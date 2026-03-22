@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "WebSearch"
+      "WebSearch",
+      "Bash(ls -la /Users/bwright/Documents/GitHub/FantasyWebsite/_bmad/*/)"
     ]
   }
 }

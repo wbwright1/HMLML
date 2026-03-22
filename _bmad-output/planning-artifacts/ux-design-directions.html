@@ -1,0 +1,1412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HML Design Directions — Visual Exploration</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;900&display=swap');
+
+  /* === GLOBAL RESET & BASE === */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #1A1A1A;
+    color: #FAF8F5;
+    line-height: 1.5;
+  }
+
+  /* === NAVIGATION === */
+  .nav-bar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    background: rgba(26, 26, 26, 0.95);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(250, 248, 245, 0.1);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    overflow-x: auto;
+  }
+  .nav-bar h1 {
+    font-size: 14px;
+    font-weight: 700;
+    white-space: nowrap;
+    color: #FAF8F5;
+    margin-right: 16px;
+  }
+  .nav-link {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(250, 248, 245, 0.6);
+    text-decoration: none;
+    white-space: nowrap;
+    padding: 6px 12px;
+    border-radius: 6px;
+    transition: all 0.2s;
+  }
+  .nav-link:hover { color: #FAF8F5; background: rgba(250, 248, 245, 0.08); }
+
+  /* === SECTION WRAPPER === */
+  .direction-section {
+    min-height: 100vh;
+    padding: 96px 24px 64px;
+    border-bottom: 1px solid rgba(250, 248, 245, 0.06);
+  }
+  .direction-header {
+    max-width: 800px;
+    margin: 0 auto 64px;
+    text-align: center;
+  }
+  .direction-number {
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #2D5A3D;
+    margin-bottom: 12px;
+  }
+  .direction-title {
+    font-size: 36px;
+    font-weight: 900;
+    margin-bottom: 16px;
+    line-height: 1.1;
+  }
+  .direction-subtitle {
+    font-size: 16px;
+    color: rgba(250, 248, 245, 0.6);
+    max-width: 600px;
+    margin: 0 auto;
+  }
+
+  /* === MOCKUP CONTAINER === */
+  .mockup-frame {
+    max-width: 1200px;
+    margin: 0 auto;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+  }
+
+  /* ======================================
+     DIRECTION 1: EDITORIAL SCROLL
+     ====================================== */
+  .d1 {
+    background: #FAF8F5;
+    color: #1A1A1A;
+    font-family: 'Inter', sans-serif;
+  }
+  .d1 .mock-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 48px;
+    border-bottom: 1px solid #E8E4E0;
+  }
+  .d1 .mock-logo {
+    font-size: 18px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    color: #2D5A3D;
+  }
+  .d1 .mock-nav-links {
+    display: flex;
+    gap: 32px;
+    list-style: none;
+  }
+  .d1 .mock-nav-links li {
+    font-size: 14px;
+    font-weight: 500;
+    color: #6B6560;
+  }
+  .d1 .mock-nav-links li:first-child { color: #2D5A3D; }
+  .d1 .hero-section {
+    padding: 128px 48px;
+    text-align: center;
+  }
+  .d1 .hero-section h1 {
+    font-size: 64px;
+    font-weight: 900;
+    line-height: 1.0;
+    letter-spacing: -0.03em;
+    margin-bottom: 24px;
+  }
+  .d1 .hero-section p {
+    font-size: 18px;
+    color: #6B6560;
+    max-width: 500px;
+    margin: 0 auto;
+  }
+  .d1 .stat-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: #E8E4E0;
+    border-top: 1px solid #E8E4E0;
+    border-bottom: 1px solid #E8E4E0;
+  }
+  .d1 .stat-card {
+    background: #FAF8F5;
+    padding: 48px 32px;
+    text-align: center;
+  }
+  .d1 .stat-card .stat-number {
+    font-size: 48px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+  .d1 .stat-card .stat-label {
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #9C9590;
+  }
+  .d1 .content-section {
+    padding: 96px 48px;
+  }
+  .d1 .section-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #2D5A3D;
+    margin-bottom: 16px;
+  }
+  .d1 .section-title {
+    font-size: 36px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    margin-bottom: 48px;
+  }
+  .d1 .standings-row {
+    display: flex;
+    align-items: center;
+    padding: 24px 0;
+    border-bottom: 1px solid #E8E4E0;
+    gap: 24px;
+  }
+  .d1 .standings-rank {
+    font-size: 32px;
+    font-weight: 900;
+    color: #1A1A1A;
+    width: 48px;
+    text-align: center;
+  }
+  .d1 .standings-team {
+    flex: 1;
+  }
+  .d1 .standings-team-name {
+    font-size: 18px;
+    font-weight: 700;
+  }
+  .d1 .standings-team-owner {
+    font-size: 14px;
+    color: #9C9590;
+  }
+  .d1 .standings-record {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  .d1 .standings-record .wins { font-weight: 900; }
+  .d1 .standings-record .losses { font-weight: 400; color: #9C9590; }
+
+  /* ======================================
+     DIRECTION 2: CARD-BASED DASHBOARD
+     ====================================== */
+  .d2 {
+    background: #FAF8F5;
+    color: #1A1A1A;
+    font-family: 'Inter', sans-serif;
+  }
+  .d2 .mock-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 32px;
+    border-bottom: 1px solid #E8E4E0;
+  }
+  .d2 .mock-logo {
+    font-size: 16px;
+    font-weight: 900;
+    color: #2D5A3D;
+  }
+  .d2 .mock-nav-links {
+    display: flex;
+    gap: 24px;
+    list-style: none;
+  }
+  .d2 .mock-nav-links li {
+    font-size: 13px;
+    font-weight: 500;
+    color: #6B6560;
+  }
+  .d2 .dashboard {
+    padding: 32px;
+    display: grid;
+    grid-template-columns: 2fr 1fr;
+    gap: 24px;
+  }
+  .d2 .card {
+    background: #FFFFFF;
+    border: 1px solid #E8E4E0;
+    border-radius: 12px;
+    padding: 32px;
+  }
+  .d2 .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+  }
+  .d2 .card-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #9C9590;
+  }
+  .d2 .card-action {
+    font-size: 13px;
+    font-weight: 500;
+    color: #2D5A3D;
+  }
+  .d2 .matchup-pair {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 0;
+    border-bottom: 1px solid #E8E4E0;
+  }
+  .d2 .matchup-pair:last-child { border-bottom: none; }
+  .d2 .matchup-team {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .d2 .team-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    background: #E8E4E0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  .d2 .matchup-score {
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .d2 .matchup-vs {
+    font-size: 12px;
+    color: #9C9590;
+    font-weight: 500;
+  }
+  .d2 .sidebar { display: flex; flex-direction: column; gap: 24px; }
+  .d2 .spotlight-stat {
+    text-align: center;
+    padding: 40px 24px;
+  }
+  .d2 .spotlight-number {
+    font-size: 56px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.03em;
+    margin-bottom: 8px;
+  }
+  .d2 .spotlight-label {
+    font-size: 14px;
+    color: #6B6560;
+    margin-bottom: 4px;
+  }
+  .d2 .spotlight-context {
+    font-size: 12px;
+    color: #9C9590;
+  }
+  .d2 .badge {
+    display: inline-block;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 4px 10px;
+    border-radius: 4px;
+    margin-bottom: 12px;
+  }
+  .d2 .badge-gold { background: rgba(184, 134, 11, 0.12); color: #B8860B; }
+  .d2 .badge-green { background: rgba(45, 90, 61, 0.1); color: #2D5A3D; }
+
+  /* ======================================
+     DIRECTION 3: BOLD STATS HERO
+     ====================================== */
+  .d3 {
+    background: #FAF8F5;
+    color: #1A1A1A;
+    font-family: 'Inter', sans-serif;
+  }
+  .d3 .mock-nav {
+    padding: 24px 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .d3 .mock-logo {
+    font-size: 20px;
+    font-weight: 900;
+    color: #2D5A3D;
+    letter-spacing: -0.03em;
+  }
+  .d3 .mock-nav-links {
+    display: flex;
+    gap: 32px;
+    list-style: none;
+  }
+  .d3 .mock-nav-links li { font-size: 14px; font-weight: 500; color: #6B6560; }
+  .d3 .h2h-hero {
+    padding: 96px 48px;
+    text-align: center;
+  }
+  .d3 .h2h-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #9C9590;
+    margin-bottom: 32px;
+  }
+  .d3 .h2h-matchup {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 64px;
+    margin-bottom: 48px;
+  }
+  .d3 .h2h-team {
+    text-align: center;
+  }
+  .d3 .h2h-team-name {
+    font-size: 24px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .d3 .h2h-team-owner {
+    font-size: 14px;
+    color: #9C9590;
+  }
+  .d3 .h2h-score {
+    text-align: center;
+  }
+  .d3 .h2h-record {
+    font-size: 80px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.04em;
+  }
+  .d3 .h2h-record .winner { color: #1A1A1A; }
+  .d3 .h2h-record .dash { color: #E8E4E0; margin: 0 4px; }
+  .d3 .h2h-record .loser { color: #9C9590; }
+  .d3 .h2h-context {
+    font-size: 14px;
+    color: #6B6560;
+    margin-top: 16px;
+  }
+  .d3 .streak-badge {
+    display: inline-block;
+    background: rgba(184, 134, 11, 0.1);
+    color: #B8860B;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    padding: 6px 14px;
+    border-radius: 100px;
+    margin-top: 24px;
+  }
+  .d3 .history-section {
+    padding: 64px 48px 48px;
+    border-top: 1px solid #E8E4E0;
+  }
+  .d3 .history-title {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #2D5A3D;
+    margin-bottom: 32px;
+  }
+  .d3 .history-row {
+    display: grid;
+    grid-template-columns: 80px 1fr 100px 100px;
+    align-items: center;
+    padding: 16px 0;
+    border-bottom: 1px solid #E8E4E0;
+    font-size: 15px;
+  }
+  .d3 .history-season { font-weight: 700; }
+  .d3 .history-week { color: #9C9590; }
+  .d3 .history-score { font-weight: 700; text-align: right; }
+  .d3 .history-result {
+    text-align: right;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .d3 .result-w { color: #1A1A1A; }
+  .d3 .result-l { color: #9C9590; }
+
+  /* ======================================
+     DIRECTION 4: FRANCHISE PAGE — SCROLL NARRATIVE
+     ====================================== */
+  .d4 {
+    background: #FAF8F5;
+    color: #1A1A1A;
+    font-family: 'Inter', sans-serif;
+  }
+  .d4 .franchise-hero {
+    padding: 128px 48px 96px;
+    border-bottom: 1px solid #E8E4E0;
+  }
+  .d4 .franchise-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #2D5A3D;
+    margin-bottom: 16px;
+  }
+  .d4 .franchise-name {
+    font-size: 56px;
+    font-weight: 900;
+    line-height: 1.05;
+    letter-spacing: -0.03em;
+    margin-bottom: 12px;
+  }
+  .d4 .franchise-owner {
+    font-size: 18px;
+    color: #6B6560;
+    margin-bottom: 48px;
+  }
+  .d4 .franchise-stats {
+    display: flex;
+    gap: 64px;
+  }
+  .d4 .franchise-stat-value {
+    font-size: 40px;
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .d4 .franchise-stat-label {
+    font-size: 12px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: #9C9590;
+    margin-top: 8px;
+  }
+  .d4 .franchise-section {
+    padding: 96px 48px;
+    border-bottom: 1px solid #E8E4E0;
+  }
+  .d4 .franchise-section-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #2D5A3D;
+    margin-bottom: 16px;
+  }
+  .d4 .franchise-section-title {
+    font-size: 32px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    margin-bottom: 48px;
+  }
+  .d4 .season-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .d4 .season-row {
+    display: grid;
+    grid-template-columns: 80px 1fr auto auto;
+    align-items: center;
+    gap: 32px;
+    padding: 24px 0;
+    border-bottom: 1px solid #E8E4E0;
+  }
+  .d4 .season-year {
+    font-size: 24px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+  .d4 .season-owner {
+    font-size: 15px;
+    color: #6B6560;
+  }
+  .d4 .season-record {
+    font-size: 20px;
+    font-weight: 700;
+  }
+  .d4 .season-finish {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 6px 14px;
+    border-radius: 100px;
+    background: rgba(45, 90, 61, 0.08);
+    color: #2D5A3D;
+  }
+  .d4 .trophy-row {
+    display: flex;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+  .d4 .trophy-card {
+    background: #FFFFFF;
+    border: 1px solid #E8E4E0;
+    border-radius: 12px;
+    padding: 32px;
+    text-align: center;
+    min-width: 180px;
+    flex: 1;
+  }
+  .d4 .trophy-icon {
+    font-size: 32px;
+    margin-bottom: 12px;
+    color: #B8860B;
+  }
+  .d4 .trophy-title {
+    font-size: 14px;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .d4 .trophy-year {
+    font-size: 13px;
+    color: #9C9590;
+  }
+
+  /* ======================================
+     DIRECTION 5: MATCHUP LIVE SCORES
+     ====================================== */
+  .d5 {
+    background: #FAF8F5;
+    color: #1A1A1A;
+    font-family: 'Inter', sans-serif;
+  }
+  .d5 .mock-nav {
+    padding: 20px 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #E8E4E0;
+  }
+  .d5 .mock-logo { font-size: 16px; font-weight: 900; color: #2D5A3D; }
+  .d5 .live-header {
+    padding: 48px 48px 32px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+  .d5 .live-title { font-size: 32px; font-weight: 900; letter-spacing: -0.02em; }
+  .d5 .live-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #2D5A3D;
+  }
+  .d5 .live-dot {
+    width: 8px;
+    height: 8px;
+    background: #2D5A3D;
+    border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  .d5 .matchups-grid {
+    padding: 0 48px 48px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 24px;
+  }
+  .d5 .matchup-card {
+    background: #FFFFFF;
+    border: 1px solid #E8E4E0;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .d5 .matchup-card-header {
+    padding: 16px 24px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #9C9590;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom: 1px solid #E8E4E0;
+    display: flex;
+    justify-content: space-between;
+  }
+  .d5 .matchup-card-body { padding: 24px; }
+  .d5 .matchup-team-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 0;
+  }
+  .d5 .matchup-team-row + .matchup-team-row {
+    border-top: 1px solid #E8E4E0;
+  }
+  .d5 .matchup-team-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+  .d5 .matchup-team-abbr {
+    width: 32px;
+    height: 32px;
+    background: #E8E4E0;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+  }
+  .d5 .matchup-team-name-sm {
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .d5 .matchup-team-score {
+    font-size: 28px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+  .d5 .matchup-team-score.leading { color: #1A1A1A; }
+  .d5 .matchup-team-score.trailing { color: #9C9590; }
+
+  /* ======================================
+     DIRECTION 6: LEADERBOARD — CLEAN AUTHORITY
+     ====================================== */
+  .d6 {
+    background: #FAF8F5;
+    color: #1A1A1A;
+    font-family: 'Inter', sans-serif;
+  }
+  .d6 .mock-nav {
+    padding: 20px 48px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #E8E4E0;
+  }
+  .d6 .mock-logo { font-size: 16px; font-weight: 900; color: #2D5A3D; }
+  .d6 .leaderboard-header {
+    padding: 96px 48px 64px;
+    text-align: center;
+  }
+  .d6 .leaderboard-label {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #2D5A3D;
+    margin-bottom: 16px;
+  }
+  .d6 .leaderboard-title {
+    font-size: 40px;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+  }
+  .d6 .leaderboard-body {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 0 48px 96px;
+  }
+  .d6 .lb-row {
+    display: grid;
+    grid-template-columns: 64px 1fr 120px 120px 120px;
+    align-items: center;
+    padding: 24px 16px;
+    border-bottom: 1px solid #E8E4E0;
+    gap: 16px;
+  }
+  .d6 .lb-row:first-child { border-top: 1px solid #E8E4E0; }
+  .d6 .lb-rank {
+    font-size: 28px;
+    font-weight: 900;
+    text-align: center;
+    letter-spacing: -0.02em;
+  }
+  .d6 .lb-rank.top-3 { color: #B8860B; }
+  .d6 .lb-team-info {}
+  .d6 .lb-team-name {
+    font-size: 16px;
+    font-weight: 700;
+  }
+  .d6 .lb-team-owner {
+    font-size: 13px;
+    color: #9C9590;
+  }
+  .d6 .lb-stat {
+    text-align: right;
+    font-size: 16px;
+    font-weight: 600;
+  }
+  .d6 .lb-stat-header {
+    text-align: right;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #9C9590;
+  }
+  .d6 .lb-header {
+    display: grid;
+    grid-template-columns: 64px 1fr 120px 120px 120px;
+    padding: 16px 16px 12px;
+    gap: 16px;
+  }
+  .d6 .lb-superlative {
+    display: inline-block;
+    background: rgba(184, 134, 11, 0.08);
+    color: #B8860B;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    padding: 3px 8px;
+    border-radius: 4px;
+    margin-top: 4px;
+  }
+
+  /* === INTRO SECTION === */
+  .intro-section {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    padding: 96px 24px;
+  }
+  .intro-section h1 {
+    font-size: 56px;
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 1.05;
+    margin-bottom: 24px;
+  }
+  .intro-section h1 span { color: #2D5A3D; }
+  .intro-section p {
+    font-size: 18px;
+    color: rgba(250, 248, 245, 0.6);
+    max-width: 600px;
+    line-height: 1.6;
+    margin-bottom: 48px;
+  }
+  .intro-section .scroll-hint {
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(250, 248, 245, 0.3);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  /* === RESPONSIVE === */
+  @media (max-width: 768px) {
+    .d1 .hero-section h1 { font-size: 40px; }
+    .d1 .stat-row { grid-template-columns: 1fr; }
+    .d1 .hero-section, .d1 .content-section { padding: 64px 24px; }
+    .d2 .dashboard { grid-template-columns: 1fr; }
+    .d2 .dashboard { padding: 16px; }
+    .d3 .h2h-matchup { flex-direction: column; gap: 24px; }
+    .d3 .h2h-record { font-size: 56px; }
+    .d3 .h2h-hero, .d3 .history-section { padding: 64px 24px; }
+    .d3 .history-row { grid-template-columns: 60px 1fr auto; }
+    .d3 .history-row > :nth-child(2) { display: none; }
+    .d4 .franchise-hero, .d4 .franchise-section { padding: 64px 24px; }
+    .d4 .franchise-name { font-size: 36px; }
+    .d4 .franchise-stats { flex-wrap: wrap; gap: 32px; }
+    .d4 .season-row { grid-template-columns: 60px 1fr auto; gap: 16px; }
+    .d4 .season-owner { display: none; }
+    .d5 .matchups-grid { grid-template-columns: 1fr; padding: 0 24px 48px; }
+    .d5 .live-header { padding: 32px 24px 16px; }
+    .d6 .lb-row, .d6 .lb-header { grid-template-columns: 48px 1fr 80px; }
+    .d6 .lb-row > :nth-child(4), .d6 .lb-row > :nth-child(5),
+    .d6 .lb-header > :nth-child(4), .d6 .lb-header > :nth-child(5) { display: none; }
+    .d6 .leaderboard-header { padding: 64px 24px 48px; }
+    .d6 .leaderboard-body { padding: 0 24px 64px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAVIGATION -->
+<nav class="nav-bar">
+  <h1>HML Design Directions</h1>
+  <a href="#intro" class="nav-link">Overview</a>
+  <a href="#d1" class="nav-link">1. Editorial Scroll</a>
+  <a href="#d2" class="nav-link">2. Card Dashboard</a>
+  <a href="#d3" class="nav-link">3. Bold Stats Hero</a>
+  <a href="#d4" class="nav-link">4. Franchise Narrative</a>
+  <a href="#d5" class="nav-link">5. Live Matchups</a>
+  <a href="#d6" class="nav-link">6. Clean Leaderboard</a>
+</nav>
+
+<!-- INTRO -->
+<section id="intro" class="intro-section">
+  <h1>Harambe Memorial League<br><span>Design Directions</span></h1>
+  <p>Six visual directions exploring the Press Box theme — warm off-white backgrounds, forest green accents, Geist typography, Apple-level whitespace, and gold achievement moments. Each mockup shows a different page or layout approach.</p>
+  <div class="scroll-hint">Scroll to explore ↓</div>
+</section>
+
+<!-- DIRECTION 1: EDITORIAL SCROLL — HOMEPAGE -->
+<section id="d1" class="direction-section">
+  <div class="direction-header">
+    <div class="direction-number">Direction 1</div>
+    <h2 class="direction-title">Editorial Scroll — Homepage</h2>
+    <p class="direction-subtitle">Full-width sections with bold type and generous spacing. The homepage as a vertical narrative — each scroll reveals a new content block. Maximum Apple energy.</p>
+  </div>
+  <div class="mockup-frame d1">
+    <nav class="mock-nav">
+      <div class="mock-logo">HML</div>
+      <ul class="mock-nav-links">
+        <li>Matchups</li>
+        <li>Teams</li>
+        <li>Records</li>
+        <li>Drafts</li>
+        <li>History</li>
+      </ul>
+    </nav>
+    <div class="hero-section">
+      <h1>Season 8</h1>
+      <p>The Harambe Memorial League — Week 11 in the books. Here's where things stand.</p>
+    </div>
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-number">142.8</div>
+        <div class="stat-label">High Score This Week</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">5</div>
+        <div class="stat-label">Active Win Streak — Gorilla Warfare</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number">3</div>
+        <div class="stat-label">Teams Above .600</div>
+      </div>
+    </div>
+    <div class="content-section">
+      <div class="section-label">Current Standings</div>
+      <div class="section-title">Week 11 Power Rankings</div>
+      <div class="standings-row">
+        <div class="standings-rank">1</div>
+        <div class="standings-team">
+          <div class="standings-team-name">Gorilla Warfare</div>
+          <div class="standings-team-owner">Marcus</div>
+        </div>
+        <div class="standings-record"><span class="wins">9</span><span class="losses">-2</span></div>
+      </div>
+      <div class="standings-row">
+        <div class="standings-rank">2</div>
+        <div class="standings-team">
+          <div class="standings-team-name">Harambe's Legacy</div>
+          <div class="standings-team-owner">Jordan</div>
+        </div>
+        <div class="standings-record"><span class="wins">8</span><span class="losses">-3</span></div>
+      </div>
+      <div class="standings-row">
+        <div class="standings-rank">3</div>
+        <div class="standings-team">
+          <div class="standings-team-name">Banana Splits</div>
+          <div class="standings-team-owner">Blake</div>
+        </div>
+        <div class="standings-record"><span class="wins">7</span><span class="losses">-4</span></div>
+      </div>
+      <div class="standings-row">
+        <div class="standings-rank">4</div>
+        <div class="standings-team">
+          <div class="standings-team-name">Zoo Crew</div>
+          <div class="standings-team-owner">Darnell</div>
+        </div>
+        <div class="standings-record"><span class="wins">7</span><span class="losses">-4</span></div>
+      </div>
+      <div class="standings-row">
+        <div class="standings-rank">5</div>
+        <div class="standings-team">
+          <div class="standings-team-name">Silverback Attack</div>
+          <div class="standings-team-owner">Taylor</div>
+        </div>
+        <div class="standings-record"><span class="wins">6</span><span class="losses">-5</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DIRECTION 2: CARD-BASED DASHBOARD -->
+<section id="d2" class="direction-section">
+  <div class="direction-header">
+    <div class="direction-number">Direction 2</div>
+    <h2 class="direction-title">Card-Based Dashboard</h2>
+    <p class="direction-subtitle">Homepage as a living dashboard with cards for matchups, spotlight stats, and quick links. Information-rich but organized — each card is a self-contained unit with room to breathe.</p>
+  </div>
+  <div class="mockup-frame d2">
+    <nav class="mock-nav">
+      <div class="mock-logo">Harambe Memorial League</div>
+      <ul class="mock-nav-links">
+        <li>Matchups</li>
+        <li>Teams</li>
+        <li>Records</li>
+        <li>Drafts</li>
+      </ul>
+    </nav>
+    <div class="dashboard">
+      <div class="main-col">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">This Week's Matchups — Week 11</span>
+            <span class="card-action">View All →</span>
+          </div>
+          <div class="matchup-pair">
+            <div class="matchup-team">
+              <div class="team-avatar">GW</div>
+              <div>
+                <div style="font-size:15px;font-weight:700;">Gorilla Warfare</div>
+                <div style="font-size:12px;color:#9C9590;">Marcus</div>
+              </div>
+            </div>
+            <div class="matchup-score">128.4</div>
+            <div class="matchup-vs">vs</div>
+            <div class="matchup-score" style="color:#9C9590;">112.1</div>
+            <div class="matchup-team" style="text-align:right;">
+              <div>
+                <div style="font-size:15px;font-weight:700;">Zoo Crew</div>
+                <div style="font-size:12px;color:#9C9590;">Darnell</div>
+              </div>
+              <div class="team-avatar">ZC</div>
+            </div>
+          </div>
+          <div class="matchup-pair">
+            <div class="matchup-team">
+              <div class="team-avatar">HL</div>
+              <div>
+                <div style="font-size:15px;font-weight:700;">Harambe's Legacy</div>
+                <div style="font-size:12px;color:#9C9590;">Jordan</div>
+              </div>
+            </div>
+            <div class="matchup-score">134.7</div>
+            <div class="matchup-vs">vs</div>
+            <div class="matchup-score" style="color:#9C9590;">98.2</div>
+            <div class="matchup-team" style="text-align:right;">
+              <div>
+                <div style="font-size:15px;font-weight:700;">Silverback Attack</div>
+                <div style="font-size:12px;color:#9C9590;">Taylor</div>
+              </div>
+              <div class="team-avatar">SA</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="sidebar">
+        <div class="card spotlight-stat">
+          <div class="badge badge-gold">League Record</div>
+          <div class="spotlight-number">167.3</div>
+          <div class="spotlight-label">Highest Score This Season</div>
+          <div class="spotlight-context">Gorilla Warfare — Week 7</div>
+        </div>
+        <div class="card spotlight-stat">
+          <div class="badge badge-green">Active Streak</div>
+          <div class="spotlight-number">5W</div>
+          <div class="spotlight-label">Gorilla Warfare</div>
+          <div class="spotlight-context">Longest active streak in the league</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DIRECTION 3: BOLD STATS HERO — H2H PAGE -->
+<section id="d3" class="direction-section">
+  <div class="direction-header">
+    <div class="direction-number">Direction 3</div>
+    <h2 class="direction-title">Bold Stats Hero — Head-to-Head</h2>
+    <p class="direction-subtitle">The "screenshot moment" page. A massive H2H record as the hero, with match history below. This is the page that gets dropped into group chats. The number IS the design.</p>
+  </div>
+  <div class="mockup-frame d3">
+    <nav class="mock-nav">
+      <div class="mock-logo">HML</div>
+      <ul class="mock-nav-links">
+        <li>Matchups</li>
+        <li>Teams</li>
+        <li>Records</li>
+        <li>Drafts</li>
+        <li>History</li>
+      </ul>
+    </nav>
+    <div class="h2h-hero">
+      <div class="h2h-label">Head-to-Head — All Time</div>
+      <div class="h2h-matchup">
+        <div class="h2h-team">
+          <div class="h2h-team-name">Gorilla Warfare</div>
+          <div class="h2h-team-owner">Marcus</div>
+        </div>
+        <div class="h2h-score">
+          <div class="h2h-record">
+            <span class="winner">7</span><span class="dash">–</span><span class="loser">2</span>
+          </div>
+        </div>
+        <div class="h2h-team">
+          <div class="h2h-team-name">Zoo Crew</div>
+          <div class="h2h-team-owner">Darnell</div>
+        </div>
+      </div>
+      <div class="h2h-context">Across 5 seasons including legacy era • Includes 1 playoff matchup</div>
+      <div class="streak-badge">Current Streak: 3W — Gorilla Warfare</div>
+    </div>
+    <div class="history-section">
+      <div class="history-title">Match History</div>
+      <div class="history-row">
+        <div class="history-season">2025</div>
+        <div class="history-week">Week 11</div>
+        <div class="history-score">128.4 – 112.1</div>
+        <div class="history-result result-w">W</div>
+      </div>
+      <div class="history-row">
+        <div class="history-season">2025</div>
+        <div class="history-week">Week 4</div>
+        <div class="history-score">119.7 – 105.3</div>
+        <div class="history-result result-w">W</div>
+      </div>
+      <div class="history-row">
+        <div class="history-season">2024</div>
+        <div class="history-week">Week 8</div>
+        <div class="history-score">132.1 – 138.9</div>
+        <div class="history-result result-l">L</div>
+      </div>
+      <div class="history-row">
+        <div class="history-season">2024</div>
+        <div class="history-week">Week 2</div>
+        <div class="history-score">141.5 – 127.4</div>
+        <div class="history-result result-w">W</div>
+      </div>
+      <div class="history-row">
+        <div class="history-season">2023</div>
+        <div class="history-week">Playoffs R1</div>
+        <div class="history-score">156.2 – 143.8</div>
+        <div class="history-result result-w">W</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DIRECTION 4: FRANCHISE PAGE — SCROLL NARRATIVE -->
+<section id="d4" class="direction-section">
+  <div class="direction-header">
+    <div class="direction-number">Direction 4</div>
+    <h2 class="direction-title">Franchise Page — Scroll Narrative</h2>
+    <p class="direction-subtitle">A franchise page that unfolds like a story. Big hero with career stats, then sections for season history, trophies, and draft history — each revealed as you scroll. The franchise as a character.</p>
+  </div>
+  <div class="mockup-frame d4">
+    <div class="franchise-hero">
+      <div class="franchise-label">Franchise</div>
+      <div class="franchise-name">Gorilla Warfare</div>
+      <div class="franchise-owner">Managed by Marcus • Est. 2018</div>
+      <div class="franchise-stats">
+        <div>
+          <div class="franchise-stat-value">62-38</div>
+          <div class="franchise-stat-label">All-Time Record</div>
+        </div>
+        <div>
+          <div class="franchise-stat-value">2</div>
+          <div class="franchise-stat-label">Championships</div>
+        </div>
+        <div>
+          <div class="franchise-stat-value">4</div>
+          <div class="franchise-stat-label">Playoff Appearances</div>
+        </div>
+        <div>
+          <div class="franchise-stat-value">12,847</div>
+          <div class="franchise-stat-label">Career Points</div>
+        </div>
+      </div>
+    </div>
+    <div class="franchise-section">
+      <div class="franchise-section-label">Awards</div>
+      <div class="franchise-section-title">Trophy Case</div>
+      <div class="trophy-row">
+        <div class="trophy-card">
+          <div class="trophy-icon">◆</div>
+          <div class="trophy-title">League Champion</div>
+          <div class="trophy-year">2023</div>
+        </div>
+        <div class="trophy-card">
+          <div class="trophy-icon">◆</div>
+          <div class="trophy-title">League Champion</div>
+          <div class="trophy-year">2021</div>
+        </div>
+        <div class="trophy-card">
+          <div class="trophy-icon">▲</div>
+          <div class="trophy-title">Most Points Scored</div>
+          <div class="trophy-year">2023</div>
+        </div>
+        <div class="trophy-card">
+          <div class="trophy-icon">★</div>
+          <div class="trophy-title">Regular Season Champ</div>
+          <div class="trophy-year">2022</div>
+        </div>
+      </div>
+    </div>
+    <div class="franchise-section">
+      <div class="franchise-section-label">History</div>
+      <div class="franchise-section-title">Season by Season</div>
+      <div class="season-timeline">
+        <div class="season-row">
+          <div class="season-year">2025</div>
+          <div class="season-owner">Marcus</div>
+          <div class="season-record">9-2</div>
+          <div class="season-finish">In Progress</div>
+        </div>
+        <div class="season-row">
+          <div class="season-year">2024</div>
+          <div class="season-owner">Marcus</div>
+          <div class="season-record">8-5</div>
+          <div class="season-finish">Semifinals</div>
+        </div>
+        <div class="season-row">
+          <div class="season-year">2023</div>
+          <div class="season-owner">Marcus</div>
+          <div class="season-record">11-2</div>
+          <div class="season-finish">Champion</div>
+        </div>
+        <div class="season-row">
+          <div class="season-year">2022</div>
+          <div class="season-owner">Marcus</div>
+          <div class="season-record">9-4</div>
+          <div class="season-finish">Runner-Up</div>
+        </div>
+        <div class="season-row" style="background: rgba(184,134,11,0.03);">
+          <div class="season-year" style="color:#9C9590;">2021</div>
+          <div class="season-owner" style="color:#9C9590;">Marcus • Legacy Era</div>
+          <div class="season-record" style="color:#9C9590;">10-3</div>
+          <div class="season-finish" style="background:rgba(184,134,11,0.1);color:#B8860B;">Champion</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DIRECTION 5: LIVE MATCHUPS -->
+<section id="d5" class="direction-section">
+  <div class="direction-header">
+    <div class="direction-number">Direction 5</div>
+    <h2 class="direction-title">Live Matchup Scores</h2>
+    <p class="direction-subtitle">Game-window experience with the live pulse indicator. Cards per matchup, bold scores, leading team visually emphasized through weight. Betting-site energy with premium restraint.</p>
+  </div>
+  <div class="mockup-frame d5">
+    <nav class="mock-nav">
+      <div class="mock-logo">HML</div>
+      <div class="live-indicator"><div class="live-dot"></div> Live — Sunday Afternoon</div>
+    </nav>
+    <div class="live-header">
+      <div class="live-title">Week 11 Matchups</div>
+    </div>
+    <div class="matchups-grid">
+      <div class="matchup-card">
+        <div class="matchup-card-header">
+          <span>Matchup 1</span>
+          <span>Q3</span>
+        </div>
+        <div class="matchup-card-body">
+          <div class="matchup-team-row">
+            <div class="matchup-team-info">
+              <div class="matchup-team-abbr">GW</div>
+              <div class="matchup-team-name-sm">Gorilla Warfare</div>
+            </div>
+            <div class="matchup-team-score leading">98.4</div>
+          </div>
+          <div class="matchup-team-row">
+            <div class="matchup-team-info">
+              <div class="matchup-team-abbr">ZC</div>
+              <div class="matchup-team-name-sm">Zoo Crew</div>
+            </div>
+            <div class="matchup-team-score trailing">84.1</div>
+          </div>
+        </div>
+      </div>
+      <div class="matchup-card">
+        <div class="matchup-card-header">
+          <span>Matchup 2</span>
+          <span>Q3</span>
+        </div>
+        <div class="matchup-card-body">
+          <div class="matchup-team-row">
+            <div class="matchup-team-info">
+              <div class="matchup-team-abbr">HL</div>
+              <div class="matchup-team-name-sm">Harambe's Legacy</div>
+            </div>
+            <div class="matchup-team-score leading">107.2</div>
+          </div>
+          <div class="matchup-team-row">
+            <div class="matchup-team-info">
+              <div class="matchup-team-abbr">SA</div>
+              <div class="matchup-team-name-sm">Silverback Attack</div>
+            </div>
+            <div class="matchup-team-score trailing">68.9</div>
+          </div>
+        </div>
+      </div>
+      <div class="matchup-card">
+        <div class="matchup-card-header">
+          <span>Matchup 3</span>
+          <span>Q3</span>
+        </div>
+        <div class="matchup-card-body">
+          <div class="matchup-team-row">
+            <div class="matchup-team-info">
+              <div class="matchup-team-abbr">BS</div>
+              <div class="matchup-team-name-sm">Banana Splits</div>
+            </div>
+            <div class="matchup-team-score trailing">72.6</div>
+          </div>
+          <div class="matchup-team-row">
+            <div class="matchup-team-info">
+              <div class="matchup-team-abbr">JG</div>
+              <div class="matchup-team-name-sm">Jungle Juice</div>
+            </div>
+            <div class="matchup-team-score leading">89.3</div>
+          </div>
+        </div>
+      </div>
+      <div class="matchup-card">
+        <div class="matchup-card-header">
+          <span>Matchup 4</span>
+          <span>Q4</span>
+        </div>
+        <div class="matchup-card-body">
+          <div class="matchup-team-row">
+            <div class="matchup-team-info">
+              <div class="matchup-team-abbr">KK</div>
+              <div class="matchup-team-name-sm">King Kong Club</div>
+            </div>
+            <div class="matchup-team-score leading">115.8</div>
+          </div>
+          <div class="matchup-team-row">
+            <div class="matchup-team-info">
+              <div class="matchup-team-abbr">PB</div>
+              <div class="matchup-team-name-sm">Primate Ballers</div>
+            </div>
+            <div class="matchup-team-score trailing">112.4</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- DIRECTION 6: LEADERBOARD -->
+<section id="d6" class="direction-section">
+  <div class="direction-header">
+    <div class="direction-number">Direction 6</div>
+    <h2 class="direction-title">All-Time Leaderboard</h2>
+    <p class="direction-subtitle">Clean authority. Bold rank numbers, generous row spacing, gold accents for the top 3. Superlative badges surface "that's sick" moments. Designed to be screenshotted at any width.</p>
+  </div>
+  <div class="mockup-frame d6">
+    <nav class="mock-nav">
+      <div class="mock-logo">Harambe Memorial League</div>
+    </nav>
+    <div class="leaderboard-header">
+      <div class="leaderboard-label">All-Time Records</div>
+      <div class="leaderboard-title">Career Leaderboard</div>
+    </div>
+    <div class="leaderboard-body">
+      <div class="lb-header">
+        <div></div>
+        <div class="lb-stat-header" style="text-align:left;">Team</div>
+        <div class="lb-stat-header">Wins</div>
+        <div class="lb-stat-header">Points</div>
+        <div class="lb-stat-header">Titles</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank top-3">1</div>
+        <div class="lb-team-info">
+          <div class="lb-team-name">Gorilla Warfare</div>
+          <div class="lb-team-owner">Marcus</div>
+          <div class="lb-superlative">Most Wins All-Time</div>
+        </div>
+        <div class="lb-stat">62</div>
+        <div class="lb-stat">12,847</div>
+        <div class="lb-stat">2</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank top-3">2</div>
+        <div class="lb-team-info">
+          <div class="lb-team-name">Harambe's Legacy</div>
+          <div class="lb-team-owner">Jordan</div>
+          <div class="lb-superlative">Most Points All-Time</div>
+        </div>
+        <div class="lb-stat">58</div>
+        <div class="lb-stat">13,102</div>
+        <div class="lb-stat">1</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank top-3">3</div>
+        <div class="lb-team-info">
+          <div class="lb-team-name">Banana Splits</div>
+          <div class="lb-team-owner">Blake</div>
+        </div>
+        <div class="lb-stat">55</div>
+        <div class="lb-stat">11,934</div>
+        <div class="lb-stat">1</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank">4</div>
+        <div class="lb-team-info">
+          <div class="lb-team-name">Zoo Crew</div>
+          <div class="lb-team-owner">Darnell</div>
+        </div>
+        <div class="lb-stat">52</div>
+        <div class="lb-stat">11,456</div>
+        <div class="lb-stat">1</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank">5</div>
+        <div class="lb-team-info">
+          <div class="lb-team-name">Silverback Attack</div>
+          <div class="lb-team-owner">Taylor</div>
+        </div>
+        <div class="lb-stat">49</div>
+        <div class="lb-stat">10,823</div>
+        <div class="lb-stat">0</div>
+      </div>
+      <div class="lb-row">
+        <div class="lb-rank">6</div>
+        <div class="lb-team-info">
+          <div class="lb-team-name">Jungle Juice</div>
+          <div class="lb-team-owner">Chris</div>
+        </div>
+        <div class="lb-stat">47</div>
+        <div class="lb-stat">10,541</div>
+        <div class="lb-stat">0</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
