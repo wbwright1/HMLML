@@ -19,7 +19,7 @@ inputDocuments: ['prd.md', 'architecture.md']
 
 ### Project Vision
 
-The Harambe Memorial League Website transforms a 12-team dynasty fantasy football league from scattered Sleeper app data and group chat memories into a permanent, always-available institution with history, personality, and trash-talk fuel. The site is fully public (no login), server-rendered, and mobile-first — designed for quick weekly check-ins and deep historical dives alike. All data is automatically synced from the Sleeper API, with near-live matchup scores during NFL game windows. The site preserves and unifies history across the league's legacy 10-team era and current 12-team format.
+The Harambe Memorial League Memorial League Website transforms a 12-team dynasty fantasy football league from scattered Sleeper app data and group chat memories into a permanent, always-available institution with history, personality, and trash-talk fuel. The site is fully public (no login), server-rendered, and mobile-first — designed for quick weekly check-ins and deep historical dives alike. All data is automatically synced from the Sleeper API, with near-live matchup scores during NFL game windows. The site preserves and unifies history across the league's legacy 10-team era and current 12-team format.
 
 ### Target Users
 

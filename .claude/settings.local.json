@@ -2,7 +2,14 @@
   "permissions": {
     "allow": [
       "WebSearch",
-      "Bash(ls -la /Users/bwright/Documents/GitHub/FantasyWebsite/_bmad/*/)"
+      "Bash(ls -la /Users/bwright/Documents/GitHub/FantasyWebsite/_bmad/*/)",
+      "Read(//private/tmp/**)",
+      "Bash(rm -rf hml-scaffold)",
+      "Bash(npx create-next-app@latest hml-scaffold --typescript --tailwind --eslint --app --turbopack --import-alias \"@/*\" --use-npm)",
+      "Bash(npm init:*)",
+      "Bash(npm install:*)",
+      "Bash(npm uninstall:*)",
+      "Bash(npx shadcn@latest init -d)"
     ]
   }
 }

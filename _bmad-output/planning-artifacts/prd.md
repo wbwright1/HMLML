@@ -12,14 +12,14 @@ classification:
   scope: single_league
 ---
 
-# Product Requirements Document - Harambe Memorial League Website
+# Product Requirements Document - Harambe Memorial League Memorial League Website
 
 **Author:** Blake
 **Date:** 2026-03-13
 
 ## Executive Summary
 
-The Harambe Memorial League (HML) Website is a public-facing web application serving as the permanent home for the HML, a 12-team dynasty fantasy football league. It centralizes league history, performance data, draft records, and power rankings in one always-available destination — replacing scattered memories and buried Sleeper app data with a living record of the league's culture and lore.
+The Harambe Memorial League Memorial League (HML) Website is a public-facing web application serving as the permanent home for the HML, a 12-team dynasty fantasy football league. It centralizes league history, performance data, draft records, and power rankings in one always-available destination — replacing scattered memories and buried Sleeper app data with a living record of the league's culture and lore.
 
 All data is sourced and synced automatically from the Sleeper API via a 3-tier sync pipeline (daily, hourly, and near-live matchup scores every 30 seconds during active game windows). No login is required. The site carries forward history from the HML's predecessor (a 10-team league), ensuring the full dynasty timeline — including legacy seasons, rosters, and draft picks — is preserved and surfaced from day one.
 

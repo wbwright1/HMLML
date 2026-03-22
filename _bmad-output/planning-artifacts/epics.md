@@ -9,7 +9,7 @@ inputDocuments: ['prd.md', 'architecture.md', 'ux-design-specification.md']
 
 ## Overview
 
-This document provides the complete epic and story breakdown for FantasyWebsite (Harambe Memorial League), decomposing the requirements from the PRD, UX Design, and Architecture requirements into implementable stories.
+This document provides the complete epic and story breakdown for FantasyWebsite (Harambe Memorial League Memorial League), decomposing the requirements from the PRD, UX Design, and Architecture requirements into implementable stories.
 
 ## Requirements Inventory
 
