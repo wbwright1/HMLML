@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import { SiteNav } from "@/components/site-nav";
 import { BottomTabBar } from "@/components/bottom-tab-bar";
 import { SiteFooter } from "@/components/site-footer";
+import { Analytics } from "@vercel/analytics/next";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -39,6 +40,7 @@ export default function RootLayout({
 
         <SiteFooter />
         <BottomTabBar />
+        <Analytics />
       </body>
     </html>
   );

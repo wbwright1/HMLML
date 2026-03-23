@@ -42,7 +42,8 @@
       "Bash(curl -s \"https://api.sleeper.app/v1/league/916853033424773120\")",
       "Bash(curl -s \"http://localhost:3000/api/legacy-import?leagueId=784490166948585472\" -H \"Authorization: Bearer 81db33da5cf0e2a543508dd341bdf71ebada39ad75f6dae8\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000/players)",
-      "Bash(grep -rl 'Harambe Memorial League' --include=*.tsx --include=*.ts --include=*.json /Users/bwright/Documents/GitHub/FantasyWebsite/app /Users/bwright/Documents/GitHub/FantasyWebsite/components /Users/bwright/Documents/GitHub/FantasyWebsite/lib /Users/bwright/Documents/GitHub/FantasyWebsite/e2e)"
+      "Bash(grep -rl 'Harambe Memorial League' --include=*.tsx --include=*.ts --include=*.json /Users/bwright/Documents/GitHub/FantasyWebsite/app /Users/bwright/Documents/GitHub/FantasyWebsite/components /Users/bwright/Documents/GitHub/FantasyWebsite/lib /Users/bwright/Documents/GitHub/FantasyWebsite/e2e)",
+      "Bash(npm ls:*)"
     ]
   }
 }
