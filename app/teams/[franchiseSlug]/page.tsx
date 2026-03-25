@@ -55,6 +55,11 @@ export default async function FranchiseDetailPage({
       ? franchise.seasonHistory[0].ownerDisplayName
       : undefined;
 
+  const currentCoOwner =
+    franchise.seasonHistory.length > 0
+      ? franchise.seasonHistory[0].coOwnerDisplayName
+      : undefined;
+
   // Win percentage
   const totalGames = franchise.totalWins + franchise.totalLosses;
   const winPct = totalGames > 0 ? (franchise.totalWins / totalGames) : 0;
@@ -62,7 +67,14 @@ export default async function FranchiseDetailPage({
   return (
     <>
       {/* Hero Section */}
-      <section className="py-24 space-y-8">
+      <section
+        className="py-24 space-y-8"
+        style={{
+          background: franchise.brandingColor
+            ? `linear-gradient(to bottom, ${franchise.brandingColor}0F, transparent 60%)`
+            : undefined,
+        }}
+      >
         <Link
           href="/teams"
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -80,6 +92,7 @@ export default async function FranchiseDetailPage({
             }}
             championships={franchise.championships}
             ownerName={currentOwner ?? undefined}
+            coOwnerName={currentCoOwner ?? undefined}
             variant="hero"
           />
         </ScrollReveal>
@@ -156,7 +169,7 @@ export default async function FranchiseDetailPage({
                       </div>
                       {season.ownerDisplayName && (
                         <p className="text-body-sm text-muted-foreground">
-                          {season.ownerDisplayName}
+                          {season.ownerDisplayName}{season.coOwnerDisplayName ? ` & ${season.coOwnerDisplayName}` : ""}
                         </p>
                       )}
                     </div>

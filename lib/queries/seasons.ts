@@ -79,6 +79,7 @@ export async function getSeasonStandings(seasonId: number) {
       rosterId: franchiseSeasons.rosterId,
       userId: franchiseSeasons.userId,
       ownerDisplayName: franchiseSeasons.ownerDisplayName,
+      coOwnerDisplayName: franchiseSeasons.coOwnerDisplayName,
       wins: franchiseSeasons.wins,
       losses: franchiseSeasons.losses,
       ties: franchiseSeasons.ties,

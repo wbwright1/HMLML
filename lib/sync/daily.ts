@@ -237,6 +237,14 @@ async function syncUsersAndRosters(): Promise<SyncStepResult> {
       const ownerId = roster.owner_id;
       if (!ownerId) continue; // Skip unowned rosters
 
+      // Resolve co-owner display name(s)
+      const coOwners = (roster as { co_owners?: string[] | null }).co_owners;
+      const coOwnerDisplayName = coOwners?.length
+        ? coOwners
+            .map((id) => userMap.get(id)?.displayName ?? "Unknown")
+            .join(" & ")
+        : null;
+
       const userData = userMap.get(ownerId) ?? {
         teamName: "Unknown",
         displayName: "Unknown",
@@ -283,6 +291,7 @@ async function syncUsersAndRosters(): Promise<SyncStepResult> {
           rosterId: rosterIdStr,
           userId: ownerId,
           ownerDisplayName: userData.displayName,
+          coOwnerDisplayName,
           wins: roster.settings.wins ?? 0,
           losses: roster.settings.losses ?? 0,
           ties: roster.settings.ties ?? 0,
@@ -296,6 +305,7 @@ async function syncUsersAndRosters(): Promise<SyncStepResult> {
             rosterId: rosterIdStr,
             userId: ownerId,
             ownerDisplayName: userData.displayName,
+            coOwnerDisplayName,
             wins: roster.settings.wins ?? 0,
             losses: roster.settings.losses ?? 0,
             ties: roster.settings.ties ?? 0,

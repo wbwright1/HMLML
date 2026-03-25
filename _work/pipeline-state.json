@@ -1,0 +1,14 @@
+{
+  "project": "{{PROJECT_NAME}}",
+  "sprints": [
+    {
+      "id": 1,
+      "name": "Sprint 1",
+      "status": "active",
+      "stories": []
+    }
+  ],
+  "currentSprint": 1,
+  "currentStory": null,
+  "currentState": null
+}

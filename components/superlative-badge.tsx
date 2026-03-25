@@ -3,36 +3,23 @@ interface SuperlativeBadgeProps {
   variant?: "gold" | "silver" | "green" | "neutral" | "brown";
 }
 
-const variantStyles: Record<string, { backgroundColor: string; color: string }> = {
-  gold: { backgroundColor: "rgba(184, 134, 11, 0.1)", color: "#B8860B" },
-  silver: { backgroundColor: "rgba(44, 82, 130, 0.15)", color: "#2C5282" },
-  green: { backgroundColor: "rgba(45, 90, 61, 0.1)", color: "#2D5A3D" },
-  neutral: { backgroundColor: "#F0ECE8", color: "#6B6560" },
-  brown: { backgroundColor: "rgba(139, 115, 85, 0.1)", color: "#8B7355" },
+const variantClasses: Record<string, string> = {
+  gold: "bg-gold/10 text-gold",
+  silver: "bg-blue-800/15 text-blue-800",
+  green: "bg-primary/10 text-primary",
+  neutral: "bg-muted text-muted-foreground",
+  brown: "bg-amber-800/10 text-amber-800",
 };
 
 export function SuperlativeBadge({
   text,
   variant = "neutral",
 }: SuperlativeBadgeProps) {
-  const styles = variantStyles[variant] ?? variantStyles.neutral;
+  const classes = variantClasses[variant] ?? variantClasses.neutral;
 
   return (
     <span
-      style={{
-        display: "inline-block",
-        fontSize: "0.75rem",
-        textTransform: "uppercase",
-        letterSpacing: "0.05em",
-        fontWeight: 500,
-        borderRadius: "9999px",
-        paddingLeft: "0.5rem",
-        paddingRight: "0.5rem",
-        paddingTop: "0.125rem",
-        paddingBottom: "0.125rem",
-        backgroundColor: styles.backgroundColor,
-        color: styles.color,
-      }}
+      className={`inline-block text-caption uppercase tracking-wide font-medium rounded-full px-2 py-0.5 ${classes}`}
     >
       {text}
     </span>

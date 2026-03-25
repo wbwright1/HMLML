@@ -38,10 +38,17 @@ export function MatchupRow({ matchup, variant = "final" }: MatchupRowProps) {
 
   return (
     <div
-      className="flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80"
+      className="relative flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 overflow-hidden"
       role="group"
       aria-label={ariaLabel}
     >
+      {/* Home team color accent */}
+      <div
+        className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-xl"
+        style={{ backgroundColor: homeTeam.franchiseBrandingColor ?? "var(--border)" }}
+        aria-hidden="true"
+      />
+
       {/* Home Team */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-3">
@@ -108,6 +115,13 @@ export function MatchupRow({ matchup, variant = "final" }: MatchupRowProps) {
           </div>
         </div>
       </div>
+
+      {/* Away team color accent */}
+      <div
+        className="absolute right-0 top-0 bottom-0 w-[3px] rounded-r-xl"
+        style={{ backgroundColor: awayTeam.franchiseBrandingColor ?? "var(--border)" }}
+        aria-hidden="true"
+      />
     </div>
   );
 }

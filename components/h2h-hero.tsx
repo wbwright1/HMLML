@@ -55,29 +55,11 @@ export function H2HHero({ teamA, teamB, record, streak }: H2HHeroProps) {
         <StatHero
           value={
             <span>
-              <span
-                style={{
-                  color:
-                    record.wins > record.losses
-                      ? "#2D5A3D"
-                      : record.losses > record.wins
-                        ? "#C4402F"
-                        : "#1A1A1A",
-                }}
-              >
+              <span className={record.wins > record.losses ? "text-primary" : record.losses > record.wins ? "text-loss" : "text-foreground"}>
                 {record.wins}
               </span>
               {" - "}
-              <span
-                style={{
-                  color:
-                    record.losses > record.wins
-                      ? "#2D5A3D"
-                      : record.wins > record.losses
-                        ? "#C4402F"
-                        : "#1A1A1A",
-                }}
-              >
+              <span className={record.losses > record.wins ? "text-primary" : record.wins > record.losses ? "text-loss" : "text-foreground"}>
                 {record.losses}
               </span>
             </span>

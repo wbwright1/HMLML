@@ -42,16 +42,20 @@ export async function getAllFranchises() {
       .select({
         franchiseId: franchiseSeasons.franchiseId,
         ownerDisplayName: franchiseSeasons.ownerDisplayName,
+        coOwnerDisplayName: franchiseSeasons.coOwnerDisplayName,
         seasonYear: seasons.seasonYear,
       })
       .from(franchiseSeasons)
       .innerJoin(seasons, eq(franchiseSeasons.seasonId, seasons.id))
       .orderBy(desc(seasons.seasonYear));
 
-    const ownerMap = new Map<string, string>();
+    const ownerMap = new Map<string, { owner: string; coOwner?: string }>();
     for (const row of ownerRows) {
       if (!ownerMap.has(row.franchiseId) && row.ownerDisplayName) {
-        ownerMap.set(row.franchiseId, row.ownerDisplayName);
+        ownerMap.set(row.franchiseId, {
+          owner: row.ownerDisplayName,
+          coOwner: row.coOwnerDisplayName ?? undefined,
+        });
       }
     }
 
@@ -61,7 +65,8 @@ export async function getAllFranchises() {
       name: r.name,
       abbreviation: r.abbreviation ?? undefined,
       brandingColor: r.brandingColor ?? undefined,
-      ownerName: ownerMap.get(r.id),
+      ownerName: ownerMap.get(r.id)?.owner,
+      coOwnerName: ownerMap.get(r.id)?.coOwner,
       totalWins: Number(r.totalWins ?? 0),
       totalLosses: Number(r.totalLosses ?? 0),
       totalPointsScored: Number(r.totalPointsScored ?? 0),
@@ -94,6 +99,7 @@ export async function getFranchiseBySlug(slug: string) {
         rosterId: franchiseSeasons.rosterId,
         userId: franchiseSeasons.userId,
         ownerDisplayName: franchiseSeasons.ownerDisplayName,
+        coOwnerDisplayName: franchiseSeasons.coOwnerDisplayName,
         wins: franchiseSeasons.wins,
         losses: franchiseSeasons.losses,
         ties: franchiseSeasons.ties,

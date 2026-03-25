@@ -2,6 +2,25 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* =========================================================================
+   Link & Button Visual Hierarchy — Press Box Design System
+   =========================================================================
+   Primary action links (navigation, "View all"):
+     text-primary font-medium hover:underline
+
+   Secondary action links (breadcrumbs, back links, contextual):
+     text-muted-foreground hover:text-foreground transition-colors
+
+   Card/row links (franchise names in tables, season years):
+     text-primary hover:underline
+
+   Active nav links:
+     text-primary underline underline-offset-4 decoration-primary
+
+   Disabled/muted links:
+     text-muted-foreground pointer-events-none
+   ========================================================================= */
+
 @theme inline {
     /* Fonts */
     --font-heading: var(--font-sans);
@@ -32,6 +51,7 @@
     --color-chart-4: var(--chart-4);
     --color-chart-5: var(--chart-5);
     --color-gold: var(--gold);
+    --color-loss: var(--loss);
 
     /* Border radius */
     --radius-sm: calc(var(--radius) * 0.6);
@@ -91,6 +111,9 @@
 
     /* Achievement gold */
     --gold: #B8860B;
+
+    /* Loss/negative — warm red */
+    --loss: #C4402F;
 
     /* Chart palette */
     --chart-1: #2D5A3D;

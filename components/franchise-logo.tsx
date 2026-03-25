@@ -48,7 +48,7 @@ export function FranchiseLogo({
       {/* Fallback — always rendered behind the image */}
       <div
         className="absolute inset-0 flex items-center justify-center rounded-lg"
-        style={{ backgroundColor: brandingColor ?? "#6B6560" }}
+        style={{ backgroundColor: brandingColor ?? "var(--muted-foreground)" }}
         aria-hidden="true"
       >
         <span className={`font-bold text-white select-none ${textSizeMap[size]}`}>

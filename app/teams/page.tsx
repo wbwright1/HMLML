@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseIdentity } from "@/components/franchise-identity";
+import { EmptyState } from "@/components/empty-state";
 import { getAllFranchises } from "@/lib/queries/franchises";
 
 export const metadata = {
@@ -22,10 +23,11 @@ export default async function TeamsPage() {
   if (!franchises || franchises.length === 0) {
     return (
       <PageSection label="Franchises" title="Teams">
-        <p className="text-body-lg text-muted-foreground">
-          No franchises loaded yet. Check back once data has been synced from
-          Sleeper.
-        </p>
+        <EmptyState
+          icon="users"
+          title="Loading Franchises"
+          description="Franchise data is syncing from Sleeper. Check back shortly."
+        />
       </PageSection>
     );
   }
@@ -43,6 +45,7 @@ export default async function TeamsPage() {
             <Link
               href={`/teams/${franchise.slug}`}
               className="group block rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/40 hover:bg-card/80"
+              style={{ borderTopWidth: "3px", borderTopColor: franchise.brandingColor ?? "var(--border)" }}
             >
               <FranchiseIdentity
                 franchise={{
@@ -53,6 +56,7 @@ export default async function TeamsPage() {
                 }}
                 championships={franchise.championships}
                 ownerName={franchise.ownerName}
+                coOwnerName={franchise.coOwnerName}
                 variant="standard"
               />
               <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">

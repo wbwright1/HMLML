@@ -10,6 +10,7 @@ interface FranchiseIdentityProps {
   };
   championships?: number;
   ownerName?: string;
+  coOwnerName?: string;
   variant?: "compact" | "standard" | "hero";
 }
 
@@ -17,6 +18,7 @@ export function FranchiseIdentity({
   franchise,
   championships = 0,
   ownerName,
+  coOwnerName,
   variant = "standard",
 }: FranchiseIdentityProps) {
   if (variant === "compact") {
@@ -51,7 +53,7 @@ export function FranchiseIdentity({
           <ChampionshipStars count={championships} variant="hero" />
           {ownerName && (
             <p className="text-body-sm text-muted-foreground">
-              Owned by {ownerName}
+              Owned by {ownerName}{coOwnerName ? ` & ${coOwnerName}` : ""}
             </p>
           )}
         </div>
@@ -76,7 +78,9 @@ export function FranchiseIdentity({
           <ChampionshipStars count={championships} variant="inline" />
         </div>
         {ownerName && (
-          <p className="text-caption text-muted-foreground">{ownerName}</p>
+          <p className="text-caption text-muted-foreground">
+            {ownerName}{coOwnerName ? ` & ${coOwnerName}` : ""}
+          </p>
         )}
       </div>
     </div>
