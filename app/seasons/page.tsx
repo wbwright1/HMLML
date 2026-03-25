@@ -82,14 +82,10 @@ export default async function SeasonsPage() {
                         <SuperlativeBadge text="Complete" variant="green" />
                       )}
                       {season.status === "in_season" && (
-                        <span className="text-xs uppercase tracking-wider px-2 py-0.5 rounded-full text-primary bg-primary/10">
-                          In Season
-                        </span>
+                        <SuperlativeBadge text="In Season" variant="green" />
                       )}
                       {season.status === "pre_draft" && (
-                        <span className="text-xs uppercase tracking-wider px-2 py-0.5 rounded-full text-muted-foreground bg-muted">
-                          Pre-Draft
-                        </span>
+                        <SuperlativeBadge text="Pre-Draft" variant="neutral" />
                       )}
                     </div>
 

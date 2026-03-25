@@ -280,7 +280,7 @@ export function PlayerTable({ players, franchises, statsSeason }: PlayerTablePro
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search players, NFL teams, or HMLML teams..."
           autoComplete="off"
-          style={{ paddingLeft: "3.25rem", paddingRight: "1.25rem", paddingTop: "1rem", paddingBottom: "1rem", fontSize: "1.125rem", width: "100%", borderRadius: "0.75rem", border: "1px solid var(--border)", backgroundColor: "var(--card)", outline: "none", color: "var(--foreground)" }}
+          style={{ paddingLeft: "3.25rem", paddingRight: "1.25rem", paddingTop: "1rem", paddingBottom: "1rem", fontSize: "1.125rem", width: "100%", borderRadius: "0.75rem", border: "1px solid var(--border)", backgroundColor: "var(--card)", color: "var(--foreground)" }}
         />
       </div>
 
@@ -346,7 +346,6 @@ export function PlayerTable({ players, franchises, statsSeason }: PlayerTablePro
                 fontWeight: 600,
                 color: "var(--foreground)",
                 border: "none",
-                outline: "none",
                 cursor: "pointer",
               }}
             >

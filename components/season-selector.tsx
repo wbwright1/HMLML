@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useEffect, useCallback, type KeyboardEvent } from "react";
+import { useRef, useState, useEffect, useCallback, type KeyboardEvent } from "react";
 
 interface SeasonSelectorProps {
   seasons: number[];
@@ -16,6 +16,28 @@ export function SeasonSelector({
   showAllTime = false,
 }: SeasonSelectorProps) {
   const tablistRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const updateScrollState = useCallback(() => {
+    const el = tablistRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 0);
+    setCanScrollRight(el.scrollLeft + el.clientWidth < el.scrollWidth - 1);
+  }, []);
+
+  useEffect(() => {
+    const el = tablistRef.current;
+    if (!el) return;
+    updateScrollState();
+    el.addEventListener("scroll", updateScrollState, { passive: true });
+    const observer = new ResizeObserver(updateScrollState);
+    observer.observe(el);
+    return () => {
+      el.removeEventListener("scroll", updateScrollState);
+      observer.disconnect();
+    };
+  }, [updateScrollState]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLButtonElement>) => {
@@ -66,9 +88,13 @@ export function SeasonSelector({
 
   return (
     <div className="relative">
-      {/* Fade indicators for horizontal scroll */}
-      <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-background to-transparent z-10" />
-      <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-background to-transparent z-10" />
+      {/* Fade indicators for horizontal scroll — only visible when content overflows */}
+      {canScrollLeft && (
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-background to-transparent z-10" />
+      )}
+      {canScrollRight && (
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-background to-transparent z-10" />
+      )}
       <div
         ref={tablistRef}
         role="tablist"

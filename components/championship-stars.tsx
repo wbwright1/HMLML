@@ -10,7 +10,7 @@ function StarIcon({ className, shadow }: { className?: string; shadow?: boolean 
       viewBox="0 0 24 24"
       fill="currentColor"
       aria-hidden="true"
-      style={shadow ? { filter: "drop-shadow(0 1px 2px rgba(184, 134, 11, 0.3))" } : undefined}
+      style={shadow ? { filter: "drop-shadow(0 1px 2px color-mix(in srgb, var(--gold) 30%, transparent))" } : undefined}
     >
       <path d="M12 2l3.09 6.26L22 9.27l-5 4.87L18.18 22 12 18.27 5.82 22 7 14.14 2 9.27l6.91-1.01L12 2z" />
     </svg>

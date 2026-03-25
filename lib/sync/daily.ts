@@ -238,7 +238,7 @@ async function syncUsersAndRosters(): Promise<SyncStepResult> {
       if (!ownerId) continue; // Skip unowned rosters
 
       // Resolve co-owner display name(s)
-      const coOwners = (roster as { co_owners?: string[] | null }).co_owners;
+      const coOwners = roster.co_owners;
       const coOwnerDisplayName = coOwners?.length
         ? coOwners
             .map((id) => userMap.get(id)?.displayName ?? "Unknown")

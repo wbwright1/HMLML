@@ -80,7 +80,6 @@ export function FranchisePairSelector({
                 fontWeight: 600,
                 color: "var(--foreground)",
                 border: "none",
-                outline: "none",
                 cursor: "pointer",
               }}
             >
@@ -155,7 +154,6 @@ export function FranchisePairSelector({
                 fontWeight: 600,
                 color: "var(--foreground)",
                 border: "none",
-                outline: "none",
                 cursor: "pointer",
               }}
             >

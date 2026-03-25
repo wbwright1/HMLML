@@ -47,6 +47,7 @@ export function FranchiseIdentity({
           abbreviation={franchise.abbreviation}
           brandingColor={franchise.brandingColor}
           size="xl"
+          decorative
         />
         <div className="space-y-2">
           <h1 className="text-h1 font-bold">{franchise.name}</h1>

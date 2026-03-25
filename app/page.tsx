@@ -28,33 +28,58 @@ export default async function HomePage() {
     // DB may not be connected in dev — fall through to empty states
   }
 
-  // Superlative stats
-  const superlatives = latestSeason
-    ? await getHomepageSuperlatives(latestSeason.id)
-    : null;
-
-  // Season narrative: in-season = last week results, offseason = league at a glance
+  // Superlative stats + season narrative (wrapped in try/catch)
   const isInSeason = latestSeason?.status === "in_season";
-  const lastWeekResults =
-    isInSeason && matchupData
-      ? await getLastWeekResults(latestSeason!.id, matchupData.week)
-      : null;
-  const leagueGlance = !isInSeason ? await getLeagueAtAGlance() : null;
+
+  let superlatives: {
+    highestScore: { franchiseName: string; points: number | null; week: number } | null;
+    longestStreak: { franchiseName: string; streak: number } | null;
+    closestMatchup: { teamA: string; teamB: string; margin: number; scoreA: number; scoreB: number } | null;
+    mostAllTimeWins: { franchiseName: string; totalWins: number } | null;
+    latestCompletedWeek: number;
+  } | null = null;
+  let lastWeekResults: Awaited<ReturnType<typeof getLastWeekResults>> | null = null;
+  let leagueGlance: Awaited<ReturnType<typeof getLeagueAtAGlance>> | null = null;
+
+  try {
+    const [s, lwr, lg] = await Promise.all([
+      latestSeason ? getHomepageSuperlatives(latestSeason.id) : null,
+      isInSeason && matchupData
+        ? getLastWeekResults(latestSeason!.id, matchupData.week)
+        : null,
+      !isInSeason ? getLeagueAtAGlance() : null,
+    ]);
+    superlatives = s;
+    lastWeekResults = lwr;
+    leagueGlance = lg;
+  } catch {
+    // DB queries may fail — fall through to empty states
+  }
 
   const hasLiveMatchups =
     matchupData?.matchups.some((m) => m.status === "in_progress") ?? false;
+
+  const hasAnySuperlative = (() => {
+    if (!superlatives) return false;
+    const s = superlatives;
+    return (
+      s.highestScore != null ||
+      (s.longestStreak != null && s.longestStreak.streak > 1) ||
+      s.closestMatchup != null ||
+      s.mostAllTimeWins != null
+    );
+  })();
 
   return (
     <>
       {/* Story 3.1: League Identity Hero */}
       <section
-        className="py-24 space-y-4 text-center"
-        style={{ backgroundColor: "rgba(45, 90, 61, 0.04)" }}
+        className="py-24 space-y-4 text-center bg-primary/[0.04]"
       >
         <p className="text-caption uppercase tracking-widest text-muted-foreground">
           Est. 2017
         </p>
-        <h1 className="text-display">Harambe Memorial League</h1>
+        <h1 className="text-display">Harambe Memorial League Memorial League</h1>
         <p className="text-body-lg text-muted-foreground">
           12 Teams. Dynasty Format. Harambe&rsquo;s Legacy.
         </p>
@@ -71,7 +96,7 @@ export default async function HomePage() {
       </section>
 
       {/* Story 3.2: Superlative Stats Row */}
-      {superlatives && (
+      {hasAnySuperlative && superlatives && (
         <ScrollReveal>
           <section className="py-12">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
@@ -322,7 +347,7 @@ export default async function HomePage() {
                         )}
                         <div className="flex flex-wrap gap-4 mt-2 text-sm">
                           <span className="tabular-nums">
-                            <span className={isLeader ? "font-bold" : "font-bold"}>{entry.wins ?? 0}</span>
+                            <span className={isLeader ? "font-bold" : ""}>{entry.wins ?? 0}</span>
                             <span className="text-muted-foreground">W</span>
                             <span className="text-muted-foreground mx-0.5">-</span>
                             <span>{entry.losses ?? 0}</span>

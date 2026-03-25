@@ -177,7 +177,7 @@ export default async function SeasonDetailPage({
                         />
                         {entry.ownerDisplayName && (
                           <p className="text-xs text-muted-foreground mt-0.5 ml-10">
-                            {entry.ownerDisplayName}
+                            {entry.ownerDisplayName}{entry.coOwnerDisplayName ? ` & ${entry.coOwnerDisplayName}` : ""}
                           </p>
                         )}
                       </td>
@@ -264,7 +264,7 @@ export default async function SeasonDetailPage({
                         />
                         {entry.ownerDisplayName && (
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {entry.ownerDisplayName}
+                            {entry.ownerDisplayName}{entry.coOwnerDisplayName ? ` & ${entry.coOwnerDisplayName}` : ""}
                           </p>
                         )}
                         <div className="flex flex-wrap gap-4 mt-2 text-sm">
