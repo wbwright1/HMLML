@@ -104,12 +104,10 @@ export default async function SeasonDetailPage({
         )}
 
         {season.championName && (
-          <div className="mt-6 rounded-xl border border-primary/30 bg-primary/5 p-6 text-center">
-            <p className="text-caption uppercase tracking-widest text-primary mb-1">
-              Champion
-            </p>
-            <p className="text-h3">{season.championName}</p>
+          <div className="mt-6 rounded-xl border border-gold/30 bg-gold/5 p-6 text-center space-y-2">
             <ChampionshipStars count={1} variant="hero" />
+            <p className="text-h3">{season.championName}</p>
+            <SuperlativeBadge text="League Champion" variant="gold" />
           </div>
         )}
       </PageSection>
@@ -152,6 +150,7 @@ export default async function SeasonDetailPage({
                     <tr
                       key={entry.id}
                       className="border-b border-border/50 last:border-0"
+                      style={{ borderLeft: `3px solid ${entry.franchiseBrandingColor ?? "var(--border)"}` }}
                     >
                       <td className="py-4 pr-4">
                         <span
@@ -178,7 +177,7 @@ export default async function SeasonDetailPage({
                         />
                         {entry.ownerDisplayName && (
                           <p className="text-xs text-muted-foreground mt-0.5 ml-10">
-                            {entry.ownerDisplayName}
+                            {entry.ownerDisplayName}{entry.coOwnerDisplayName ? ` & ${entry.coOwnerDisplayName}` : ""}
                           </p>
                         )}
                       </td>
@@ -237,7 +236,10 @@ export default async function SeasonDetailPage({
             <div className="md:hidden space-y-3">
               {standings.map((entry) => (
                 <ScrollReveal key={entry.id}>
-                  <div className="rounded-xl border border-border bg-card p-4">
+                  <div
+                    className="rounded-xl border border-border bg-card p-4"
+                    style={{ borderLeftWidth: "3px", borderLeftColor: entry.franchiseBrandingColor ?? "var(--border)" }}
+                  >
                     <div className="flex items-start gap-3">
                       <span
                         className={`text-lg tabular-nums font-bold mt-0.5 ${
@@ -262,7 +264,7 @@ export default async function SeasonDetailPage({
                         />
                         {entry.ownerDisplayName && (
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {entry.ownerDisplayName}
+                            {entry.ownerDisplayName}{entry.coOwnerDisplayName ? ` & ${entry.coOwnerDisplayName}` : ""}
                           </p>
                         )}
                         <div className="flex flex-wrap gap-4 mt-2 text-sm">

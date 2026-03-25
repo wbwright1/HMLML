@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { Search, ChevronUp, ChevronDown } from "lucide-react";
 import { PositionBadge } from "@/components/position-badge";
+import { EmptyState } from "@/components/empty-state";
 import type { RosteredPlayer } from "@/lib/queries/players";
 
 const POSITIONS = ["ALL", "QB", "RB", "WR", "TE"] as const;
@@ -260,7 +261,7 @@ export function PlayerTable({ players, franchises, statsSeason }: PlayerTablePro
           Filter players
         </label>
         <svg
-          style={{ position: "absolute", left: "1.25rem", top: "50%", transform: "translateY(-50%)", width: "1.25rem", height: "1.25rem", color: "#9C9590", pointerEvents: "none" }}
+          style={{ position: "absolute", left: "1.25rem", top: "50%", transform: "translateY(-50%)", width: "1.25rem", height: "1.25rem", color: "var(--muted-foreground)", pointerEvents: "none" }}
           viewBox="0 0 24 24"
           fill="none"
           stroke="currentColor"
@@ -279,7 +280,7 @@ export function PlayerTable({ players, franchises, statsSeason }: PlayerTablePro
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search players, NFL teams, or HMLML teams..."
           autoComplete="off"
-          style={{ paddingLeft: "3.25rem", paddingRight: "1.25rem", paddingTop: "1rem", paddingBottom: "1rem", fontSize: "1.125rem", width: "100%", borderRadius: "0.75rem", border: "1px solid #E8E4E0", backgroundColor: "#FFFFFF", outline: "none", color: "#1A1A1A" }}
+          style={{ paddingLeft: "3.25rem", paddingRight: "1.25rem", paddingTop: "1rem", paddingBottom: "1rem", fontSize: "1.125rem", width: "100%", borderRadius: "0.75rem", border: "1px solid var(--border)", backgroundColor: "var(--card)", color: "var(--foreground)" }}
         />
       </div>
 
@@ -310,8 +311,8 @@ export function PlayerTable({ players, franchises, statsSeason }: PlayerTablePro
                     border: "none",
                     transition: "all 150ms",
                     ...(isActive
-                      ? { backgroundColor: "#2D5A3D", color: "#FFFFFF" }
-                      : { backgroundColor: "#E8E4E0", color: "#6B6560" }),
+                      ? { backgroundColor: "var(--primary)", color: "var(--primary-foreground)" }
+                      : { backgroundColor: "var(--muted)", color: "var(--muted-foreground)" }),
                   }}
                 >
                   {pos}
@@ -336,16 +337,15 @@ export function PlayerTable({ players, franchises, statsSeason }: PlayerTablePro
                 MozAppearance: "none",
                 appearance: "none",
                 borderRadius: "0.5rem",
-                backgroundColor: "#E8E4E0",
+                backgroundColor: "var(--border)",
                 paddingLeft: "1rem",
                 paddingRight: "2.5rem",
                 paddingTop: "0.5rem",
                 paddingBottom: "0.5rem",
                 fontSize: "0.875rem",
                 fontWeight: 600,
-                color: "#1A1A1A",
+                color: "var(--foreground)",
                 border: "none",
-                outline: "none",
                 cursor: "pointer",
               }}
             >
@@ -360,7 +360,7 @@ export function PlayerTable({ players, franchises, statsSeason }: PlayerTablePro
               </optgroup>
             </select>
             <svg
-              style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", width: "1rem", height: "1rem", color: "#6B6560", pointerEvents: "none" }}
+              style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", width: "1rem", height: "1rem", color: "var(--muted-foreground)", pointerEvents: "none" }}
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -566,11 +566,11 @@ export function PlayerTable({ players, franchises, statsSeason }: PlayerTablePro
 
       {/* Empty filtered state */}
       {filtered.length === 0 && (
-        <div className="py-12 text-center">
-          <p className="text-body text-muted-foreground">
-            No players match your filters.
-          </p>
-        </div>
+        <EmptyState
+          icon="search"
+          title="No Players Found"
+          description={search ? `No players match "${search}". Check the spelling or try a different name.` : "No players match your filters."}
+        />
       )}
     </div>
   );

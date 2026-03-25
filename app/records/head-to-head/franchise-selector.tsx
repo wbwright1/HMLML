@@ -71,16 +71,15 @@ export function FranchisePairSelector({
                 appearance: "none",
                 width: "100%",
                 borderRadius: "0.5rem",
-                backgroundColor: "#E8E4E0",
+                backgroundColor: "var(--border)",
                 paddingLeft: "1rem",
                 paddingRight: "2.5rem",
                 paddingTop: "0.625rem",
                 paddingBottom: "0.625rem",
                 fontSize: "0.875rem",
                 fontWeight: 600,
-                color: "#1A1A1A",
+                color: "var(--foreground)",
                 border: "none",
-                outline: "none",
                 cursor: "pointer",
               }}
             >
@@ -96,7 +95,7 @@ export function FranchisePairSelector({
               ))}
             </select>
             <svg
-              style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", width: "1rem", height: "1rem", color: "#6B6560", pointerEvents: "none" }}
+              style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", width: "1rem", height: "1rem", color: "var(--muted-foreground)", pointerEvents: "none" }}
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -146,16 +145,15 @@ export function FranchisePairSelector({
                 appearance: "none",
                 width: "100%",
                 borderRadius: "0.5rem",
-                backgroundColor: "#E8E4E0",
+                backgroundColor: "var(--border)",
                 paddingLeft: "1rem",
                 paddingRight: "2.5rem",
                 paddingTop: "0.625rem",
                 paddingBottom: "0.625rem",
                 fontSize: "0.875rem",
                 fontWeight: 600,
-                color: "#1A1A1A",
+                color: "var(--foreground)",
                 border: "none",
-                outline: "none",
                 cursor: "pointer",
               }}
             >
@@ -171,7 +169,7 @@ export function FranchisePairSelector({
               ))}
             </select>
             <svg
-              style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", width: "1rem", height: "1rem", color: "#6B6560", pointerEvents: "none" }}
+              style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", width: "1rem", height: "1rem", color: "var(--muted-foreground)", pointerEvents: "none" }}
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"

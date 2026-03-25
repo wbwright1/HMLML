@@ -64,6 +64,7 @@ export const franchiseSeasons = pgTable(
     rosterId: text("roster_id").notNull(),
     userId: text("user_id").notNull(),
     ownerDisplayName: text("owner_display_name"),
+    coOwnerDisplayName: text("co_owner_display_name"),
     wins: integer("wins").default(0),
     losses: integer("losses").default(0),
     ties: integer("ties").default(0),

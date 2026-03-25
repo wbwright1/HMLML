@@ -43,6 +43,7 @@ export const SleeperRosterSchema = z
   .object({
     roster_id: z.number(),
     owner_id: z.string().nullable(),
+    co_owners: z.array(z.string()).nullable().optional(),
     league_id: z.string(),
     players: z.array(z.string()).nullable(),
     starters: z.array(z.string()).nullable(),

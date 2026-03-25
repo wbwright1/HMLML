@@ -8,6 +8,7 @@ import {
   getHeadToHead,
   getHeadToHeadHistory,
 } from "@/lib/queries/records";
+import { EmptyState } from "@/components/empty-state";
 import { FranchisePairSelector } from "@/app/records/head-to-head/franchise-selector";
 
 export const metadata = {
@@ -74,19 +75,19 @@ export default async function HeadToHeadPage({
       </PageSection>
 
       {!bothSelected && franchises.length === 0 && (
-        <div className="py-12 text-center">
-          <p className="text-body-lg text-muted-foreground">
-            No franchise data available yet. Check back once data has been synced.
-          </p>
-        </div>
+        <EmptyState
+          icon="users"
+          title="No Data Available"
+          description="Franchise data isn't available yet. Check back once data has been synced."
+        />
       )}
 
       {!bothSelected && franchises.length > 0 && (
-        <div className="py-12 text-center">
-          <p className="text-body text-muted-foreground">
-            Pick two teams above to see their rivalry history.
-          </p>
-        </div>
+        <EmptyState
+          icon="search"
+          title="Select Two Franchises"
+          description="Choose two franchises above to see their head-to-head history."
+        />
       )}
 
       {bothSelected && record && (
@@ -108,47 +109,40 @@ export default async function HeadToHeadPage({
                   aria-label={`Total points: ${teamA.name} ${history.reduce((sum, g) => sum + g.pointsA, 0).toFixed(1)}, ${teamB.name} ${history.reduce((sum, g) => sum + g.pointsB, 0).toFixed(1)}`}
                 >
                   <span
-                    className="text-right"
-                    style={{ minWidth: "5rem" }}
+                    className="text-right min-w-[5rem]"
                   >
                     <span
-                      className="text-h3 font-bold block"
-                      style={{ color: "#1A1A1A" }}
+                      className="text-h3 font-bold block text-foreground"
                     >
                       {history
                         .reduce((sum, g) => sum + g.pointsA, 0)
                         .toFixed(1)}
                     </span>
                     <span
-                      className="text-xs block"
-                      style={{ color: "#6B6560" }}
+                      className="text-xs block text-muted-foreground"
                     >
                       {teamA.name}
                     </span>
                   </span>
 
                   <span
-                    className="text-sm font-medium uppercase tracking-widest"
-                    style={{ color: "#6B6560" }}
+                    className="text-sm font-medium uppercase tracking-widest text-muted-foreground"
                   >
                     Total Points
                   </span>
 
                   <span
-                    className="text-left"
-                    style={{ minWidth: "5rem" }}
+                    className="text-left min-w-[5rem]"
                   >
                     <span
-                      className="text-h3 font-bold block"
-                      style={{ color: "#1A1A1A" }}
+                      className="text-h3 font-bold block text-foreground"
                     >
                       {history
                         .reduce((sum, g) => sum + g.pointsB, 0)
                         .toFixed(1)}
                     </span>
                     <span
-                      className="text-xs block"
-                      style={{ color: "#6B6560" }}
+                      className="text-xs block text-muted-foreground"
                     >
                       {teamB.name}
                     </span>
@@ -200,12 +194,9 @@ export default async function HeadToHeadPage({
                               <span
                                 className={
                                   aWon
-                                    ? "font-bold"
-                                    : "text-muted-foreground"
+                                    ? "font-bold text-primary"
+                                    : "text-loss"
                                 }
-                                style={{
-                                  color: aWon ? "#2D5A3D" : "#C4402F",
-                                }}
                               >
                                 {teamA.name} {game.pointsA.toFixed(1)}
                               </span>
@@ -213,12 +204,9 @@ export default async function HeadToHeadPage({
                               <span
                                 className={
                                   !aWon
-                                    ? "font-bold"
-                                    : "text-muted-foreground"
+                                    ? "font-bold text-primary"
+                                    : "text-loss"
                                 }
-                                style={{
-                                  color: !aWon ? "#2D5A3D" : "#C4402F",
-                                }}
                               >
                                 {game.pointsB.toFixed(1)} {teamB.name}
                               </span>

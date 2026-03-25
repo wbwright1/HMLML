@@ -56,7 +56,7 @@ export default async function PowerRankingsPage() {
                   href={`/teams/${entry.slug}`}
                   className="block rounded-xl border border-border bg-card p-5 transition-colors hover:bg-muted/50"
                 >
-                  <div className="flex items-center gap-4">
+                  <div className="flex flex-wrap items-center gap-4">
                     {/* Rank */}
                     <span
                       className={`text-2xl font-black tabular-nums w-10 text-center shrink-0 ${

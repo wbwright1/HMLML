@@ -3,6 +3,7 @@ import { PageSection } from "@/components/page-section";
 import { ChampionshipStars } from "@/components/championship-stars";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
+import { StatHero } from "@/components/stat-hero";
 import { getTrophyCase } from "@/lib/queries/records";
 import type { TrophyEntry } from "@/lib/queries/records";
 
@@ -96,8 +97,42 @@ export default async function TrophyCasePage() {
           </div>
         ) : (
           <div className="space-y-3">
-            {trophies.map((trophy, index) => (
-              <ScrollReveal key={trophy.seasonYear} delay={index * 40}>
+            {/* Most recent champion — featured */}
+            {trophies.length > 0 && trophies[0].championName && (
+              <ScrollReveal>
+                <div className="rounded-xl border border-gold/30 bg-gold/5 p-8 text-center space-y-4">
+                  <StatHero
+                    value={trophies[0].seasonYear}
+                    label="Reigning Champion"
+                    variant="lg"
+                  />
+                  <div className="flex items-center justify-center gap-3">
+                    <ChampionshipStars count={1} variant="hero" />
+                    {trophies[0].championSlug ? (
+                      <Link
+                        href={`/teams/${trophies[0].championSlug}`}
+                        className="text-h2 font-bold hover:text-primary transition-colors"
+                      >
+                        {trophies[0].championName}
+                      </Link>
+                    ) : (
+                      <span className="text-h2 font-bold">{trophies[0].championName}</span>
+                    )}
+                    <ChampionshipStars count={1} variant="hero" />
+                  </div>
+                  <SuperlativeBadge text="League Champion" variant="gold" />
+                  {trophies[0].runnerUpName && (
+                    <p className="text-sm text-muted-foreground">
+                      defeated {trophies[0].runnerUpName}
+                    </p>
+                  )}
+                </div>
+              </ScrollReveal>
+            )}
+
+            {/* Historical champions */}
+            {trophies.slice(1).map((trophy, index) => (
+              <ScrollReveal key={trophy.seasonYear} delay={(index + 1) * 40}>
                 <div
                   className={`rounded-xl border p-5 transition-colors ${
                     trophy.championName

@@ -2,6 +2,8 @@ import Link from "next/link";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { getAllSeasons } from "@/lib/queries/seasons";
+import { SuperlativeBadge } from "@/components/superlative-badge";
+import { EmptyState } from "@/components/empty-state";
 import { SeasonNavigator } from "./season-navigator";
 
 export const metadata = {
@@ -22,10 +24,11 @@ export default async function SeasonsPage() {
   if (seasons.length === 0) {
     return (
       <PageSection label="Year by Year" title="League History">
-        <p className="text-body-lg text-muted-foreground">
-          No seasons loaded yet. Check back once data has been synced from
-          Sleeper.
-        </p>
+        <EmptyState
+          icon="calendar"
+          title="No Seasons Yet"
+          description="Season history will appear after the first data sync completes."
+        />
       </PageSection>
     );
   }
@@ -76,22 +79,13 @@ export default async function SeasonsPage() {
                         </span>
                       )}
                       {season.status === "complete" && (
-                        <span
-                          className="text-xs uppercase tracking-wider px-2 py-0.5 rounded-full"
-                          style={{ color: "#2D5A3D", backgroundColor: "rgba(45, 90, 61, 0.1)" }}
-                        >
-                          Complete
-                        </span>
+                        <SuperlativeBadge text="Complete" variant="green" />
                       )}
                       {season.status === "in_season" && (
-                        <span className="text-xs uppercase tracking-wider px-2 py-0.5 rounded-full text-primary bg-primary/10">
-                          In Season
-                        </span>
+                        <SuperlativeBadge text="In Season" variant="green" />
                       )}
                       {season.status === "pre_draft" && (
-                        <span className="text-xs uppercase tracking-wider px-2 py-0.5 rounded-full text-muted-foreground bg-muted">
-                          Pre-Draft
-                        </span>
+                        <SuperlativeBadge text="Pre-Draft" variant="neutral" />
                       )}
                     </div>
 
