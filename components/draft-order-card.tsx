@@ -1,7 +1,7 @@
 import Link from "next/link";
 
 interface DraftOrderCardProps {
-  picks: { rank: number; franchiseName: string; record: string }[];
+  picks: { rank: number; franchiseName: string; record: string; originalOwnerName?: string }[];
   seasonYear?: number;
 }
 
@@ -23,8 +23,15 @@ export function DraftOrderCard({ picks, seasonYear }: DraftOrderCardProps) {
             <span className="w-6 text-center font-bold text-text-primary tabular-nums">
               {pick.rank}
             </span>
-            <span className="flex-1 font-medium text-text-primary">
-              {pick.franchiseName}
+            <span className="flex-1 min-w-0">
+              <span className="font-medium text-text-primary">
+                {pick.franchiseName}
+              </span>
+              {pick.originalOwnerName && (
+                <span className="text-text-tertiary text-xs ml-1">
+                  (via {pick.originalOwnerName})
+                </span>
+              )}
             </span>
             <span className="text-text-tertiary tabular-nums">
               {pick.record}

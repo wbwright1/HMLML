@@ -69,7 +69,9 @@ export default async function SeasonDetailPage({
   }
 
   const seasonYears = allSeasons.map((s) => s.seasonYear);
-  const isLegacy = season.previousLeagueId !== null;
+  // A season is legacy era if any franchise_season in it has the legacy flag set
+  // (NOT based on previousLeagueId, which chains all Sleeper seasons)
+  const isLegacy = standings.some((s) => s.isLegacyEra);
   const playoffWeekStart = season.playoffWeekStart;
 
   return (
@@ -81,7 +83,7 @@ export default async function SeasonDetailPage({
         <div className="flex flex-wrap items-center gap-4">
           <Link
             href="/seasons"
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="text-sm text-text-tertiary hover:text-text-secondary transition-colors"
           >
             &larr; All Seasons
           </Link>
@@ -115,7 +117,7 @@ export default async function SeasonDetailPage({
       {/* Final Standings */}
       <PageSection label="Final Standings" title="Standings">
         {standings.length === 0 ? (
-          <p className="text-body-lg text-muted-foreground">
+          <p className="text-body-lg text-text-tertiary">
             Standings data is not available for this season yet.
           </p>
         ) : (
@@ -125,22 +127,22 @@ export default async function SeasonDetailPage({
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-muted-foreground font-medium w-12">
+                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-text-tertiary font-medium w-12">
                       #
                     </th>
-                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-text-tertiary font-medium">
                       Team
                     </th>
-                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-muted-foreground font-medium text-center">
+                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-text-tertiary font-medium text-center">
                       Record
                     </th>
-                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-muted-foreground font-medium text-right">
+                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-text-tertiary font-medium text-right">
                       PF
                     </th>
-                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-muted-foreground font-medium text-right">
+                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-text-tertiary font-medium text-right">
                       PA
                     </th>
-                    <th className="pb-3 text-xs uppercase tracking-wider text-muted-foreground font-medium text-right">
+                    <th className="pb-3 text-xs uppercase tracking-wider text-text-tertiary font-medium text-right">
                       Playoff
                     </th>
                   </tr>
@@ -149,15 +151,14 @@ export default async function SeasonDetailPage({
                   {standings.map((entry) => (
                     <tr
                       key={entry.id}
-                      className="border-b border-border/50 last:border-0"
-                      style={{ borderLeft: `3px solid ${entry.franchiseBrandingColor ?? "var(--border)"}` }}
+                      className="border-b border-border/50 last:border-0 hover:bg-surface-muted transition-colors"
                     >
                       <td className="py-4 pr-4">
                         <span
                           className={`text-sm tabular-nums font-bold ${
                             (entry.standingsFinish ?? 99) <= 3
-                              ? "text-gold"
-                              : "text-muted-foreground"
+                              ? "text-accent-gold"
+                              : "text-text-tertiary"
                           }`}
                         >
                           {entry.standingsFinish ?? "-"}
@@ -176,7 +177,7 @@ export default async function SeasonDetailPage({
                           variant="compact"
                         />
                         {entry.ownerDisplayName && (
-                          <p className="text-xs text-muted-foreground mt-0.5 ml-10">
+                          <p className="text-xs text-text-tertiary mt-0.5 ml-10">
                             {entry.ownerDisplayName}{entry.coOwnerDisplayName ? ` & ${entry.coOwnerDisplayName}` : ""}
                           </p>
                         )}
@@ -185,25 +186,25 @@ export default async function SeasonDetailPage({
                         <span className="text-sm font-bold tabular-nums">
                           {entry.wins ?? 0}
                         </span>
-                        <span className="text-xs text-muted-foreground ml-0.5">
+                        <span className="text-xs text-text-tertiary ml-0.5">
                           W
                         </span>
-                        <span className="text-muted-foreground mx-1">-</span>
+                        <span className="text-text-tertiary mx-1">-</span>
                         <span className="text-sm font-normal tabular-nums">
                           {entry.losses ?? 0}
                         </span>
-                        <span className="text-xs text-muted-foreground ml-0.5">
+                        <span className="text-xs text-text-tertiary ml-0.5">
                           L
                         </span>
                         {(entry.ties ?? 0) > 0 && (
                           <>
-                            <span className="text-muted-foreground mx-1">
+                            <span className="text-text-tertiary mx-1">
                               -
                             </span>
                             <span className="text-sm font-normal tabular-nums">
                               {entry.ties}
                             </span>
-                            <span className="text-xs text-muted-foreground ml-0.5">
+                            <span className="text-xs text-text-tertiary ml-0.5">
                               T
                             </span>
                           </>
@@ -217,7 +218,7 @@ export default async function SeasonDetailPage({
                         </span>
                       </td>
                       <td className="py-4 pr-4 text-right">
-                        <span className="text-sm tabular-nums text-muted-foreground">
+                        <span className="text-sm tabular-nums text-text-tertiary">
                           {entry.pointsAgainst != null
                             ? Number(entry.pointsAgainst).toFixed(1)
                             : "-"}
@@ -237,15 +238,14 @@ export default async function SeasonDetailPage({
               {standings.map((entry) => (
                 <ScrollReveal key={entry.id}>
                   <div
-                    className="rounded-xl border border-border bg-card p-4"
-                    style={{ borderLeftWidth: "3px", borderLeftColor: entry.franchiseBrandingColor ?? "var(--border)" }}
+                    className="rounded-xl border border-border bg-surface p-4"
                   >
                     <div className="flex items-start gap-3">
                       <span
                         className={`text-lg tabular-nums font-bold mt-0.5 ${
                           (entry.standingsFinish ?? 99) <= 3
-                            ? "text-gold"
-                            : "text-muted-foreground"
+                            ? "text-accent-gold"
+                            : "text-text-tertiary"
                         }`}
                       >
                         {entry.standingsFinish ?? "-"}
@@ -263,7 +263,7 @@ export default async function SeasonDetailPage({
                           variant="compact"
                         />
                         {entry.ownerDisplayName && (
-                          <p className="text-xs text-muted-foreground mt-0.5">
+                          <p className="text-xs text-text-tertiary mt-0.5">
                             {entry.ownerDisplayName}{entry.coOwnerDisplayName ? ` & ${entry.coOwnerDisplayName}` : ""}
                           </p>
                         )}
@@ -272,23 +272,23 @@ export default async function SeasonDetailPage({
                             <span className="font-bold">
                               {entry.wins ?? 0}
                             </span>
-                            <span className="text-muted-foreground">W</span>
-                            <span className="text-muted-foreground mx-0.5">
+                            <span className="text-text-tertiary">W</span>
+                            <span className="text-text-tertiary mx-0.5">
                               -
                             </span>
                             <span>{entry.losses ?? 0}</span>
-                            <span className="text-muted-foreground">L</span>
+                            <span className="text-text-tertiary">L</span>
                             {(entry.ties ?? 0) > 0 && (
                               <>
-                                <span className="text-muted-foreground mx-0.5">
+                                <span className="text-text-tertiary mx-0.5">
                                   -
                                 </span>
                                 <span>{entry.ties}</span>
-                                <span className="text-muted-foreground">T</span>
+                                <span className="text-text-tertiary">T</span>
                               </>
                             )}
                           </span>
-                          <span className="text-muted-foreground tabular-nums">
+                          <span className="text-text-tertiary tabular-nums">
                             {entry.pointsScored != null
                               ? Number(entry.pointsScored).toFixed(1)
                               : "-"}{" "}
@@ -321,13 +321,13 @@ export default async function SeasonDetailPage({
                 <Link
                   key={week}
                   href={`/seasons/${year}/week/${week}`}
-                  className={`rounded-lg border text-center py-3 px-2 text-sm font-medium transition-colors hover:bg-muted/50 ${
+                  className={`rounded-lg border text-center py-3 px-2 text-sm font-medium transition-colors hover:bg-surface-muted ${
                     isPlayoff
-                      ? "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"
-                      : "border-border bg-card text-foreground"
+                      ? "border-accent-green/30 bg-accent-green-light text-accent-green hover:bg-accent-green-light/80"
+                      : "border-border bg-surface text-text-primary"
                   }`}
                 >
-                  <span className="block text-xs text-muted-foreground mb-0.5">
+                  <span className="block text-xs text-text-tertiary mb-0.5">
                     {isPlayoff ? "Playoff" : "Week"}
                   </span>
                   {week}
@@ -340,7 +340,7 @@ export default async function SeasonDetailPage({
             <div className="mt-6">
               <Link
                 href={`/playoffs/${year}`}
-                className="inline-flex items-center gap-2 text-sm text-primary hover:text-primary/80 transition-colors underline underline-offset-4 font-medium"
+                className="inline-flex items-center gap-2 text-sm text-accent-green hover:text-accent-green/80 transition-colors underline underline-offset-4 font-medium"
               >
                 View Playoff Bracket &rarr;
               </Link>
@@ -354,10 +354,10 @@ export default async function SeasonDetailPage({
 
 function PlayoffBadge({ result }: { result: string | null }) {
   if (!result)
-    return <span className="text-sm text-muted-foreground">-</span>;
+    return <span className="text-sm text-text-tertiary">-</span>;
 
   const label = getPlayoffLabel(result);
-  if (!label) return <span className="text-sm text-muted-foreground">-</span>;
+  if (!label) return <span className="text-sm text-text-tertiary">-</span>;
 
   const variant = getPlayoffBadgeVariant(result);
 

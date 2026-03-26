@@ -40,6 +40,7 @@ export interface DraftOrderEntry {
   rank: number;
   franchiseName: string;
   record: string;
+  originalOwnerName?: string; // set when pick was traded (shows "via [original owner]")
 }
 
 export interface PreseasonAwards {
@@ -65,6 +66,7 @@ export async function getPreseasonAwards(
         franchiseId: franchiseSeasons.franchiseId,
         franchiseName: franchises.name,
         franchiseSlug: franchises.slug,
+        rosterId: franchiseSeasons.rosterId,
         wins: franchiseSeasons.wins,
         losses: franchiseSeasons.losses,
         ties: franchiseSeasons.ties,
@@ -235,6 +237,41 @@ export async function getPreseasonAwards(
 
     // ── Draft Order ─────────────────────────────────────────────────────
 
+    // Build roster_id -> franchise name map for traded pick resolution
+    const rosterToFranchise = new Map<string, string>();
+    for (const t of seasonStandings) {
+      rosterToFranchise.set(t.rosterId, t.franchiseName);
+    }
+
+    // Fetch traded picks from Sleeper to identify "via" trades for round 1
+    let tradedPickMap = new Map<string, string>(); // rosterId -> original owner name
+    try {
+      // Get the latest season's league ID for the Sleeper API call
+      const [latestSeasonRow] = await db
+        .select({ leagueId: seasons.leagueId })
+        .from(seasons)
+        .orderBy(desc(seasons.seasonYear))
+        .limit(1);
+
+      if (latestSeasonRow) {
+        const { getLeagueTradedPicks } = await import("@/lib/sleeper");
+        const tradedResult = await getLeagueTradedPicks(latestSeasonRow.leagueId);
+        if ("data" in tradedResult) {
+          for (const pick of tradedResult.data) {
+            // Only care about round 1 picks where owner differs from original
+            if (pick.round === 1 && pick.owner_id !== pick.roster_id) {
+              const originalOwnerName = rosterToFranchise.get(String(pick.roster_id));
+              if (originalOwnerName) {
+                tradedPickMap.set(String(pick.owner_id), originalOwnerName);
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      // Sleeper API may be unavailable; draft order still works without "via" info
+    }
+
     // Draft order is inverse of standings finish (worst first)
     const draftOrder: DraftOrderEntry[] = [...seasonStandings]
       .sort((a, b) => {
@@ -248,11 +285,25 @@ export async function getPreseasonAwards(
         // Among same group, sort by standings finish descending (worst first)
         return (b.standingsFinish ?? 99) - (a.standingsFinish ?? 99);
       })
-      .map((t, i) => ({
-        rank: i + 1,
-        franchiseName: t.franchiseName,
-        record: `${t.wins ?? 0}-${t.losses ?? 0}${(t.ties ?? 0) > 0 ? `-${t.ties}` : ""}`,
-      }));
+      .map((t, i) => {
+        // Check if this pick's slot (original owner roster) was traded to someone else
+        // The pick slot belongs to roster t.rosterId; check if someone else owns it
+        const currentOwnerName = tradedPickMap.get(t.rosterId);
+        // If a different owner owns this pick, show them as the picker with "via" original
+        if (currentOwnerName) {
+          return {
+            rank: i + 1,
+            franchiseName: currentOwnerName,
+            record: `${t.wins ?? 0}-${t.losses ?? 0}${(t.ties ?? 0) > 0 ? `-${t.ties}` : ""}`,
+            originalOwnerName: t.franchiseName,
+          };
+        }
+        return {
+          rank: i + 1,
+          franchiseName: t.franchiseName,
+          record: `${t.wins ?? 0}-${t.losses ?? 0}${(t.ties ?? 0) > 0 ? `-${t.ties}` : ""}`,
+        };
+      });
 
     return {
       teamAwards,
