@@ -1,26 +1,7 @@
+import { getNflState } from "@/lib/queries/nfl-state";
+import { getLatestSeason } from "@/lib/queries/matchups";
+
 type SeasonVariant = "preseason" | "week" | "playoffs" | "offseason";
-
-interface NflState {
-  seasonType: string;
-  week: number;
-}
-
-/**
- * Returns the current NFL calendar state.
- *
- * Currently returns null for ALL states because the seasons table only stores
- * Sleeper league lifecycle status (pre_draft, in_season, complete), not NFL
- * calendar state (pre, regular, post, off). These are different concepts.
- * Epic 2 will introduce an NFL state data source with actual season_type
- * and week columns. Until then, returning null is the correct fallback
- * per UXA decision #3.
- */
-async function getCurrentNflState(): Promise<NflState | null> {
-  // Epic 2 will provide an NFL state table with season_type and week columns.
-  // Until that data source exists, return null to avoid displaying incorrect
-  // season state derived from Sleeper league lifecycle status.
-  return null;
-}
 
 function getVariantClasses(variant: SeasonVariant): string {
   switch (variant) {
@@ -34,30 +15,46 @@ function getVariantClasses(variant: SeasonVariant): string {
   }
 }
 
-function getLabel(state: NflState): { label: string; variant: SeasonVariant } | null {
-  switch (state.seasonType) {
-    case "pre":
-      return { label: "Preseason", variant: "preseason" };
-    case "regular":
-      return { label: `Week ${state.week}`, variant: "week" };
-    case "post":
-      return { label: "Playoffs", variant: "playoffs" };
-    case "off":
-      return { label: "Offseason", variant: "offseason" };
-    default:
-      return null;
-  }
-}
-
 export async function SeasonalPillBadge() {
-  const state = await getCurrentNflState();
+  let nflState: Awaited<ReturnType<typeof getNflState>> = null;
+  let latestSeason: Awaited<ReturnType<typeof getLatestSeason>> = null;
 
-  if (!state) return null;
+  try {
+    [nflState, latestSeason] = await Promise.all([
+      getNflState(),
+      getLatestSeason(),
+    ]);
+  } catch {
+    return null;
+  }
 
-  const result = getLabel(state);
-  if (!result) return null;
+  // Apply the same season detection logic as the hub (page.tsx)
+  const nflSeasonType = nflState?.seasonType ?? null;
+  const dbSeasonStatus = latestSeason?.status ?? null;
 
-  const { label, variant } = result;
+  let label: string;
+  let variant: SeasonVariant;
+
+  if (nflSeasonType === "regular") {
+    label = `Week ${nflState?.week ?? 1}`;
+    variant = "week";
+  } else if (nflSeasonType === "post") {
+    label = "Playoffs";
+    variant = "playoffs";
+  } else if (nflSeasonType === "pre") {
+    label = "Preseason";
+    variant = "preseason";
+  } else if (dbSeasonStatus === "in_season") {
+    label = "In Season";
+    variant = "week";
+  } else if (dbSeasonStatus === "pre_draft" || dbSeasonStatus === "complete") {
+    label = "Preseason";
+    variant = "preseason";
+  } else {
+    label = "Offseason";
+    variant = "offseason";
+  }
+
   const variantClasses = getVariantClasses(variant);
 
   return (

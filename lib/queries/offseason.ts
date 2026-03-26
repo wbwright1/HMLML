@@ -5,14 +5,40 @@ import {
   franchiseSeasons,
   matchups,
   transactions,
+  players,
 } from "@/lib/db/schema";
-import { eq, desc, sql, and } from "drizzle-orm";
+import { eq, desc, sql, and, inArray } from "drizzle-orm";
 
 /**
  * Get offseason recap data for a completed season.
+ * If the given season has no matchup data, falls back to the most recent completed season.
  */
 export async function getOffseasonRecap(seasonId: number) {
   try {
+    let effectiveSeasonId = seasonId;
+
+    // Check if this season has any matchup data
+    const [matchupCount] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(matchups)
+      .where(eq(matchups.seasonId, seasonId));
+
+    if (!matchupCount || matchupCount.count === 0) {
+      // Fall back to most recent completed season with matchup data
+      const [completedSeason] = await db
+        .select({ id: seasons.id })
+        .from(seasons)
+        .where(eq(seasons.status, "complete"))
+        .orderBy(desc(seasons.seasonYear))
+        .limit(1);
+
+      if (completedSeason) {
+        effectiveSeasonId = completedSeason.id;
+      } else {
+        return null;
+      }
+    }
+
     // Champion
     const [seasonRow] = await db
       .select({
@@ -20,7 +46,7 @@ export async function getOffseasonRecap(seasonId: number) {
         championFranchiseId: seasons.championFranchiseId,
       })
       .from(seasons)
-      .where(eq(seasons.id, seasonId))
+      .where(eq(seasons.id, effectiveSeasonId))
       .limit(1);
 
     if (!seasonRow) return null;
@@ -49,12 +75,11 @@ export async function getOffseasonRecap(seasonId: number) {
       })
       .from(franchiseSeasons)
       .innerJoin(franchises, eq(franchises.id, franchiseSeasons.franchiseId))
-      .where(eq(franchiseSeasons.seasonId, seasonId))
+      .where(eq(franchiseSeasons.seasonId, effectiveSeasonId))
       .orderBy(desc(franchiseSeasons.pointsScored))
       .limit(1);
 
-    // Biggest upset: largest margin where the team with fewer wins won
-    // Simplified: just find the largest blowout
+    // Biggest blowout
     const [biggestBlowout] = await db
       .select({
         winner: sql<string>`winner_f.name`,
@@ -65,7 +90,7 @@ export async function getOffseasonRecap(seasonId: number) {
         (SELECT m1.franchise_id as winner_id, m1.points, m2.franchise_id as loser_id, m2.points as loser_points
          FROM matchups m1
          JOIN matchups m2 ON m1.season_id = m2.season_id AND m1.week = m2.week AND m1.matchup_id = m2.matchup_id AND m1.id != m2.id
-         WHERE m1.season_id = ${seasonId} AND m1.is_winner = true AND m1.is_playoff = false
+         WHERE m1.season_id = ${effectiveSeasonId} AND m1.is_winner = true AND m1.is_playoff = false
          ORDER BY ABS(m1.points - m2.points) DESC
          LIMIT 1) sub
         JOIN franchises winner_f ON winner_f.id = sub.winner_id
@@ -83,7 +108,7 @@ export async function getOffseasonRecap(seasonId: number) {
       .from(matchups)
       .where(
         and(
-          eq(matchups.seasonId, seasonId),
+          eq(matchups.seasonId, effectiveSeasonId),
           eq(matchups.isPlayoff, false),
         )
       )
@@ -149,7 +174,7 @@ export async function getOffseasonRecap(seasonId: number) {
 }
 
 /**
- * Get recent transactions for a season.
+ * Get recent transactions for a season, with player names resolved.
  */
 export async function getRecentTransactions(
   seasonId: number,
@@ -169,6 +194,30 @@ export async function getRecentTransactions(
       .orderBy(desc(transactions.createdAtSleeper))
       .limit(limit);
 
+    // Collect all player IDs from all transactions for batch lookup
+    const allPlayerIds = new Set<string>();
+    for (const txn of rows) {
+      const adds = txn.adds as Record<string, string> | null;
+      const drops = txn.drops as Record<string, string> | null;
+      if (adds) Object.keys(adds).forEach((id) => allPlayerIds.add(id));
+      if (drops) Object.keys(drops).forEach((id) => allPlayerIds.add(id));
+    }
+
+    // Batch-fetch player names
+    const playerNameMap = new Map<string, string>();
+    if (allPlayerIds.size > 0) {
+      const playerRows = await db
+        .select({ id: players.id, fullName: players.fullName })
+        .from(players)
+        .where(inArray(players.id, Array.from(allPlayerIds)));
+
+      for (const p of playerRows) {
+        if (p.fullName) {
+          playerNameMap.set(p.id, p.fullName);
+        }
+      }
+    }
+
     return rows.map((txn) => {
       const date = txn.createdAtSleeper
         ? new Date(txn.createdAtSleeper).toLocaleDateString("en-US", {
@@ -177,18 +226,28 @@ export async function getRecentTransactions(
           })
         : "Unknown";
 
-      let description = `${txn.type} transaction`;
       const adds = txn.adds as Record<string, string> | null;
       const drops = txn.drops as Record<string, string> | null;
 
+      const parts: string[] = [];
+
       if (adds && Object.keys(adds).length > 0) {
-        const playerCount = Object.keys(adds).length;
-        description = `Added ${playerCount} player${playerCount > 1 ? "s" : ""}`;
+        const names = Object.keys(adds).map(
+          (id) => playerNameMap.get(id) ?? "a player"
+        );
+        parts.push(`Added ${formatPlayerNames(names)}`);
       }
+
       if (drops && Object.keys(drops).length > 0) {
-        const playerCount = Object.keys(drops).length;
-        description += `, dropped ${playerCount} player${playerCount > 1 ? "s" : ""}`;
+        const names = Object.keys(drops).map(
+          (id) => playerNameMap.get(id) ?? "a player"
+        );
+        parts.push(`dropped ${formatPlayerNames(names)}`);
       }
+
+      const description = parts.length > 0
+        ? parts.join(", ")
+        : `${txn.type} transaction`;
 
       return {
         date,
@@ -200,4 +259,12 @@ export async function getRecentTransactions(
     console.error("[offseason] getRecentTransactions error:", error);
     return [];
   }
+}
+
+/** Format a list of player names, truncating at 2 with "+N more" */
+function formatPlayerNames(names: string[]): string {
+  if (names.length <= 2) {
+    return names.join(", ");
+  }
+  return `${names.slice(0, 2).join(", ")} +${names.length - 2} more`;
 }

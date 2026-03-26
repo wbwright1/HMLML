@@ -10,6 +10,7 @@ import { WeekBanner } from "@/components/week-banner";
 import { TeamAwardCard } from "@/components/team-award-card";
 import { PlayerAwardCard } from "@/components/player-award-card";
 import { StingCard } from "@/components/sting-card";
+import { DraftCountdown } from "@/components/draft-countdown";
 import { DraftOrderCard } from "@/components/draft-order-card";
 import { LiveMatchupCard } from "@/components/live-matchup-card";
 import { WeeklySuperlativeCard } from "@/components/weekly-superlative-card";
@@ -19,7 +20,7 @@ import { TransactionActivityCard } from "@/components/transaction-activity-card"
 import { ChampionshipStars } from "@/components/championship-stars";
 import { ScorePoller } from "@/app/matchups/score-poller";
 import { getCurrentWeekMatchups, getLatestSeason } from "@/lib/queries/matchups";
-import { getSeasonStandings } from "@/lib/queries/seasons";
+import { getSeasonStandings, getLastCompletedSeason } from "@/lib/queries/seasons";
 import {
   getHomepageSuperlatives,
   getLastWeekResults,
@@ -53,7 +54,31 @@ export default async function HomePage() {
   }
 
   // Determine hub state
-  const seasonType = nflState?.seasonType ?? (latestSeason?.status === "in_season" ? "regular" : "off");
+  // Sleeper's season_type: "pre" (NFL preseason Aug), "regular", "post" (playoffs), "off" (NFL offseason)
+  // Fantasy league mapping: NFL "off" maps to fantasy "preseason" when the latest season is
+  // complete or pre_draft (new league year, pre-draft). Only show offseason if no season data exists.
+  const nflSeasonType = nflState?.seasonType ?? null;
+  const dbSeasonStatus = latestSeason?.status ?? null;
+
+  let seasonType: NflSeasonType;
+  if (nflSeasonType === "regular") {
+    seasonType = "regular";
+  } else if (nflSeasonType === "post") {
+    seasonType = "post";
+  } else if (nflSeasonType === "pre") {
+    // NFL preseason (August): also fantasy preseason
+    seasonType = "pre";
+  } else if (dbSeasonStatus === "in_season") {
+    // DB says in-season even though NFL API says off or is unavailable
+    seasonType = "regular";
+  } else if (dbSeasonStatus === "pre_draft" || dbSeasonStatus === "complete") {
+    // NFL offseason + DB shows completed or pre-draft season = fantasy preseason
+    seasonType = "pre";
+  } else {
+    // No season data or unknown state: offseason fallback
+    seasonType = "off";
+  }
+
   const hasLiveMatchups = matchupData?.matchups.some((m) => m.status === "in_progress") ?? false;
   const isGameWindow = seasonType === "regular" && hasLiveMatchups;
 
@@ -90,7 +115,7 @@ export default async function HomePage() {
     );
   }
 
-  // Offseason (default)
+  // Offseason (default) — only if no season data exists
   return (
     <OffseasonHub
       latestSeason={latestSeason}
@@ -110,7 +135,9 @@ async function PreseasonHub({
   latestSeason: Awaited<ReturnType<typeof getLatestSeason>>;
   standings: Awaited<ReturnType<typeof getSeasonStandings>>;
 }) {
-  // Find the most recent completed season for awards
+  // Find the most recent completed season for awards and champion data.
+  // latestSeason might be a new empty season (e.g., 2026 pre_draft with no games),
+  // so we explicitly query for the last completed season.
   let awards: Awaited<ReturnType<typeof getPreseasonAwards>> = null;
   let championData: {
     seasonYear: number;
@@ -120,26 +147,35 @@ async function PreseasonHub({
     defeatedOpponent?: string;
   } | null = null;
 
-  if (latestSeason) {
-    try {
-      awards = await getPreseasonAwards(latestSeason.id);
+  try {
+    // Use last completed season for awards (not the potentially empty latest season)
+    const completedSeason = await getLastCompletedSeason();
+    const awardSeasonId = completedSeason?.id ?? latestSeason?.id;
+    const awardSeasonYear = completedSeason?.seasonYear ?? latestSeason?.seasonYear;
 
-      // Champion from the latest season
-      const champion = standings.find((s) => s.playoffResult === "champion");
-      const runnerUp = standings.find((s) => s.playoffResult === "runner_up");
-      if (champion) {
+    if (awardSeasonId) {
+      awards = await getPreseasonAwards(awardSeasonId);
+
+      // Get standings for the completed season to find champion
+      const completedStandings = completedSeason && completedSeason.id !== latestSeason?.id
+        ? await getSeasonStandings(completedSeason.id)
+        : standings;
+
+      const champion = completedStandings.find((s) => s.playoffResult === "champion");
+      const runnerUp = completedStandings.find((s) => s.playoffResult === "runner_up");
+      if (champion && awardSeasonYear) {
         const record = `${champion.wins ?? 0}-${champion.losses ?? 0}`;
         championData = {
-          seasonYear: latestSeason.seasonYear,
+          seasonYear: awardSeasonYear,
           franchiseName: champion.franchiseName,
           franchiseSlug: champion.franchiseSlug,
           record,
           defeatedOpponent: runnerUp?.franchiseName,
         };
       }
-    } catch {
-      // Awards data may not be available
     }
+  } catch {
+    // Awards data may not be available
   }
 
   return (
@@ -153,6 +189,15 @@ async function PreseasonHub({
           record={championData.record}
           defeatedOpponent={championData.defeatedOpponent}
         />
+      )}
+
+      {/* Draft Countdown */}
+      {process.env.NEXT_PUBLIC_DRAFT_DATE && (
+        <ScrollReveal>
+          <PageSection label="Upcoming" title="Draft Day">
+            <DraftCountdown draftDate={process.env.NEXT_PUBLIC_DRAFT_DATE} />
+          </PageSection>
+        </ScrollReveal>
       )}
 
       {/* Team Awards */}
@@ -620,30 +665,46 @@ async function OffseasonHub({
   let leagueGlance: Awaited<ReturnType<typeof getLeagueAtAGlance>> | null = null;
   let offseasonRecap: Awaited<ReturnType<typeof getOffseasonRecap>> | null = null;
   let recentTransactions: Awaited<ReturnType<typeof getRecentTransactions>> = [];
+  let completedSeason: Awaited<ReturnType<typeof getLastCompletedSeason>> | null = null;
+  let completedStandings: Awaited<ReturnType<typeof getSeasonStandings>> = [];
 
   try {
-    leagueGlance = await getLeagueAtAGlance();
+    [leagueGlance, completedSeason] = await Promise.all([
+      getLeagueAtAGlance(),
+      getLastCompletedSeason(),
+    ]);
 
-    if (latestSeason) {
+    // Use completed season for recap; fall back to latest season for transactions
+    const recapSeasonId = completedSeason?.id ?? latestSeason?.id;
+    const txnSeasonId = latestSeason?.id ?? completedSeason?.id;
+
+    if (recapSeasonId || txnSeasonId) {
       [offseasonRecap, recentTransactions] = await Promise.all([
-        getOffseasonRecap(latestSeason.id),
-        getRecentTransactions(latestSeason.id),
+        recapSeasonId ? getOffseasonRecap(recapSeasonId) : null,
+        txnSeasonId ? getRecentTransactions(txnSeasonId) : [],
       ]);
+    }
+
+    // Get standings for the completed season to find champion
+    if (completedSeason) {
+      completedStandings = await getSeasonStandings(completedSeason.id);
     }
   } catch {
     // Data may not be available
   }
 
-  // Champion banner data
-  const champion = standings.find((s) => s.playoffResult === "champion");
-  const runnerUp = standings.find((s) => s.playoffResult === "runner_up");
+  // Champion banner data from the completed season
+  const championStandings = completedStandings.length > 0 ? completedStandings : standings;
+  const champion = championStandings.find((s) => s.playoffResult === "champion");
+  const runnerUp = championStandings.find((s) => s.playoffResult === "runner_up");
+  const championSeasonYear = completedSeason?.seasonYear ?? latestSeason?.seasonYear;
 
   return (
     <>
       {/* Champion Banner */}
-      {champion && latestSeason && (
+      {champion && championSeasonYear && (
         <ChampionBanner
-          seasonYear={latestSeason.seasonYear}
+          seasonYear={championSeasonYear}
           franchiseName={champion.franchiseName}
           franchiseSlug={champion.franchiseSlug}
           record={`${champion.wins ?? 0}-${champion.losses ?? 0}`}
