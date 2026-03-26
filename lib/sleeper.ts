@@ -40,11 +40,14 @@ export type SleeperResult<T> =
 
 async function fetchSleeper<T>(
   path: string,
-  schema: z.ZodType<T>
+  schema: z.ZodType<T>,
+  options?: { revalidate?: number }
 ): Promise<SleeperResult<T>> {
   try {
     const url = path.startsWith("http") ? path : `${SLEEPER_BASE_URL}${path}`;
-    const res = await fetch(url);
+    const res = await fetch(url, {
+      next: { revalidate: options?.revalidate ?? 0 },
+    });
 
     if (!res.ok) {
       const message = `Sleeper API returned ${res.status}`;
@@ -111,13 +114,14 @@ export async function getLeagueMatchups(
   );
 }
 
-/** Fetch all drafts for a league. */
+/** Fetch all drafts for a league. Cached for 1 hour. */
 export async function getLeagueDrafts(
   leagueId: string
 ): Promise<SleeperResult<SleeperDraft[]>> {
   return fetchSleeper(
     `/league/${leagueId}/drafts`,
-    z.array(SleeperDraftSchema)
+    z.array(SleeperDraftSchema),
+    { revalidate: 3600 }
   );
 }
 
@@ -142,13 +146,14 @@ export async function getLeagueTransactions(
   );
 }
 
-/** Fetch all traded future picks for a league. */
+/** Fetch all traded future picks for a league. Cached for 1 hour. */
 export async function getLeagueTradedPicks(
   leagueId: string
 ): Promise<SleeperResult<SleeperTradedPick[]>> {
   return fetchSleeper(
     `/league/${leagueId}/traded_picks`,
-    z.array(SleeperTradedPickSchema)
+    z.array(SleeperTradedPickSchema),
+    { revalidate: 3600 }
   );
 }
 
@@ -172,11 +177,11 @@ export async function getLosersBracket(
   );
 }
 
-/** Fetch the current NFL state (season, week, etc.). */
+/** Fetch the current NFL state (season, week, etc.). Cached for 5 minutes. */
 export async function getNFLState(): Promise<
   SleeperResult<SleeperNFLState>
 > {
-  return fetchSleeper("/state/nfl", SleeperNFLStateSchema);
+  return fetchSleeper("/state/nfl", SleeperNFLStateSchema, { revalidate: 300 });
 }
 
 /**
