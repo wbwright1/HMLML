@@ -165,7 +165,7 @@ function RoundRow({
         role="rowheader"
         className="sticky left-0"
         style={{
-          height: 52,
+          height: 68,
           width: 48,
           background: "var(--canvas)",
           display: "flex",
@@ -215,13 +215,13 @@ function PickCell({
         role="gridcell"
         aria-label={`Pick ${cell.roundPickNumber}: upcoming`}
         style={{
-          height: 52,
+          height: 68,
           background: "var(--surface-muted)",
           border: "1px solid var(--border)",
-          padding: "4px 6px",
+          padding: "6px 6px",
           display: "flex",
           flexDirection: "column",
-          justifyContent: "space-between",
+          gap: 2,
           overflow: "hidden",
         }}
       >
@@ -232,7 +232,7 @@ function PickCell({
           {cell.roundPickNumber}
         </span>
         <span
-          className="text-[13px]"
+          className="text-[14px]"
           style={{ color: "var(--text-muted)" }}
         >
           TBD
@@ -250,31 +250,31 @@ function PickCell({
       role="gridcell"
       aria-label={`Pick ${cell.roundPickNumber}: ${cell.playerName ?? "Unknown"}, ${cell.playerPosition ?? "Unknown"}, ${teamName}`}
       style={{
-        height: 52,
+        height: 68,
         backgroundColor: posColor.cell.bg,
         border: "1px solid rgba(0,0,0,0.08)",
-        padding: "4px 6px",
+        padding: "6px 6px",
         display: "flex",
         flexDirection: "column",
-        justifyContent: "space-between",
+        gap: 2,
         overflow: "hidden",
       }}
     >
       <span
         className="text-[12px] tabular-nums"
-        style={{ color: "#FFFFFF", opacity: 0.75 }}
+        style={{ color: "#FFFFFF" }}
       >
         {cell.roundPickNumber}
       </span>
       <span
-        className="text-[13px] font-medium truncate"
+        className="text-[14px] font-semibold truncate"
         style={{ color: "#FFFFFF" }}
       >
         {lastName || "Unknown"}
       </span>
       <span
-        className="text-[11px] font-medium uppercase"
-        style={{ color: "#FFFFFF", opacity: 0.85 }}
+        className="text-[12px] font-medium uppercase"
+        style={{ color: "#FFFFFF" }}
       >
         {cell.playerPosition ?? ""}
       </span>

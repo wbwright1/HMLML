@@ -21,20 +21,20 @@ export interface PositionColorConfig {
 
 export const POSITION_COLORS: Record<string, PositionColorConfig> = {
   QB: {
-    cell: { bg: "#D95F3B", text: "#FFFFFF" },
-    badge: { bg: "#FDF0EC", text: "#A84220" },
+    cell: { bg: "#C45D3E", text: "#FFFFFF" }, // --accent-warm
+    badge: { bg: "#FDF0EC", text: "#9A4428" },
   },
   RB: {
-    cell: { bg: "#1E8A6E", text: "#FFFFFF" },
-    badge: { bg: "#E6F4F1", text: "#145E4B" },
+    cell: { bg: "#2D5A3D", text: "#FFFFFF" }, // --accent-green
+    badge: { bg: "#E8F0EB", text: "#1E3D2A" },
   },
   WR: {
-    cell: { bg: "#3A6FC4", text: "#FFFFFF" },
-    badge: { bg: "#EBF0FA", text: "#2A4F8F" },
+    cell: { bg: "#5B7B9D", text: "#FFFFFF" }, // muted slate blue, warm undertone
+    badge: { bg: "#EDF1F5", text: "#3E566D" },
   },
   TE: {
-    cell: { bg: "#C28B0C", text: "#FFFFFF" },
-    badge: { bg: "#FDF6E3", text: "#8A6200" },
+    cell: { bg: "#B8860B", text: "#FFFFFF" }, // --accent-gold
+    badge: { bg: "#FDF6E3", text: "#7A5A07" },
   },
   K: {
     cell: { bg: "#8A8480", text: "#FFFFFF" },
