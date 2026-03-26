@@ -1,0 +1,17 @@
+{
+  "agent": "UXA",
+  "story": "1.5",
+  "epic": "1",
+  "completedAt": "2026-03-25",
+  "specFile": "_work/epic-1/story-1.5/uxa-spec.md",
+  "keyDecisions": [
+    "EmptyState iconMap already covers all 7 variants — no new Lucide icons needed",
+    "not-found.tsx: title='This page doesn't exist.' body='Maybe it was traded away.' two Button links (default+outline) to / and /teams",
+    "error.tsx: two-paragraph description (primary + assurance), remove 'If the problem persists' sentence, add 'Go home' outline Button as second action",
+    "All copy verified em-dash-free per CLAUDE.md rule",
+    "Button asChild pattern used for link-styled-as-button in not-found.tsx and error.tsx",
+    "gap-3 flagged as UXA extrapolation (not strictly on 8px grid); gap-4 is the alternative"
+  ],
+  "openItems": [],
+  "blockers": []
+}

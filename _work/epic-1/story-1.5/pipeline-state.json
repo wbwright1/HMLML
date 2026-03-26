@@ -1,0 +1,17 @@
+{
+  "story": "1.5",
+  "epic": "1",
+  "currentState": "critic-approved",
+  "previousState": "fend-complete",
+  "lastUpdatedBy": "CRITIC",
+  "lastUpdatedAt": "2026-03-25",
+  "stateHistory": [
+    { "state": "analysis", "enteredAt": "2026-03-25", "agent": "orchestrator" },
+    { "state": "reqs-complete", "enteredAt": "2026-03-25", "agent": "REQS" },
+    { "state": "uxa-complete", "enteredAt": "2026-03-25", "agent": "UXA" },
+    { "state": "qa-plan-complete", "enteredAt": "2026-03-25", "agent": "QA-Phase-A" },
+    { "state": "judge-g1-approved", "enteredAt": "2026-03-25", "agent": "JUDGE-Gate-1" },
+    { "state": "fend-complete", "enteredAt": "2026-03-25", "agent": "FEND" },
+    { "state": "critic-approved", "enteredAt": "2026-03-25", "agent": "CRITIC" }
+  ]
+}
