@@ -1,22 +1,22 @@
-const POSITION_COLORS: Record<string, string> = {
-  QB: "text-primary bg-primary/10",
-  RB: "text-gold bg-gold/10",
-  WR: "text-foreground bg-muted",
-  TE: "text-muted-foreground bg-muted",
-  K: "text-muted-foreground bg-muted",
-  DEF: "text-muted-foreground bg-muted",
-};
+import { getPositionColor } from "@/lib/position-colors";
 
 export function PositionBadge({ position }: { position: string | null }) {
   if (!position)
-    return <span className="text-sm text-muted-foreground">-</span>;
+    return (
+      <span className="text-sm" style={{ color: "var(--text-muted)" }}>
+        -
+      </span>
+    );
 
-  const colorClass =
-    POSITION_COLORS[position] ?? "text-muted-foreground bg-muted";
+  const color = getPositionColor(position);
 
   return (
     <span
-      className={`inline-block text-xs font-semibold uppercase px-2 py-0.5 rounded ${colorClass}`}
+      className="inline-block text-[12px] font-medium uppercase tracking-[0.06em] px-2 py-0.5 rounded-full"
+      style={{
+        backgroundColor: color.badge.bg,
+        color: color.badge.text,
+      }}
     >
       {position}
     </span>

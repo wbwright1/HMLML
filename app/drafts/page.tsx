@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { db } from "@/lib/db";
+import { seasons } from "@/lib/db/schema";
+import { desc } from "drizzle-orm";
 import { PageSection } from "@/components/page-section";
 import { EmptyState } from "@/components/empty-state";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -13,14 +16,29 @@ export const metadata = {
 
 export default async function DraftsPage() {
   let drafts: Awaited<ReturnType<typeof getDraftsByYear>> = [];
+  let upcomingSeasonYear: number | null = null;
 
   try {
     drafts = await getDraftsByYear();
+
+    // Check if there's an upcoming season with no draft picks yet
+    const [latestSeason] = await db
+      .select({ seasonYear: seasons.seasonYear, status: seasons.status })
+      .from(seasons)
+      .orderBy(desc(seasons.seasonYear))
+      .limit(1);
+
+    if (latestSeason) {
+      const hasDraftForYear = drafts.some((d) => d.seasonYear === latestSeason.seasonYear);
+      if (!hasDraftForYear) {
+        upcomingSeasonYear = latestSeason.seasonYear;
+      }
+    }
   } catch {
     // DB may not be connected in dev
   }
 
-  if (drafts.length === 0) {
+  if (drafts.length === 0 && !upcomingSeasonYear) {
     return (
       <PageSection label="Draft Room" title="Drafts">
         <EmptyState
@@ -47,12 +65,39 @@ export default async function DraftsPage() {
 
   return (
     <PageSection label="Draft Room" title="Drafts">
-      <p className="text-body-lg text-muted-foreground max-w-prose">
+      <p className="text-body-lg text-text-tertiary max-w-prose">
         Complete draft boards and pick-by-pick results for every Harambe
         Memorial League draft.
       </p>
 
       <div className="mt-8 space-y-4">
+        {upcomingSeasonYear && (
+          <ScrollReveal>
+            <Link
+              href={`/drafts/${upcomingSeasonYear}`}
+              className="group flex items-center justify-between rounded-xl border border-accent-green/30 bg-accent-green-light p-5 transition-colors hover:border-accent-green/50"
+            >
+              <div className="space-y-1">
+                <div className="flex items-center gap-3">
+                  <span className="text-h3 group-hover:text-accent-green transition-colors">
+                    {upcomingSeasonYear}
+                  </span>
+                  <SuperlativeBadge text="Upcoming" variant="green" />
+                  <SuperlativeBadge text="Rookie" variant="neutral" />
+                </div>
+                <p className="text-body-sm text-text-tertiary">
+                  Draft board preview
+                </p>
+              </div>
+              <span
+                className="text-text-tertiary group-hover:text-accent-green transition-colors"
+                aria-hidden="true"
+              >
+                &rarr;
+              </span>
+            </Link>
+          </ScrollReveal>
+        )}
         {years.map((year, yearIndex) => {
           const yearDrafts = draftsByYear.get(year)!;
 
@@ -63,11 +108,11 @@ export default async function DraftsPage() {
             >
               <Link
                 href={`/drafts/${year}`}
-                className="group flex items-center justify-between rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/40 hover:bg-card/80"
+                className="group flex items-center justify-between rounded-xl border border-border bg-surface p-5 transition-colors hover:border-accent-green/40 hover:bg-surface/80"
               >
                 <div className="space-y-1">
                   <div className="flex items-center gap-3">
-                    <span className="text-h3 group-hover:text-primary transition-colors">
+                    <span className="text-h3 group-hover:text-accent-green transition-colors">
                       {year}
                     </span>
                     <DraftTypeBadge
@@ -75,13 +120,13 @@ export default async function DraftsPage() {
                       isLegacyEra={draft.isLegacyEra}
                     />
                   </div>
-                  <p className="text-body-sm text-muted-foreground">
+                  <p className="text-body-sm text-text-tertiary">
                     {draft.pickCount} picks
                   </p>
                 </div>
 
                 <span
-                  className="text-muted-foreground group-hover:text-foreground transition-colors"
+                  className="text-text-tertiary group-hover:text-foreground transition-colors"
                   aria-hidden="true"
                 >
                   &rarr;
@@ -109,7 +154,7 @@ function DraftTypeBadge({
         variant={draftType === "startup" ? "green" : "neutral"}
       />
       {isLegacyEra && (
-        <span className="text-xs uppercase tracking-wider text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+        <span className="text-xs uppercase tracking-wider text-text-tertiary bg-surface-muted px-2 py-0.5 rounded-full">
           Legacy Era
         </span>
       )}
