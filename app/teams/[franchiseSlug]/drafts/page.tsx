@@ -73,7 +73,7 @@ export default async function FranchiseDraftsPage({
   return (
     <>
       {/* Hero Section */}
-      <section className="py-24 space-y-8">
+      <section className="py-8 md:py-12 space-y-6">
         <Link
           href={`/teams/${franchise.slug}`}
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"

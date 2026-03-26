@@ -69,7 +69,7 @@ export default async function FranchiseDetailPage({
     <>
       {/* Hero Section */}
       <section
-        className="py-24 space-y-8"
+        className="py-8 md:py-12 space-y-6"
         style={{
           background: franchise.brandingColor
             ? `linear-gradient(to bottom, ${franchise.brandingColor}0F, transparent 60%)`

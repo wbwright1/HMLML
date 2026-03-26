@@ -78,26 +78,6 @@
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
 
-    /* Spacing tokens */
-    --spacing-xs: 0.5rem;
-    --spacing-sm: 1rem;
-    --spacing-md: 1.5rem;
-    --spacing-lg: 2rem;
-    --spacing-xl: 3rem;
-    --spacing-2xl: 4rem;
-    --spacing-3xl: 6rem;
-    --spacing-4xl: 8rem;
-
-    /* 8px-multiple spacing tokens */
-    --spacing-space-1: 0.25rem;
-    --spacing-space-2: 0.5rem;
-    --spacing-space-3: 0.75rem;
-    --spacing-space-4: 1rem;
-    --spacing-space-6: 1.5rem;
-    --spacing-space-8: 2rem;
-    --spacing-space-12: 3rem;
-    --spacing-space-16: 4rem;
-    --spacing-space-24: 6rem;
 }
 
 /* =========================================================================

@@ -37,7 +37,7 @@ export default async function PowerRankingsPage() {
         </p>
       </PageSection>
 
-      <section className="pb-24 space-y-3">
+      <section className="pb-8 md:pb-12 space-y-6">
         {rankings.length === 0 ? (
           <EmptyState
             icon="chart"

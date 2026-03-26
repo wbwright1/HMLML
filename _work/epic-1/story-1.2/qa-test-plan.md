@@ -120,7 +120,7 @@ These tests inspect `app/globals.css` directly. Each test is self-contained — 
 | CSS-T37 | `--spacing-space-16` | `4rem` | 64px |
 | CSS-T38 | `--spacing-space-24` | `6rem` | 96px |
 
-**Assert:** All 9 tokens are present. Existing semantic spacing tokens (`--spacing-xs` through `--spacing-4xl`) are still present (regression check — must not have been removed).
+**Assert:** All 9 tokens are present. The legacy semantic spacing tokens (`--spacing-xs` through `--spacing-4xl`) have been intentionally removed as part of the app-wide spacing standardization; Tailwind utility classes are used directly instead. Their absence is expected, not a regression.
 
 ---
 

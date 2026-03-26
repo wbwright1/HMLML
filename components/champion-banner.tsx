@@ -20,7 +20,7 @@ export function ChampionBanner({
       href={`/teams/${franchiseSlug}`}
       className="block w-full relative overflow-hidden rounded-lg"
     >
-      <div className="relative bg-gradient-to-br from-accent-green to-[#1a3d28] px-6 py-10 sm:px-10 sm:py-14">
+      <div className="relative bg-gradient-to-br from-accent-green to-[#1a3d28] px-6 py-10 sm:px-10 sm:py-12">
         {/* Trophy watermark */}
         <svg
           className="absolute right-4 top-1/2 -translate-y-1/2 h-32 w-32 sm:h-48 sm:w-48 opacity-[0.10]"

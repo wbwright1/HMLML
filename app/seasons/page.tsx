@@ -53,7 +53,7 @@ export default async function SeasonsPage() {
         </div>
       </PageSection>
 
-      <section className="pb-24 space-y-6">
+      <section className="pb-8 md:pb-12 space-y-6">
         {seasons.map((season, index) => {
           // Legacy era = seasons with fewer than 12 rosters (10-team era)
           const isLegacy =

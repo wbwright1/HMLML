@@ -44,7 +44,7 @@ export default async function RivalriesPage() {
         )}
       </PageSection>
 
-      <section className="pb-24 space-y-4">
+      <section className="pb-8 md:pb-12 space-y-6">
         {rivalries.length === 0 ? (
           <EmptyState
             icon="users"

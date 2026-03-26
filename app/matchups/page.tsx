@@ -86,7 +86,7 @@ export default async function MatchupsPage() {
         </div>
       </PageSection>
 
-      <section className="pb-24 space-y-3">
+      <section className="pb-8 md:pb-12 space-y-6">
         {matchups.map((matchup, index) => (
           <ScrollReveal key={matchup.matchupId} delay={index * 40}>
             <MatchupRow

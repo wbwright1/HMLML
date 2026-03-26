@@ -364,7 +364,7 @@ export default async function PlayoffBracketPage({
       </PageSection>
 
       {!hasData ? (
-        <section className="pb-24">
+        <section className="pb-8 md:pb-12">
           <EmptyState
             icon="calendar"
             title="No Playoff Data"
@@ -374,7 +374,7 @@ export default async function PlayoffBracketPage({
           />
         </section>
       ) : (
-        <section className="pb-24 space-y-12">
+        <section className="pb-8 md:pb-12 space-y-6">
           {/* Championship matchup */}
           {championshipMatchup && (
             <ScrollReveal delay={80}>
