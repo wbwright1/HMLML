@@ -8,7 +8,7 @@ import { SeasonSelector } from "@/components/season-selector";
 import { EmptyState } from "@/components/empty-state";
 import type { LeaderboardEntry } from "@/lib/queries/records";
 
-type SortKey = "wins" | "losses" | "pointsScored" | "winPct" | "championships";
+type SortKey = "wins" | "losses" | "pointsScored" | "pointsAgainst" | "winPct" | "championships";
 
 interface LeaderboardTableProps {
   allTimeData: LeaderboardEntry[];
@@ -142,6 +142,17 @@ export function LeaderboardTable({
                   </th>
                   <th
                     scope="col"
+                    className={`${headerClassForKey("pointsAgainst")} text-right`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleSort("pointsAgainst")}
+                    onKeyDown={(e) => handleSortKeyDown("pointsAgainst", e)}
+                    aria-sort={sortKey === "pointsAgainst" ? (sortDesc ? "descending" : "ascending") : undefined}
+                  >
+                    PA{sortIndicator("pointsAgainst")}
+                  </th>
+                  <th
+                    scope="col"
                     className={`${headerClassForKey("championships")} text-right`}
                     role="button"
                     tabIndex={0}
@@ -215,6 +226,9 @@ export function LeaderboardTable({
                       <td className="py-4 pr-4 text-right text-sm tabular-nums">
                         {entry.pointsScored.toFixed(1)}
                       </td>
+                      <td className="py-4 pr-4 text-right text-sm tabular-nums text-text-tertiary">
+                        {entry.pointsAgainst.toFixed(1)}
+                      </td>
                       <td className="py-4 text-right text-sm tabular-nums">
                         {entry.championships}
                       </td>
@@ -277,6 +291,9 @@ export function LeaderboardTable({
                         </span>
                         <span className="text-text-tertiary tabular-nums">
                           {entry.pointsScored.toFixed(1)} PF
+                        </span>
+                        <span className="text-text-tertiary tabular-nums">
+                          {entry.pointsAgainst.toFixed(1)} PA
                         </span>
                       </div>
                     </div>
