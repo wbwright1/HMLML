@@ -202,7 +202,7 @@ export function LeaderboardTable({
                         <div className="flex flex-wrap gap-1 mt-1">
                           {entry.championships > 0 && (
                             <SuperlativeBadge
-                              text={`${entry.championships}x Champ`}
+                              text={activeSeason === "all-time" ? `${entry.championships}x Champ` : "Champion"}
                               variant="gold"
                             />
                           )}
@@ -271,7 +271,7 @@ export function LeaderboardTable({
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {entry.championships > 0 && (
                           <SuperlativeBadge
-                            text={`${entry.championships}x Champ`}
+                            text={activeSeason === "all-time" ? `${entry.championships}x Champ` : "Champion"}
                             variant="gold"
                           />
                         )}

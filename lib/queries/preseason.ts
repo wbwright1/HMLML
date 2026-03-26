@@ -237,16 +237,18 @@ export async function getPreseasonAwards(
 
     // ── Draft Order ─────────────────────────────────────────────────────
 
-    // Build roster_id -> franchise name map for traded pick resolution
-    const rosterToFranchise = new Map<string, string>();
+    // Build roster_id -> franchise info map
+    const rosterToFranchise = new Map<string, { name: string; record: string }>();
     for (const t of seasonStandings) {
-      rosterToFranchise.set(t.rosterId, t.franchiseName);
+      rosterToFranchise.set(t.rosterId, {
+        name: t.franchiseName,
+        record: `${t.wins ?? 0}-${t.losses ?? 0}${(t.ties ?? 0) > 0 ? `-${t.ties}` : ""}`,
+      });
     }
 
-    // Fetch traded picks from Sleeper to identify "via" trades for round 1
-    let tradedPickMap = new Map<string, string>(); // rosterId -> original owner name
+    let draftOrder: DraftOrderEntry[] = [];
     try {
-      // Get the latest season's league ID for the Sleeper API call
+      // Get the latest season's league ID for Sleeper API calls
       const [latestSeasonRow] = await db
         .select({ leagueId: seasons.leagueId })
         .from(seasons)
@@ -254,56 +256,89 @@ export async function getPreseasonAwards(
         .limit(1);
 
       if (latestSeasonRow) {
-        const { getLeagueTradedPicks } = await import("@/lib/sleeper");
-        const tradedResult = await getLeagueTradedPicks(latestSeasonRow.leagueId);
+        const { getLeagueDrafts, getLeagueTradedPicks } = await import("@/lib/sleeper");
+
+        // Fetch drafts and traded picks in parallel
+        const [draftsResult, tradedResult] = await Promise.all([
+          getLeagueDrafts(latestSeasonRow.leagueId),
+          getLeagueTradedPicks(latestSeasonRow.leagueId),
+        ]);
+
+        // Build traded pick map: roster_id (original slot) -> owner roster_id (current)
+        const tradedPickOwner = new Map<number, number>(); // original roster -> current owner roster
         if ("data" in tradedResult) {
           for (const pick of tradedResult.data) {
-            // Only care about round 1 picks where owner differs from original
             if (pick.round === 1 && pick.owner_id !== pick.roster_id) {
-              const originalOwnerName = rosterToFranchise.get(String(pick.roster_id));
-              if (originalOwnerName) {
-                tradedPickMap.set(String(pick.owner_id), originalOwnerName);
+              tradedPickOwner.set(pick.roster_id, pick.owner_id);
+            }
+          }
+        }
+
+        // Find the upcoming draft (status = pre_draft) with a set draft_order
+        if ("data" in draftsResult) {
+          const upcomingDraft = draftsResult.data.find(
+            (d) => d.status === "pre_draft" && d.draft_order
+          );
+
+          if (upcomingDraft?.draft_order) {
+            // draft_order is { rosterId: pickSlot } e.g. { "1": 3, "2": 1, ... }
+            // Invert to { pickSlot: rosterId }
+            const slotToRoster = new Map<number, string>();
+            for (const [rosterId, slot] of Object.entries(upcomingDraft.draft_order)) {
+              slotToRoster.set(slot, rosterId);
+            }
+
+            const maxSlot = Math.max(...slotToRoster.keys());
+            for (let slot = 1; slot <= maxSlot; slot++) {
+              const originalRosterId = slotToRoster.get(slot);
+              if (!originalRosterId) continue;
+
+              const originalFranchise = rosterToFranchise.get(originalRosterId);
+              if (!originalFranchise) continue;
+
+              // Check if this pick slot was traded to someone else
+              const currentOwnerRosterId = tradedPickOwner.get(Number(originalRosterId));
+              if (currentOwnerRosterId) {
+                const currentOwner = rosterToFranchise.get(String(currentOwnerRosterId));
+                if (currentOwner) {
+                  draftOrder.push({
+                    rank: slot,
+                    franchiseName: currentOwner.name,
+                    record: originalFranchise.record,
+                    originalOwnerName: originalFranchise.name,
+                  });
+                  continue;
+                }
               }
+
+              draftOrder.push({
+                rank: slot,
+                franchiseName: originalFranchise.name,
+                record: originalFranchise.record,
+              });
             }
           }
         }
       }
     } catch {
-      // Sleeper API may be unavailable; draft order still works without "via" info
+      // Sleeper API may be unavailable
     }
 
-    // Draft order is inverse of standings finish (worst first)
-    const draftOrder: DraftOrderEntry[] = [...seasonStandings]
-      .sort((a, b) => {
-        // Non-playoff teams sorted by reverse standings (worst record picks first)
-        // Playoff teams pick last
-        const aPlayoff = a.playoffResult != null && a.playoffResult !== "consolation" && a.playoffResult !== "toilet_bowl";
-        const bPlayoff = b.playoffResult != null && b.playoffResult !== "consolation" && b.playoffResult !== "toilet_bowl";
-
-        if (aPlayoff !== bPlayoff) return aPlayoff ? 1 : -1;
-
-        // Among same group, sort by standings finish descending (worst first)
-        return (b.standingsFinish ?? 99) - (a.standingsFinish ?? 99);
-      })
-      .map((t, i) => {
-        // Check if this pick's slot (original owner roster) was traded to someone else
-        // The pick slot belongs to roster t.rosterId; check if someone else owns it
-        const currentOwnerName = tradedPickMap.get(t.rosterId);
-        // If a different owner owns this pick, show them as the picker with "via" original
-        if (currentOwnerName) {
-          return {
-            rank: i + 1,
-            franchiseName: currentOwnerName,
-            record: `${t.wins ?? 0}-${t.losses ?? 0}${(t.ties ?? 0) > 0 ? `-${t.ties}` : ""}`,
-            originalOwnerName: t.franchiseName,
-          };
-        }
-        return {
+    // Fallback: derive from standings if Sleeper draft order not available
+    if (draftOrder.length === 0) {
+      draftOrder = [...seasonStandings]
+        .sort((a, b) => {
+          const aPlayoff = a.playoffResult != null && a.playoffResult !== "consolation" && a.playoffResult !== "toilet_bowl";
+          const bPlayoff = b.playoffResult != null && b.playoffResult !== "consolation" && b.playoffResult !== "toilet_bowl";
+          if (aPlayoff !== bPlayoff) return aPlayoff ? 1 : -1;
+          return (b.standingsFinish ?? 99) - (a.standingsFinish ?? 99);
+        })
+        .map((t, i) => ({
           rank: i + 1,
           franchiseName: t.franchiseName,
           record: `${t.wins ?? 0}-${t.losses ?? 0}${(t.ties ?? 0) > 0 ? `-${t.ties}` : ""}`,
-        };
-      });
+        }));
+    }
 
     return {
       teamAwards,
