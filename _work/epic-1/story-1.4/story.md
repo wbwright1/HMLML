@@ -1,20 +1,20 @@
-# Story 1.4: Snarky Label Content System
+# Story 1.4: Desktop Navigation Bar
 
 ## Story
-As a developer,
-I want a centralized content system for superlative labels,
-So that snarky copy is consistent and easy to update without touching component code.
+As a visitor on desktop,
+I want a slim, branded navigation bar,
+So that I can quickly navigate between all major sections.
 
 ## Acceptance Criteria
 
-**Given** the content system TypeScript constant
-**When** a component needs a superlative label
-**Then** all 14+ labels are available (Point Machine, Iron Curtain, Alpha Dog, League Doormat, Glass Cannon, Paper Tiger, Draft Day Genius, Wasted Picks, On Fire, Rock Bottom, Mercy Rule, Cardiac Crew, What Could've Been, Coaching Malpractice)
-**And** each label includes context (what triggers it), tone (positive/sting/neutral), and display text
-**And** labels are importable from a single `lib/content.ts` module
+**Given** the site loads on a desktop viewport (>= 1024px)
+**When** the page renders
+**Then** a slim top nav bar is visible with "HMLML" brand text on the left
+**And** 6 nav items are displayed: Hub, Teams, Records, History, Drafts, Players
+**And** the current section is highlighted with accent-green underline and bold text
+**And** inactive sections use text-tertiary color and regular weight
+**And** the nav is persistent across all pages and does not scroll away
 
 ## Notes
-- This is a pure data module with no UI; just TypeScript constants
-- Each label entry should include: key, displayText, description (what triggers it), tone ('positive' | 'sting' | 'neutral')
-- The module should be easily extensible for future labels
-- No UI components in this story; just the data/type definitions
+- UX-DR28: Navigation spec
+- FR38: Persistent navigation element

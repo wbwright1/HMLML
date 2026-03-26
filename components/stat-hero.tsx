@@ -29,7 +29,7 @@ export function StatHero({
         </span>
       )}
 
-      <p className={`font-black ${valueSizeMap[variant]}`}>{value}</p>
+      <p className={`font-black tabular-nums ${valueSizeMap[variant]}`}>{value}</p>
 
       <figcaption className="mt-1 space-y-0.5">
         <p className="text-body-sm font-medium text-muted-foreground">{label}</p>

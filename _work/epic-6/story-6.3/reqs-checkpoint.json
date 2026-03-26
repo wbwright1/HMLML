@@ -1,0 +1,70 @@
+{
+  "story": "6.3",
+  "epic": "6",
+  "title": "Responsive Edge-Case Fixes",
+  "agent": "REQS",
+  "status": "complete",
+  "timestamp": "2026-03-25T00:00:00Z",
+  "acceptanceCriteria": {
+    "AC1": {
+      "description": "Power rankings flex-wrap at md breakpoint",
+      "uxDr": "UX-DR12",
+      "nfr": ["NFR3"],
+      "currentState": "flex-wrap already applied unconditionally; needs verification at 768px",
+      "changeRequired": "verify-and-adjust",
+      "files": ["app/records/power-rankings/page.tsx"]
+    },
+    "AC2": {
+      "description": "Superlative stats row responsive grid",
+      "uxDr": "UX-DR2",
+      "nfr": ["NFR5"],
+      "currentState": "grid-cols-2 / md:grid-cols-4 already in place",
+      "changeRequired": "verify-only",
+      "files": ["app/page.tsx"]
+    },
+    "AC3": {
+      "description": "MobileTableView card consistency at md breakpoint",
+      "uxDr": "UX-DR14",
+      "nfr": ["NFR3"],
+      "currentState": "md breakpoint switch exists; card layout is generic label/value pairs",
+      "changeRequired": "audit-and-adjust",
+      "files": [
+        "components/mobile-table-view.tsx",
+        "app/teams/[franchiseSlug]/roster/page.tsx",
+        "app/teams/[franchiseSlug]/drafts/page.tsx",
+        "app/drafts/[seasonYear]/page.tsx"
+      ]
+    },
+    "AC4": {
+      "description": "SeasonSelector overflow fade indicators + auto-scroll",
+      "uxDr": "UX-DR13",
+      "nfr": ["NFR4"],
+      "currentState": "fade indicators and auto-scroll both already implemented",
+      "changeRequired": "verify-and-enhance-motion-preference",
+      "files": ["components/season-selector.tsx"]
+    },
+    "AC5": {
+      "description": "Bottom nav safe-area-inset-bottom for notched devices",
+      "uxDr": "UX-DR15",
+      "nfr": ["NFR3"],
+      "currentState": "no bottom tab bar exists; no viewport-fit=cover; no safe-area padding",
+      "changeRequired": "add-viewport-fit-and-safe-area-padding",
+      "files": ["app/layout.tsx", "components/site-footer.tsx"]
+    }
+  },
+  "conflicts": [],
+  "blockers": [],
+  "riskLevel": "low",
+  "testCount": 10,
+  "filesImpacted": [
+    "app/records/power-rankings/page.tsx",
+    "app/page.tsx",
+    "components/mobile-table-view.tsx",
+    "app/teams/[franchiseSlug]/roster/page.tsx",
+    "app/teams/[franchiseSlug]/drafts/page.tsx",
+    "app/drafts/[seasonYear]/page.tsx",
+    "components/season-selector.tsx",
+    "app/layout.tsx",
+    "components/site-footer.tsx"
+  ]
+}

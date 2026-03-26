@@ -1,0 +1,59 @@
+{
+  "story": "6.2",
+  "title": "Page-Specific Empty States",
+  "phase": "reqs-brief",
+  "status": "complete",
+  "timestamp": "2026-03-25",
+  "requirements": {
+    "FR17": {
+      "description": "All existing empty state messages replaced with EmptyState component with page-specific content",
+      "status": "not-started",
+      "instancesToReplace": 12
+    },
+    "UX-DR8": {
+      "description": "EmptyState centered, max-width 400px, spacing-2xl padding, Lucide icons 48px",
+      "status": "inherited-from-6.1",
+      "notes": "Each usage must pass correct icon prop from existing iconMap"
+    },
+    "NFR6": {
+      "description": "No new third-party libraries",
+      "status": "satisfied",
+      "notes": "All icons already in EmptyState iconMap; no new dependencies"
+    }
+  },
+  "acceptanceCriteria": {
+    "AC1_page_specific_empty_states": "NOT_STARTED",
+    "AC2_voice_tone_compliance": "NOT_STARTED"
+  },
+  "alreadyCompliant": [
+    "app/page.tsx",
+    "app/teams/page.tsx",
+    "app/seasons/page.tsx",
+    "app/players/player-table.tsx",
+    "app/records/head-to-head/page.tsx (franchise selection states)"
+  ],
+  "filesToModify": [
+    "app/drafts/page.tsx",
+    "app/matchups/page.tsx",
+    "app/records/leaderboard-table.tsx",
+    "app/records/trophies/page.tsx",
+    "app/records/power-rankings/page.tsx",
+    "app/records/rivalries/page.tsx",
+    "app/playoffs/[seasonYear]/page.tsx",
+    "app/teams/[franchiseSlug]/roster/page.tsx",
+    "app/teams/[franchiseSlug]/page.tsx",
+    "app/seasons/[seasonYear]/week/[week]/page.tsx",
+    "app/teams/[franchiseSlug]/drafts/page.tsx",
+    "app/records/head-to-head/page.tsx"
+  ],
+  "gaps": [],
+  "conflicts": [],
+  "constraints": [
+    "leaderboard-table.tsx is a client component; EmptyState import works since it has no server-only APIs",
+    "Dynamic content in descriptions (season year, active season) handled via template literals",
+    "Wrapper div elements around current empty states should be removed when replacing with EmptyState"
+  ],
+  "dependsOn": {
+    "story-6.1": "complete"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "story": "4.2",
+  "title": "Franchise Card Top Borders",
+  "agent": "REQS",
+  "status": "reqs-complete",
+  "verdict": "COMPLETE",
+  "timestamp": "2026-03-25T00:00:00Z",
+  "acceptanceCriteria": {
+    "AC-1": {
+      "description": "3px top border in brandingColor when set",
+      "frs": ["FR7"],
+      "existingImplementation": true,
+      "file": "app/teams/page.tsx",
+      "line": 48
+    },
+    "AC-2": {
+      "description": "Fallback to var(--border) when brandingColor is null",
+      "frs": ["FR7"],
+      "existingImplementation": true,
+      "file": "app/teams/page.tsx",
+      "line": 48
+    },
+    "AC-3": {
+      "description": "Decorative only, no info by color alone",
+      "nfrs": ["NFR1"],
+      "existingImplementation": true,
+      "notes": "CSS border is inherently invisible to screen readers; team name, owner, record provide identity"
+    }
+  },
+  "databaseChanges": "none",
+  "apiChanges": "none",
+  "validationChanges": "none",
+  "flags": [
+    "Existing implementation in app/teams/page.tsx line 48 already satisfies all ACs. DEV should verify and proceed to acceptance testing."
+  ],
+  "openQuestions": [],
+  "forwardDependencies": ["4.3", "4.4"]
+}

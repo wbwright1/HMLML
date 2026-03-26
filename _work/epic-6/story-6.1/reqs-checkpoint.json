@@ -1,0 +1,43 @@
+{
+  "story": "6.1",
+  "title": "EmptyState Component",
+  "phase": "reqs-brief",
+  "status": "complete",
+  "timestamp": "2026-03-25",
+  "requirements": {
+    "FR16": {
+      "description": "Reusable EmptyState component with icon, title, description, optional action link",
+      "status": "already-implemented",
+      "file": "components/empty-state.tsx"
+    },
+    "UX-DR8": {
+      "description": "EmptyState centered, max-width 400px, spacing-2xl padding, Lucide icons 48px",
+      "status": "already-implemented",
+      "notes": "py-16 matches spacing-2xl (4rem/64px), px-4 is intentionally smaller for horizontal"
+    },
+    "NFR4": {
+      "description": "Animations respect prefers-reduced-motion",
+      "status": "covered-globally",
+      "notes": "Global CSS rule in globals.css handles all transitions; component has no animations"
+    }
+  },
+  "acceptanceCriteria": {
+    "AC1_centered_max_width_padding": "PASS",
+    "AC2_optional_icon_48px": "PASS",
+    "AC3_title_h3": "PASS",
+    "AC4_description_body_muted": "PASS",
+    "AC5_optional_action_link": "PASS",
+    "AC6_reduced_motion": "PASS"
+  },
+  "gaps": [],
+  "conflicts": [],
+  "existingConsumers": [
+    "app/page.tsx",
+    "app/teams/page.tsx",
+    "app/seasons/page.tsx",
+    "app/records/head-to-head/page.tsx",
+    "app/players/player-table.tsx"
+  ],
+  "recommendation": "Component already exists and satisfies all ACs. Story scope is verification and E2E testing only. No code changes expected.",
+  "nextStory": "6.2 (Page-Specific Empty States) will replace remaining plain-text empty states with EmptyState component"
+}

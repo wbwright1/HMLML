@@ -1,0 +1,40 @@
+{
+  "story": "3.2",
+  "title": "Superlative Stats Row",
+  "agent": "REQS",
+  "status": "reqs-complete",
+  "timestamp": "2026-03-25T00:00:00.000Z",
+  "verdict": "COMPLETE",
+  "findings": {
+    "alreadyImplemented": true,
+    "implementationFiles": [
+      "app/page.tsx",
+      "components/stat-hero.tsx",
+      "lib/queries/homepage.ts"
+    ],
+    "acceptanceCriteriaMet": {
+      "AC-1_superlative_row_renders": true,
+      "AC-1_four_stats": true,
+      "AC-1_md_size": true,
+      "AC-1_responsive_grid": true,
+      "AC-1_server_rendered": true,
+      "AC-2_graceful_absence": true
+    },
+    "requirementsCoverage": {
+      "FR2": "met",
+      "UX-DR2": "met",
+      "NFR5": "met"
+    },
+    "databaseChanges": "none",
+    "apiChanges": "none",
+    "newComponents": "none",
+    "minorGaps": [
+      "StatHero value element lacks tabular-nums for numeric alignment (CLAUDE.md typography rule)"
+    ]
+  },
+  "forwardDependencies": [
+    "Story 6.3 should verify responsive grid rather than re-implement"
+  ],
+  "openQuestions": [],
+  "flags": []
+}

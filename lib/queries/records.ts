@@ -110,6 +110,8 @@ export interface TrophyEntry {
   championFranchiseId: string | null;
   championName: string | null;
   championSlug: string | null;
+  championAbbreviation: string | null;
+  championBrandingColor: string | null;
   runnerUpName: string | null;
   runnerUpSlug: string | null;
 }
@@ -680,6 +682,8 @@ export async function getTrophyCase(): Promise<TrophyEntry[]> {
         championFranchiseId: seasons.championFranchiseId,
         championName: sql<string | null>`champ.name`,
         championSlug: sql<string | null>`champ.slug`,
+        championAbbreviation: sql<string | null>`champ.abbreviation`,
+        championBrandingColor: sql<string | null>`champ.branding_color`,
         runnerUpName: sql<string | null>`runner.name`,
         runnerUpSlug: sql<string | null>`runner.slug`,
       })
@@ -703,6 +707,8 @@ export async function getTrophyCase(): Promise<TrophyEntry[]> {
       championFranchiseId: row.championFranchiseId,
       championName: row.championName,
       championSlug: row.championSlug,
+      championAbbreviation: row.championAbbreviation,
+      championBrandingColor: row.championBrandingColor,
       runnerUpName: row.runnerUpName,
       runnerUpSlug: row.runnerUpSlug,
     }));

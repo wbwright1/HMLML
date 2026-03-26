@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageSection } from "@/components/page-section";
+import { EmptyState } from "@/components/empty-state";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { getDraftsByYear } from "@/lib/queries/drafts";
@@ -22,10 +23,13 @@ export default async function DraftsPage() {
   if (drafts.length === 0) {
     return (
       <PageSection label="Draft Room" title="Drafts">
-        <p className="text-body-lg text-muted-foreground">
-          No draft data available yet. Check back once drafts have been synced
-          from Sleeper.
-        </p>
+        <EmptyState
+          icon="calendar"
+          title="No Draft Data"
+          description="Draft history will appear once draft data has been synced from Sleeper."
+          actionLabel="Browse seasons"
+          actionHref="/seasons"
+        />
       </PageSection>
     );
   }

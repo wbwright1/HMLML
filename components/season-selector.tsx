@@ -74,7 +74,8 @@ export function SeasonSelector({
       '[aria-selected="true"]'
     );
     if (activeTab) {
-      activeTab.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+      const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      activeTab.scrollIntoView({ behavior: prefersReducedMotion ? "auto" : "smooth", block: "nearest", inline: "center" });
     }
   }, [activeSeason]);
 

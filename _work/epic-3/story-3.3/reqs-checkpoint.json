@@ -1,0 +1,41 @@
+{
+  "story": "3.3",
+  "title": "Full Week Matchups Display",
+  "phase": "reqs",
+  "status": "complete",
+  "timestamp": "2026-03-25T00:00:00Z",
+  "requirements": {
+    "functional": ["FR3"],
+    "uxDesign": ["UX-DR3"],
+    "nonFunctional": ["NFR1", "NFR3", "NFR6"]
+  },
+  "acceptanceCriteria": {
+    "ac1_all_6_matchups": {
+      "status": "pre-satisfied",
+      "evidence": "getCurrentWeekMatchups() has no limit; page.tsx maps full array"
+    },
+    "ac2_no_view_all_link": {
+      "status": "pre-satisfied",
+      "evidence": "No 'View all' link exists in app/page.tsx; PageSection has no link prop"
+    },
+    "ac3_dynamic_week_header": {
+      "status": "pre-satisfied",
+      "evidence": "PageSection title uses template literal with matchupData.week"
+    },
+    "ac4_score_poller_integration": {
+      "status": "pre-satisfied",
+      "evidence": "ScorePoller rendered at line 239 with initialIsGameWindow prop"
+    },
+    "ac5_empty_state": {
+      "status": "pre-satisfied",
+      "evidence": "Conditional rendering gates matchups section; EmptyState fallback exists"
+    }
+  },
+  "implementationDelta": "none",
+  "codeDelta": "E2E tests only",
+  "filesToCreate": ["e2e/story-3.3-matchups.spec.ts"],
+  "filesToModify": [],
+  "conflicts": [],
+  "dependencies": ["story-3.1", "story-3.2"],
+  "risks": []
+}

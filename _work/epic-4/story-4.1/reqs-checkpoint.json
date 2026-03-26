@@ -1,0 +1,26 @@
+{
+  "story": "4.1",
+  "title": "MatchupRow Team Color Accents",
+  "agent": "REQS",
+  "state": "reqs-complete",
+  "verdict": "COMPLETE",
+  "timestamp": "2026-03-25",
+  "requirementsTracked": {
+    "FR": ["FR6"],
+    "UX-DR": ["UX-DR4"],
+    "NFR": ["NFR1"]
+  },
+  "acceptanceCriteria": {
+    "AC-1": "Both teams have brandingColor: 3px vertical bars on left/right edges using inline style",
+    "AC-2": "Missing brandingColor fallback to var(--border)",
+    "AC-3": "Decorative only, aria-hidden, no info by color alone"
+  },
+  "databaseChanges": "none",
+  "apiChanges": "none",
+  "newDependencies": "none",
+  "flags": [
+    "Existing matchup-row.tsx already implements all three ACs. DEV should verify and proceed to acceptance testing."
+  ],
+  "forwardDependencies": ["4.2", "4.3", "4.4"],
+  "openQuestions": []
+}

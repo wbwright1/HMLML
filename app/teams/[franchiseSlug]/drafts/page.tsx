@@ -8,6 +8,7 @@ import { MobileTableView } from "@/components/mobile-table-view";
 import { PositionBadge } from "@/components/position-badge";
 import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getFranchiseDraftHistory } from "@/lib/queries/drafts";
+import { EmptyState } from "@/components/empty-state";
 
 interface FranchiseDraftsPageProps {
   params: Promise<{ franchiseSlug: string }>;
@@ -112,10 +113,11 @@ export default async function FranchiseDraftsPage({
       {/* Draft History */}
       <PageSection label="All Picks" title="Draft History">
         {draftHistory.length === 0 ? (
-          <p className="text-body-lg text-muted-foreground">
-            No draft history available yet. Check back once draft data has been
-            synced from Sleeper.
-          </p>
+          <EmptyState
+            icon="calendar"
+            title="No Draft History"
+            description="Draft history will appear once draft data has been synced from Sleeper."
+          />
         ) : (
           <div className="space-y-12">
             {draftHistory.map((draft, draftIndex) => (

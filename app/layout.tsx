@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
@@ -12,6 +12,10 @@ export const metadata: Metadata = {
   title: "Harambe Memorial League Memorial League",
   description:
     "The official home of the Harambe Memorial League Memorial League — dynasty fantasy football history, records, and live scores.",
+};
+
+export const viewport: Viewport = {
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

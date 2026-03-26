@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PageSection } from "@/components/page-section";
+import { EmptyState } from "@/components/empty-state";
 import { MatchupRow } from "@/components/matchup-row";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -24,16 +25,13 @@ export default async function MatchupsPage() {
   if (!data || data.matchups.length === 0) {
     return (
       <PageSection label="Head to Head" title="Matchups">
-        <p className="text-body-lg text-muted-foreground">
-          No matchup data available yet. Check back once the season begins and
-          scores have been synced from Sleeper.
-        </p>
-        <Link
-          href="/seasons"
-          className="text-sm text-primary hover:text-primary/80 transition-colors underline underline-offset-4 mt-2 inline-block"
-        >
-          Browse league history
-        </Link>
+        <EmptyState
+          icon="calendar"
+          title="No Matchups Available"
+          description="Matchup data will appear once the season begins and scores are synced from Sleeper."
+          actionLabel="Browse league history"
+          actionHref="/seasons"
+        />
       </PageSection>
     );
   }

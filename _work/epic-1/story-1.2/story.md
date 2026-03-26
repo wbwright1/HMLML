@@ -1,23 +1,19 @@
-# Story 1.2: Press Box Evolved Theme Implementation
+# Story 1.2: Typography System Audit & Update
 
 ## Story
-As a developer,
-I want all design tokens (colors, typography, spacing) implemented in Tailwind CSS v4,
-So that every component uses the brand system consistently.
+As a visitor,
+I want typography to create clear visual hierarchy,
+So that I can scan content quickly and identify what matters.
 
 ## Acceptance Criteria
 
-**Given** the Tailwind configuration
-**When** the theme is applied
-**Then** all 15 color tokens are defined as CSS custom properties (--canvas through --accent-warm-light)
-**And** the typography scale is defined (Display through Caption with correct sizes, weights, letter-spacing, line-heights)
-**And** the 8px spacing system tokens are available (space-1 through space-24)
-**And** `font-variant-numeric: tabular-nums` is applied globally to numeric content
-**And** Geist Sans is loaded via next/font as the single typeface
-**And** shadcn/ui default theme colors are overridden with HMLML brand tokens
-**And** all text/background combinations meet WCAG 2.1 AA contrast ratios
+**Given** the UX spec defines 9 typography levels (Display, H1, H2, H3, Body Large, Body, Body Small, Caption, Stat Number)
+**When** the typography utility classes are audited
+**Then** each level matches its specified size, weight, letter-spacing, and line-height
+**And** Display is 56-64px, Black 900, -0.02em tracking
+**And** Caption is 12px, Medium 500, 0.06em tracking, always UPPERCASE
+**And** tabular-nums (font-variant-numeric: tabular-nums) is applied globally to all numeric content
+**And** Geist Sans is the only typeface loaded via next/font
 
 ## Notes
-- Reference the Visual Design Foundation section of the UX spec for exact hex values
-- The color tokens must be defined as CSS custom properties for runtime access
-- Typography letter-spacing values: Display -0.02em, H1 -0.015em, H2 -0.01em, Caption 0.06em
+- UX-DR2: Implement complete typography system using Geist Sans with 9 levels

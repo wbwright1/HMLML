@@ -4,6 +4,7 @@ import { PageSection } from "@/components/page-section";
 import { MatchupRow } from "@/components/matchup-row";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
+import { EmptyState } from "@/components/empty-state";
 import {
   getMatchupsByWeek,
   getSeasonByYearSimple,
@@ -117,17 +118,13 @@ export default async function WeekResultsPage({
 
       <section className="pb-24 space-y-3">
         {matchups.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card p-8 text-center">
-            <p className="text-body-lg text-muted-foreground">
-              No matchup data available for this week.
-            </p>
-            <Link
-              href={`/seasons/${year}`}
-              className="text-sm text-primary hover:text-primary/80 transition-colors underline underline-offset-4 mt-4 inline-block"
-            >
-              Back to {year} season
-            </Link>
-          </div>
+          <EmptyState
+            icon="calendar"
+            title="No Matchup Data"
+            description="No matchup data available for this week."
+            actionLabel={`Back to ${year} season`}
+            actionHref={`/seasons/${year}`}
+          />
         ) : (
           matchups.map((matchup, index) => (
             <ScrollReveal key={matchup.matchupId} delay={index * 40}>

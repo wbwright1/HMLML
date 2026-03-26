@@ -154,9 +154,11 @@ export default async function HeadToHeadPage({
 
           <PageSection label="Game Log" title="Match History">
             {history.length === 0 ? (
-              <p className="text-body-lg text-muted-foreground">
-                No matchup history found between these two franchises.
-              </p>
+              <EmptyState
+                icon="chart"
+                title="No Match History"
+                description="No matchup history found between these two franchises."
+              />
             ) : (
               <>
                 <p className="text-sm text-muted-foreground mb-2">

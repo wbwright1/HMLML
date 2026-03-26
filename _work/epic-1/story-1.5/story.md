@@ -1,22 +1,21 @@
-# Story 1.5: Empty State & Error Components
+# Story 1.5: Mobile Hamburger Menu
 
 ## Story
-As a visitor,
-I want clear, on-brand messaging when data is unavailable,
-So that I understand what's happening and don't see a broken page.
+As a visitor on mobile,
+I want a hamburger menu for navigation,
+So that I can access all sections without the nav taking up screen space.
 
 ## Acceptance Criteria
 
-**Given** a page with no data available
+**Given** the site loads on a mobile viewport (< 768px)
 **When** the page renders
-**Then** an EmptyState component displays with contextual icon, title, description, and optional action link
-**And** the 404 page shows snarky messaging ("This page doesn't exist. Maybe it was traded away.") with links back to Hub and Teams
-**And** error boundaries show calm messaging ("Something went wrong. We're showing the last available data.")
-**And** empty states never show a blank page; always show last-cached data with timestamp when possible
+**Then** a fixed slim top bar is visible with "HMLML" brand and hamburger button
+**And** the hamburger button has aria-label="Open navigation"
+**When** the hamburger button is tapped
+**Then** nav items stack vertically in a menu overlay
+**And** pressing Escape closes the menu
+**And** the top bar does not scroll away
 
 ## Notes
-- EmptyState component: centered, max-width 400px, generous vertical padding, Lucide React icon at 48px with muted opacity
-- 404 page: custom not-found.tsx with on-brand styling and snarky tone
-- Error boundary: error.tsx per the Next.js App Router pattern
-- Page-specific empty states defined in UX spec (syncing, no matchups, no players found, etc.)
-- Error tone: calm and confident, NEVER "Oops!" style
+- UX-DR28: Navigation spec (hamburger on mobile)
+- FR38: Persistent navigation element

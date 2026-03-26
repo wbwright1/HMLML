@@ -5,6 +5,7 @@ import Link from "next/link";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { SeasonSelector } from "@/components/season-selector";
+import { EmptyState } from "@/components/empty-state";
 import type { LeaderboardEntry } from "@/lib/queries/records";
 
 type SortKey = "wins" | "losses" | "pointsScored" | "winPct" | "championships";
@@ -73,10 +74,11 @@ export function LeaderboardTable({
       />
 
       {data.length === 0 ? (
-        <p className="text-body-lg text-muted-foreground">
-          No leaderboard data available
-          {activeSeason !== "all-time" ? ` for ${activeSeason}` : ""}.
-        </p>
+        <EmptyState
+          icon="trophy"
+          title="No Leaderboard Data"
+          description={`No leaderboard data available${activeSeason !== "all-time" ? ` for ${activeSeason}` : ""}.`}
+        />
       ) : (
         <>
           {/* Desktop table */}
@@ -144,6 +146,7 @@ export function LeaderboardTable({
                     <tr
                       key={entry.id}
                       className="border-b border-border/50 last:border-0"
+                      style={{ borderLeft: `3px solid ${entry.brandingColor ?? "var(--border)"}` }}
                     >
                       <td className="py-4 pr-4">
                         <span
@@ -216,6 +219,7 @@ export function LeaderboardTable({
                   key={entry.id}
                   href={`/teams/${entry.slug}`}
                   className="block rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/50"
+                  style={{ borderLeftWidth: "3px", borderLeftColor: entry.brandingColor ?? "var(--border)" }}
                 >
                   <div className="flex items-start gap-3">
                     <span

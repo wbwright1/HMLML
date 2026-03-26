@@ -5,6 +5,7 @@ import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { MobileTableView } from "@/components/mobile-table-view";
 import { PositionBadge } from "@/components/position-badge";
+import { EmptyState } from "@/components/empty-state";
 import {
   getFranchiseBySlug,
   getFranchiseRoster,
@@ -164,10 +165,11 @@ export default async function RosterPage({ params }: RosterPageProps) {
         title="Roster"
       >
         {slotGroups.length === 0 ? (
-          <p className="text-body-lg text-muted-foreground">
-            No roster data available yet. Check back once rosters have been
-            synced from Sleeper.
-          </p>
+          <EmptyState
+            icon="users"
+            title="No Roster Data"
+            description="Roster data will appear once rosters have been synced from Sleeper."
+          />
         ) : (
           <div className="space-y-10">
             {slotGroups.map(([slot, players], groupIndex) => (

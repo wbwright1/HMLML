@@ -1,0 +1,47 @@
+{
+  "story": "4.4",
+  "title": "Standings Table Color Borders",
+  "epic": 4,
+  "phase": "reqs",
+  "status": "complete",
+  "timestamp": "2026-03-25T00:00:00Z",
+  "requirementsCovered": {
+    "functional": ["FR9"],
+    "nonFunctional": ["NFR1"],
+    "uxDesign": []
+  },
+  "acceptanceCriteria": {
+    "AC-1_left_border_all_standings": {
+      "status": "partially_implemented",
+      "notes": "Homepage and season detail already done. Records leaderboard and power rankings need implementation."
+    },
+    "AC-2_fallback_no_branding_color": {
+      "status": "partially_implemented",
+      "notes": "Pattern proven in homepage/season detail. Same pattern to apply to remaining views."
+    },
+    "AC-3_decorative_only": {
+      "status": "met",
+      "notes": "All views already convey identity via name, record, and rank. Border adds no semantic info."
+    }
+  },
+  "filesToModify": [
+    "app/records/leaderboard-table.tsx",
+    "app/records/power-rankings/page.tsx"
+  ],
+  "filesAlreadyComplete": [
+    "app/page.tsx",
+    "app/seasons/[seasonYear]/page.tsx"
+  ],
+  "dataAvailability": "All brandingColor data already available in existing queries. No schema or query changes needed.",
+  "conflicts": [],
+  "risks": [
+    {
+      "description": "Leaderboard client-side sorting could theoretically break color association",
+      "mitigation": "brandingColor is a property on each entry object; sorting preserves the association",
+      "severity": "none"
+    }
+  ],
+  "newComponentsNeeded": false,
+  "newQueriesNeeded": false,
+  "schemaChangesNeeded": false
+}

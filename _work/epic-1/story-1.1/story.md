@@ -1,21 +1,20 @@
-# Story 1.1: Project Scaffolding
+# Story 1.1: Color Token Audit & Update
 
 ## Story
-As a developer,
-I want the project initialized with the correct tech stack and folder structure,
-So that all subsequent development has a consistent foundation.
+As a visitor,
+I want the site to use a consistent, warm color palette,
+So that every page feels cohesive and intentionally designed.
 
 ## Acceptance Criteria
 
-**Given** no existing project setup
-**When** the scaffolding script runs
-**Then** the project is created with Next.js 16+ (App Router), TypeScript strict mode, Tailwind CSS v4, ESLint, and Turbopack
-**And** Drizzle ORM, @vercel/postgres, Zod, drizzle-zod, and Playwright are installed
-**And** shadcn/ui is initialized with the project
-**And** the `@/*` import alias is configured
-**And** the folder structure matches the architecture spec (app/, components/, lib/, e2e/)
+**Given** the UX spec defines 15 named semantic color tokens
+**When** the globals.css is audited against the spec
+**Then** all 15 tokens match their specified hex values exactly
+**And** no hardcoded hex values exist outside the token system (except dynamic franchise brandingColor)
+**And** all shadcn/ui aliases reference the semantic tokens via var()
+**And** no red/purple color pairings exist anywhere in the UI
+**And** WCAG AA contrast ratios are verified: text-primary on canvas >= 4.5:1, text-secondary on canvas >= 4.5:1, accent-green on canvas >= 3:1
 
 ## Notes
-- This is the foundation story; nothing else can start until this is complete
-- Use the architecture doc's initialization command as reference
-- The project already exists but may need dependency updates or restructuring to match the new architecture
+- UX-DR1: Implement complete Press Box Evolved color token system with 15 named semantic tokens
+- NFR12, NFR13, NFR14: Accessibility and contrast requirements

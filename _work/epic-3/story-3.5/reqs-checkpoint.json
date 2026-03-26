@@ -1,0 +1,60 @@
+{
+  "agent": "REQS",
+  "story": "3.5",
+  "epic": "3",
+  "status": "complete",
+  "timestamp": "2026-03-25T00:00:00Z",
+  "frsCovered": ["FR5"],
+  "nfrsCovered": ["NFR1", "NFR3", "NFR5", "NFR6"],
+  "uxDrsCovered": [],
+  "acceptanceCriteria": {
+    "AC-1": {
+      "description": "Regular season Last Week's Results with bold winners, scores, blowout callout",
+      "status": "implemented",
+      "files": [
+        "app/page.tsx",
+        "lib/queries/homepage.ts"
+      ],
+      "gaps": []
+    },
+    "AC-2": {
+      "description": "Offseason League at a Glance with champion, seasons, matchups, most championships",
+      "status": "partially_implemented",
+      "files": [
+        "app/page.tsx",
+        "lib/queries/homepage.ts",
+        "components/championship-stars.tsx"
+      ],
+      "gaps": [
+        {
+          "id": "GAP-1",
+          "severity": "minor",
+          "description": "ChampionshipStars component not rendered alongside reigning champion in offseason view",
+          "fix": "Add reigningChampionshipCount to getLeagueAtAGlance return; render ChampionshipStars in StatHero value"
+        }
+      ]
+    },
+    "AC-3": {
+      "description": "Narrative section not rendered when no data available",
+      "status": "implemented",
+      "files": [
+        "app/page.tsx"
+      ],
+      "gaps": []
+    }
+  },
+  "conflictsFound": [],
+  "queryModificationsRequired": [
+    {
+      "file": "lib/queries/homepage.ts",
+      "function": "getLeagueAtAGlance",
+      "change": "Add reigningChampionshipCount field counting seasons where champion_franchise_id matches reigning champion"
+    }
+  ],
+  "newComponentsRequired": [],
+  "newFilesRequired": [],
+  "testingNotes": [
+    "E2E tests against real Postgres: in-season narrative, offseason narrative, no-data fallback, week-1 edge case",
+    "No mocks permitted per project testing policy"
+  ]
+}
