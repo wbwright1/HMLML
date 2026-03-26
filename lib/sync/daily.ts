@@ -532,18 +532,21 @@ async function syncDrafts(): Promise<SyncStepResult> {
       );
     }
 
-    // Build roster_id → franchise_id map from franchise_seasons
+    // Build roster_id → franchise_id and user_id → franchise_id maps from franchise_seasons
     const franchiseSeasonRows = await db
       .select({
         rosterId: franchiseSeasons.rosterId,
         franchiseId: franchiseSeasons.franchiseId,
+        userId: franchiseSeasons.userId,
       })
       .from(franchiseSeasons)
       .where(eq(franchiseSeasons.seasonId, seasonRecord.id));
 
     const rosterToFranchise = new Map<string, string>();
+    const userToFranchise = new Map<string, string>();
     for (const row of franchiseSeasonRows) {
       rosterToFranchise.set(row.rosterId, row.franchiseId);
+      userToFranchise.set(row.userId, row.franchiseId);
     }
 
     // Filter to completed drafts only
@@ -575,10 +578,42 @@ async function syncDrafts(): Promise<SyncStepResult> {
 
       const picks = picksResult.data;
 
+      // Build slot -> original franchise mapping from draft_order
+      // draft_order: { userId: slot }, so invert to { slot: franchiseId }
+      const slotToOriginalFranchise = new Map<number, string>();
+      if (draft.draft_order) {
+        for (const [userId, slot] of Object.entries(draft.draft_order)) {
+          const franchiseId = userToFranchise.get(userId);
+          if (franchiseId) {
+            slotToOriginalFranchise.set(slot, franchiseId);
+          }
+        }
+      }
+
       // Build all pick rows for this draft
+      const totalTeamsInDraft = draft.draft_order
+        ? Object.keys(draft.draft_order).length
+        : picks.reduce((max, p) => Math.max(max, p.roster_id), 0);
+
       const pickRows = picks.map((pick) => {
         const rosterIdStr = String(pick.roster_id);
         const franchiseId = rosterToFranchise.get(rosterIdStr) ?? null;
+
+        // Determine the original franchise that held this pick slot
+        // For linear drafts, pick position in round = ((pick_no - 1) % totalTeams) + 1
+        // For snake drafts, odd rounds are forward, even rounds are reversed
+        const pickInRound = ((pick.pick_no - 1) % totalTeamsInDraft) + 1;
+        const isSnake = draftType === "startup"; // rookie drafts are linear
+        const isEvenRound = pick.round % 2 === 0;
+        const originalSlot = isSnake && isEvenRound
+          ? totalTeamsInDraft - pickInRound + 1
+          : pickInRound;
+        const originalFranchiseId = slotToOriginalFranchise.get(originalSlot) ?? null;
+
+        // Only store originalFranchiseId when it differs from franchiseId (pick was traded)
+        const tradedOriginal = originalFranchiseId && originalFranchiseId !== franchiseId
+          ? originalFranchiseId
+          : null;
 
         // Build player name from metadata if available
         const playerName = pick.metadata
@@ -597,6 +632,7 @@ async function syncDrafts(): Promise<SyncStepResult> {
           franchiseId,
           playerId: pick.player_id,
           playerName,
+          originalFranchiseId: tradedOriginal,
           isLegacyEra: false,
         };
       });

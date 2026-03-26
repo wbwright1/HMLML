@@ -169,6 +169,7 @@ export const draftPicks = pgTable(
     franchiseId: text("franchise_id").references(() => franchises.id),
     playerId: text("player_id").references(() => players.id),
     playerName: text("player_name"), // snapshot at draft time
+    originalFranchiseId: text("original_franchise_id").references(() => franchises.id), // franchise that originally held the pick slot (null = same as franchiseId, or unknown)
     isLegacyEra: boolean("is_legacy_era").default(false),
     createdAt: timestamp("created_at").defaultNow(),
   },

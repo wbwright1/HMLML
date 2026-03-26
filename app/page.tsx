@@ -515,9 +515,9 @@ async function RegularSeasonHub({
             <ScrollReveal>
               <PageSection label="Last Week" title={`Week ${lastWeekResults.week} Results`}>
                 <div className="space-y-2">
-                  {lastWeekResults.results.map((result, i) => (
+                  {lastWeekResults.results.map((result) => (
                     <div
-                      key={i}
+                      key={`${result.winner}-${result.loser}`}
                       className="flex items-center justify-between rounded-lg border border-border/50 bg-surface px-4 py-3 text-sm"
                     >
                       <span>

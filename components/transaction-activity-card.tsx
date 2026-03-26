@@ -31,11 +31,11 @@ export function TransactionActivityCard({
       </p>
 
       <div className="space-y-3">
-        {transactions.map((txn, i) => {
+        {transactions.map((txn) => {
           const badge = typeBadgeMap[txn.type] ?? typeBadgeMap.commissioner;
           return (
             <div
-              key={i}
+              key={`${txn.date}-${txn.type}-${txn.description}`}
               className="flex items-start gap-3 py-2 border-b border-border/50 last:border-0"
             >
               <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap mt-0.5">

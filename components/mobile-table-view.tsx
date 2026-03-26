@@ -23,7 +23,7 @@ export function MobileTableView({
           >
             {visibleColumns.map((colIndex) => (
               <div
-                key={colIndex}
+                key={`${rowIndex}-${headers[colIndex]}`}
                 className="flex items-center justify-between gap-4"
               >
                 <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium shrink-0">
@@ -43,9 +43,9 @@ export function MobileTableView({
         <table className="w-full text-left">
           <thead>
             <tr className="border-b border-border">
-              {headers.map((header, i) => (
+              {headers.map((header) => (
                 <th
-                  key={i}
+                  key={header}
                   className="pb-3 pr-4 last:pr-0 text-xs uppercase tracking-wider text-muted-foreground font-medium"
                 >
                   {header}
@@ -61,7 +61,7 @@ export function MobileTableView({
               >
                 {row.map((cell, cellIndex) => (
                   <td
-                    key={cellIndex}
+                    key={`${rowIndex}-${headers[cellIndex]}`}
                     className="py-4 pr-4 last:pr-0 text-sm"
                   >
                     {cell}

@@ -7,6 +7,7 @@ import {
   players,
 } from "@/lib/db/schema";
 import { eq, desc, asc } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -29,6 +30,8 @@ export interface DraftPickWithFranchise {
   franchiseSlug: string | null;
   franchiseAbbreviation: string | null;
   franchiseBrandingColor: string | null;
+  originalFranchiseId: string | null;
+  originalFranchiseName: string | null;
 }
 
 export interface DraftSummary {
@@ -126,6 +129,7 @@ export async function getDraftBySeasonYear(
     if (!season) return null;
 
     // Get all picks for this season, joined with franchise and player info
+    const originalFranchises = alias(franchises, "originalFranchises");
     const rows = await db
       .select({
         id: draftPicks.id,
@@ -144,9 +148,12 @@ export async function getDraftBySeasonYear(
         franchiseSlug: franchises.slug,
         franchiseAbbreviation: franchises.abbreviation,
         franchiseBrandingColor: franchises.brandingColor,
+        originalFranchiseId: draftPicks.originalFranchiseId,
+        originalFranchiseName: originalFranchises.name,
       })
       .from(draftPicks)
       .leftJoin(franchises, eq(draftPicks.franchiseId, franchises.id))
+      .leftJoin(originalFranchises, eq(draftPicks.originalFranchiseId, originalFranchises.id))
       .leftJoin(players, eq(draftPicks.playerId, players.id))
       .where(eq(draftPicks.seasonId, season.id))
       .orderBy(asc(draftPicks.pickNumber));
@@ -207,6 +214,7 @@ export async function getFranchiseDraftHistory(
   }[]
 > {
   try {
+    const originalFranchises = alias(franchises, "originalFranchises");
     const rows = await db
       .select({
         id: draftPicks.id,
@@ -225,10 +233,13 @@ export async function getFranchiseDraftHistory(
         franchiseSlug: franchises.slug,
         franchiseAbbreviation: franchises.abbreviation,
         franchiseBrandingColor: franchises.brandingColor,
+        originalFranchiseId: draftPicks.originalFranchiseId,
+        originalFranchiseName: originalFranchises.name,
         seasonYear: seasons.seasonYear,
       })
       .from(draftPicks)
       .leftJoin(franchises, eq(draftPicks.franchiseId, franchises.id))
+      .leftJoin(originalFranchises, eq(draftPicks.originalFranchiseId, originalFranchises.id))
       .leftJoin(players, eq(draftPicks.playerId, players.id))
       .innerJoin(seasons, eq(draftPicks.seasonId, seasons.id))
       .where(eq(draftPicks.franchiseId, franchiseId))

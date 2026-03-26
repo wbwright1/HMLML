@@ -61,9 +61,9 @@ export function PlayoffBracketCard({
               {round.name}
             </p>
             <div className="space-y-2">
-              {round.matchups.map((matchup, i) => (
+              {round.matchups.map((matchup) => (
                 <BracketMatchupCard
-                  key={i}
+                  key={`${matchup.week}-${matchup.teamA.slug}-${matchup.teamB.slug}`}
                   matchup={matchup}
                   seasonYear={seasonYear}
                 />
