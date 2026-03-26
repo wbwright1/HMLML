@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getAwardIcon } from "@/lib/award-icons";
 
 interface StingCardProps {
   label: string;
@@ -23,7 +24,10 @@ export function StingCard({
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <p className="text-caption uppercase text-accent-warm mb-2">
-            {label}
+            <span className="flex items-center gap-1.5">
+              {getAwardIcon(label)}
+              {label}
+            </span>
           </p>
           <p className="text-body font-bold text-text-primary">
             {franchiseName}

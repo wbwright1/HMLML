@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getAwardIcon } from "@/lib/award-icons";
 
 interface TeamAwardCardProps {
   label: string;
@@ -35,9 +36,12 @@ export function TeamAwardCard({
       className={`block rounded-lg border p-5 transition-colors duration-150 hover:border-border-strong ${toneStyles[tone]}`}
     >
       <p className={`text-caption uppercase mb-2 ${labelStyles[tone]}`}>
-        {label}
+        <span className="flex items-center gap-1.5">
+          {getAwardIcon(label)}
+          {label}
+        </span>
       </p>
-      <p className="text-display tabular-nums text-text-primary">{stat}</p>
+      <p className="text-h2 tabular-nums text-text-primary">{stat}</p>
       <p className="text-body-sm text-text-tertiary mt-1">{context}</p>
       <p className="text-body font-bold text-text-primary mt-3">
         {franchiseName}

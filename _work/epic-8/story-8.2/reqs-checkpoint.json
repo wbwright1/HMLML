@@ -1,0 +1,10 @@
+{
+  "agent": "REQS",
+  "story": "8.2",
+  "completedAt": "2026-03-26",
+  "verdict": "COMPLETE",
+  "briefPath": "_work/epic-8/story-8.2/reqs-brief.md",
+  "stateTransition": "analysis -> reqs-complete",
+  "actionsRequired": [],
+  "openQuestions": []
+}

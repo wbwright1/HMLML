@@ -243,7 +243,7 @@ async function PreseasonHub({
       {awards && awards.draftOrder.length > 0 && (
         <ScrollReveal>
           <PageSection label="Upcoming" title="Draft Order">
-            <DraftOrderCard picks={awards.draftOrder} />
+            <DraftOrderCard picks={awards.draftOrder} seasonYear={latestSeason?.seasonYear ?? new Date().getFullYear()} />
           </PageSection>
         </ScrollReveal>
       )}
@@ -516,14 +516,14 @@ async function RegularSeasonHub({
                   {lastWeekResults.results.map((result, i) => (
                     <div
                       key={i}
-                      className="flex items-center justify-between rounded-lg border border-border/50 bg-card px-4 py-3 text-sm"
+                      className="flex items-center justify-between rounded-lg border border-border/50 bg-surface px-4 py-3 text-sm"
                     >
                       <span>
                         <span className="font-semibold">{result.winner}</span>
-                        <span className="text-muted-foreground"> def. </span>
-                        <span className="text-muted-foreground">{result.loser}</span>
+                        <span className="text-text-tertiary"> def. </span>
+                        <span className="text-text-tertiary">{result.loser}</span>
                       </span>
-                      <span className="tabular-nums text-muted-foreground whitespace-nowrap ml-4">
+                      <span className="tabular-nums text-text-tertiary whitespace-nowrap ml-4">
                         {result.winnerScore.toFixed(1)} - {result.loserScore.toFixed(1)}
                       </span>
                     </div>

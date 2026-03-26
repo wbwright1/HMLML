@@ -55,13 +55,13 @@ export default async function DraftDetailPage({
       <section className="py-8 md:py-12 space-y-6">
         <Link
           href="/drafts"
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="text-sm text-text-tertiary hover:text-text-secondary transition-colors"
         >
           &larr; All Drafts
         </Link>
 
         <div className="space-y-2">
-          <p className="text-caption uppercase tracking-widest text-primary">
+          <p className="text-caption uppercase tracking-widest text-accent-green">
             Draft Board
           </p>
           <h1 className="text-h1">{year} Draft</h1>
@@ -88,29 +88,29 @@ export default async function DraftDetailPage({
             }
             title={`${draft.draftType === "startup" ? "Startup" : "Rookie"} Draft`}
           >
-            <div className="flex flex-wrap items-center gap-3 -mt-8">
+            <div className="flex flex-wrap items-center gap-3">
               <SuperlativeBadge
                 text={draft.draftType === "startup" ? "Startup" : "Rookie"}
                 variant={draft.draftType === "startup" ? "green" : "neutral"}
               />
               {draft.isLegacyEra && (
-                <span className="text-xs uppercase tracking-wider text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                <span className="text-xs uppercase tracking-wider text-text-tertiary bg-surface-muted px-2 py-0.5 rounded-full">
                   Legacy Era
                 </span>
               )}
-              <span className="text-sm text-muted-foreground">
+              <span className="text-sm text-text-tertiary">
                 {draft.picks.length} picks &middot; {rounds.length} rounds
               </span>
             </div>
 
-            <div className="space-y-10 mt-4">
+            <div className="space-y-8 mt-4">
               {rounds.map((roundNum) => {
                 const roundPicks = roundsMap.get(roundNum)!;
 
                 return (
                   <ScrollReveal key={roundNum}>
                     <div className="space-y-3">
-                      <h3 className="text-xs uppercase tracking-widest text-muted-foreground font-medium border-b border-border pb-2">
+                      <h3 className="text-xs uppercase tracking-widest text-text-tertiary font-medium border-b border-border pb-2">
                         Round {roundNum}
                       </h3>
 
@@ -120,7 +120,7 @@ export default async function DraftDetailPage({
                         rows={roundPicks.map((pick) => [
                           <span
                             key="pick"
-                            className="tabular-nums text-muted-foreground"
+                            className="tabular-nums text-text-tertiary"
                           >
                             {pick.pickNumber}
                           </span>,
@@ -133,7 +133,7 @@ export default async function DraftDetailPage({
                               {pick.franchiseName ?? "Unknown"}
                             </Link>
                           ) : (
-                            <span key="team" className="text-muted-foreground">
+                            <span key="team" className="text-text-tertiary">
                               {pick.franchiseName ?? "Unknown"}
                             </span>
                           ),

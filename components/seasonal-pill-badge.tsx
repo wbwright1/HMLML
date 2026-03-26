@@ -7,11 +7,11 @@ function getVariantClasses(variant: SeasonVariant): string {
   switch (variant) {
     case "preseason":
     case "week":
-      return "bg-primary/10 text-primary";
+      return "bg-accent-green-light text-accent-green";
     case "playoffs":
-      return "bg-[#FEF9EC] text-[#B8860B]";
+      return "bg-accent-gold-light text-accent-gold";
     case "offseason":
-      return "bg-muted text-muted-foreground";
+      return "bg-surface-muted text-text-tertiary";
   }
 }
 

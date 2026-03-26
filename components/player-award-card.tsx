@@ -1,3 +1,5 @@
+import { getAwardIcon } from "@/lib/award-icons";
+
 interface PlayerAwardCardProps {
   category: string;
   playerName: string;
@@ -7,10 +9,10 @@ interface PlayerAwardCardProps {
 }
 
 const positionColors: Record<string, string> = {
-  QB: "bg-[#E8465D] text-white",
-  RB: "bg-[#39B0AC] text-white",
-  WR: "bg-[#5A8DEE] text-white",
-  TE: "bg-[#F0983C] text-white",
+  QB: "bg-accent-warm text-white",
+  RB: "bg-accent-green text-white",
+  WR: "bg-accent-gold text-white",
+  TE: "bg-text-secondary text-white",
 };
 
 export function PlayerAwardCard({
@@ -27,7 +29,10 @@ export function PlayerAwardCard({
   return (
     <div className="rounded-lg border border-accent-gold/20 bg-accent-gold-light p-5 text-center">
       <p className="text-caption uppercase text-accent-gold mb-3">
-        {category}
+        <span className="flex items-center justify-center gap-1.5">
+          {getAwardIcon(category)}
+          {category}
+        </span>
       </p>
 
       {/* Position badge circle */}

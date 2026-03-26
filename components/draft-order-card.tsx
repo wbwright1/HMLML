@@ -2,23 +2,23 @@ import Link from "next/link";
 
 interface DraftOrderCardProps {
   picks: { rank: number; franchiseName: string; record: string }[];
-  showAll?: boolean;
+  seasonYear?: number;
 }
 
-export function DraftOrderCard({ picks, showAll = false }: DraftOrderCardProps) {
-  const displayPicks = showAll ? picks : picks.slice(0, 4);
-
+export function DraftOrderCard({ picks, seasonYear }: DraftOrderCardProps) {
   return (
     <div className="rounded-lg border border-border bg-surface p-5">
       <h3 className="text-caption uppercase text-text-tertiary mb-4">
         DRAFT ORDER
       </h3>
 
-      <ol className="space-y-2">
-        {displayPicks.map((pick) => (
+      <ol className="space-y-1">
+        {picks.map((pick, index) => (
           <li
             key={pick.rank}
-            className="flex items-center gap-3 text-body-sm"
+            className={`flex items-center gap-3 text-body-sm py-1.5 rounded ${
+              index % 2 === 1 ? "bg-surface-muted/50" : ""
+            }`}
           >
             <span className="w-6 text-center font-bold text-text-primary tabular-nums">
               {pick.rank}
@@ -33,12 +33,12 @@ export function DraftOrderCard({ picks, showAll = false }: DraftOrderCardProps) 
         ))}
       </ol>
 
-      {!showAll && picks.length > 4 && (
+      {seasonYear && (
         <Link
-          href="/drafts"
-          className="block mt-4 text-body-sm font-medium text-primary hover:underline"
+          href={`/drafts/${seasonYear}`}
+          className="block mt-4 text-body-sm font-medium text-accent-green hover:underline"
         >
-          Full Draft Order
+          View Full Draft Order (All 3 Rounds) &rarr;
         </Link>
       )}
     </div>
