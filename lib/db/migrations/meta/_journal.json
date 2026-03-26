@@ -15,6 +15,13 @@
       "when": 1774470170907,
       "tag": "0001_known_nebula",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1774544828165,
+      "tag": "0002_slippery_gabe_jones",
+      "breakpoints": true
     }
   ]
 }

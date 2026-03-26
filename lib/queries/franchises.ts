@@ -37,26 +37,24 @@ export async function getAllFranchises() {
       .groupBy(franchises.id)
       .orderBy(franchises.name);
 
-    // Fetch current owner for each franchise (from the most recent season)
-    const ownerRows = await db
-      .select({
-        franchiseId: franchiseSeasons.franchiseId,
-        ownerDisplayName: franchiseSeasons.ownerDisplayName,
-        coOwnerDisplayName: franchiseSeasons.coOwnerDisplayName,
-        seasonYear: seasons.seasonYear,
-      })
-      .from(franchiseSeasons)
-      .innerJoin(seasons, eq(franchiseSeasons.seasonId, seasons.id))
-      .orderBy(desc(seasons.seasonYear));
+    // Fetch current owner for each franchise (from the most recent season only)
+    const ownerRows = await db.execute(sql`
+      SELECT DISTINCT ON (fs.franchise_id)
+        fs.franchise_id,
+        fs.owner_display_name,
+        fs.co_owner_display_name
+      FROM franchise_seasons fs
+      INNER JOIN seasons s ON fs.season_id = s.id
+      WHERE fs.owner_display_name IS NOT NULL
+      ORDER BY fs.franchise_id, s.season_year DESC
+    `);
 
     const ownerMap = new Map<string, { owner: string; coOwner?: string }>();
-    for (const row of ownerRows) {
-      if (!ownerMap.has(row.franchiseId) && row.ownerDisplayName) {
-        ownerMap.set(row.franchiseId, {
-          owner: row.ownerDisplayName,
-          coOwner: row.coOwnerDisplayName ?? undefined,
-        });
-      }
+    for (const row of ownerRows.rows as Array<Record<string, unknown>>) {
+      ownerMap.set(row.franchise_id as string, {
+        owner: row.owner_display_name as string,
+        coOwner: (row.co_owner_display_name as string) ?? undefined,
+      });
     }
 
     return rows.map((r) => ({

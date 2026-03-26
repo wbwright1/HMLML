@@ -30,6 +30,9 @@ export const seasons = pgTable(
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
+  (table) => [
+    index("idx_seasons_status").on(table.status),
+  ],
 );
 
 // ---------------------------------------------------------------------------
@@ -117,6 +120,7 @@ export const matchups = pgTable(
     ),
     index("idx_matchups_season_week").on(table.seasonId, table.week),
     index("idx_matchups_franchise_id").on(table.franchiseId),
+    index("idx_matchups_season_status").on(table.seasonId, table.status),
   ],
 );
 
@@ -143,6 +147,7 @@ export const players = pgTable(
   },
   (table) => [
     index("idx_players_search").on(table.searchFullName),
+    index("idx_players_position").on(table.position),
   ],
 );
 
@@ -193,6 +198,10 @@ export const transactions = pgTable(
     createdAtSleeper: bigint("created_at_sleeper", { mode: "number" }),
     createdAt: timestamp("created_at").defaultNow(),
   },
+  (table) => [
+    index("idx_transactions_season_id").on(table.seasonId),
+    index("idx_transactions_created_at_sleeper").on(table.createdAtSleeper),
+  ],
 );
 
 // ---------------------------------------------------------------------------

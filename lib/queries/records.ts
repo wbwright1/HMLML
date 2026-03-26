@@ -222,6 +222,72 @@ export async function getLeaderboard(
 }
 
 // ---------------------------------------------------------------------------
+// 4.2a — All Season Leaderboards (batch, single query)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetches leaderboard data for ALL seasons in a single query,
+ * grouped by season year. Replaces N separate getLeaderboard(year) calls.
+ */
+export async function getAllSeasonLeaderboards(): Promise<
+  Record<string, LeaderboardEntry[]>
+> {
+  try {
+    const rows = await db
+      .select({
+        seasonYear: seasons.seasonYear,
+        id: franchises.id,
+        slug: franchises.slug,
+        name: franchises.name,
+        abbreviation: franchises.abbreviation,
+        brandingColor: franchises.brandingColor,
+        wins: franchiseSeasons.wins,
+        losses: franchiseSeasons.losses,
+        ties: franchiseSeasons.ties,
+        pointsScored: franchiseSeasons.pointsScored,
+        pointsAgainst: franchiseSeasons.pointsAgainst,
+        playoffResult: franchiseSeasons.playoffResult,
+      })
+      .from(franchiseSeasons)
+      .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
+      .innerJoin(seasons, eq(franchiseSeasons.seasonId, seasons.id))
+      .orderBy(seasons.seasonYear, desc(franchiseSeasons.wins));
+
+    const result: Record<string, LeaderboardEntry[]> = {};
+
+    for (const r of rows) {
+      const yearKey = String(r.seasonYear);
+      if (!result[yearKey]) result[yearKey] = [];
+
+      const w = r.wins ?? 0;
+      const l = r.losses ?? 0;
+      const t = r.ties ?? 0;
+      const total = w + l + t;
+
+      result[yearKey].push({
+        id: r.id,
+        slug: r.slug,
+        name: r.name,
+        abbreviation: r.abbreviation ?? undefined,
+        brandingColor: r.brandingColor ?? undefined,
+        wins: w,
+        losses: l,
+        ties: t,
+        pointsScored: Number(r.pointsScored ?? 0),
+        pointsAgainst: Number(r.pointsAgainst ?? 0),
+        championships: r.playoffResult === "champion" ? 1 : 0,
+        winPct: total > 0 ? w / total : 0,
+        seasonsPlayed: 1,
+      });
+    }
+
+    return result;
+  } catch {
+    return {};
+  }
+}
+
+// ---------------------------------------------------------------------------
 // 4.2 — Career Stats
 // ---------------------------------------------------------------------------
 

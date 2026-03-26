@@ -139,10 +139,10 @@ export async function getPreseasonAwards(
     }
 
     // ── Player Awards (top scorer by position) ──────────────────────────
+    // Single query with DISTINCT ON to get top player per position
 
     const playerAwards: PlayerAward[] = [];
 
-    // Get the season year for the player stats query
     const [seasonRow] = await db
       .select({ seasonYear: seasons.seasonYear })
       .from(seasons)
@@ -150,39 +150,30 @@ export async function getPreseasonAwards(
       .limit(1);
 
     if (seasonRow) {
-      const positions = ["QB", "RB", "WR", "TE"] as const;
+      const topPlayers = await db.execute(sql`
+        SELECT DISTINCT ON (p.position)
+          p.full_name AS player_name,
+          p.position,
+          p.points_ppr,
+          f.name AS franchise_name
+        FROM roster_players rp
+        INNER JOIN players p ON rp.player_id = p.id
+        INNER JOIN franchises f ON rp.franchise_id = f.id
+        WHERE rp.season_id = ${seasonId}
+          AND p.position IN ('QB', 'RB', 'WR', 'TE')
+          AND p.stats_season = ${seasonRow.seasonYear}
+          AND p.points_ppr IS NOT NULL
+        ORDER BY p.position, p.points_ppr DESC
+      `);
 
-      for (const pos of positions) {
-        const topPlayer = await db
-          .select({
-            playerName: players.fullName,
-            position: players.position,
-            pointsPpr: players.pointsPpr,
-            franchiseName: franchises.name,
-          })
-          .from(rosterPlayers)
-          .innerJoin(players, eq(rosterPlayers.playerId, players.id))
-          .innerJoin(
-            franchises,
-            eq(rosterPlayers.franchiseId, franchises.id)
-          )
-          .where(
-            and(
-              eq(rosterPlayers.seasonId, seasonId),
-              eq(players.position, pos),
-              eq(players.statsSeason, seasonRow.seasonYear)
-            )
-          )
-          .orderBy(desc(players.pointsPpr))
-          .limit(1);
-
-        if (topPlayer[0] && topPlayer[0].pointsPpr != null) {
+      for (const row of topPlayers.rows as Array<Record<string, unknown>>) {
+        if (row.points_ppr != null) {
           playerAwards.push({
-            category: `BEST ${pos}`,
-            playerName: topPlayer[0].playerName ?? "Unknown",
-            franchiseName: topPlayer[0].franchiseName,
-            stat: `${topPlayer[0].pointsPpr.toFixed(1)} pts`,
-            position: pos,
+            category: `BEST ${row.position as string}`,
+            playerName: (row.player_name as string) ?? "Unknown",
+            franchiseName: row.franchise_name as string,
+            stat: `${(row.points_ppr as number).toFixed(1)} pts`,
+            position: row.position as string,
           });
         }
       }

@@ -154,12 +154,14 @@ async function PreseasonHub({
     const awardSeasonYear = completedSeason?.seasonYear ?? latestSeason?.seasonYear;
 
     if (awardSeasonId) {
-      awards = await getPreseasonAwards(awardSeasonId);
-
-      // Get standings for the completed season to find champion
-      const completedStandings = completedSeason && completedSeason.id !== latestSeason?.id
-        ? await getSeasonStandings(completedSeason.id)
-        : standings;
+      // Run awards and standings in parallel since both depend only on completedSeason
+      const needsStandings = completedSeason && completedSeason.id !== latestSeason?.id;
+      const [awardsResult, completedStandingsResult] = await Promise.all([
+        getPreseasonAwards(awardSeasonId),
+        needsStandings ? getSeasonStandings(completedSeason.id) : Promise.resolve(null),
+      ]);
+      awards = awardsResult;
+      const completedStandings = completedStandingsResult ?? standings;
 
       const champion = completedStandings.find((s) => s.playoffResult === "champion");
       const runnerUp = completedStandings.find((s) => s.playoffResult === "runner_up");
