@@ -67,6 +67,7 @@ export async function getPreseasonAwards(
         franchiseName: franchises.name,
         franchiseSlug: franchises.slug,
         rosterId: franchiseSeasons.rosterId,
+        userId: franchiseSeasons.userId,
         wins: franchiseSeasons.wins,
         losses: franchiseSeasons.losses,
         ties: franchiseSeasons.ties,
@@ -237,13 +238,14 @@ export async function getPreseasonAwards(
 
     // ── Draft Order ─────────────────────────────────────────────────────
 
-    // Build roster_id -> franchise info map (using numeric keys since Sleeper uses numbers)
-    const rosterToFranchise = new Map<number, { name: string; record: string }>();
+    // Build lookup maps: user_id -> franchise info, roster_id -> franchise info
+    // Sleeper draft_order uses user_id keys; traded_picks uses roster_id (numbers)
+    const userToFranchise = new Map<string, { name: string; rosterId: string; record: string }>();
+    const rosterToFranchise = new Map<string, { name: string; record: string }>();
     for (const t of seasonStandings) {
-      rosterToFranchise.set(Number(t.rosterId), {
-        name: t.franchiseName,
-        record: `${t.wins ?? 0}-${t.losses ?? 0}${(t.ties ?? 0) > 0 ? `-${t.ties}` : ""}`,
-      });
+      const record = `${t.wins ?? 0}-${t.losses ?? 0}${(t.ties ?? 0) > 0 ? `-${t.ties}` : ""}`;
+      userToFranchise.set(t.userId, { name: t.franchiseName, rosterId: t.rosterId, record });
+      rosterToFranchise.set(t.rosterId, { name: t.franchiseName, record });
     }
 
     let draftOrder: DraftOrderEntry[] = [];
@@ -258,20 +260,20 @@ export async function getPreseasonAwards(
       if (latestSeasonRow) {
         const { getLeagueDrafts, getLeagueTradedPicks } = await import("@/lib/sleeper");
 
-        // Fetch drafts and traded picks in parallel (cached for 1 hour by Sleeper client)
+        // Fetch drafts and traded picks in parallel (cached for 1 hour in production)
         const [draftsResult, tradedResult] = await Promise.all([
           getLeagueDrafts(latestSeasonRow.leagueId),
           getLeagueTradedPicks(latestSeasonRow.leagueId),
         ]);
 
-        // traded_picks: each entry has roster_id (original pick slot owner)
-        // and owner_id (who currently holds it). For round 1, if they differ
-        // the pick was traded. Key by the original roster_id.
-        const tradedR1 = new Map<number, number>(); // original roster -> current owner roster
+        // traded_picks: roster_id = original pick slot, owner_id = current holder
+        // For round 1, if they differ the pick was traded.
+        // Key: original roster_id (string) -> current owner roster_id (string)
+        const tradedR1 = new Map<string, string>();
         if ("data" in tradedResult) {
           for (const pick of tradedResult.data) {
             if (pick.round === 1 && pick.owner_id !== pick.roster_id) {
-              tradedR1.set(pick.roster_id, pick.owner_id);
+              tradedR1.set(String(pick.roster_id), String(pick.owner_id));
             }
           }
         }
@@ -283,32 +285,32 @@ export async function getPreseasonAwards(
           );
 
           if (upcomingDraft?.draft_order) {
-            // draft_order: { "rosterId": pickSlot } e.g. { "1": 3, "2": 1 }
-            // This tells us which slot each roster picks at.
-            // Invert to: { pickSlot: rosterIdNum }
-            const slotToRoster = new Map<number, number>();
-            for (const [rosterId, slot] of Object.entries(upcomingDraft.draft_order)) {
-              slotToRoster.set(slot, Number(rosterId));
+            // draft_order: { userId: pickSlot } e.g. { "337850257649987584": 1 }
+            // Invert to: { pickSlot: userId }
+            const slotToUserId = new Map<number, string>();
+            for (const [userId, slot] of Object.entries(upcomingDraft.draft_order)) {
+              slotToUserId.set(slot, userId);
             }
 
-            const maxSlot = Math.max(...slotToRoster.keys());
+            const maxSlot = Math.max(...slotToUserId.keys());
             for (let slot = 1; slot <= maxSlot; slot++) {
-              const slotRosterId = slotToRoster.get(slot);
-              if (slotRosterId == null) continue;
+              const userId = slotToUserId.get(slot);
+              if (!userId) continue;
 
-              const slotFranchise = rosterToFranchise.get(slotRosterId);
-              if (!slotFranchise) continue;
+              // Resolve user_id -> franchise via the franchise_seasons table
+              const franchise = userToFranchise.get(userId);
+              if (!franchise) continue;
 
-              // Check if this roster's round 1 pick was traded away
-              const currentOwnerId = tradedR1.get(slotRosterId);
-              if (currentOwnerId != null) {
-                const currentOwner = rosterToFranchise.get(currentOwnerId);
+              // Check if this franchise's round 1 pick was traded away
+              const currentOwnerRosterId = tradedR1.get(franchise.rosterId);
+              if (currentOwnerRosterId) {
+                const currentOwner = rosterToFranchise.get(currentOwnerRosterId);
                 if (currentOwner) {
                   draftOrder.push({
                     rank: slot,
                     franchiseName: currentOwner.name,
-                    record: slotFranchise.record,
-                    originalOwnerName: slotFranchise.name,
+                    record: franchise.record,
+                    originalOwnerName: franchise.name,
                   });
                   continue;
                 }
@@ -316,8 +318,8 @@ export async function getPreseasonAwards(
 
               draftOrder.push({
                 rank: slot,
-                franchiseName: slotFranchise.name,
-                record: slotFranchise.record,
+                franchiseName: franchise.name,
+                record: franchise.record,
               });
             }
           }
