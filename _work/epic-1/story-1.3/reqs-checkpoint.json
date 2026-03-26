@@ -1,0 +1,27 @@
+{
+  "agent": "REQS",
+  "story": "1.3",
+  "completedAt": "2026-03-25",
+  "state": "reqs-complete",
+  "briefFile": "_work/epic-1/story-1.3/reqs-brief.md",
+  "flagCount": 4,
+  "flags": [
+    "Token dependency on Story 1.2 (--accent-warm, --accent-green not yet in globals.css)",
+    "SiteNav client directive conflict with CLAUDE.md RSC-default rule",
+    "BottomTabBar retirement required -- hamburger replaces mobile nav",
+    "SeasonalPillBadge data source query not yet available (Epic 2 dependency)"
+  ],
+  "componentsInventoried": [
+    "components/site-nav.tsx (UPDATE -- nav items, hamburger, seasonal pill)",
+    "components/bottom-tab-bar.tsx (RETIRE -- pending orchestrator approval)",
+    "app/layout.tsx (MINOR UPDATE -- remove tab bar, fix mobile padding)",
+    "components/sync-timestamp.tsx (UPDATE -- stale thresholds)",
+    "components/sync-timestamp-client.tsx (UPDATE -- stale color + text label)",
+    "components/seasonal-pill-badge.tsx (NEW)",
+    "components/section-header.tsx (NEW)"
+  ],
+  "existingCompliantComponents": [
+    "components/site-footer.tsx",
+    "components/page-section.tsx (not the Section Header, coexists)"
+  ]
+}

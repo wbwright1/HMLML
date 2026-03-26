@@ -11,7 +11,7 @@ test.describe("Site Navigation", () => {
     const routes = ["/matchups", "/teams", "/records", "/drafts", "/seasons", "/players"];
     for (const route of routes) {
       await page.goto(route);
-      await expect(page.locator("h1, h2")).toBeVisible();
+      await expect(page.locator("h1, h2").first()).toBeVisible();
     }
   });
 

@@ -3,6 +3,7 @@ import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
+import { EmptyState } from "@/components/empty-state";
 import { getPowerRankings } from "@/lib/queries/records";
 import type { PowerRankingEntry } from "@/lib/queries/records";
 
@@ -36,14 +37,13 @@ export default async function PowerRankingsPage() {
         </p>
       </PageSection>
 
-      <section className="pb-24 space-y-3">
+      <section className="pb-8 md:pb-12 space-y-6">
         {rankings.length === 0 ? (
-          <div className="rounded-xl border border-border bg-card p-8 text-center">
-            <p className="text-body-lg text-muted-foreground">
-              No power rankings data available yet. Rankings appear once the
-              season is underway.
-            </p>
-          </div>
+          <EmptyState
+            icon="chart"
+            title="No Power Rankings"
+            description="Rankings appear once the season is underway."
+          />
         ) : (
           rankings.map((entry, index) => {
             const total = entry.wins + entry.losses + entry.ties;
@@ -55,6 +55,7 @@ export default async function PowerRankingsPage() {
                 <Link
                   href={`/teams/${entry.slug}`}
                   className="block rounded-xl border border-border bg-card p-5 transition-colors hover:bg-muted/50"
+                  style={{ borderLeftWidth: "3px", borderLeftColor: entry.brandingColor ?? "var(--border)" }}
                 >
                   <div className="flex flex-wrap items-center gap-4">
                     {/* Rank */}

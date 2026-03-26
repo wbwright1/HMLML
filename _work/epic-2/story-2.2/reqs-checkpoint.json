@@ -1,0 +1,39 @@
+{
+  "story": "2.2",
+  "title": "Co-Owner Sync & Legacy Import",
+  "agent": "REQS",
+  "status": "reqs-complete",
+  "verdict": "COMPLETE",
+  "timestamp": "2026-03-25T00:00:00Z",
+  "flags": [
+    "CRITICAL: Implementation already exists in codebase. Both daily sync and legacy import already resolve co-owner display names. Story may be complete pending verification pass."
+  ],
+  "acceptanceCriteria": {
+    "AC-1": "Daily sync resolves co-owner user IDs to display names via userMap",
+    "AC-2": "Resolved co-owner display name stored in franchise_seasons.coOwnerDisplayName",
+    "AC-3": "Multiple co-owners joined with ' & ' separator (UX-DR11)",
+    "AC-4": "Legacy import backfills co-owner data for all historical seasons",
+    "AC-5": "Same resolution and formatting rules apply in legacy import",
+    "AC-6": "No co-owners results in null (not empty string)"
+  },
+  "requirementsCovered": {
+    "functional": ["FR22"],
+    "nonFunctional": ["NFR6"],
+    "uxDesign": ["UX-DR11"]
+  },
+  "databaseChanges": "None (Story 2.1 prerequisite added the column)",
+  "apiEndpoints": "None modified (sync logic within existing endpoints)",
+  "validationSchemas": "SleeperRosterSchema already includes co_owners field",
+  "implementationAlreadyExists": true,
+  "existingImplementationLocations": {
+    "dailySync": "lib/sync/daily.ts lines 241-246, 294, 307",
+    "legacyImport": "lib/sync/legacy-import.ts lines 263-268, 317, 331",
+    "sleeperSchema": "lib/sleeper-schemas.ts line 46"
+  },
+  "forwardDependencies": ["Story 2.3"],
+  "openQuestions": [
+    "Verify daily sync has been run with co-owner logic active",
+    "Verify legacy import has been run to backfill historical co-owner data",
+    "Verify null (not empty string) for rosters without co-owners"
+  ]
+}

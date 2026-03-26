@@ -2,6 +2,16 @@ import Link from "next/link";
 import { Calendar, Users, Search, AlertCircle, Trophy, BarChart3 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
+/**
+ * Canonical iconMap keys and their page-variant mappings:
+ *
+ *   "calendar" (Calendar)    -> Matchups (no data), Seasons (no data)
+ *   "users"    (Users)       -> Teams (no data)
+ *   "search"   (Search)      -> Player search (no results)
+ *   "alert"    (AlertCircle) -> Error page (inline section)
+ *   "trophy"   (Trophy)      -> Records / trophies pages
+ *   "chart"    (BarChart3)   -> Homepage (no data), H2H (no data)
+ */
 const iconMap: Record<string, LucideIcon> = {
   calendar: Calendar,
   users: Users,

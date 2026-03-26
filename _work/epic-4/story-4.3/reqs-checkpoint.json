@@ -1,0 +1,46 @@
+{
+  "story": "4.3",
+  "title": "Franchise Page Hero Gradient",
+  "epic": "4 - Franchise Identity & Color",
+  "phase": "reqs",
+  "status": "complete",
+  "timestamp": "2026-03-25T00:00:00Z",
+  "requirementsTraced": {
+    "FR": ["FR8"],
+    "NFR": ["NFR1", "NFR3", "NFR6"],
+    "UX-DR": ["UX-DR5"]
+  },
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "description": "Gradient applied when brandingColor exists (5-8% opacity, fades to transparent)",
+      "requirements": ["FR8", "UX-DR5"]
+    },
+    {
+      "id": "AC-2",
+      "description": "No gradient when brandingColor is absent",
+      "requirements": ["FR8"]
+    },
+    {
+      "id": "AC-3",
+      "description": "Gradient is purely decorative, not sole identifier",
+      "requirements": ["NFR1"]
+    },
+    {
+      "id": "AC-4",
+      "description": "WCAG AA contrast maintained for all text over gradient",
+      "requirements": ["NFR3"]
+    }
+  ],
+  "filesInScope": [
+    "app/teams/[franchiseSlug]/page.tsx"
+  ],
+  "conflictsFound": [],
+  "riskLevel": "low",
+  "keyFinding": "Hero gradient is already implemented in current codebase with correct opacity (0F hex = 5.9%) and fade (60%). Story requires verification and E2E test coverage rather than new implementation.",
+  "testingRequired": {
+    "e2e": true,
+    "unit": false,
+    "manual": true
+  }
+}

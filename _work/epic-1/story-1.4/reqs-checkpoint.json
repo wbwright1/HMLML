@@ -1,0 +1,18 @@
+{
+  "agent": "REQS",
+  "story": "1.4",
+  "title": "Snarky Label Content System",
+  "completedAt": "2026-03-25",
+  "state": "reqs-complete",
+  "briefPath": "_work/epic-1/story-1.4/reqs-brief.md",
+  "keyDecisions": [
+    "Module lives at lib/content.ts; separate from lib/playoff-labels.ts",
+    "Primary export is a Record<string, SnarkyLabel> map for O(1) key lookup",
+    "Tone type is 'positive' | 'sting' | 'neutral' (UX spec 'Neutral/fun' resolved to 'neutral')",
+    "14 label entries fully specified with UPPER_SNAKE_CASE keys",
+    "No React, no use client directive, no Zod, no database access",
+    "as const or readonly enforced for immutability"
+  ],
+  "openQuestions": [],
+  "flags": []
+}

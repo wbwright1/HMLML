@@ -1,14 +1,49 @@
 {
-  "project": "{{PROJECT_NAME}}",
-  "sprints": [
+  "project": "FantasyWebsite",
+  "initiative": "UX Redesign (Direction 5: Hybrid)",
+  "sprints": [],
+  "epics": [
     {
-      "id": 1,
-      "name": "Sprint 1",
-      "status": "active",
-      "stories": []
+      "id": 1, "name": "Design System & Site Shell", "status": "complete",
+      "storyCount": 23, "storiesComplete": 23
+    },
+    {
+      "id": 2, "name": "Preseason Hub Experience", "status": "complete",
+      "storyCount": 9, "storiesComplete": 9
+    },
+    {
+      "id": 3, "name": "Game Day Hub Experience", "status": "complete",
+      "storyCount": 15, "storiesComplete": 15
+    },
+    {
+      "id": 4, "name": "Franchise Deep Dive", "status": "complete",
+      "storyCount": 9, "storiesComplete": 9
+    },
+    {
+      "id": 5, "name": "League History & Records", "status": "complete",
+      "storyCount": 10, "storiesComplete": 10
+    },
+    {
+      "id": 6, "name": "Playoffs & Offseason Hub", "status": "complete",
+      "storyCount": 8, "storiesComplete": 8
+    },
+    {
+      "id": 7, "name": "Player Discovery", "status": "complete",
+      "storyCount": 5, "storiesComplete": 5
+    },
+    {
+      "id": 8, "name": "UI/UX Polish Fixes", "status": "in-progress",
+      "storyCount": 4, "storiesComplete": 0,
+      "stories": [
+        { "id": "8.1", "title": "Tone Down Team Award Stats & Add Icons", "state": "analysis" },
+        { "id": "8.2", "title": "Draft Order Shows Full First Round on Hub", "state": "analysis" },
+        { "id": "8.3", "title": "Clean Up Records Leaderboard Table Styling", "state": "analysis" },
+        { "id": "8.4", "title": "Fix Draft Detail Page Label Spacing", "state": "analysis" }
+      ]
     }
   ],
-  "currentSprint": 1,
-  "currentStory": null,
-  "currentState": null
+  "totalStories": 83,
+  "totalComplete": 79,
+  "currentStory": "8.1",
+  "currentState": "analysis"
 }

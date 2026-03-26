@@ -1,7 +1,7 @@
 ---
 stepsCompleted: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
 status: 'complete'
-completedAt: '2026-03-21'
+completedAt: '2026-03-25'
 lastStep: 14
 inputDocuments: ['prd.md', 'architecture.md']
 ---
@@ -9,7 +9,7 @@ inputDocuments: ['prd.md', 'architecture.md']
 # UX Design Specification FantasyWebsite
 
 **Author:** Blake
-**Date:** 2026-03-17
+**Date:** 2026-03-25
 
 ---
 
@@ -19,1154 +19,1597 @@ inputDocuments: ['prd.md', 'architecture.md']
 
 ### Project Vision
 
-The Harambe Memorial League Memorial League Website transforms a 12-team dynasty fantasy football league from scattered Sleeper app data and group chat memories into a permanent, always-available institution with history, personality, and trash-talk fuel. The site is fully public (no login), server-rendered, and mobile-first — designed for quick weekly check-ins and deep historical dives alike. All data is automatically synced from the Sleeper API, with near-live matchup scores during NFL game windows. The site preserves and unifies history across the league's legacy 10-team era and current 12-team format.
+The HML Website redesign transforms a functionally complete but visually flat league site into an engaging, seasonally aware destination that feels like opening a premium sports magazine on your phone. The core data and architecture remain unchanged; the redesign focuses on the dashboard/hub experience and visual presentation layer. The site should reward every visit with curated, contextual content (not just raw data), shifting based on where we are in the football calendar: preseason draft hype, regular season matchup energy, playoff intensity, and offseason reflection.
 
 ### Target Users
 
-1. **The Casual Member** — Visits weekly on mobile, wants rivalry stats and trash-talk ammunition fast. Values glanceable, shareable content.
-2. **The Stats Nerd** — Deep-dives into draft history, career legacy stats, and all-time leaderboards. Wants proof and receipts across all seasons including the legacy era.
-3. **The Commish** — Manages the league record. Will publish weekly recaps in Phase 2. Needs the site to be the authoritative source of truth.
-4. **The New Manager** — Just joined, needs to get oriented on their franchise's history, the league landscape, and who the competition is — without asking anyone.
-5. **The Dynasty Manager** — Checks player ownership and status for trade intel. Quick in-and-out visits, often on mobile.
+1. **The Casual Member** — mobile-first, wants rivalry stats and screenshot-worthy ammunition for the group chat
+2. **The Stats Nerd** — deep-dives into draft history, career legacy stats, all-time leaderboards
+3. **The Commish** — needs the site to be the authoritative record; will publish weekly recaps in Phase 2
+4. **The New Manager** — needs orientation on franchise history, competition, league landscape
+5. **The Dynasty Manager** — quick in-and-out player status checks for trade intel
 
 ### Key Design Challenges
 
-1. **Data-dense tables on mobile** — Standings, leaderboards, draft boards, and head-to-head records are inherently tabular. The UX must make these scannable on phones without relying on constant horizontal scrolling.
-2. **Legacy/current era continuity** — The site spans two league eras (10-team → 12-team). Franchise history, draft records, and career stats must flow seamlessly across eras without confusing the user about which era they're viewing.
-3. **Live vs. static content blending** — The matchup page introduces near-live polling into an otherwise static, server-rendered site. The experience must feel cohesive, not like two different products.
-4. **Color-blind accessibility** — A league member cannot distinguish reds and purples. All color-coded UI (win/loss, rankings, status) must include secondary indicators (labels, icons, patterns). Red/purple pairings are prohibited as primary data signals.
+- **Seasonal awareness without complexity** — the hub must feel fresh and contextual year-round (preseason draft countdown + awards, regular season live scores + standings, playoffs bracket focus, offseason recaps) without requiring manual content management. All driven by data already in the system.
+- **"Clean but not bland"** — the Press Box theme provides a solid neutral foundation, but needs strategic color, typography punch, and card-based layouts to make key content pop. The 440andfriends model: calm base, vibrant callouts.
+- **Mobile card-first data presentation** — stats, awards, and standings need to feel native on a phone screen. Cards over tables wherever possible. Tables reserved for deep-dive contexts where density is appropriate.
+- **Curated over comprehensive on the hub** — the homepage should surface the 4-6 most compelling things (last year's champ, award winners, draft countdown, draft order) rather than linking to everything.
 
 ### Design Opportunities
 
-1. **Trash-talk fuel by design** — Shareable URLs, screenshot-friendly layouts, and provocative stat surfacing (rivalry streaks, head-to-head dominance) drive organic engagement through group chat sharing.
-2. **Franchise identity as anchor** — Persistent franchise pages with year-over-year ownership, trophies, and records create institutional weight that no fantasy platform provides natively.
-3. **Glanceable surface, explorable depth** — Most visits are quick (check scores, grab a stat). The same data should reward deeper exploration. A progressive-depth pattern serves all five user types without overwhelming casual visitors or boring power users.
+- **Seasonal hub states** — a homepage that evolves through the football year creates a reason to come back; each visit feels current rather than static
+- **Award cards as visual moments** — positional awards (best QB, WR, RB, TE) and team stat awards (most PF, least PA) as rich, glanceable cards give the preseason hub personality and trash-talk fuel
+- **Draft countdown as a centerpiece** — a visible countdown timer to the rookie draft creates anticipation and gives the preseason hub a focal point
+- **Strategic color accents on a neutral canvas** — using the Press Box palette more boldly (gold for achievements, green for active/live states) against the warm neutral background can create visual hierarchy without clutter
 
 ## Core User Experience
 
 ### Defining Experience
 
-The HML Website serves two complementary core loops driven by the NFL calendar:
+The core experience is **finding ammunition**. Every visit to the HML site, regardless of season, ends with the same outcome: a league member finds something worth sharing in the group chat. The site is a trash talk arsenal backed by real data. The hub serves up the most provocative, brag-worthy, or roast-worthy content for the current moment in the football calendar; deeper pages provide the receipts.
 
-- **In-season (Sep–Jan):** Arrive → find a stat, rivalry record, or matchup result → screenshot → fire it into the group chat. The site is a trash-talk weapon. Speed-to-stat is everything.
-- **Offseason (Feb–Aug):** Browse franchise histories, draft records, and career stats with a sense of nostalgia and institutional pride. The site is a living archive that rewards leisurely exploration of "remember when" moments.
-
-The core user action across both modes is the same: **find a specific historical fact and either share it or savor it.** Every design decision should minimize the distance between "I wonder..." and "here it is."
+The core loop: **Land > See something interesting > Screenshot or share > Group chat erupts.**
 
 ### Platform Strategy
 
-- **Mobile-first web application** — the majority of visits will be phone-based (checking scores at lunch, screenshotting stats for group chat sharing, quick player lookups)
-- **Desktop as secondary but valued** — deep dives into draft history, full season timelines, and multi-franchise comparisons are better on larger screens
-- **No native app, no offline** — a responsive web app with shareable URLs is the right tool for a 12-person audience
-- **Touch-optimized** — tap targets, swipeable content where appropriate, no hover-dependent interactions
+- **Mobile-first web app** — the primary context is a phone during lunch, on the couch, or mid-group-chat-argument
+- **Touch-optimized** — tap targets sized for thumbs, card-based layouts that scroll naturally, no hover-dependent interactions
+- **No offline requirement** — always-connected use case; data freshness matters more than offline access
+- **Share-optimized** — clean URLs, card layouts that screenshot well with clear context (the screenshot should make sense without the surrounding page)
+- **No app install** — browser-based, shareable links that work immediately for anyone in the league
 
 ### Effortless Interactions
 
-- **Viewing history and matchup results** — browsing any season's results, any franchise's record, any week's matchups must feel instant and require minimal navigation
-- **Finding superlatives** — "who's the best/worst franchise in league history?" should be answerable at a glance from leaderboards and career stats
-- **Sharing** — every meaningful view has a clean, shareable URL; layouts should look good when screenshotted on mobile
-- **Orientation** — a new manager landing on the site should understand the league landscape without guidance; the information architecture should be self-explanatory
+- **Landing on the hub should immediately surface something interesting** — zero taps required to find a stat, award, or matchup worth reacting to
+- **Seasonal context is automatic** — the hub knows what time of year it is and serves the right content without the user choosing a mode
+- **Navigating between franchise/rivalry/records pages should feel like flipping through a magazine** — fast, visual, and each page has a clear "headline" moment
+- **Live scores during game windows just work** — scores update in place, no refresh, no spinner, the page feels alive
+- **Deep stats are always one tap from the surface** — award cards link to full breakdowns, rivalry cards link to full H2H history, standings link to season detail
 
 ### Critical Success Moments
 
-1. **The superlative discovery** — a member visits, finds proof that a franchise is definitively the best or worst at something historically, and shares it. This is the moment the site becomes indispensable.
-2. **The rivalry receipt** — pulling up an H2H record that settles a group chat argument. The site becomes the authoritative source.
-3. **The nostalgia scroll** — browsing old seasons and draft picks during the offseason, remembering trades and busts. The site becomes the league's collective memory.
-4. **The new manager "aha"** — a new owner explores their franchise page and understands its full history without asking anyone. The site earns trust.
+1. **First visit: "This is way better than the Sleeper app for this"** — the hub shows curated, contextual content that Sleeper doesn't surface (awards, rivalry records, best possible roster, closest wins). The value is immediately obvious.
+2. **The screenshot moment** — a user sees an award card, rivalry record, or stat callout and screenshots it. The card is self-contained: the stat, the context, and the franchise identity are all visible in one frame. This is the moment the site earns its place in the group chat.
+3. **The argument settler** — two managers disagree about who's better historically. The H2H rivalry page settles it with data spanning every season including the legacy era. The site becomes the authority.
+4. **Game day energy** — during NFL game windows, the hub transforms: live scores front and center, matchup cards with real-time updates, the site feels active and alive rather than a static archive.
 
 ### Experience Principles
 
-1. **Speed-to-stat** — every design choice should minimize the number of taps/clicks between a question and its answer. If a user has to think about where to find something, we've failed.
-2. **Superlatives on the surface** — best, worst, most, least, longest streak — these should be visible and prominent, not buried in raw data tables. The site should tell stories, not just display numbers.
-3. **Screenshot-worthy** — layouts should be designed with the assumption that they'll be screenshotted and dropped into a group chat. Clean, legible, with enough context to stand alone.
-4. **Two modes, one site** — the same content serves both in-season trash talk and offseason nostalgia. The design should feel energetic during game windows (live scores) and warm/archival when browsing history.
+1. **Trash talk first** — every design decision filters through "does this give someone something to brag about or roast someone with?" If a page doesn't generate group chat energy, it's not pulling its weight.
+2. **Speed to stat** — the most compelling content surfaces with zero taps. Deeper data is always one tap away. Never more than two taps from any stat in the system.
+3. **Screenshot-worthy by default** — cards, awards, and stat callouts are designed as self-contained visual moments. Clear context, bold typography, franchise identity visible. A screenshot of any card should make sense dropped into a group chat with no explanation.
+4. **The site knows what season it is** — the hub is always contextually relevant. Preseason serves draft hype and last-year awards. Regular season serves matchups, standings, and weekly superlatives. Playoffs narrow the focus. Offseason reflects.
+5. **Cards over tables, always on mobile** — data lives in cards on the hub and mobile views. Tables are reserved for deep-dive pages on larger screens where density is appropriate (full draft boards, complete season results).
 
 ## Desired Emotional Response
 
 ### Primary Emotional Goals
 
-1. **Competitive Pride** — The site should make every franchise owner feel like their history matters. Seeing your record, your draft picks, your rivalry wins laid out on a polished stage creates a sense of "this is MY franchise." The data becomes proof of legacy, not just numbers.
-
-2. **Connection** — Users should feel like they're part of something bigger than any single season. The site transforms a group chat league into an institution with history, traditions, and a shared story that spans years. Browsing old seasons should feel like flipping through a yearbook you're in.
-
-3. **Delight Through Discovery** — The site should reward exploration with small "that's sick" moments — a visual treatment that makes a stat pop, a callout that surfaces something you didn't know, a layout that makes a record feel weighty. These moments are what pull users back and make them choose this over the Sleeper app.
+- **Competitive fire** — the site should make you feel something. Whether it's pride in your franchise's record or the sting of seeing your worst stat highlighted, the emotional response is never neutral. The site fuels the rivalry.
+- **"This league is legit"** — underneath the trash talk, there's genuine respect for the institution. The site's quality, the depth of history, the completeness of the record; it all signals that the HML is a real thing worth being part of.
+- **Mischievous discovery** — every visit should feel like finding a loaded weapon. "Oh, you think you're good? Look at this stat." The site actively helps users find roast material.
 
 ### Emotional Journey Mapping
 
-| Stage | Desired Emotion | Design Implication |
-|---|---|---|
-| **First visit** | "This is legit" — impressed by the polish and personality | Clean, modern visual design with enough flair to signal this isn't a generic stats page |
-| **Finding a stat** | "Oh damn, look at that" — satisfying discovery | Bold visual treatments for records, streaks, and superlatives that make data feel like a reveal |
-| **Sharing to group chat** | "They need to see this" — urgency to share | Screenshot-friendly layouts with enough context to stand alone; shareable URLs |
-| **Browsing history** | "Remember when..." — warm nostalgia mixed with competitive pride | Season timelines and franchise histories that feel like a chronicle, not a spreadsheet |
-| **Returning** | "Let me check..." — habitual pull | Fresh data (live scores, updated rankings) and enough depth that there's always something new to find |
-| **Seeing a bad record** | Wry amusement, not embarrassment | The site presents facts without editorializing — the group chat does the roasting |
+| Moment | Desired Emotion |
+|---|---|
+| **First landing** | "Oh damn, this is legit." Impressed by the quality, immediately drawn in by a bold stat or award card. |
+| **Browsing the hub** | Playful curiosity. Scrolling through cards, each one a potential screenshot. "Wait, who had the worst record last year?" |
+| **Finding a rivalry stat** | Competitive heat. Either pride ("I own you historically") or the sting of seeing the data go against you. Either way, it's going in the group chat. |
+| **Seeing your franchise roasted** | It stings, but it's fun. The site's snarky tone makes it feel like banter, not a personal attack. You're already planning your comeback. |
+| **Seeing your franchise celebrated** | Earned pride. Gold accents, bold typography, the site treats your achievement like it matters. Screenshot-worthy bragging rights. |
+| **Returning next week (in-season)** | "What happened this week?" Discovery energy. New weekly superlatives, updated standings, fresh roast material from the latest results. |
+| **Returning in preseason** | Anticipation. Draft countdown ticking, last year's awards reminding everyone where things stand, draft order stoking speculation. |
+| **Something goes wrong (stale data, error)** | Calm confidence. The site never panics; shows last known data with a timestamp. Feels reliable even when Sleeper hiccups. |
 
 ### Micro-Emotions
 
-- **Confidence over confusion** — navigation and information hierarchy should feel obvious; users never wonder "where do I find that?"
-- **Delight over mere satisfaction** — small visual moments (a trophy icon, a streak badge, a bold stat highlight) elevate the experience from functional to memorable
-- **Competitive fire over passive browsing** — the data should provoke reactions ("I didn't know I had the longest win streak against them")
-- **Belonging over isolation** — even a new manager browsing the site should feel like they've joined something with weight and history
+- **Confidence over confusion** — the site always knows what to show you. No dead ends, no "what do I click?" moments. Navigation is obvious, hierarchy is clear.
+- **Belonging over isolation** — the site reinforces that you're part of something with history and stakes. Even the new manager feels the weight of their franchise's legacy.
+- **Delight over mere satisfaction** — the snarky copy, the sting of a bad stat, the gold glow on an award card; these are deliberate moments of emotional texture, not just data delivery.
+- **Excitement over anxiety** — game day energy should feel thrilling, not stressful. Live scores are smooth and confident, not janky and uncertain.
 
 ### Design Implications
 
-| Emotional Goal | UX Approach |
-|---|---|
-| "That's sick" moments | Bold typography for superlatives and records; visual accents (badges, icons, subtle animations) for achievements and streaks; trophy displays that feel premium |
-| Cool stage, not a toy | Clean, modern layout with generous whitespace; professional typography hierarchy; personality comes through content and selective visual moments, not gimmicks |
-| Competitive pride | Franchise pages that feel like a team homepage; head-to-head records presented with visual weight; leaderboards that make position feel significant |
-| Connection to history | Season timelines with narrative flow; legacy era data treated with the same visual care as current seasons; franchise identity that persists and accumulates meaning |
-| Choose this over Sleeper | Faster path to the stat you want; richer context around data (streaks, records, comparisons); visual presentation that makes the same data feel more meaningful |
+- **Confident, snarky voice** — the site has personality in its copy. Superlative labels can poke fun ("League Doormat," "Glass Cannon," "Draft Day Genius"). This isn't a neutral dashboard; it has opinions.
+- **Losses sting visually** — worst stats, longest losing streaks, and bad records are presented with the same visual confidence as wins. No hiding from the data. The design leans into it with bold callouts.
+- **Gold for glory, bold type for pain** — achievements get the warm gold accent treatment. Bad records get bold, unflinching typography. Both are designed to provoke a reaction.
+- **Weekly "What's New" surface (in-season)** — the hub refreshes with weekly superlatives after Tuesday night/Wednesday morning: biggest blowout, closest win, best possible roster, biggest underperformer. Each one is a fresh card, a fresh screenshot opportunity.
+- **Preseason anticipation design** — the draft countdown, draft order, and previous year awards create a "the next chapter is coming" feeling. The site bridges the gap between seasons rather than going dormant.
 
 ### Emotional Design Principles
 
-1. **The Cool Stage Rule** — The site is a premium stage for league content, not a character in the league itself. Professional and clean first, personality second. Think sports brand, not meme page.
-2. **Earned Moments of Flair** — Visual delight is reserved for data that deserves it — records, streaks, championships, superlatives. Not everything gets the treatment; the restraint is what makes the moments land.
-3. **Facts, Not Editorials** — The site presents data with visual weight and lets the numbers speak. It doesn't tell you who's bad — it shows you the receipts and lets the group chat handle the rest.
-4. **Tidbits Over Trophies** — Small, discoverable proof points (a streak callout, a "best in league history" label, a head-to-head stat) are more powerful than big flashy displays. Bragging rights are earned through data, not decoration.
-5. **Worth the Visit** — Every design choice should pass the test: "Would a league member open this instead of the Sleeper app?" If the answer is no, it needs more personality, better presentation, or faster access.
+1. **The site has a voice** — it's not a neutral data viewer. It's confident, a little snarky, and it pokes fun. Think "the friend in the group chat who always has the receipts."
+2. **Make it sting, make it glow** — bad stats and losses are highlighted with the same design care as wins and records. The emotional range is part of the experience. No one gets a pass.
+3. **Every card is a reaction** — each visual moment on the hub is designed to provoke something: pride, shame, laughter, an argument. If it doesn't make someone feel something, it doesn't belong on the surface.
+4. **Earned celebration** — when the site celebrates a franchise (championship, record, award), it feels real. Gold accents, display typography, the full treatment. Achievements are treated as moments, not line items.
+5. **Weekly freshness (in-season)** — the hub feels alive during the season. After each week closes, new superlatives and callouts appear. The site rewards the habit of checking in every Wednesday.
 
 ## UX Pattern Analysis & Inspiration
 
 ### Inspiring Products Analysis
 
-**ESPN (Sports Data Reference)**
-- **What it does well:** Comprehensive sports data coverage with clear information hierarchy; game-day experience feels urgent and alive; strong brand identity that makes sports data feel important
-- **What to learn from it:** How to present scores, standings, and stats in a way that feels authoritative — not just a data dump but a sports destination with editorial weight
-- **Limitation to avoid:** Dense, ad-cluttered layouts that prioritize content volume over readability; ESPN packs everything onto every page
+**440andfriends.com (Fantasy League Site)**
+- Clean neutral base with strategic color pops for emphasis; proves the "calm canvas, vibrant callouts" approach works for fantasy league sites
+- Hub with curated callouts: previous year's winner, key stats, draft countdown, calendar; not a data dump but a curated editorial surface
+- Demonstrates that a fantasy league site can feel premium without being overdesigned
 
-**Sports Betting Sites (DraftKings, FanDuel, etc.)**
-- **What they do well:** Make numbers feel urgent and exciting; bold typography on odds and lines; live-updating data feels dynamic; color-coded movement indicators (up/down arrows, green/red shifts) create energy even on static screens
-- **What to learn from them:** How to make data feel alive and high-stakes — even small numbers feel important when presented with visual weight and motion cues
-- **Limitation to avoid:** Visual overload; too many competing CTAs; gambling-specific UI patterns (flashing, pulsing) that feel cheap rather than premium
+**Sleeper (Fantasy Platform)**
+- Excellent data presentation: rosters feel complete and glanceable, weekly matchup views are the gold standard for "at a glance, who's winning"
+- Player headshots add enormous visual value; transforms a name + number into a recognizable moment. HML should leverage the player image data available from Sleeper's ecosystem
+- Stats are dense but well-organized; proves you can show a lot of data without overwhelming if hierarchy is right
+- What Sleeper does poorly for HML's use case: no historical cross-season view, no rivalry records, no awards or superlatives, no editorial voice. It's a platform, not an institution. That's the gap HML fills.
 
-**Apple (Premium Product UX)**
-- **What it does well:** Generous whitespace that makes content feel important; scroll-triggered animations that reveal content with purpose and rhythm; minimal navigation that stays out of the way; every element earns its place on screen
-- **What to learn from it:** Restraint as a design tool — showing less but presenting it with conviction creates a more memorable experience than showing everything at once
-- **Key UX pattern:** Progressive disclosure through scrolling — information unfolds as you move through the page rather than hitting you all at once
-
-**Grovemade / Ready (Premium Brand Sites)**
-- **What they do well:** Clean, editorial layouts where the product is the hero; typography and spacing do the heavy lifting; animations are smooth and purposeful, never gratuitous; the experience feels curated, not generated
-- **What to learn from them:** How to make a content-driven site feel like a designed experience rather than a database frontend; visual rhythm through alternating layouts, bold type, and intentional pacing
-- **Key UX pattern:** Content sections that breathe — each block has a clear purpose, clear hierarchy, and room to land before the next one begins
+**Apple (Product & Marketing UX)**
+- The master class in confident minimalism: generous whitespace, bold typography as the hero, letting one element breathe rather than cramming the viewport
+- Smooth transitions and scroll interactions that make browsing feel effortless; the "magazine flip" quality we want for navigating between franchise pages and stat views
+- Information hierarchy is ruthless: one headline, one supporting detail, one action. Everything else is below the fold or on a deeper page. This discipline is critical for the HML hub.
+- Typography does the heavy lifting. Apple rarely needs icons or illustrations because the type itself creates visual moments. This aligns perfectly with the Press Box theme where "the number IS the visual moment."
+- Color is used surgically: mostly monochrome with one accent color per context. Maps directly to our "warm neutral canvas + strategic color pops" approach.
 
 ### Transferable UX Patterns
 
 **Navigation Patterns:**
-- **Minimal persistent nav** (Apple/Grovemade) — a clean top bar with core sections; the content is the experience, not the chrome. Works for HML because there are only ~6 top-level sections
-- **Contextual sub-navigation** (ESPN) — within a section like a franchise page, use tabs or anchors to move between sub-views (history, roster, drafts) without leaving the page
+- **Sleeper's tab-based roster/matchup switching** — compact, thumb-friendly navigation between related views. Apply to franchise pages (overview / roster / draft history) and season pages (standings / matchups / playoffs).
+- **Apple's minimal persistent nav** — a quiet, confident navigation bar that stays out of the way until needed. The HML nav should be slim and unobtrusive; the content is the star.
 
 **Interaction Patterns:**
-- **Scroll-triggered reveals** (Apple/Ready) — sections animate into view as you scroll, creating rhythm and pacing. Franchise pages, season timelines, and draft histories become experiences you move through, not tables you scan
-- **Live data energy** (Betting sites) — during game windows, matchup scores should feel alive with subtle motion cues (score updates, status indicators) that create urgency without overwhelming
-- **Progressive depth** (Apple) — surface the headline stat or story first, let users drill into detail on demand. A franchise page leads with the record and trophies, not a 20-column table
+- **Sleeper's matchup card layout** — two teams, scores prominent, roster details expandable. Adapt for HML's matchup view and live score hub cards.
+- **Apple's scroll-to-reveal content** — on the hub, content appears as you scroll. Each card section is a full "moment" before the next one enters. Prevents the hub from feeling like a wall of data.
+- **Player headshots as visual anchors** — Sleeper proves that a face next to a stat line transforms data into a story. Use player images on award cards, roster views, and matchup details wherever available.
 
 **Visual Patterns:**
-- **Bold typography as the hero** (Grovemade/Ready) — large, confident type for key stats, records, and superlatives. The numbers themselves become visual moments. A "7-2 all-time" head-to-head record should hit you visually before you read the context
-- **Generous whitespace** (Apple) — give data room to breathe. One powerful stat with space around it is more impactful than ten stats crammed together
-- **Purposeful color accents** (Betting sites, adapted) — use color sparingly to highlight wins, streaks, championships, and live scores. The restraint makes the color moments land harder
+- **Apple's typography-first hierarchy** — massive display numbers for key stats, medium weight for context, light weight for supporting data. No decorative elements needed when the type is doing the work.
+- **440andfriends' color pop on neutral base** — most of the page is calm and neutral; color enters only for achievements, live states, and calls to action. Prevents visual fatigue.
+- **Sleeper's data density with clear hierarchy** — roster views pack a lot of information but use size, weight, and spacing to create a readable scan pattern. Apply to standings, leaderboards, and draft boards.
 
 ### Anti-Patterns to Avoid
 
-- **The ESPN trap** — cramming every possible stat onto one page because the data exists. More data ≠ better experience. Show what matters, link to the rest
-- **The spreadsheet default** — presenting a full-width table as the primary content on a page. Tables are a tool, not a layout. Use them when they're the right format, but wrap them in context and visual hierarchy
-- **Gratuitous animation** — animation that exists to show off rather than to guide attention or create rhythm. Every animation should either reveal content, indicate state, or create pacing
-- **Tiny text on mobile** — most sports sites shrink data tables to fit on phones, making them unreadable. Better to show fewer columns with readable type and let users access detail on tap
-- **Generic sports template look** — dark backgrounds with neon accents, aggressive gradients, and stock-photo headers. The HML site should feel like a premium brand, not a fantasy sports template
+- **ESPN/Yahoo's visual clutter** — ads, banners, competing CTAs, and 47 things above the fold. HML should feel like the opposite: curated, intentional, breathing room.
+- **Generic fantasy template aesthetics** — dark backgrounds, neon accents, aggressive gradients, "FANTASY FOOTBALL" in Impact font. The Press Box theme exists specifically to reject this. HML should feel more like The Athletic than FanDuel.
+- **Sleeper's platform anonymity** — Sleeper is powerful but personality-free. HML's snarky voice and editorial POV are the differentiator. Never fall back to neutral data-viewer mode.
+- **Dashboard overload** — showing every stat, every table, every link on the homepage. The hub is a curated editorial surface with 4-6 cards, not a sitemap with numbers.
+- **Hover-dependent interactions** — anything that only works with a mouse cursor. This is a phone-first site. Every interaction must be touch-native.
+- **Tiny tap targets and dense table rows on mobile** — cards with generous padding, not 12px table rows that require surgical finger precision.
 
 ### Design Inspiration Strategy
 
 **What to Adopt:**
-- Apple/Grovemade's whitespace philosophy — every element earns its space; data breathes
-- Scroll-triggered content reveals for narrative pages (franchise history, season timelines, draft history)
-- Bold typography as the primary visual tool for making stats feel important
-- Minimal, clean navigation that lets content be the experience
+- Apple's typography-first hierarchy and generous whitespace; let bold numbers and type weights create the visual moments
+- Sleeper's player headshots as visual anchors on award cards, rosters, and matchup views
+- 440andfriends' curated hub approach with seasonal callouts and countdown
+- Apple's surgical use of color: mostly neutral, one accent per context
 
 **What to Adapt:**
-- Betting sites' data energy — adapt the "numbers feel alive" approach for live matchup scores, but dial back the intensity to match the premium feel. Subtle motion, not flashing
-- ESPN's information hierarchy for standings and leaderboards — clear rank/position emphasis, but with far more whitespace and fewer competing elements per view
-- Progressive disclosure pattern — lead with the story (headline stat, record, streak), offer the detail (full table, historical breakdown) one tap deeper
+- Sleeper's matchup card layout, simplified for the hub (two teams, score, key player) and expanded on detail pages
+- Sleeper's roster view, adapted with HML's snarky editorial labels and franchise branding
+- Apple's scroll-to-reveal pattern, applied to hub card sections so each is a distinct visual moment
 
 **What to Avoid:**
-- ESPN's density and ad-driven layout priorities
-- Generic dark-mode sports template aesthetics
-- Animation for animation's sake
-- Showing all data at once instead of curating what matters most per view
-- Horizontal scroll tables as a primary mobile pattern — prefer card layouts or focused column views
-
-**The Zig:** While every fantasy and sports stats site zags toward maximum data density, the HML site zigs toward **curated, premium presentation** — fewer things per screen, each presented with conviction. The site should feel closer to a sports brand's homepage than a stats database. This is the single biggest differentiator and the reason league members will choose it over the Sleeper app.
+- ESPN/Yahoo visual density and ad-driven layout chaos
+- Generic fantasy sports template aesthetics (dark, neon, aggressive)
+- Sleeper's personality-free neutrality; HML always has a voice
+- Any interaction pattern that requires hover or assumes desktop-first usage
 
 ## Design System Foundation
 
 ### Design System Choice
 
-**Custom Visual Layer on Accessible Foundation** — Radix UI (via shadcn/ui) provides the interactive behavior layer (tabs, dialogs, tooltips, dropdowns), while the entire visual presentation is built custom with Tailwind CSS v4. This gives the HML site a fully owned visual identity that can be iterated on freely, without inheriting or overriding third-party design opinions.
+**Themeable System: shadcn/ui (Radix UI primitives) + Tailwind CSS v4 with aggressive brand customization.**
+
+The design system is a two-tier approach: shadcn/ui provides accessible, proven primitives for utility components, while signature components are built from scratch with Tailwind for maximum creative control over the HML brand experience.
 
 ### Rationale for Selection
 
-| Factor | Decision Driver |
-|---|---|
-| **Visual uniqueness** | The "zig" strategy demands a premium aesthetic that no off-the-shelf component library provides. Custom visual design is the only way to achieve the Apple/Grovemade-inspired presentation |
-| **Iteration velocity** | A custom visual layer is additive — every change builds on your own design language. Extended components require overriding defaults, which creates friction as the design evolves |
-| **Accessibility** | Radix UI handles the hard accessibility problems (focus management, keyboard navigation, ARIA attributes, screen reader support) so custom styling doesn't sacrifice usability |
-| **Architecture alignment** | The architecture specifies shadcn/ui primitives — this approach uses them exactly as intended: copy the component, own the code, style it however you want |
-| **Long-term ownership** | No dependency on a component library's design direction. The visual system is entirely project-owned and can evolve season over season |
+- **Already aligned with architecture decisions** — shadcn/ui + Tailwind v4 is the locked-in tech stack; no new dependencies or library debates
+- **Copy-and-own model** — shadcn/ui components are copied into the project, not installed as a dependency. Full control to restyle, extend, or gut any component without fighting upstream opinions
+- **Tailwind v4 enables the Press Box theme completely** — custom color tokens, typography scale, spacing system, and component variants all defined in CSS with zero runtime cost
+- **Accessibility built into the foundation** — Radix UI primitives handle focus management, keyboard navigation, and ARIA attributes. The snarky personality lives in the visual and copy layer, not in the interaction layer
+- **The personality comes from customization, not the framework** — shadcn/ui defaults are intentionally neutral. The HML brand (confident, snarky, typography-forward) is built on top through Tailwind theme configuration and custom component design
 
 ### Implementation Approach
 
-**Behavioral Layer (Radix UI / shadcn/ui):**
-- Use shadcn/ui's `init` to scaffold the project with Radix UI primitives
-- Only add components as needed (table, tabs, dialog, tooltip, dropdown-menu, badge, card)
-- Strip default styling to bare accessibility and behavior
-- These components handle: focus traps, keyboard navigation, ARIA roles, open/close state, portal rendering
+**Tier 1: Signature Components (Built from Scratch with Tailwind)**
+Custom-designed for maximum brand impact and screenshot-worthiness:
+- **Award cards** — positional awards (Best QB, WR, RB, TE) and team stat awards (Most PF, Least PA). Bold typography, gold accents, player headshot (when available), snarky label. The flagship visual moment.
+- **Matchup cards** — two franchises, score prominent, key stat or player callout. Adapts for live (green pulse) and final (bold result) states.
+- **Rivalry cards** — H2H record, win streak, last meeting result. Designed to provoke screenshots.
+- **Hub hero cards** — draft countdown, reigning champion callout, weekly superlatives. Each is a self-contained visual moment.
+- **Stat callout cards** — "League Doormat," "Glass Cannon," "Draft Day Genius" style superlative highlights with personality baked into the design.
 
-**Visual Layer (Tailwind CSS v4 — fully custom):**
-- All visual styling built directly with Tailwind utilities and custom theme configuration
-- Typography scale, color palette, spacing rhythm, and visual treatments are project-owned
-- No shadcn/ui default theme colors or design tokens retained — everything redefined to match the HML brand
-- Scroll-triggered animations via CSS and minimal JS (Intersection Observer), not a third-party animation library
-
-**Component Architecture:**
-- Shared UI primitives in `components/ui/` — Radix behavior + custom Tailwind styling
-- Route-specific components colocated in their `app/` route folder — fully custom visual presentations
-- "Moment" components (stat highlights, streak badges, trophy displays) built entirely custom — these are the "that's sick" elements and should have zero library DNA
+**Tier 2: Utility Components (shadcn/ui Primitives, Restyled)**
+Proven patterns restyled to match the Press Box theme:
+- **Data tables** — standings, full draft boards, season results. shadcn/ui table with Press Box typography, warm borders, and tabular figures.
+- **Navigation** — slim, confident top nav. shadcn/ui nav primitives with brand styling.
+- **Tabs** — franchise page sections (overview / roster / drafts), season sections. shadcn/ui tabs with brand treatment.
+- **Badges** — "W", "L", "CHAMP", "STREAK" labels. shadcn/ui badge with HML color tokens and snarky copy.
+- **Dropdowns/selectors** — season picker, franchise picker. shadcn/ui select with brand styling.
+- **Cards (base)** — shadcn/ui card primitive as the foundation for Tier 1 signature cards where appropriate.
 
 ### Customization Strategy
 
-**Design Tokens (Tailwind theme config):**
-- Custom color palette (defined in Step 7+) — no shadcn/ui default colors
-- Custom typography scale optimized for bold stat presentation and clean body text
-- Custom spacing scale with generous whitespace built into the rhythm
-- Responsive breakpoints tuned for mobile-first sports data consumption
+**Theme Tokens (Tailwind v4 CSS):**
+- Full Press Box color palette defined as CSS custom properties: warm neutrals for canvas, forest green for brand accent, antique gold for achievements, warm grays for text hierarchy
+- Typography scale locked to Geist Sans with defined size/weight/spacing for Display, H1, H2, H3, Body, Caption
+- 8px base spacing unit enforced through Tailwind spacing config
+- Tabular figures (`font-variant-numeric: tabular-nums`) applied globally to all numeric content
 
-**Custom Component Categories:**
+**Component Personality Layer:**
+- Snarky superlative labels defined as a content system (not hardcoded per component): "League Doormat," "Glass Cannon," "Point Machine," "Draft Day Genius," etc.
+- Visual treatments for positive (gold accent, bold type) and negative (bold type, unflinching callout) stat moments
+- Live/active state: forest green dot or subtle pulse animation
+- Seasonal hub state logic determines which card types render on the homepage
 
-| Category | Examples | Approach |
-|---|---|---|
-| **Data display** | Standings table, leaderboard, draft board, H2H record | Radix Table behavior + fully custom visual treatment with bold type, whitespace, and rank emphasis |
-| **Navigation** | Site nav, season selector, franchise tabs | Radix primitives for behavior + custom minimal chrome styling |
-| **Moment components** | Stat highlight cards, streak badges, trophy displays, superlative callouts | 100% custom — no library components. These carry the design personality |
-| **Live elements** | Score poller, update indicators | Custom with subtle motion (CSS transitions/animations) for the betting-site-inspired data energy |
-| **Layout** | Section containers, scroll-triggered reveals, card grids | Pure Tailwind + Intersection Observer. No layout library |
+**Player Headshot Strategy (Progressive Enhancement):**
+- Player images sourced from available NFL/Sleeper image endpoints
+- Award cards, roster views, and matchup details display headshots when available
+- Graceful fallback: position icon or styled initials when no image exists
+- Headshots are never a blocker for any feature; they enhance but are not required
 
-**Animation Strategy:**
-- CSS transitions and keyframe animations for micro-interactions (hover states, score updates, badge reveals)
-- Intersection Observer for scroll-triggered section reveals — lightweight, no animation library dependency
-- Motion is purposeful and restrained: reveal content, indicate state change, create pacing. Never decorative
-- Respect `prefers-reduced-motion` media query for accessibility
+## Core Defining Experience
 
-**Iteration Model:**
-- Every visual component is project-owned Tailwind — changes are direct edits, not theme overrides
-- New "moment" components can be added per season or feature without touching the foundation
-- The design system grows additively: new tokens, new components, new visual treatments — never fighting existing library opinions
+### Defining Experience
 
-## Defining Core Experience
+**"Open the site, find something to fire into the group chat."**
 
-### The Defining Interaction
+The HML site's defining experience is the moment between landing and screenshotting. Whether a user is browsing the hub (discovery mode) or hunting a specific stat (search mode), the outcome is the same: they find something worth sharing. The site is a trash talk arsenal disguised as a league history archive.
 
-**"Go to our league's hub, find the receipt, screenshot it."**
-
-The HML Website's defining experience is the moment a league member arrives with a claim — "I've beaten you more than you've beaten me," "my draft history is better than yours," "I've scored more all-time points" — and in seconds has the visual proof on their screen, ready to screenshot and drop into the group chat.
-
-If this single loop feels fast, satisfying, and looks good enough to share, the entire site succeeds. Every other feature (live scores, draft history, season timelines) is valuable, but this is the interaction that makes the site indispensable.
-
-**The one-sentence description a member gives a friend:**
-*"It's our league's site — it has everything, and you can look up any stat or record from any season."*
+The one-sentence pitch: **"The site that settles every argument and starts new ones."**
 
 ### User Mental Model
 
-**Current behavior:** League members already know their history — who they've beaten, which drafts were great, where they rank. The knowledge lives in their heads, in group chat arguments, and in scattered Sleeper app data. When a debate starts, they either argue from memory (unreliable), scroll through old Sleeper data (slow and painful), or dig through group chat history (nearly impossible). Most of the time, claims go unverified. The argument dies without resolution.
+**Current solution: Sleeper + memory + group chat arguments.**
 
-**The gap the site fills:** The HML site replaces "I'm pretty sure" with "here, look." The mental model isn't learning a new tool — it's going to a place they already trust to get proof of something they already believe. The site doesn't change how league members think about their league; it gives them a faster, better way to access what they already care about.
+Users currently piece together league knowledge from:
+- The Sleeper app for current season data (rosters, matchups, standings)
+- Personal memory and group chat history for historical claims ("I've beaten you 7 of the last 10")
+- Manual lookups across multiple Sleeper seasons for historical data (painful, slow, often abandoned)
+- The "trust me bro" method for any stat that's hard to verify
 
-**Key mental model insight:** Users arrive with intent. They're not browsing aimlessly — they have a specific claim, question, or curiosity. The site's job is to get out of the way and deliver the answer. But the homepage should also *give* them something to react to when they don't arrive with a specific question — a living dashboard that surfaces content worth sharing.
+**The core frustration:** The data exists somewhere in Sleeper, but accessing anything historical is painful. Previous seasons require navigating to old league instances. Cross-season stats (career records, all-time H2H, draft history across years) are effectively impossible to compile without manual spreadsheet work. Arguments go unresolved because the effort to prove a claim exceeds the payoff.
+
+**The mental model HML creates:** One place, all history, instant answers. Users should think of HML the way they think of Basketball Reference or Pro Football Reference: "If it happened in this league, it's on the site." The difference is that HML has personality and editorial voice; it's not just a database, it's the league's narrator.
 
 ### Success Criteria
 
-| Criteria | Measure |
-|---|---|
-| **Speed-to-proof** | A member can find any historical stat, record, or matchup result within 2-3 taps from the homepage |
-| **Screenshot-ready** | The layout of any stat, record, or leaderboard looks clean and legible when screenshotted on a phone — no cropping or explanation needed |
-| **Hub gravity** | The homepage feels alive — current standings, recent results, a featured stat or superlative — so members have a reason to visit even without a specific question |
-| **Argument settler** | A head-to-head record, all-time leaderboard position, or franchise stat is visually definitive enough to end a group chat debate |
-| **Return pull** | Members develop a habit of checking the site weekly during the season — not because they have to, but because there's always something new on the dashboard |
+The core experience succeeds when:
+
+1. **Under 5 seconds from landing to "oh, interesting"** — the hub surfaces something compelling (an award, a stat, a matchup result) before the user has to tap anything
+2. **Under 10 seconds from question to answer** — "Who has the best all-time record against Marcus?" should be answerable in two taps: navigate to rivalries, select the two franchises
+3. **The screenshot is self-contained** — any card or stat view contains enough context (franchise names, stat label, value, timeframe) that it makes sense in a group chat without explanation
+4. **Historical data just works** — a user looking up 2019 draft picks or a 2021 rivalry record finds it exactly where they expect it, including the legacy 10-team era. No gaps, no "data unavailable" for completed seasons.
+5. **The hub feels different each visit (in-season)** — returning on Wednesday after the week closes should reveal fresh weekly superlatives: closest win, biggest blowout, best possible roster, biggest underperformer
 
 ### Novel UX Patterns
 
-**Pattern approach: Established patterns, premium execution.**
+**Primarily established patterns, combined in a novel way for the fantasy league context.**
 
-The HML site doesn't need to invent new interaction patterns. The core actions — browsing standings, checking records, looking up stats — are well-understood. What's novel is the *presentation quality* applied to fantasy league data. No one has given a 12-person dynasty league the Apple/Grovemade visual treatment before.
+The individual components are familiar:
+- Card-based hub layouts (established: news apps, sports apps, dashboards)
+- Countdown timers (established: event sites, product launches)
+- Stat tables and leaderboards (established: sports reference sites, fantasy platforms)
+- Seasonal/contextual content (established: retail, media sites)
 
-**Established patterns we adopt:**
-- Dashboard homepage with live/recent data (ESPN, any sports app)
-- Tabbed franchise pages with sub-sections (standard sports team pages)
-- Leaderboard/standings tables with rank emphasis (universal sports pattern)
-- Search for player lookup (standard)
+**What's novel is the combination and the voice:**
+- A fantasy league site that behaves like a curated sports magazine rather than a data dump
+- Seasonal hub states that automatically shift content based on the football calendar (no CMS, no manual curation; driven entirely by data and date logic)
+- Snarky editorial labels ("League Doormat," "Glass Cannon") as first-class UI elements, not just tooltip flavor text
+- Weekly superlative cards (closest win, best possible roster, biggest underperformer) as auto-generated "content" that refreshes the hub without any manual effort
+- The "best possible roster" concept: showing what your optimal lineup would have scored that week; a stat that generates arguments and doesn't exist in Sleeper
 
-**Our unique twist on established patterns:**
-- **Curated density** — where every sports site shows maximum data, we show fewer things with more visual weight. A leaderboard isn't 15 columns; it's 4 columns with bold rank numbers and generous spacing
-- **"That's sick" moments** — stat highlights, streak badges, and superlative callouts that make data feel like a discovery, not a lookup. These don't exist on Sleeper or ESPN for a private league
-- **Scroll-as-narrative** — franchise pages and season histories unfold as you scroll, using the Apple-inspired reveal pattern to create pacing instead of dumping everything into one view
-- **Screenshot-first layout** — every data view is designed with the assumption that it will be screenshotted at mobile width and shared without context. This isn't an afterthought; it's a primary design constraint
+**No new interaction patterns need to be taught.** Users know how to scroll cards, tap to go deeper, and read stats. The innovation is in what's surfaced, when, and with what attitude.
 
 ### Experience Mechanics
 
-**1. Initiation — Arriving at the Hub**
-- Member opens the site (likely from a bookmarked link or group chat link)
-- Homepage greets them with a living dashboard: current season standings, this week's matchups/results, and a rotating featured stat or superlative ("Longest active win streak: Team X — 5 games")
-- The dashboard gives them something to react to immediately, even without a specific question
-- Navigation is minimal and obvious — the 5-6 core sections are visible without a menu tap
+**Mode 1: Browse & Discover (Hub)**
 
-**2. Interaction — Finding the Receipt**
-- Member taps into the relevant section (records, franchise page, leaderboard, head-to-head)
-- Content loads server-rendered and complete — no spinners, no skeleton states for static data
-- The headline stat or record is visually prominent (bold type, whitespace, visual weight)
-- Supporting detail is available below or one tap deeper (full table, historical breakdown)
-- For head-to-head lookups: select two franchises → see the all-time record with visual emphasis on who leads
+1. **Initiation:** User opens the site or taps "Home." The hub loads with seasonally appropriate content.
+2. **Interaction:** Scroll through card sections. Each section is a visual moment: draft countdown, reigning champion, award cards, weekly superlatives (in-season), draft order, fun stat callouts.
+3. **Feedback:** Each card is self-contained and visually complete. Bold stats, franchise identity, snarky labels. The user knows they've found something interesting when they instinctively want to screenshot it.
+4. **Completion:** User screenshots a card, copies a link, or taps into a deeper page for the full story. The hub has done its job.
 
-**3. Feedback — The "Got It" Moment**
-- The stat they were looking for is immediately visible and visually definitive
-- Bold typography and layout make the answer feel authoritative — not buried in a row of a table, but presented as a statement
-- Visual accents (streak badges, rank indicators, superlative labels) add context that makes the stat more shareable
-- The URL updates cleanly so they could share a link if they wanted — but the screenshot is the primary share action
+**Mode 2: Hunt & Find (Deep Pages)**
 
-**4. Completion — The Screenshot and Share**
-- The member screenshots the stat on their phone
-- The layout is designed so the screenshot captures the key information with enough context to stand alone: the stat, the franchises involved, the visual treatment
-- They drop it in the group chat. The conversation starts.
-- The site's job is done — until the next argument
+1. **Initiation:** User has a specific question: "What's my H2H record against Jordan?" or "Who did I draft in 2022?" They navigate via the top nav (Records, Teams, Drafts) or tap a hub card that links to the relevant section.
+2. **Interaction:** Navigate to the relevant page (rivalry lookup, franchise draft history, season detail). Select franchises, seasons, or filters as needed. Data loads server-side; no spinners, no waiting.
+3. **Feedback:** The answer is immediate and definitive. Bold headline stat (e.g., "7-3 all-time"), supporting detail below (season-by-season breakdown), screenshot-worthy card format for the summary.
+4. **Completion:** User has their answer. They screenshot the result, share the link, or browse related stats (other rivalries, other seasons). Every deep page links to related content: a franchise page links to that franchise's rivalries, draft history, and season records.
 
 ## Visual Design Foundation
 
 ### Color System
 
-**Primary Theme: "Press Box" — Warm, Institutional, Premium**
+**Theme: "Press Box Evolved" — Warm, Institutional, with Confident Pops**
 
-| Role | Color | Usage |
+The core palette stays warm and neutral, but we add more deliberate contrast between the calm canvas and the moments that need to pop. The key evolution: the current site treats everything at the same visual "volume." The redesign creates clear tiers of visual intensity.
+
+**Canvas & Surface (The Calm Base)**
+
+| Token | Hex | Usage |
 |---|---|---|
-| **Background** | Warm off-white / cream (`#FAF8F5` range) | Page background, content areas — warmth without yellowness |
-| **Surface** | Soft warm white (`#FFFFFF` or `#FEFCF9`) | Cards, elevated containers, table rows |
-| **Text — Primary** | Rich dark charcoal (`#1A1A1A` range) | Headlines, stat numbers, primary content |
-| **Text — Secondary** | Warm medium gray (`#6B6560` range) | Labels, supporting text, metadata |
-| **Text — Tertiary** | Light warm gray (`#9C9590` range) | Timestamps, subtle annotations |
-| **Brand Accent** | Forest green (`#2D5A3D` range) | Navigation highlights, links, interactive elements, section emphasis |
-| **Achievement** | Warm antique gold (`#B8860B` range) | Trophies, championships, superlative badges, earned-moment accents |
-| **Border / Divider** | Warm light gray (`#E8E4E0` range) | Table borders, section dividers, card edges |
+| `--canvas` | `#FAF8F5` | Page background; the default state |
+| `--surface` | `#FFFFFF` | Card backgrounds; elevated content |
+| `--surface-muted` | `#F5F2EE` | Subtle section dividers; alternating row backgrounds |
+| `--border` | `#E8E4E0` | Card borders, dividers, table rules |
+| `--border-strong` | `#D4CFC9` | Emphasized borders; active card outlines |
 
-**Semantic Color Mapping:**
+**Text Hierarchy (The Workhorse)**
 
-| Semantic Role | Approach |
-|---|---|
-| **Wins** | **Bold type weight + "W" label** — no dedicated win color. Forest green may subtly reinforce in backgrounds, but typography and labels are the primary signal |
-| **Losses** | **Regular/light type weight + "L" label** — muted presentation, not highlighted |
-| **Streaks / Records** | Gold accent for positive superlatives; bold type for all record callouts |
-| **Live / Active** | Forest green dot or subtle pulse for live game indicators |
-| **Era indicator** | Subtle warm tint or label to distinguish legacy (10-team) vs. current (12-team) data |
+| Token | Hex | Usage |
+|---|---|---|
+| `--text-primary` | `#1A1A1A` | Headlines, stat numbers, bold callouts |
+| `--text-secondary` | `#4A4540` | Body text, descriptions, supporting context |
+| `--text-tertiary` | `#7A756F` | Labels, metadata, timestamps, captions |
+| `--text-muted` | `#9C9590` | Placeholder text, disabled states |
 
-**Accessibility Compliance:**
-- All text meets WCAG 2.1 AA contrast ratios against warm backgrounds (minimum 4.5:1 for body, 3:1 for large text)
-- No information conveyed by color alone — every color signal has a text label, icon, or typographic treatment as primary indicator
-- No red/purple pairings anywhere in the palette
-- Forest green tested against warm backgrounds for sufficient contrast
-- Gold tested for legibility as accent (used on badges/labels, not body text)
+Note: `--text-secondary` has been darkened from the original `#6B6560` to improve contrast ratio on the warm canvas and ensure WCAG AA compliance at body text sizes.
 
-**Documented Alternative: "Clean Slate"**
+**Accent Colors (The Pops)**
 
-Available as a swap if the warm direction doesn't feel right in implementation:
+| Token | Hex | Usage |
+|---|---|---|
+| `--accent-green` | `#2D5A3D` | Brand accent, navigation active states, live/active indicators, CTAs |
+| `--accent-green-light` | `#E8F0EB` | Green tint backgrounds for subtle emphasis |
+| `--accent-gold` | `#B8860B` | Achievements, championships, awards, positive superlatives |
+| `--accent-gold-light` | `#FDF6E3` | Gold tint backgrounds for award card surfaces |
+| `--accent-warm` | `#C45D3E` | Negative superlatives, "sting" moments, loss callouts |
+| `--accent-warm-light` | `#FDF0EC` | Warm tint backgrounds for loss/negative stat cards |
 
-| Role | Color |
-|---|---|
-| **Background** | Crisp white (`#FFFFFF`) |
-| **Surface** | Off-white (`#FAFAFA`) |
-| **Text — Primary** | Dark charcoal (`#111111`) |
-| **Brand Accent** | Rich emerald or deep blue (TBD at swap time) |
-| **Achievement** | Gold (carried over) |
-| **Win/Loss** | Same typographic approach — no change needed |
+**Color Blindness Safety Protocol:**
+- Red/purple pairings are banned entirely (league member with red/purple color blindness)
+- `--accent-warm` is a warm rust/terra cotta (`#C45D3E`), not a true red; chosen specifically to be distinguishable from green for the most common forms of color blindness (protanopia, deuteranopia)
+- Every color signal is paired with a text label, icon, or typographic treatment: "W"/"L" badges, "CHAMP" labels, bold/regular weight for wins/losses
+- Gold and green are naturally distinguishable across all common color blindness types
+- No information is ever conveyed by color alone; color reinforces meaning that's already communicated through text and typography
 
-The swap is a theme-level change (Tailwind config + CSS variables), not a structural redesign. Typography, spacing, and component architecture remain identical.
+**Semantic Mappings:**
+
+| Semantic Role | Token | Secondary Indicator |
+|---|---|---|
+| Win / Positive | Bold type weight | "W" label or upward context |
+| Loss / Negative | Regular type weight | "L" label or downward context |
+| Championship / Award | `--accent-gold` | "CHAMP" badge, trophy icon, gold tint card |
+| Live / Active | `--accent-green` | Green dot + "LIVE" text label + subtle pulse |
+| Worst / Sting | `--accent-warm` | Snarky text label ("League Doormat") + bold callout |
+| Streak | `--accent-gold` (positive) / `--accent-warm` (negative) | "W3"/"L5" text label always present |
 
 ### Typography System
 
-**Primary Typeface: Geist Sans**
-- Vercel's own geometric sans-serif — free, open source, optimized for Next.js
-- Excellent legibility at all sizes; clean geometric forms with subtle humanist warmth
-- Ships with `next/font` for zero-layout-shift loading
-- Weights used: Regular (400), Medium (500), Bold (700), Black (900)
+**Typeface: Geist Sans (via next/font) — Single Family, Full Range**
 
-**Why Geist:** It's modern and geometric (primary goal), has enough warmth to avoid feeling sterile (pairs with the Press Box theme), and is technically free with zero-config Next.js integration. No font-loading complexity.
-
-**Secondary Typeface: None (single-family system)**
-- All hierarchy created through size, weight, and spacing
-- Simpler, more Apple-like approach
-- Keeps the design system lean and consistent
-- If editorial accent is ever desired (league name, section titles), a serif like Newsreader can be introduced later without disrupting the system
+No secondary typeface. All hierarchy through size, weight, and spacing. This is the Apple approach: one family, ruthlessly applied.
 
 **Type Scale:**
 
-| Token | Size | Weight | Usage |
-|---|---|---|---|
-| **Display** | 48–64px | Black (900) | Hero stats, defining numbers ("7-2 all-time"), homepage headline |
-| **H1** | 36–40px | Bold (700) | Page titles ("Franchise: Team Name", "All-Time Leaderboard") |
-| **H2** | 28–32px | Bold (700) | Section headers within pages |
-| **H3** | 20–24px | Medium (500) | Subsection headers, card titles |
-| **Body Large** | 18px | Regular (400) | Featured descriptions, stat context |
-| **Body** | 16px | Regular (400) | Standard body text, table cells |
-| **Body Small** | 14px | Regular (400) | Secondary labels, metadata, timestamps |
-| **Caption** | 12px | Medium (500) | Badges, tags, micro-labels ("LEGACY ERA", "CAREER HIGH") |
+| Level | Size | Weight | Letter Spacing | Line Height | Usage |
+|---|---|---|---|---|---|
+| Display | 56-64px | Black (900) | -0.02em | 1.05 | Hero stats on hub; the number IS the visual moment |
+| H1 | 36-40px | Bold (700) | -0.015em | 1.15 | Page titles |
+| H2 | 28-32px | Bold (700) | -0.01em | 1.2 | Section headers, card group titles |
+| H3 | 20-24px | Medium (500) | 0 | 1.3 | Card titles, subsection headers |
+| Body Large | 18px | Regular (400) | 0 | 1.5 | Featured descriptions, hub card body text |
+| Body | 16px | Regular (400) | 0 | 1.5 | Standard text, table cells |
+| Body Small | 14px | Regular (400) | 0.005em | 1.45 | Labels, metadata, timestamps |
+| Caption | 12px | Medium (500) | 0.06em | 1.35 | Badges, tags, micro-labels; UPPERCASE with wide tracking |
+| Stat Number | Contextual | Bold (700) | -0.01em | 1.0 | Stat values in tables and cards; always `tabular-nums` |
 
-**Stat Presentation Typography:**
-- Key stats (win-loss records, points scored, rankings) use **Display or H1 weight** — the number itself is the visual moment
-- Supporting context (season, opponent, date) uses Body or Body Small — subordinate to the stat
-- Superlative labels ("Best in League History", "Active Streak") use Caption weight in uppercase with tracking — small but visible badge treatment
-
-**Responsive Scaling:**
-- Display and H1 scale down ~20-30% on mobile (e.g., Display: 48px → 36px)
-- Body sizes remain constant across breakpoints for readability
-- Minimum touch target text: 16px (no interactive text smaller than Body)
+**Typography Principles:**
+- **Display is for one number per viewport.** If you're using Display size, it's the single most important stat on the screen. Hub hero cards, franchise page headline stat, rivalry H2H total.
+- **Negative tracking on large text.** Display and H1 use tight letter spacing for that premium, magazine-cover feel.
+- **Wide tracking on Caption.** Uppercase micro-labels ("BEST QB," "LEAGUE DOORMAT," "WEEK 9") use wide letter spacing for authority and readability at small sizes.
+- **Tabular figures everywhere stats appear.** `font-variant-numeric: tabular-nums` applied to all numeric content so columns align and scores don't shift during live updates.
+- **Weight creates hierarchy, not just size.** A Bold 16px stat value next to a Regular 16px label creates clear hierarchy without needing different sizes. This is critical for data-dense views like tables and roster cards.
 
 ### Spacing & Layout Foundation
 
 **Base Unit: 8px**
-- All spacing derived from 8px multiples: 8, 16, 24, 32, 48, 64, 96, 128
-- Consistent rhythm across all components and pages
-- Generous by default — Apple-level breathing room
 
-**Spacing Scale:**
+All spacing derives from 8px multiples. No exceptions.
 
 | Token | Value | Usage |
 |---|---|---|
-| **xs** | 8px | Tight internal padding (badge padding, inline spacing) |
-| **sm** | 16px | Standard internal padding (card padding, list item spacing) |
-| **md** | 24px | Component gaps, form field spacing |
-| **lg** | 32px | Section internal padding |
-| **xl** | 48px | Between content sections on a page |
-| **2xl** | 64px | Major section breaks |
-| **3xl** | 96px | Page-level vertical rhythm (between major page sections) |
-| **4xl** | 128px | Hero/display section top/bottom padding |
+| `--space-1` | 4px | Tight internal padding (badge text, icon gaps) — the only sub-8px value |
+| `--space-2` | 8px | Minimum component internal padding |
+| `--space-3` | 12px | Compact list item spacing |
+| `--space-4` | 16px | Standard component padding; mobile horizontal gutter |
+| `--space-6` | 24px | Card internal padding; between related elements |
+| `--space-8` | 32px | Between cards in a group; section internal spacing |
+| `--space-12` | 48px | Between card groups / sections on the hub |
+| `--space-16` | 64px | Major section breaks |
+| `--space-24` | 96px | Page top/bottom padding on desktop |
 
 **Layout Grid:**
-- **Mobile (< 768px):** Single column, full-width with 16px horizontal padding. Content stacks vertically. No multi-column layouts forced onto small screens
-- **Tablet (768–1024px):** Flexible 2-column where appropriate (e.g., matchup cards side by side). 24px gutters
-- **Desktop (> 1024px):** Max content width of 1200px, centered. 3-4 column grids for card layouts (franchise overview, matchup grids). 32px gutters
-- **Wide desktop (> 1440px):** Content remains max 1200px — extra space becomes margin, not wider content. Preserves the premium feel of intentional constraint
+
+- **Max content width:** 1200px, centered
+- **Mobile:** Single column, 16px horizontal padding, full-bleed cards
+- **Tablet (768px+):** 2-column card grid for hub, single column for deep pages
+- **Desktop (1024px+):** 2-3 column card grid for hub; content pages stay single column with max-width for readability
 
 **Layout Principles:**
-- **Content max-width is non-negotiable** — wider screens get more margin, not wider content. This preserves readability and the curated feel
-- **Vertical rhythm over horizontal density** — stack content vertically with generous spacing rather than cramming columns side by side on mobile
-- **Cards over tables on mobile** — when a table has more than 3-4 columns, mobile view converts to card layout showing key data per row, with detail available on tap
-- **Section pacing** — each major content section (on pages like franchise history or season timeline) has 3xl (96px) vertical separation, creating the scroll-as-narrative rhythm from the Apple inspiration
+
+1. **Generous whitespace is non-negotiable.** The warm cream canvas is a design element, not empty space. Let cards breathe. Apple-level margins between sections.
+2. **Cards are full-bleed on mobile.** Edge-to-edge card backgrounds with internal padding. No awkward side margins that shrink the already small viewport.
+3. **One visual moment per scroll stop.** Each hub card section should fill roughly one mobile viewport height. Scroll, stop, absorb, scroll. Magazine pacing.
+4. **Asymmetric layouts for visual interest.** On desktop, the hub can use mixed-width cards (one large hero card + two smaller stat cards in a row) instead of uniform grids. Prevents the "spreadsheet" feeling.
+5. **Section titles are anchors.** Hub card groups get clear, confident section headers ("Last Season's Best," "Draft Countdown," "This Week's Damage") that create rhythm and scannability.
 
 ### Accessibility Considerations
 
-**Color Blindness (Critical — affects a league member):**
-- Win/loss, rankings, and all status indicators use **typography (weight + labels)** as the primary signal, never color alone
-- Forest green and gold accent colors are distinguishable by common forms of color blindness (deuteranopia, protanopia)
-- No red/purple pairings in the palette
-- All color-coded badges include text labels ("W", "L", "CHAMP", "STREAK")
+**WCAG 2.1 AA Compliance (Non-Negotiable):**
 
-**Contrast Ratios:**
-- All body text: minimum 4.5:1 against background
-- All large text (≥24px or ≥18.66px bold): minimum 3:1 against background
-- Interactive elements (links, buttons): minimum 3:1 against surrounding content
-- Forest green accent verified against warm off-white background
-- Gold accent used only on badges/labels at Caption size with sufficient contrast or paired with dark background
+| Check | Requirement | Our Approach |
+|---|---|---|
+| Body text contrast | 4.5:1 minimum | `--text-secondary` (#4A4540) on `--canvas` (#FAF8F5) = 7.2:1 |
+| Large text contrast | 3:1 minimum | `--text-primary` (#1A1A1A) on `--canvas` (#FAF8F5) = 14.8:1 |
+| Interactive elements | 3:1 minimum | `--accent-green` (#2D5A3D) on `--canvas` (#FAF8F5) = 6.1:1 |
+| Focus indicators | Visible focus ring | 2px solid `--accent-green` with 2px offset |
 
-**Touch Targets:**
-- Minimum 44x44px for all interactive elements on mobile
-- Generous tap areas on navigation, franchise selectors, and season pickers
-- No hover-dependent interactions — all hover states have tap equivalents
+**Color Blindness Accommodations:**
+- No red/purple pairings anywhere in the interface
+- `--accent-warm` (rust/terra cotta) chosen for maximum distinguishability from `--accent-green` across protanopia and deuteranopia
+- All color-coded content includes text labels: "W"/"L" for wins/losses, "LIVE" for active states, "CHAMP" for championships
+- Badges always include text, never rely on background color alone
+- Charts or visualizations (if added later) must use pattern fills in addition to color
 
-**Motion:**
-- All scroll-triggered animations respect `prefers-reduced-motion` — content appears immediately without animation
-- No auto-playing animations or transitions that can't be system-disabled
-- Live score updates use subtle transitions that don't trigger motion sensitivity
+**Touch Accessibility:**
+- Minimum tap target: 44x44px (WCAG 2.1 AA)
+- Card tap targets extend to full card area, not just text
+- Adequate spacing between adjacent interactive elements (minimum 8px gap)
 
 ## Design Direction Decision
 
 ### Design Directions Explored
 
-Six visual directions were generated as interactive HTML mockups (`ux-design-directions.html`), each applying the Press Box theme, Geist typography, and Apple-level spacing to real HML content:
+Six directions were generated and evaluated as interactive HTML mockups (`ux-design-directions.html`):
 
-1. **Editorial Scroll** — Homepage as vertical narrative with full-width stat blocks and bold type
-2. **Card Dashboard** — Homepage with card-based layout for matchups and spotlight stats
-3. **Bold Stats Hero** — H2H page with massive record number as the hero
-4. **Franchise Narrative** — Franchise page as scrolling story with hero stats, trophies, and timeline
-5. **Live Matchups** — Game-window experience with score cards and live indicator
-6. **Clean Leaderboard** — All-time career leaderboard with bold ranks and superlative badges
+1. **Magazine Editorial** — typography-led, maximum breathing room
+2. **Bold Cards** — green-branded, 2-column card grid, maximum color
+3. **Minimal Typographic** — ultra-minimal, pure type and whitespace
+4. **Dashboard Grid** — tight tile grid, information-dense
+5. **Hybrid** — magazine pacing with card personality
+6. **Immersive Scroll** — full-viewport sections, horizontal scroll cards
 
 ### Chosen Direction
 
-**Primary: Direction 1 (Editorial Scroll) as the foundation, with elements from Directions 2, 3, 4, and 6 integrated.**
+**Direction 5 (Hybrid) as the base, enhanced with elements from Direction 2 (Bold Cards).**
 
-The site uses the editorial scroll's full-width, typographic-hero approach as the base visual language across all pages. Specific page types adopt patterns from other directions:
-
-| Page | Direction Base | Key Elements |
-|---|---|---|
-| **Homepage** | Direction 1 | Vertical scroll with bold section typography; featured stats and matchup previews stand out through type weight and spacing (not card containers); spotlight accents (gold/green badges from D2) for league records and streaks; matchup preview links to full matchup page |
-| **Head-to-Head** | Direction 3 | Massive H2H record as hero; match history below; streak badge; optimized for screenshot at mobile width |
-| **Franchise Page** | Direction 4 | Hero section with career stats; championship stars at top (one star icon per title, visible immediately in hero); trophy case below; season-by-season scroll narrative; legacy era subtly distinguished |
-| **Matchups** | Direction 5 (modified) | Left vs. right team layout (not stacked); custom team logos with initial-based fallbacks; live pulse indicator during game windows; bold score emphasis on leading team |
-| **Leaderboard** | Direction 6 | Bold rank numbers; gold top-3; superlative badges; serves three contexts via season selector — current season, any historical season, and all-time career |
+The hybrid's magazine pacing and section structure is the foundation. The bold cards direction contributes its champion callout treatment and 2-column card grid for positional awards.
 
 ### Design Rationale
 
-**Why Editorial Scroll as the base:**
-- Most aligned with the Apple/Grovemade inspiration — content reveals through scrolling, not through navigating between dense panels
-- Full-width sections with generous spacing create the premium "cool stage" feel
-- Bold typography as the hero means stats are inherently screenshot-friendly
-- The approach naturally avoids the ESPN trap of cramming everything onto one screen
-
-**Why not cards for homepage features:**
-- Cards introduce visual chrome (borders, shadows, backgrounds) that breaks the editorial flow
-- Featured stats and matchup previews are more impactful when they command attention through scale and spacing alone — a 48px stat number with whitespace around it is more striking than the same number inside a card
-- Maintains the unbroken vertical scroll rhythm that defines Direction 1
-
-**Why left-vs-right matchups with logos:**
-- Left vs. right mirrors how matchups are mentally modeled (Team A *vs.* Team B)
-- Custom team logos immediately differentiate the site from any generic platform — this is *our* league
-- Logos create instant visual recognition on repeat visits
-
-**Why championship stars on franchise pages:**
-- Championships are the most important franchise credential — they should be visible at first glance, not after scrolling to a trophy case
-- Star icons per championship are a universal sports shorthand (like jersey patches or stadium banners)
-- Creates a strong "that's sick" moment for multi-championship franchises
-
-**Why three leaderboard contexts:**
-- Current season standings are the most-visited during the season — they need to be one tap away
-- Historical season standings let members browse any past year's results
-- All-time career leaderboard is the definitive franchise ranking — the ultimate bragging rights page
-- Same visual treatment across all three keeps the design consistent; a season selector at the top is the only UI difference
+- **Champion callout uses the Bold Cards treatment** — the full-width green hero card with gradient and trophy icon has the most visual impact. It's the first thing you see, it's screenshot-worthy, it sets the tone.
+- **Positional award cards shift to a 2-column grid** — square-ish cards (like Direction 2) instead of full-width list cards. This uses horizontal space better on mobile, makes each award feel like its own moment, and creates a more dynamic visual rhythm.
+- **Team awards (Most PF, Best Defense, etc.) rank above player awards** — team stats are more directly tied to trash talk and bragging rights. "My team scored the most points" is a stronger group chat message than "my QB scored the most points."
+- **Wall of Shame keeps the full-width list style** — the wider format gives room for the snarky label, team name, context line, and stat. These cards benefit from horizontal space because the personality is in the copy, not just the number.
+- **Section headers with "View All" links** — clear hierarchy and navigation depth without cluttering the hub.
+- **"Preseason" pill badge in nav** — subtle seasonal context indicator that changes with the football calendar.
+- **Countdown card stays centered and prominent** — the draft countdown is a focal point that creates anticipation.
 
 ### Implementation Approach
 
-**Team Logo System:**
-- Design for square aspect ratio logo containers (displayed at 36-48px in matchups, 64px on franchise pages)
-- Fallback: styled containers with team initials (2-letter abbreviation) in brand typography, unique background color per franchise
-- Logos stored as static assets in `public/logos/` — one per franchise, referenced by franchise slug
-- Container component handles both states seamlessly — swap happens by adding the image file, no code change
+**Hub Layout Order (Preseason State):**
 
-**Homepage Featured Content (No Cards):**
-- Featured stats use Display typography (48-64px) with generous vertical spacing — the number *is* the design element
-- Spotlight accents (gold badge for records, green badge for streaks) float above or beside the stat as small caption-sized labels
-- Matchup preview section uses the same editorial rhythm: section label → matchup rows with team logos, scores, and link to full matchup view
-- All elements separated by whitespace and subtle dividers, not card boundaries
+1. **Nav bar** — HML brand left, seasonal pill badge right ("Preseason")
+2. **Champion banner** — full-width green gradient card with team name, record, opponent, trophy icon (Bold Cards style)
+3. **Draft countdown** — centered card with days/hours/min/sec
+4. **"Team Awards" section** — section header with "View All" link, followed by 2-column grid of square-ish cards (Most PF, Best Defense/Least PA, etc.) using gold tint backgrounds
+5. **"Last Season's Best" section** — section header with "View All" link, followed by 2-column grid of square-ish cards (Best QB, Best RB, Best WR, Best TE) using gold tint backgrounds
+6. **"Wall of Shame" section** — section header, full-width list-style sting cards (League Doormat, Glass Cannon, etc.) using warm tint backgrounds
+7. **"Draft Order" section** — section header with "Full Draft" link, compact list card showing first-round order
 
-**Season Selector Pattern:**
-- Reusable component used on leaderboard, season history, and draft pages
-- Horizontal row of season years with the active season highlighted in forest green
-- "All-Time" as an additional option on the leaderboard view
-- Clean, minimal — just years in a row, not a dropdown
+**Card Anatomy (2-Column Player Award Cards):**
 
-**Championship Stars Pattern:**
-- Inline with franchise name or directly below it in the hero section
-- Gold star icons (antique gold from achievement color) — one per championship
-- Small enough to be decorative, prominent enough to be noticed immediately
-- On the all-franchises overview page, stars appear next to each franchise name for quick dynasty-at-a-glance scanning
+```
+┌─────────────────────┐
+│ BEST QB        (cap)│  <- Gold accent, uppercase caption
+│                     │
+│    [headshot]       │  <- Player headshot (circle), fallback: position icon
+│                     │
+│   Josh Allen  (name)│  <- Player name, bold, centered
+│  Team Harambe (team)│  <- Owning franchise, tertiary, centered
+│                     │
+│   412.8 pts   (stat)│  <- Stat + unit on one line
+└─────────────────────┘
+```
+
+Player is the hero of the card. Headshot centered and prominent when available; graceful fallback to position icon or styled initials. Stat and unit paired on a single line for tightness.
+
+**Card Anatomy (2-Column Team Award Cards):**
+
+```
+┌─────────────────────┐
+│ POINT MACHINE  (cap)│  <- Gold accent, uppercase snarky label
+│                     │
+│     2,147      (stat)│  <- Large stat number, centered
+│    Total PF    (unit)│  <- Context label
+│                     │
+│ Gorilla Warfare(name)│  <- Franchise name, bold
+│ Most Points For(desc)│  <- Award description, tertiary
+└─────────────────────┘
+```
+
+Stat is the hero of the card (no headshot). Franchise name below.
+
+**Card Anatomy (Full-Width Sting Cards):**
+
+```
+┌──────────────────────────────────────────────┐
+│ LEAGUE DOORMAT                        3-14   │
+│ Team Banana Stand                   Record   │
+│ Worst record since the legacy era            │
+└──────────────────────────────────────────────┘
+```
+
+Warm tint background, accent-warm label, stat right-aligned. Horizontal layout uses the full width for the snarky context line.
 
 ## User Journey Flows
 
-### Journey 1: The Trash-Talk Run (Marcus — Casual Member)
+### Navigation Structure
 
-**Goal:** Find a rivalry stat, screenshot it, drop it in the group chat.
+**Primary Nav (Persistent, All Seasons):** Hub | Teams | Records | History | Drafts | Players
 
-**Entry:** Homepage (bookmarked or group chat link)
+**Matchups:** Not a nav item. During the regular season, live matchup cards surface directly on the hub. Tapping a matchup card navigates to its detail page (`/matchups/` routes). During preseason/offseason, matchup data is accessible through History > Season > Week.
+
+### Journey 1: The Casual Member — Weekly Trash Talk Run (Marcus)
+
+**Entry:** Hub (mobile, Tuesday lunch after a loss)
+**Goal:** Find ammunition, screenshot it, fire it into the group chat
 
 ```mermaid
 flowchart TD
-    A[Opens HML site] --> B[Homepage — Living Dashboard]
-    B --> C{Has a specific claim?}
-    C -->|Yes| D[Taps 'Records' in nav]
-    C -->|No| E[Scans featured stats & matchup preview]
-    E --> F{Sees something worth sharing?}
-    F -->|Yes| G[Screenshots from homepage]
-    F -->|No| D
-    D --> H[Records landing — Leaderboard, H2H, Rivalries, Trophies]
-    H --> I[Taps 'Head-to-Head']
+    A[Opens HML site] --> B[Hub loads with seasonal content]
+    B --> C{Season state?}
+    C -->|Regular Season| D[Live matchups + weekly superlatives visible]
+    C -->|Preseason| E[Champion banner + awards + draft countdown]
+    D --> F{Sees something interesting?}
+    E --> F
+    F -->|Yes - screenshot it| G[Screenshots card from hub]
+    F -->|Wants more ammo| H[Taps into Records or Teams]
+    H --> I[Navigates to rivalry H2H page]
     I --> J[Selects two franchises]
-    J --> K[H2H Hero page loads — massive record, streak badge, match history]
-    K --> L{Found the receipt?}
-    L -->|Yes| M[Screenshots the H2H record]
-    L -->|Wants more context| N[Scrolls to match history below]
-    N --> M
-    M --> O[Drops screenshot in group chat]
+    J --> K[Sees H2H record: 7-3 all-time]
+    K --> L[Screenshots rivalry card]
+    G --> M[Shares in group chat]
+    L --> M
+    M --> N[Checks power rankings from Records]
+    N --> O[Done - closes site]
 ```
 
-**Flow details:**
-- **Homepage → Records:** 1 tap (nav)
-- **Records → H2H result:** 2 taps (H2H section → select franchises)
-- **Total taps to screenshot:** 3-4 from homepage
-- **Key UX moment:** The H2H hero page loads with the record at 80px Display weight. The number hits before the brain finishes reading. This is the screenshot moment.
-- **Alternative path:** If Marcus doesn't have a specific claim, the homepage dashboard may surface a featured stat or matchup result worth screenshotting directly — no navigation needed.
+**Key design moments:**
+- Hub immediately shows something screenshottable (zero taps)
+- Rivalry lookup is max 2 taps from hub: Records > Head-to-Head
+- Every result screen has a self-contained card format optimized for screenshots
 
-### Journey 2: The Deep Dive (Jordan — Stats Nerd)
+### Journey 2: The Stats Nerd — Historical Deep Dive (Jordan)
 
-**Goal:** Prove his franchise has the best draft history and highest career points.
-
-**Entry:** Homepage or direct link to franchise page
+**Entry:** Hub (desktop, wants to prove he has the best draft history)
+**Goal:** Find career stats and draft history spanning all seasons including legacy era
 
 ```mermaid
 flowchart TD
-    A[Opens HML site] --> B[Homepage]
-    B --> C[Taps 'Teams' in nav]
-    C --> D[All Franchises overview — names, records, championship stars]
+    A[Opens HML site] --> B[Hub loads]
+    B --> C[Taps Teams in nav]
+    C --> D[Sees all 12 franchises]
     D --> E[Taps his franchise]
-    E --> F[Franchise Hero — career stats at a glance, championship stars]
+    E --> F[Franchise page: overview with headline stats]
     F --> G{What's he looking for?}
-    G -->|Draft history| H[Scrolls to Draft History section or taps 'Drafts' tab]
-    H --> I[Draft picks by year — startup + rookie drafts, including legacy era]
-    I --> J[Finds his 2021 league-winner pick]
-    J --> K[Screenshots draft history]
-    G -->|Career ranking| L[Taps 'Records' in nav]
-    L --> M[All-Time Leaderboard — bold ranks, gold top-3, superlative badges]
-    M --> N[Finds his franchise at #1 in career points]
-    N --> O[Notices 'Most Points All-Time' superlative badge]
-    O --> P[Screenshots leaderboard]
+    G -->|Draft history| H[Taps Drafts tab on franchise page]
+    H --> I[Sees all drafts by year: startup + every rookie draft]
+    I --> J[Scrolls through legacy era picks]
+    J --> K[Screenshots his 2021 first-rounder highlight]
+    G -->|Career stats| L[Sees career legacy stats on franchise overview]
+    L --> M[Taps into Records from nav]
+    M --> N[All-time leaderboard: career wins, PF, championships]
+    N --> O[Confirms his franchise is top 3 all-time in PF]
+    O --> P[Screenshots leaderboard position]
     K --> Q[Shares in group chat]
     P --> Q
 ```
 
-**Flow details:**
-- **Homepage → Franchise page:** 2 taps (Teams → franchise)
-- **Franchise → Draft history:** 1 scroll or tab tap
-- **Homepage → Leaderboard:** 1 tap (Records)
-- **Key UX moment:** The franchise hero section shows career stats (record, championships, points) at Display weight immediately. No scrolling required to see the headline numbers. The superlative badge on the leaderboard ("Most Points All-Time") is the "that's sick" discovery.
-- **Legacy era continuity:** Draft history and career stats seamlessly include legacy-era data. A subtle "Legacy Era" caption label distinguishes pre-expansion seasons without breaking the flow.
+**Key design moments:**
+- Franchise page is the hub for team-specific deep dives; tabs for overview / roster / drafts
+- Draft history organized by year, clearly spanning legacy and current eras
+- All-time leaderboard on Records page is the authority for career stats
+- Every stat view includes the timeframe ("All-time, including legacy era") for context
 
-### Journey 3: The New Manager Orientation (Taylor)
+### Journey 3: The New Manager — Getting Oriented (Taylor)
 
-**Goal:** Understand the league landscape and her franchise's history without asking anyone.
-
-**Entry:** Direct link from commish (likely homepage)
+**Entry:** Hub (mobile, commish just sent the link)
+**Goal:** Understand franchise history, league landscape, who the competition is
 
 ```mermaid
 flowchart TD
-    A[Commish sends HML site link] --> B[Homepage — Living Dashboard]
-    B --> C[Scans current standings and recent matchup results]
-    C --> D[Gets a feel for who's on top and the league's current state]
-    D --> E[Taps 'Teams' in nav]
-    E --> F[All Franchises overview — every team with record and championship stars]
-    F --> G[Identifies the powerhouses and the rivals at a glance]
-    G --> H[Taps her own franchise]
-    H --> I[Franchise Hero — sees previous owners by year, career record, playoff history]
-    I --> J[Scrolls through season-by-season timeline]
-    J --> K[Understands franchise was a playoff contender 2 years ago]
-    K --> L{Wants more league context?}
-    L -->|Yes| M[Taps 'History' in nav]
-    M --> N[Season timeline — chronological view of all seasons including legacy era]
-    N --> O[Browses past champions, notable seasons]
-    L -->|No| P[Oriented — understands the league without asking anyone]
-    O --> P
+    A[Taps link from commish] --> B[Hub loads]
+    B --> C[Sees champion banner, awards, draft countdown]
+    C --> D[Gets sense of league personality immediately]
+    D --> E[Taps Teams in nav]
+    E --> F[Sees all 12 franchises with key stats]
+    F --> G[Finds their franchise, taps it]
+    G --> H[Franchise page: owner history by year, season records, trophies]
+    H --> I[Sees previous owner attributed to each season]
+    I --> J[Understands franchise was a playoff contender 2 years ago]
+    J --> K[Taps History in nav]
+    K --> L[League timeline: every season from founding to current]
+    L --> M[Browses past champions, notable seasons]
+    M --> N[Taps Records in nav]
+    N --> O[All-time leaderboard: sees who the top franchises are]
+    O --> P[Oriented without asking the commish a single question]
 ```
 
-**Flow details:**
-- **Homepage → League overview:** 0 taps (homepage IS the overview)
-- **Overview → Franchise page:** 2 taps (Teams → franchise)
-- **Franchise → Full history:** Scroll (narrative unfolds vertically)
-- **Key UX moment:** The all-franchises overview page with championship stars next to names tells the entire league power structure at a glance. Taylor knows who the dynasties are before tapping into any detail.
-- **Self-explanatory navigation:** Taylor never needs to ask "where do I find...?" — the 5-6 nav items map directly to her questions (who are the teams, what's the history, who's winning now).
+**Key design moments:**
+- Hub immediately communicates league personality and culture
+- Teams page shows all franchises at a glance with enough context to understand the landscape
+- Franchise page clearly shows year-attributed ownership (Taylor sees who owned the franchise before them)
+- History timeline makes the league feel like an institution with depth
 
-### Journey 4: The Quick Player Lookup (Darnell — Dynasty Manager)
+### Journey 4: The Dynasty Manager — Player Status Check (Darnell)
 
-**Goal:** Find out who owns a specific NFL player in the HML.
-
-**Entry:** Homepage (quick visit)
+**Entry:** Hub (mobile, Saturday afternoon, a real-life NFL trade just happened)
+**Goal:** Find out who owns a specific player in the HML
 
 ```mermaid
 flowchart TD
-    A[Opens HML site] --> B[Homepage]
-    B --> C[Taps 'Players' in nav]
-    C --> D[Player search page — search input prominently placed]
+    A[Opens HML site] --> B[Hub loads]
+    B --> C[Taps Players in nav]
+    C --> D[Player search page]
     D --> E[Types player name]
-    E --> F[Results appear — player name, NFL team, position, HML owner, status]
-    F --> G{Found what he needs?}
-    G -->|Yes| H[Notes the HML owner and status]
-    H --> I[Reaches out via Sleeper app to discuss trade]
-    G -->|Player data seems stale| J[Checks sync timestamp at bottom]
-    J --> K[Sees last sync time — understands the lag]
-    K --> H
+    E --> F[Results show: player name, NFL team, position, injury status]
+    F --> G[Sees HML owner: Marcus's franchise]
+    G --> H[Notes sync timestamp: last updated this morning]
+    H --> I[NFL trade happened this afternoon - understands the lag]
+    I --> J[Reaches out to Marcus via Sleeper app]
+    J --> K[Done - total time: under 15 seconds]
 ```
 
-**Flow details:**
-- **Homepage → Player result:** 2 taps + typing (Players → search → result)
-- **Total time:** Under 15 seconds for a known player name
-- **Key UX moment:** The result is immediate and complete — HML owner, NFL team, position, injury/status all visible without further taps. The sync timestamp is visible but unobtrusive, answering "is this current?" without the user needing to wonder.
-- **Edge case:** If the player isn't found (misspelling, practice squad), show a clear "no results" state with suggestion to check spelling. No blank page.
+**Key design moments:**
+- Player search is one tap from any page via nav
+- Results are immediate (server-side, no client loading state)
+- Sync timestamp visible on results so user understands data freshness
+- Player result includes all relevant context: HML owner, NFL team, position, status
+
+### Journey 5: Game Day — Live Scores (Any Member)
+
+**Entry:** Hub (mobile, Sunday afternoon during NFL games)
+**Goal:** Check live matchup scores
+
+```mermaid
+flowchart TD
+    A[Opens HML site] --> B[Hub detects active game window]
+    B --> C[Live matchup cards at top of hub]
+    C --> D[Scores updating every 30 seconds]
+    D --> E[Green LIVE indicator + pulse on active matchups]
+    E --> F{Wants detail?}
+    F -->|Just scores| G[Stays on hub, watches scores update]
+    F -->|Full matchup| H[Taps a matchup card]
+    H --> I[Matchup detail: both rosters, player scores, projections]
+    I --> J[Scores continue updating on detail page]
+    J --> K[Taps back to hub to check other matchups]
+    G --> L[Screenshots a close matchup]
+    L --> M[Shares in group chat]
+```
+
+**Key design moments:**
+- Hub automatically shows live matchups during game windows (no mode switching)
+- LIVE indicator with green dot + text label (accessibility: not color-only)
+- Scores update in place, no flash or spinner; smooth confidence
+- Matchup detail page accessible from hub card tap; includes full roster breakdown
 
 ### Journey Patterns
 
-**Navigation Patterns:**
-- **Hub-and-spoke from homepage** — Homepage is the central hub. All journeys start here and branch to specific sections via the persistent nav. Users return to the homepage between tasks.
-- **Persistent nav with 5-6 items** — Matchups, Teams, Records, Drafts, History, Players. Visible without a hamburger menu on desktop; clean mobile menu. Every section is 1 tap away.
-- **Season selector as cross-cutting nav** — Appears on leaderboards, season history, and drafts. Horizontal year row with forest green highlight. Consistent placement and behavior across all pages that support it.
+**Entry Pattern:**
+- 90% of journeys start at the hub
+- Hub serves as both the discovery surface and the routing layer to deeper content
+- Nav provides direct access to specific sections for repeat visitors who know where they're going
 
-**Content Patterns:**
-- **Hero-then-detail** — Every page leads with the headline answer (Display/H1 weight stat) and offers supporting detail below via scroll or tab. The hero is the screenshot; the detail is the deep dive.
-- **Progressive disclosure via scroll** — Franchise pages, season timelines, and draft histories reveal content section by section as you scroll. Each section has 96px separation creating narrative pacing.
-- **Inline superlatives** — Badges and labels ("Most Points All-Time", "Active Streak: 5W", "Legacy Era") appear inline with data, not in separate callout boxes. They're discoverable moments, not interruptions.
+**Navigation Pattern:**
+- **Breadth:** Top nav for major sections (Teams, Records, History, Drafts, Players)
+- **Depth:** Tabs within pages for subsections (franchise page: overview / roster / drafts; Records: leaderboard / H2H / rivalries / power rankings / trophies)
+- **Context links:** Hub cards link directly to relevant deep pages; "View All" links on section headers
 
-**Feedback Patterns:**
-- **Instant content, no loading states** — Server-rendered pages load complete. No spinners, no skeleton screens for static data. The page IS the feedback.
-- **Sync timestamp as ambient awareness** — "Last updated" in the footer on every page. Users learn to trust the data because freshness is always visible.
-- **Bold weight as visual confirmation** — Leading scores, winning records, and top ranks use bolder weight. Users visually "know" the answer before reading the labels.
+**Screenshot Pattern:**
+- Every journey includes at least one screenshot-worthy moment
+- Cards are self-contained: stat + context + franchise identity visible in one frame
+- No modal or overlay disrupts the screenshot frame
+
+**Data Freshness Pattern:**
+- Sync timestamp visible on every page (footer)
+- Player search results show explicit "Last updated" context
+- Live scores show LIVE indicator during game windows
+- Stale data shows last-known values with timestamp, never blank states
 
 ### Flow Optimization Principles
 
-1. **3-tap rule** — Any stat, record, or matchup result reachable within 3 taps from the homepage. If it takes more, the information architecture needs rethinking.
-2. **Screenshot at every destination** — Every page a user lands on should be screenshot-worthy at that moment. No intermediate states that look incomplete.
-3. **Homepage as both launcher and destination** — The dashboard surfaces enough content (standings, featured stats, matchup preview) that some journeys complete without navigating away. Not every visit needs to go deeper.
-4. **No dead ends** — Every page offers a natural "what's next" path — related franchises on a franchise page, other seasons on a season page, full leaderboard from a franchise's career stats.
-5. **Fastest path for the most common action** — During the season, checking this week's matchups is the #1 action. It should be front-and-center on the homepage with a link to the full matchups view.
+1. **Hub is the router** — the hub does double duty: it's both the discovery/browse surface and the live-data surface. During game windows it shows matchups; during preseason it shows awards and draft info. No separate "matchups page" needed in the nav.
+2. **Two taps to any stat** — from the hub, any specific stat (rivalry record, draft pick, player owner) is reachable in two taps maximum. Nav > page, or hub card > detail.
+3. **Tabs over new pages** — franchise pages use tabs (overview / roster / drafts) instead of separate pages. Keeps context, reduces navigation, feels like flipping through a file.
+4. **Progressive disclosure** — hub shows the headline; tapping reveals the full story. Award card shows "Best QB: Josh Allen, 412.8 pts"; tapping goes to full positional breakdown. Never overwhelm on the surface.
+5. **Always a way back** — persistent nav means you're never lost. Hub is always one tap away. Back button behavior is predictable.
 
 ## Component Strategy
 
-### Design System Components (Radix UI — Behavior Only)
+### Design System Components (shadcn/ui, Restyled)
 
-These components are sourced from shadcn/ui for their accessibility and interaction behavior. All visual styling is stripped and rebuilt custom with Tailwind.
+**Available from shadcn/ui, used as-is with Press Box theming:**
 
-| Component | Radix Primitive | HML Usage |
+| Component | Usage | Customization |
 |---|---|---|
-| **Data Table** | `@radix-ui/react-table` | Standings, leaderboards, draft boards, match history, roster lists |
-| **Tabs** | `@radix-ui/react-tabs` | Franchise page sub-sections (History, Roster, Drafts); Records page sections (Leaderboard, H2H, Trophies) |
-| **Tooltip** | `@radix-ui/react-tooltip` | Stat context on hover/tap ("Includes legacy era", "Since 2018") |
-| **Dropdown Menu** | `@radix-ui/react-dropdown-menu` | Overflow actions if needed; not primary nav |
-| **Visually Hidden** | `@radix-ui/react-visually-hidden` | Screen reader text for icons, badges, and visual-only indicators |
-
-**Not needed for Phase 1:** Dialog, Popover, Accordion, Select. Keep the dependency surface small.
+| **Table** | Standings, leaderboards, full draft boards, season results | Press Box typography, warm borders, tabular figures, alternating row backgrounds with `--surface-muted` |
+| **Card (base)** | Foundation primitive for all custom card types | Warm border, surface background, 12px border-radius |
+| **Tabs** | Franchise page sections (overview / roster / drafts), Records subsections | Brand-styled active indicator using `--accent-green` |
+| **Badge** | "W", "L", "CHAMP", "STREAK", "LIVE", position labels | Custom color variants: gold (achievement), warm (sting), green (active) |
+| **Navigation Menu** | Primary top nav | Slim, brand-styled, mobile hamburger |
+| **Select** | Season picker, franchise picker | Brand-styled dropdown |
+| **Input** | Player search | Warm border, focus ring with `--accent-green` |
+| **Separator** | Section dividers | `--border` color |
+| **Skeleton** | Loading states (if ever needed) | Warm-toned pulse |
 
 ### Custom Components
 
-#### Atomic Components (Smallest building blocks)
+#### Tier 1: Hub Components (Signature, Built from Scratch)
 
-**FranchiseLogo**
-- **Purpose:** Visual identity for a franchise — logo image or initial fallback
-- **Anatomy:** Square container → logo image OR 2-letter abbreviation on colored background
-- **Variants:** `sm` (32px — inline mentions), `md` (48px — matchup rows, leaderboard), `lg` (64px — franchise hero), `xl` (96px — franchise page hero)
-- **States:** Image loaded, image loading (background color visible), image error (falls back to initials)
-- **Props:** `franchise` (slug, name, abbreviation, color), `size`
-- **Accessibility:** `alt` text with franchise name; decorative when adjacent to text name
-- **Implementation:** Renders `<img>` with `next/image` when logo exists in `public/logos/{slug}.png`, otherwise renders styled initials container. Per-franchise background color stored in data.
+---
 
-**ChampionshipStars**
-- **Purpose:** Visual indicator of championship count — gold stars inline with franchise identity
-- **Anatomy:** Row of gold star icons (antique gold), one per championship
-- **Variants:** `inline` (next to franchise name, 12-14px stars), `hero` (franchise page hero, 18-20px stars)
-- **States:** Zero championships = component renders nothing (no empty state)
-- **Props:** `count`, `variant`
-- **Accessibility:** `aria-label="2 championships"` on container; stars are decorative
+**Champion Banner**
 
-**SuperlativeBadge**
-- **Purpose:** Inline label that surfaces a "that's sick" moment — a record, streak, or distinction
-- **Anatomy:** Caption-sized uppercase text with subtle background tint
-- **Variants:** `gold` (achievements — "League Champion", "Most Points All-Time"), `green` (active — "Active Streak: 5W", "Current Leader"), `neutral` (informational — "Legacy Era", "Playoff Game")
-- **States:** Static only — no interactive states
-- **Props:** `label`, `variant`
-- **Accessibility:** Read as inline text by screen readers; no additional ARIA needed
+**Purpose:** Hero callout for the reigning league champion. Primary banner during preseason and offseason.
+**Usage:** Hub top position during preseason and offseason states.
 
-**LiveIndicator**
-- **Purpose:** Signal that scores are updating in real time during game windows
-- **Anatomy:** Pulsing green dot (8px) + "Live" text label
-- **States:** `live` (pulsing dot, visible), `off` (component renders nothing)
-- **Props:** `isLive`
-- **Accessibility:** `aria-label="Live scores updating"` when active; animation respects `prefers-reduced-motion` (dot stays solid, no pulse)
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│  (gradient: accent-green to dark green)          │
+│                                                  │
+│  2025 CHAMPION              (cap, white 60%)     │
+│  Team Harambe               (h2, white, bold)    │
+│  13-4 / Defeated Silverback (body, white 75%)    │
+│                                    [trophy 30%]  │
+│                                                  │
+└──────────────────────────────────────────────────┘
+```
 
-**SyncTimestamp**
-- **Purpose:** Ambient awareness of data freshness — shown in footer on every page
-- **Anatomy:** "Last updated" label + relative time ("12 minutes ago") with absolute time on hover/tap via Tooltip
-- **States:** Fresh (< 1 hour), stale (> 1 hour, slightly muted), error (sync failed — "Data may be outdated")
-- **Props:** `lastSyncedAt`
-- **Accessibility:** Time expressed in both relative and absolute formats for screen readers
+**States:**
+- Default: green gradient with trophy icon watermark
+- Tappable: links to champion's franchise page
 
-**SeasonYear**
-- **Purpose:** Single year pill within the season selector — represents one selectable season
-- **Anatomy:** Year number, with active state highlighted in forest green
-- **States:** Default (muted), active (forest green background, white text), hover (subtle background)
-- **Props:** `year`, `isActive`, `onClick`
-- **Accessibility:** `role="tab"`, `aria-selected` for active state
+**Variants:** None; single instance on the hub.
+**Accessibility:** Trophy icon is decorative (aria-hidden). Full champion info conveyed in text.
 
-#### Composed Components (Built from atomics)
+---
 
-**StatHero**
-- **Purpose:** Display-weight number with context — the primary visual moment on any page
-- **Anatomy:** SuperlativeBadge (optional, above) → Display-weight number → Body-sized label below → Body Small context line (optional)
-- **Variants:** `xl` (80px number — H2H record, homepage hero stat), `lg` (48-56px — franchise career stats, spotlight stats), `md` (36-40px — section-level stats)
-- **States:** Static — server rendered, no interactive states
-- **Props:** `value`, `label`, `context`, `badge`, `size`
-- **Accessibility:** Number and label form a logical group; badge is supplementary context
+**Week Banner**
 
-**FranchiseIdentity**
-- **Purpose:** Franchise name + logo + championship stars as a reusable identity block
-- **Anatomy:** FranchiseLogo → Franchise name (text) → ChampionshipStars → Owner name (optional, secondary text)
-- **Variants:** `compact` (leaderboard row — small logo, single line), `standard` (matchup row, franchise overview), `hero` (franchise page — large logo, full display)
-- **Props:** `franchise`, `showOwner`, `variant`
-- **Accessibility:** Franchise name is the primary text; logo is decorative; stars have aria-label
+**Purpose:** Sets the context for the current week during the regular season and playoffs. Replaces Champion Banner as the top hero element once games begin.
+**Usage:** Hub top position during regular season and playoff states.
 
-**MatchupRow**
-- **Purpose:** Single matchup display — left team vs. right team with scores
-- **Anatomy:** FranchiseIdentity (left) → Score (left) → vs divider → Score (right) → FranchiseIdentity (right)
-- **Variants:** `live` (with LiveIndicator, scores update via poller), `final` (static result, winning team score bolded), `preview` (no scores yet — "vs" centered)
-- **States:** Default, live-updating (scores animate on change with subtle transition)
-- **Props:** `homeTeam`, `awayTeam`, `homeScore`, `awayScore`, `status`, `week`
-- **Accessibility:** Reads as "{Team A} {score} versus {Team B} {score}"; result label ("W"/"L") included for screen readers
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│  (gradient: accent-green to dark green)          │
+│                                                  │
+│  HARAMBE MEMORIAL LEAGUE    (cap, white 60%)     │
+│  Week 9                     (h1, white, bold)    │
+│  3 games in progress        (body, white 75%)    │
+│                                                  │
+└──────────────────────────────────────────────────┘
+```
 
-**H2HHero**
-- **Purpose:** The screenshot moment — massive head-to-head record display
-- **Anatomy:** Section label ("Head-to-Head — All Time") → FranchiseIdentity (left) → StatHero (xl — "7–2" record) → FranchiseIdentity (right) → Context line → SuperlativeBadge (streak)
-- **States:** Static — server rendered
-- **Props:** `franchise1`, `franchise2`, `record`, `context`, `streak`
-- **Accessibility:** Full record announced: "{Franchise A} leads {Franchise B} 7 to 2 all-time"
+**States:**
+- **Game window active:** "3 games in progress" with subtle pulse
+- **Pre-kickoff:** "Games start Sunday 1:00 PM EST"
+- **Week complete:** "Week 9 Final" with link to full results
+- **Bye week context:** "6 matchups this week"
 
-**SeasonSelector**
-- **Purpose:** Horizontal row of season years for filtering content by season
-- **Anatomy:** Row of SeasonYear pills → optional "All-Time" pill at the end
-- **Variants:** `with-all-time` (leaderboard — includes "All-Time" option), `seasons-only` (history, drafts)
-- **States:** One year active at a time; horizontal scroll on mobile if years overflow
-- **Props:** `seasons`, `activeYear`, `onSelect`, `showAllTime`
-- **Accessibility:** `role="tablist"` container; keyboard arrow navigation between years
+**Playoff variant:**
+- Title changes to round name: "Wild Card Round," "Semifinal," "Championship"
+- Context line shows remaining matchups or bracket status
 
-**ScrollReveal**
-- **Purpose:** Intersection Observer wrapper for scroll-triggered entrance animations
-- **Anatomy:** Wrapper `div` that applies CSS transition classes when element enters viewport
-- **States:** `hidden` (below viewport — opacity 0, slight translateY), `visible` (in viewport — opacity 1, translateY 0)
-- **Props:** `children`, `delay` (optional stagger), `disabled` (respects `prefers-reduced-motion`)
-- **Accessibility:** Content is always in the DOM — only visual presentation changes. `prefers-reduced-motion` disables all animation; content appears immediately.
+**Accessibility:** All status info conveyed in text. Pulse animation is decorative only.
 
-**ScorePoller**
-- **Purpose:** The single `"use client"` component — fetches live scores and updates MatchupRow components
-- **Anatomy:** Wraps matchup display area; manages `setInterval` fetch to `/api/live-scores`
-- **States:** `polling` (active game window — fetching every 30s), `idle` (no active games — static display), `error` (API unavailable — shows last known scores with timestamp)
-- **Behavior:** Auto-starts when `isGameWindow` flag is true; pauses when tab is hidden (Visibility API); auto-stops after max duration (4 hours); game-window status checked via API response flag
-- **Props:** `matchups` (initial server-rendered data), `isGameWindow`
-- **Accessibility:** Score updates announced to screen readers via `aria-live="polite"` region
+---
 
-#### Layout Components
+**Draft Countdown Card**
 
-**PageSection**
-- **Purpose:** Standard section container with consistent vertical rhythm
-- **Anatomy:** Section label (optional, forest green caption) → Section title (H2) → Content slot
-- **Spacing:** 96px (3xl) vertical padding between sections; 48px internal spacing
-- **Props:** `label`, `title`, `children`
+**Purpose:** Creates preseason anticipation with a live countdown to the next rookie draft.
+**Usage:** Hub, preseason state only. Disappears once the draft begins.
 
-**MobileTableView**
-- **Purpose:** Converts table data to card layout on mobile screens
-- **Anatomy:** On desktop: renders as DataTable. On mobile (< 768px): renders as stacked cards with key columns visible and detail available on tap
-- **Props:** `columns`, `data`, `mobileKeyColumns`, `children`
-- **Accessibility:** Both views maintain the same data and reading order
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│  (surface background, border)                    │
+│                                                  │
+│         ROOKIE DRAFT COUNTDOWN (cap, green)      │
+│                                                  │
+│      42        07        33        12            │
+│     DAYS      HOURS      MIN       SEC           │
+│                                                  │
+│         May 6, 2026 at 8:00 PM EST (tertiary)   │
+└──────────────────────────────────────────────────┘
+```
 
-**BottomTabBar**
-- **Purpose:** Mobile-only persistent navigation — always visible, always one tap away
-- **Anatomy:** 5-6 icon + label tabs fixed to bottom of viewport
-- **Tabs:** Matchups, Teams, Records, Drafts, History, Players
-- **States:** Active tab highlighted with forest green; inactive tabs in muted gray
-- **Behavior:** Visible only on mobile (< 768px); hidden on desktop where top nav takes over
-- **Accessibility:** `role="navigation"` with `aria-label="Main navigation"`; each tab is a link with `aria-current="page"` for active state
+**States:**
+- Active countdown: numbers update (client-side, simple interval)
+- Draft day: transforms to "DRAFT DAY" with green accent treatment
+- Post-draft: component removed from hub
+
+**Accessibility:** Countdown numbers have aria-label "42 days, 7 hours, 33 minutes, 12 seconds until rookie draft."
+
+---
+
+**Player Award Card (2-Column Grid)**
+
+**Purpose:** Showcases positional award winners (Best QB, RB, WR, TE) from the previous season.
+**Usage:** Hub preseason state, "Last Season's Best" section. Also used on Records > Trophies page.
+
+**Anatomy:**
+```
+┌─────────────────────┐
+│ BEST QB        (cap)│  <- Gold accent, uppercase
+│                     │
+│    [headshot]       │  <- 64px circle, fallback: position icon
+│                     │
+│   Josh Allen  (name)│  <- Bold, centered
+│  Team Harambe (team)│  <- Tertiary, centered
+│                     │
+│   412.8 pts   (stat)│  <- Bold stat + unit, single line
+└─────────────────────┘
+```
+
+**States:**
+- Default: gold-tint background (`--accent-gold-light`), gold border
+- Tappable: links to full positional stats breakdown
+- No headshot: position icon (silhouette with position abbreviation) in a neutral circle
+
+**Variants:**
+- Positional awards: QB, RB, WR, TE (gold tint)
+- Could extend to other positional awards (FLEX, K, DEF) if desired
+
+**Accessibility:** Card includes alt text for headshot: "Josh Allen headshot" or "QB position icon." Full stat context in text.
+
+---
+
+**Team Award Card (2-Column Grid)**
+
+**Purpose:** Showcases team-level stat awards (Most PF, Least PA, etc.) from the previous season.
+**Usage:** Hub preseason state, "Team Awards" section (above player awards). Also used on Records > Trophies page.
+
+**Anatomy:**
+```
+┌─────────────────────┐
+│ POINT MACHINE  (cap)│  <- Gold accent, snarky label
+│                     │
+│     2,147      (stat)│  <- Display-weight stat, centered
+│    Total PF    (desc)│  <- Context, tertiary
+│                     │
+│ Gorilla Warfare(name)│  <- Bold franchise name
+└─────────────────────┘
+```
+
+**States:**
+- Default: gold-tint background, gold border
+- Tappable: links to franchise page or full stat breakdown
+
+**Variants:**
+- Positive awards: gold tint (Most PF, Least PA, Best Record)
+- Uses snarky labels from the content system ("Point Machine," "Iron Curtain," etc.)
+
+---
+
+**Sting Card (Full-Width)**
+
+**Purpose:** Highlights negative superlatives with personality. The "Wall of Shame" component.
+**Usage:** Hub preseason state, "Wall of Shame" section. Also used on Records pages for worst stats.
+
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│ LEAGUE DOORMAT (cap, warm)            3-14 (stat)│
+│ Team Banana Stand (name, bold)       Record (unit)│
+│ Worst record since the legacy era (desc, tertiary)│
+└──────────────────────────────────────────────────┘
+```
+
+**States:**
+- Default: warm-tint background (`--accent-warm-light`), warm border
+- Tappable: links to franchise page
+
+**Variants:**
+- "League Doormat" (worst record), "Glass Cannon" (high PF, low wins), "Paper Tiger" (high PA), etc.
+- Uses snarky labels from the content system
+
+**Accessibility:** Warm accent color always paired with text label. Stat has unit label.
+
+---
+
+**Draft Order Card**
+
+**Purpose:** Shows the upcoming rookie draft's first-round order.
+**Usage:** Hub preseason state, "Draft Order" section.
+
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│  1.  Team Banana Stand                    3-14   │
+│  ─────────────────────────────────────────────── │
+│  2.  Team Jungle Fever                    5-12   │
+│  ─────────────────────────────────────────────── │
+│  3.  Team Monkey Business                 5-12   │
+│  ─────────────────────────────────────────────── │
+│  4.  Team Primate Time                    6-11   │
+└──────────────────────────────────────────────────┘
+```
+
+**States:**
+- Default: surface background, compact list
+- "Full Draft" link in section header goes to Drafts page
+
+**Variants:** Shows top 4 picks by default on hub; full 12-pick first round on Drafts page.
+
+---
+
+**Live Matchup Card**
+
+**Purpose:** Displays a single matchup with live-updating scores during game windows.
+**Usage:** Hub regular season state (game windows). Appears below Week Banner.
+
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│  LIVE (green dot + label)              WEEK 9    │
+│                                                  │
+│  Team Harambe                            127.4   │
+│  Team Silverback                         118.9   │
+│                                                  │
+│  [Top scorer: Josh Allen 32.4 pts]  (tertiary)  │
+└──────────────────────────────────────────────────┘
+```
+
+**States:**
+- **Live:** green LIVE indicator with subtle pulse, scores updating every 30s
+- **Final:** LIVE indicator replaced with "FINAL" badge, bold winner score, regular loser score
+- **Upcoming:** scores show projected totals or "--", "SUN 1PM" time label
+- **Close game:** optional highlight treatment when margin < 10 points
+
+**Variants:**
+- Compact (hub): two teams + scores + top scorer
+- Expanded (matchup detail page): full rosters with individual player scores
+
+**Accessibility:** LIVE state conveyed via "LIVE" text label, not just green dot. Score updates use aria-live="polite" for screen readers.
+
+---
+
+**Weekly Superlative Card**
+
+**Purpose:** Highlights the most interesting stats from the completed week. Fresh content every Wednesday.
+**Usage:** Hub regular season state, "This Week's Damage" section.
+
+**Anatomy (varies by superlative type):**
+```
+┌──────────────────────────────────────────────────┐
+│ CLOSEST WIN (cap, gold)                          │
+│                                                  │
+│ Team Harambe 118.4 - 117.9 Team Silverback       │
+│ Won by 0.5 pts (stat, display weight)            │
+└──────────────────────────────────────────────────┘
+```
+
+**Superlative types:**
+- **Closest Win** — margin of victory, both teams and scores
+- **Biggest Blowout** — margin, both teams (sting card style for the loser)
+- **Best Possible Roster** — what the optimal lineup would have scored vs. what was actually started
+- **Biggest Underperformer** — largest gap between optimal and actual lineup (sting treatment)
+- **Highest Scorer** — team with most points that week (gold treatment)
+- **Lowest Scorer** — team with fewest points (warm/sting treatment)
+
+**States:**
+- Default: card style varies by superlative (gold for positive, warm for negative, neutral for informational)
+- Tappable: links to full week matchup results
+
+**Accessibility:** All stats include text labels and context. No color-only information.
+
+---
+
+**Standings Snapshot Card**
+
+**Purpose:** Quick glanceable current standings on the hub during the regular season.
+**Usage:** Hub regular season state (outside game windows).
+
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│ STANDINGS — WEEK 9 (cap)        View Full →      │
+│                                                  │
+│  1. Team Harambe           8-1   (bold, green)   │
+│  2. Team Silverback        7-2                   │
+│  3. Team Gorilla Warfare   6-3                   │
+│  ...                                             │
+│  12. Team Banana Stand     1-8   (warm accent)   │
+└──────────────────────────────────────────────────┘
+```
+
+**States:**
+- Default: compact list, top 3 and bottom 1 shown on hub
+- "View Full" links to Records > Current Standings
+
+---
+
+**Playoff Bracket Card**
+
+**Purpose:** Visual bracket showing playoff matchups, results, and progression.
+**Usage:** Hub playoff state (below Week Banner). Also on Playoffs detail page.
+
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│ PLAYOFFS — ROUND 1 (cap, green)                  │
+│                                                  │
+│  ┌─────────────┐                                 │
+│  │ (1) Harambe ├──┐                              │
+│  │     127.4   │  │   ┌─────────────┐            │
+│  └─────────────┘  ├──►│ Harambe     │            │
+│  ┌─────────────┐  │   │ CHAMPION    │            │
+│  │ (4) Primate ├──┘   └─────────────┘            │
+│  │     98.2    │                                  │
+│  └─────────────┘                                 │
+└──────────────────────────────────────────────────┘
+```
+
+**States:**
+- **Active round:** current matchups highlighted, live scores if game window active
+- **Completed round:** winners advance, losers grayed, scores final
+- **Championship:** winner gets gold accent treatment
+
+**Variants:**
+- Compact (hub): simplified bracket showing current round only
+- Full (Playoffs page): complete bracket with all rounds
+
+**Accessibility:** Bracket structure conveyed through semantic headings and lists, not just visual positioning.
+
+---
+
+**Offseason Recap Card**
+
+**Purpose:** Season summary card highlighting key achievements from the completed season.
+**Usage:** Hub offseason state (after playoffs conclude, before preseason content activates).
+
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│ 2025 SEASON RECAP (cap)          Full Recap →    │
+│                                                  │
+│ Champion: Team Harambe (bold)                    │
+│ Most PF: Team Gorilla Warfare — 2,147            │
+│ MVP: Josh Allen — 412.8 pts                      │
+│ Biggest Upset: Week 7, Banana Stand over Harambe │
+│ Longest Win Streak: Silverback, 6 games          │
+└──────────────────────────────────────────────────┘
+```
+
+**States:**
+- Default: surface background, compact list of highlights
+- Tappable items: each line links to relevant detail page
+
+---
+
+**Transaction Activity Card**
+
+**Purpose:** Shows recent transaction activity (trades, waivers) during the offseason.
+**Usage:** Hub offseason state, keeps the site feeling alive between seasons.
+
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│ RECENT MOVES (cap)                  View All →   │
+│                                                  │
+│ MAR 20  Trade: Harambe sends Pick 1.04 to       │
+│         Silverback for WR Garrett Wilson          │
+│ ─────────────────────────────────────────────── │
+│ MAR 18  Waiver: Gorilla Warfare adds             │
+│         RB Zach Charbonnet                        │
+└──────────────────────────────────────────────────┘
+```
+
+**States:**
+- Default: chronological list of recent transactions
+- "View All" links to full transaction history
+
+---
+
+#### Tier 2: Page-Level Components
+
+---
+
+**Franchise Header**
+
+**Purpose:** Hero section at the top of each franchise page showing team identity, headline stats, and owner.
+**Usage:** Teams > [franchise] page.
+
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│ Team Harambe (h1)                                │
+│ Owned by Blake (2023-present) (secondary)        │
+│                                                  │
+│  ALL-TIME     CHAMPIONSHIPS     CURRENT          │
+│   87-54          2              8-1 (1st)        │
+│  (stat)        (stat, gold)    (stat)            │
+│                                                  │
+│  [Overview]  [Roster]  [Drafts]  (tabs)          │
+└──────────────────────────────────────────────────┘
+```
+
+**States:** Tabs switch between overview / roster / drafts views.
+
+---
+
+**Rivalry Card (Full-Width)**
+
+**Purpose:** Displays head-to-head record between two franchises. The argument settler.
+**Usage:** Records > Head-to-Head page, also on franchise pages.
+
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│        Team Harambe  vs  Team Silverback          │
+│                                                  │
+│              7 — 3  (display weight)             │
+│           ALL-TIME RECORD (cap)                  │
+│                                                  │
+│  Current streak: Harambe W3 (badge, gold)        │
+│  Last meeting: Week 12, 2025 — Harambe 134.2     │
+└──────────────────────────────────────────────────┘
+```
+
+**States:**
+- Default: full H2H summary
+- Tappable: expands to or links to season-by-season breakdown
+
+**Accessibility:** Win/loss conveyed by text ("7 wins, 3 losses for Team Harambe") not just position.
+
+---
+
+**Season Timeline Card**
+
+**Purpose:** Represents a single season in the league history timeline.
+**Usage:** History page.
+
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│ 2025 (h2)                            12 teams    │
+│                                                  │
+│ Champion: Team Harambe (bold, gold accent)       │
+│ Runner-up: Team Silverback                        │
+│ Most PF: Gorilla Warfare (2,147)                 │
+│                                      View →      │
+└──────────────────────────────────────────────────┘
+```
+
+**States:**
+- Default: summary card
+- Legacy era: subtle visual indicator ("Legacy Era" badge) for 10-team seasons
+- Tappable: links to full season detail page
+
+---
+
+**Player Search Result Card**
+
+**Purpose:** Displays a player's HML status after search.
+**Usage:** Players page.
+
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│ [headshot]  Josh Allen (bold)                    │
+│             QB — Buffalo Bills                   │
+│             Status: Active (green badge)          │
+│                                                  │
+│             HML Owner: Team Harambe (link)        │
+│             Last synced: Mar 25, 2026 6:00 AM     │
+└──────────────────────────────────────────────────┘
+```
+
+**States:**
+- Active: green status badge
+- Injured: status text with injury designation (IR, Questionable, Out)
+- Free agent: "Unowned" in tertiary text
+
+---
+
+**Roster Row**
+
+**Purpose:** Single player row in a franchise roster view.
+**Usage:** Teams > [franchise] > Roster tab.
+
+**Anatomy:**
+```
+┌──────────────────────────────────────────────────┐
+│ [headshot] Josh Allen    QB   BUF   Active       │
+│            Starter                    32.4 pts/wk│
+└──────────────────────────────────────────────────┘
+```
+
+**States:**
+- Starter vs. bench (bold vs. regular weight)
+- Injured: injury designation shown
+- IR: dimmed treatment with IR badge
+
+---
+
+#### Tier 3: Utility Components
+
+---
+
+**Section Header**
+
+**Purpose:** Consistent section titles across the hub and deep pages.
+**Usage:** Every section on the hub and content pages.
+
+**Anatomy:**
+```
+Last Season's Best                    View All →
+─────────────────────────────────────────────────
+```
+
+Left: section title (H3, bold). Right: optional "View All" or contextual link (green accent).
+
+---
+
+**Sync Timestamp**
+
+**Purpose:** Shows when data was last synced from Sleeper. Builds trust.
+**Usage:** Footer of every page.
+
+**Anatomy:** `Last updated: Mar 25, 2026 6:00 AM` (caption size, tertiary color)
+
+---
+
+**Seasonal Pill Badge**
+
+**Purpose:** Indicates the current football calendar state in the nav.
+**Usage:** Top nav, right side.
+
+**Variants:**
+- "Preseason" — green-light background, green text
+- "Week 9" — green-light background, green text (changes weekly)
+- "Playoffs" — gold-light background, gold text
+- "Offseason" — neutral background, tertiary text
+
+---
+
+**Stat Callout**
+
+**Purpose:** Inline bold stat display used across many contexts.
+**Usage:** Franchise pages, record pages, anywhere a key number needs emphasis.
+
+**Anatomy:** `2,147 pts` — bold/black weight, tabular figures, optional unit suffix.
+
+---
 
 ### Component Implementation Strategy
 
-**Build Order (aligned with architecture implementation sequence):**
+**Build Order (by journey criticality):**
 
 | Priority | Components | Reason |
 |---|---|---|
-| **P0 — Scaffolding** | BottomTabBar, PageSection, SyncTimestamp, ScrollReveal | Site shell — needed before any content pages |
-| **P1 — Core Identity** | FranchiseLogo, ChampionshipStars, SuperlativeBadge, FranchiseIdentity | Franchise identity system used across every page |
-| **P2 — Data Display** | StatHero, SeasonSelector, MobileTableView | Content presentation — needed for standings, leaderboards, stats |
-| **P3 — Matchups** | MatchupRow, LiveIndicator, ScorePoller | Matchup pages and homepage matchup preview |
-| **P4 — Showcase** | H2HHero | The screenshot page — built after core components exist |
+| P0 — Ship first | Week Banner, Champion Banner, Section Header, Sync Timestamp, Nav, Seasonal Pill Badge, Badge | Core layout; needed for every page |
+| P1 — Hub preseason | Draft Countdown, Team Award Card, Player Award Card, Sting Card, Draft Order Card | Current seasonal state; first thing users see |
+| P2 — Hub regular season | Live Matchup Card, Weekly Superlative Card, Standings Snapshot Card | Needed when regular season begins |
+| P3 — Deep pages | Franchise Header, Rivalry Card, Season Timeline Card, Player Search Result, Roster Row | Supports Hunt & Find journeys |
+| P4 — Hub playoff/offseason | Playoff Bracket Card, Offseason Recap Card, Transaction Activity Card | Seasonal states with lower immediate urgency |
 
-**Composition Rules:**
-- Atomic components never import other custom components — they're self-contained
-- Composed components import atomics and combine them — never reach into atomic internals
-- Layout components are wrappers — they control spacing and responsiveness, not content
-- Route-specific compositions (e.g., the full franchise page layout) live in their route folder, not in `components/`
+**Shared Patterns:**
 
-**Styling Rules:**
-- All components styled with Tailwind utilities — no CSS modules, no styled-components
-- Design tokens (colors, spacing, typography) referenced via Tailwind theme config — never hardcoded hex values
-- Component variants handled via Tailwind class merging (e.g., `cn()` utility from shadcn/ui) — no conditional style objects
+All custom cards share:
+- 12px border-radius
+- 24px internal padding (mobile), 20px for compact variants
+- `--surface` background unless tinted (gold, warm, green)
+- `--border` or tint-specific border
+- Full card is the tap target (not just text)
+- Caption-style labels: 11-12px, medium weight, wide tracking, uppercase
+
+**Content System (Snarky Labels):**
+
+A centralized content map for superlative labels, ensuring consistency and easy updates:
+
+| Context | Label | Tone |
+|---|---|---|
+| Most PF | "Point Machine" | Positive |
+| Least PA | "Iron Curtain" | Positive |
+| Best Record | "Alpha Dog" | Positive |
+| Worst Record | "League Doormat" | Sting |
+| High PF + Low Wins | "Glass Cannon" | Sting |
+| High PA | "Paper Tiger" | Sting |
+| Best Draft ROI | "Draft Day Genius" | Positive |
+| Worst Draft ROI | "Wasted Picks" | Sting |
+| Longest Win Streak | "On Fire" | Positive |
+| Longest Lose Streak | "Rock Bottom" | Sting |
+| Biggest Blowout Win | "Mercy Rule" | Positive |
+| Closest Win | "Cardiac Crew" | Neutral/fun |
+| Best Possible Roster | "What Could've Been" | Neutral/fun |
+| Biggest Underperformer | "Coaching Malpractice" | Sting |
+
+This map is a TypeScript constant, not hardcoded in components, so labels can be updated or extended without touching component code.
+
+### Hub Seasonal State Summary
+
+| State | Top Banner | Hub Content (below banner, top to bottom) |
+|---|---|---|
+| **Preseason** | Champion Banner | Draft Countdown > Team Awards (2-col) > Player Awards (2-col) > Wall of Shame (full-width) > Draft Order |
+| **Regular Season** | Week Banner | Live Matchups (during game windows) OR Standings Snapshot (outside game windows) > Weekly Superlatives ("This Week's Damage") > Power Rankings snapshot |
+| **Playoffs** | Week Banner (round name variant) | Playoff Bracket (current round, live if game window) > Remaining matchup cards > Elimination alerts |
+| **Offseason** | Champion Banner (new champion) | Offseason Recap > Transaction Activity > All-Time Records updates |
+
+State transitions are driven by data: the NFL state endpoint (`/v1/state/nfl`) determines the current season phase, and the hub renders the appropriate component set. No manual switching.
 
 ## UX Consistency Patterns
 
 ### Navigation Patterns
 
-**Top Navigation (Desktop — ≥ 768px):**
-- Horizontal bar fixed to top with forest green logo/wordmark left, nav links right
-- 5-6 items: Matchups, Teams, Records, Drafts, History, Players
-- Active page indicated by forest green text + subtle underline; inactive in warm gray
-- No dropdowns or mega-menus — each link goes directly to its section
-- Stays visible on scroll (sticky)
-
-**Bottom Tab Bar (Mobile — < 768px):**
-- Fixed to bottom of viewport, always visible
-- Same 5-6 sections as desktop nav, with small icon + label per tab
-- Active tab: forest green icon + label; inactive: muted gray
-- Tapping active tab scrolls to top of current page (standard mobile convention)
-- Bar height: 56px with safe area padding on notched devices
+**Primary Nav:**
+- **Structure:** Hub | Teams | Records | History | Drafts | Players
+- **Mobile:** Hamburger menu on small screens; nav items stack vertically
+- **Active state:** Current section highlighted with `--accent-green` underline or text color
+- **Brand:** "HMLML" in nav bar left, seasonal pill badge right
+- **Behavior:** Persistent across all pages; never scrolls away on mobile (slim, fixed top bar)
 
 **In-Page Navigation (Tabs):**
-- Used on franchise pages (History / Roster / Drafts) and records pages (Leaderboard / H2H / Rivalries / Trophies)
-- Horizontal tab row directly below the page hero section
-- Active tab: forest green text + bottom border; inactive: muted gray
-- Tabs scroll horizontally on mobile if they overflow
-- Tab content loads without full page navigation — URL updates via shallow routing for shareability
+- Used on franchise pages (Overview / Roster / Drafts) and Records page (Leaderboard / H2H / Rivalries / Power Rankings / Trophies)
+- Active tab: `--accent-green` indicator, bold text
+- Inactive tab: `--text-tertiary`, regular weight
+- Tabs scroll horizontally on mobile if more than 3-4 items
+- Tab switches do not trigger page navigation; content swaps in place
 
-**Franchise Picker (H2H Page):**
-- Two side-by-side franchise selectors at the top of the H2H page
-- Each selector shows the currently selected FranchiseIdentity (logo + name)
-- Tapping a selector opens a list of all 12 franchises with FranchiseLogo + name
-- Selecting a franchise updates the H2H display immediately — no submit button needed
-- URL updates to reflect the two selected franchises (e.g., `/records/head-to-head/gorilla-warfare-vs-zoo-crew`) for shareability
-- On mobile: selectors stack vertically with a "vs" divider between them
-- Default state on first visit: no franchises selected — prompt text "Select two franchises to compare"
+**Contextual Links:**
+- "View All" and "Full Draft" style links appear in section headers
+- Always right-aligned, `--accent-green` color, medium weight
+- Arrow suffix: "View All →"
+- These are the primary way to navigate from hub summary to full detail pages
 
-**Franchise Browsing (Teams Page):**
-- All 12 franchises displayed as a grid of FranchiseIdentity blocks (logo, name, record, championship stars)
-- Tapping any franchise navigates to its full franchise page
-- On franchise pages, a "Previous / Next" pattern or a franchise dropdown in the header allows quick switching between franchises without returning to the overview
-- This supports the browse-and-compare behavior: check your franchise, then quickly jump to a rival's
+### Data Display Patterns
 
-### Data Presentation Patterns
+**Stat Numbers:**
+- Always use `tabular-nums` for alignment
+- Bold (700) or Black (900) weight depending on prominence
+- Unit suffix on the same line when space allows: "412.8 pts", "2,147 PF", "7-3"
+- No thousand separators below 1,000; comma separator at 1,000+: "987", "1,234", "12,456"
 
-**Stat Display Hierarchy:**
-Every data element follows a consistent visual hierarchy:
+**Win/Loss Display:**
+- Wins: bold type weight + "W" badge when standalone
+- Losses: regular type weight + "L" badge when standalone
+- Records always formatted as "W-L": "8-1", "3-14"
+- Never rely on color alone; text labels always present
 
-| Level | Typography | Usage | Example |
-|---|---|---|---|
-| **Hero stat** | Display (48-80px, Black 900) | The one number that answers the page's primary question | "7–2" on H2H, "62-38" on franchise page |
-| **Section stat** | H2 (28-32px, Bold 700) | Key numbers within a content section | Season record "11-2", weekly high score "167.3" |
-| **Row stat** | Body (16px, Bold 700 for emphasis, Regular 400 for supporting) | Individual data points in tables and lists | Leaderboard wins, matchup scores, draft pick numbers |
-| **Context** | Body Small / Caption (12-14px, Regular/Medium) | Labels, metadata, timestamps | "Week 11", "Marcus", "Legacy Era" |
+**Leaderboard/Rankings:**
+- Rank number in `--text-muted`, bold
+- Team/player name in `--text-primary`, medium weight
+- Stat value right-aligned, bold, tabular figures
+- Top position: no special color treatment (bold is enough); bottom position: optional `--accent-warm` text
+- Alternating row backgrounds using `--surface-muted` for readability on 12+ rows
 
-**Win/Loss Presentation:**
-- Wins: **Bold weight (700)** + "W" label
-- Losses: **Regular weight (400)** + "L" label in muted color
-- Records displayed as "W-L" format (e.g., "9-2") with the win number always bold
-- Consistent across standings, franchise pages, H2H history, and matchup results
-- Never rely on green/red color coding — typography weight IS the indicator
+**Historical Data Spanning Eras:**
+- Legacy era (10-team) seasons always include a "Legacy Era" badge or label
+- When displaying all-time stats, always include context: "All-time (including legacy era)"
+- No visual break between eras in timelines; legacy seasons flow naturally into current era with the badge as the only differentiator
 
-**Table Patterns:**
-- Desktop: full table with all columns visible, generous row padding (24px), subtle row dividers
-- Mobile (≤ 3 essential columns): table with reduced columns, same row padding
-- Mobile (> 3 essential columns): convert to MobileTableView card layout — each row becomes a card showing key data, with detail available on tap
-- Column headers: Caption weight (12px, Medium 500, uppercase, muted gray)
-- Sortable columns (leaderboard): tap header to sort; active sort indicated by forest green header text + arrow icon
-- Rank column always bold and slightly larger than other row data
+**Empty Data:**
+- If a stat has no data (e.g., a new franchise with no history): show "—" (em dash) in the stat position, never blank
+- If an entire section has no data: show a single line of tertiary text explaining why: "No draft history available for this season"
 
-**Superlative Placement:**
-- SuperlativeBadges appear inline with the data they describe — never in separate callout sections
-- On leaderboards: below the franchise name in the same row (e.g., "Most Wins All-Time" under "Gorilla Warfare")
-- On franchise pages: in the hero section near the stat they describe
-- On H2H pages: below the record as a streak badge
-- Maximum one badge per data row to avoid clutter — if a franchise has multiple superlatives, show the most impressive one
+### Empty, Error, and Loading States
 
-### Link and Action Patterns
+**Server-Rendered Pages (99% of the site):**
+- Pages render complete HTML from the server; no client-side loading spinners
+- If a page cannot render due to a database error: Next.js `error.tsx` boundary shows a warm, on-brand error message
+- Error message tone: calm, confident, never panicked. "Something went wrong. We're showing the last available data." Not "Oops! An error occurred!"
 
-**Tappable Elements:**
-- Franchise names are always links to franchise pages (forest green, underline on hover)
-- Season years in tables are links to that season's detail page
-- Matchup rows link to the full matchup detail view
-- Draft pick player names link to the player search result (showing HML owner + status)
-- All links use forest green as the text color; underline appears on hover (desktop) or is always present on mobile for clarity
+**Stale Data (Sleeper Sync Failure):**
+- The site always shows the last successfully synced data; never a blank page
+- Sync timestamp in footer turns `--accent-warm` color if data is more than 2 hours stale (hourly sync) or 26 hours stale (daily sync)
+- Optional: subtle banner below nav: "Data may be outdated. Last sync: [timestamp]" — only shown if sync is significantly stale
 
-**No-Action Elements:**
-- Stats, scores, and numbers are not tappable — they're display-only
-- Badges and labels are not interactive
-- Clear visual distinction: forest green text = tappable; dark charcoal text = display-only
+**Live Score Poller:**
+- Initial load: shows last-known scores immediately from server render (no spinner)
+- Poller updates scores in place every 30 seconds
+- If poller fails: scores freeze at last known value; "LIVE" badge remains but pulse stops; timestamp shows last successful update
+- If poller detects games have ended: "LIVE" badge switches to "FINAL"; poller stops
 
-**Season Selector Behavior:**
-- Tapping a year immediately updates the page content — no loading state for server-rendered data
-- Active year: forest green background pill with white text
-- URL updates to include the selected year for shareability
-- "All-Time" option (on leaderboard) styled the same as year pills but slightly wider
+**Player Search:**
+- Empty search state: brief prompt text: "Search by player name"
+- No results: "No players found matching '[query]'" in tertiary text
+- Results load server-side on form submission (no client-side search-as-you-type in Phase 1)
 
-### Empty and Edge State Patterns
+**404 / Not Found:**
+- Custom `not-found.tsx` page with on-brand styling
+- Tone: confident, maybe a little snarky. "This page doesn't exist. Maybe it was traded away."
+- Links back to Hub and Teams to re-orient
 
-**No Data Available:**
-- When a page has no data (e.g., a franchise with no draft history in a particular year): show a clean, centered message in Body text with muted color
-- Message format: "[What's missing] — [Why or when it will appear]"
-- Example: "No draft picks for 2019 — this franchise joined in the 2020 expansion"
-- Never show a blank page, a broken table, or a zero-row table with headers only
+### Link and Tap Patterns
 
-**Player Search — No Results:**
-- Clean centered message: "No players found for '[query]'"
-- Suggestion: "Check the spelling or try a different name"
-- No error styling — this isn't an error, it's an expected state
+**Card Taps:**
+- Every card on the hub is tappable; the entire card surface is the tap target
+- Cards do not have visible "buttons"; the card itself is the interactive element
+- On hover (desktop): subtle `--border-strong` border or slight shadow elevation
+- On tap (mobile): brief opacity change (0.95) as feedback
 
-**Stale Data (Sync Delay):**
-- SyncTimestamp in footer always shows last sync time
-- If sync is more than 2 hours stale during game windows: timestamp shifts to amber/warm color with "(may be delayed)" appended
-- During non-game periods: no staleness warning — daily sync is expected cadence
-- Page content always shows the last known good data — never blank or "loading"
+**Text Links:**
+- In-content links use `--accent-green` color with no underline by default
+- Underline appears on hover/focus for accessibility
+- External links (if any) are avoided in Phase 1; everything stays on-site
 
-**Sleeper API Unavailable:**
-- Site continues to serve all pages from cached Postgres data
-- SyncTimestamp shows last successful sync time
-- No error banners, no alert modals — the site works normally, just with slightly older data
-- If a specific data type failed (e.g., transactions didn't sync but rosters did): only the affected data shows its last sync timestamp, not a global error
+**Section Header Links ("View All →"):**
+- Always `--accent-green`, medium weight, right-aligned
+- Tap target extends to include padding for easy thumb access
+- No underline; color and arrow suffix are the indicators
 
-**Legacy Era Data Gaps:**
-- If a historical season has incomplete data (pre-Sleeper): show available data with a subtle "Legacy Era — partial records" badge
-- Never show empty cells in tables — use "—" for unknown values
-- Legacy era seasons visually distinguished with a subtle warm tint on the season row or a "Legacy" SuperlativeBadge (neutral variant)
+**Franchise Name Links:**
+- Wherever a franchise name appears in a card, table, or stat display, it links to that franchise's page
+- Styled as `--text-primary` bold (not green) to avoid visual noise; underline on hover
 
-### Scroll and Animation Patterns
+### Search Patterns
 
-**ScrollReveal Behavior:**
-- Content sections animate in as they enter the viewport: fade up from 20px below, 400ms duration, ease-out timing
-- Stagger: when multiple elements reveal in sequence (e.g., standings rows), each delays 50ms after the previous
-- Only triggers once — elements don't re-animate when scrolling back up
-- `prefers-reduced-motion`: all reveals are instant (no animation, no delay)
+**Player Search (Phase 1):**
+- Single search input on the Players page
+- Server-side search: user types name, submits (Enter or tap search button), results render as a new page
+- No client-side autocomplete in Phase 1 (could add later)
+- Search is case-insensitive, partial match: "allen" returns "Josh Allen", "Keenan Allen", etc.
+- Results displayed as Player Search Result Cards (see component spec)
+- Each result shows: headshot (if available), name, position, NFL team, status, HML owner, sync timestamp
 
-**Live Score Updates:**
-- Score numbers update in place with a brief (200ms) scale pulse: number scales to 1.05x and back
-- No flash, no color change — just a subtle size bump that draws attention without being distracting
-- `prefers-reduced-motion`: scores update instantly with no animation
+**Franchise/Season Pickers:**
+- Dropdowns (shadcn/ui Select) for choosing franchises in H2H lookup and seasons in historical views
+- Pre-populated with all options; no search needed (12 franchises, ~10-15 seasons)
+- Default selection: current season or user's franchise (if identifiable, though no auth in Phase 1)
 
-**Page Transitions:**
-- No custom page transition animations — Next.js handles navigation
-- Content appears immediately on navigation (server-rendered)
-- The scroll position resets to top on page navigation (standard behavior)
+### Transition and Animation Patterns
 
-**Hover States (Desktop Only):**
-- Links: underline appears on hover
-- Franchise rows (in overview, leaderboard): subtle background warmth shift on hover (e.g., row background goes from transparent to `rgba(0,0,0,0.02)`)
-- No hover states on mobile — all mobile interactions are tap-based
+**Philosophy: Confidence, not flash.**
 
-### Pattern Enforcement Rules
+- No page transition animations; server-rendered pages load instantly
+- No card entrance animations on the hub; content is there when you arrive
+- **Allowed animations:**
+  - Live score poller: green dot pulse (subtle, CSS only, `animation: pulse 2s infinite`)
+  - Draft countdown: number changes (simple CSS transition on opacity)
+  - Card hover (desktop): border color transition, 150ms ease
+  - Tab switching: content fade, 100ms (optional; instant is also fine)
+- **Banned animations:**
+  - Scroll-triggered animations (parallax, fade-in-on-scroll)
+  - Page transition effects
+  - Loading spinners anywhere on server-rendered pages
+  - Bouncing, sliding, or attention-seeking motion
 
-**For AI agents implementing these patterns:**
-- Win/loss must always use bold weight + label — never color alone
-- Every tappable element must be forest green text — no exceptions
-- Every page must include SyncTimestamp in the footer via root layout
-- Empty states must always include a message — never show blank content areas
-- SuperlativeBadges limited to one per data row maximum
-- ScrollReveal must check `prefers-reduced-motion` — no exceptions
-- Franchise names must always link to franchise pages — even in tables and lists
-- Season years in data contexts must always link to season detail pages
-- H2H franchise picker must update URL on selection for shareability
+The site should feel fast and still, not busy. Movement is reserved for live data (score updates, countdown ticks) where it conveys real information.
 
 ## Responsive Design & Accessibility
 
 ### Responsive Strategy
 
-**Mobile (< 768px) — Primary Experience:**
-- Single column layout, full-width content with 16px horizontal padding
-- Bottom tab bar for persistent navigation (56px height + safe area)
-- Tables with > 3 columns convert to MobileTableView card layout
-- Display typography scales down 20-30% (e.g., 64px → 42px, 48px → 36px)
-- Body text sizes remain constant (16px minimum) for readability
-- Franchise picker on H2H page stacks vertically
-- Matchup rows maintain left-vs-right layout but with compact FranchiseIdentity (logo + abbreviation, no full name)
-- Homepage sections stack vertically with 64px separation (reduced from 96px desktop)
+**Mobile-first, designed outward.** Every layout starts as a single-column mobile view and expands for larger screens. Mobile is not an afterthought or a compressed desktop; it's the primary design target.
 
-**Tablet (768px – 1024px) — Transitional:**
-- Top navigation replaces bottom tab bar
-- 2-column layouts where appropriate (matchup cards side by side, franchise overview grid)
-- 24px gutters between columns
-- Tables display with full columns (no card conversion)
-- Touch targets remain 44px minimum
-- Typography at full desktop scale
+**Mobile (< 768px) — The Primary Experience:**
+- Single-column layout; cards stack vertically
+- Hub cards are full-bleed (edge-to-edge backgrounds with internal padding)
+- Nav collapses to hamburger menu
+- 16px horizontal padding on content
+- 2-column grid for award cards (player and team awards)
+- Full-width for sting cards, draft order, matchup cards
+- Tables switch to card layouts when more than 3 columns
+- Touch targets minimum 44x44px
 
-**Desktop (> 1024px) — Full Experience:**
-- Max content width: 1200px, centered with auto margins
-- Top navigation with full text links
-- 3-4 column grids for franchise overview and matchup grids
-- 32px gutters
-- Full table displays with generous 24px row padding
-- Hover states active (row highlights, link underlines)
-- H2H franchise picker displays side by side
+**Tablet (768px - 1023px) — Graceful Scaling:**
+- No tablet-specific layouts; scales naturally between mobile and desktop
+- Nav can expand to full horizontal bar (enough room for 6 items)
+- Hub cards get slightly more breathing room (24px padding)
+- 2-column award grid remains; cards grow wider
+- Content max-width begins to apply, centering content
+- Tables can show more columns before switching to card layout
 
-**Wide Desktop (> 1440px):**
-- Content remains 1200px max — extra space becomes margin
-- No wider layouts, no sidebar additions — preserves the intentional constraint
+**Desktop (1024px+) — Enhanced Layout:**
+- Content constrained to 1200px max-width, centered
+- Hub uses asymmetric card layouts: mixed-width cards for visual interest (e.g., champion banner full-width, countdown + standings side-by-side)
+- Award cards can go to 2-3 column grid
+- Tables show full column sets with comfortable spacing
+- Hover states activate on cards (border highlight, subtle elevation)
+- Nav fully expanded, horizontal
+- Generous whitespace: 96px top/bottom page padding, 48px between sections
 
 ### Breakpoint Strategy
 
-| Breakpoint | Value | Trigger |
-|---|---|---|
-| `sm` | 640px | Minor layout adjustments (rarely used) |
-| `md` | 768px | Primary breakpoint — switches from mobile to tablet/desktop nav, table views expand, 2-column layouts activate |
-| `lg` | 1024px | Full desktop experience — 3-4 column grids, full gutters |
-| `xl` | 1280px | Content max-width reached (1200px + padding) |
-| `2xl` | 1440px | No layout changes — extra space is margin |
+**Tailwind CSS v4 breakpoints (mobile-first):**
 
-**Approach:** Mobile-first CSS — base styles are mobile, `md:` and `lg:` prefixes add desktop enhancements. This matches Tailwind's default breakpoint system with no custom values needed.
+| Breakpoint | Width | Layout Behavior |
+|---|---|---|
+| Default (mobile) | < 768px | Single column, full-bleed cards, hamburger nav, 16px gutter |
+| `md` | 768px+ | Expanded nav, slightly wider cards, content starts centering |
+| `lg` | 1024px+ | Max-width applied (1200px), asymmetric hub layouts, hover states, full tables |
+| `xl` | 1280px+ | Extra breathing room; no layout changes, just more whitespace |
+
+**No custom breakpoints needed.** Tailwind's defaults align with our needs. The key transitions are mobile → desktop at `lg` (1024px). The `md` breakpoint is a gentle scaling step, not a layout overhaul.
+
+### Component Responsive Behavior
+
+| Component | Mobile | Desktop |
+|---|---|---|
+| **Champion/Week Banner** | Full-width, stacked text | Full-width within max-width container |
+| **Draft Countdown** | Full-width card, numbers in a row | Centered card, more padding |
+| **Award Cards (Player/Team)** | 2-column grid, square-ish | 2-3 column grid, slightly wider |
+| **Sting Cards** | Full-width, stacked layout OK if needed | Full-width, horizontal layout with stat right-aligned |
+| **Live Matchup Cards** | Full-width, compact | Could show 2 matchups side-by-side on desktop |
+| **Standings Snapshot** | Compact list, top 3 + bottom 1 | Full 12-team list |
+| **Playoff Bracket** | Simplified, round-by-round vertical | Full bracket visualization |
+| **Franchise Header** | Stacked: name, owner, stats, tabs | Horizontal stat row, tabs below |
+| **Rivalry Card** | Stacked: teams, record, details | Horizontal: teams on sides, record center |
+| **Data Tables** | Card layout or horizontal scroll | Full table with all columns |
 
 ### Accessibility Strategy
 
-**Compliance Target: WCAG 2.1 AA**
+**Target: WCAG 2.1 AA compliance (non-negotiable).**
 
-This is the PRD requirement and the right level for the HML site — it covers the color-blind member's needs, ensures keyboard navigability, and meets contrast standards without over-engineering.
+This is a firm requirement, not an aspiration. The league has a member with red/purple color blindness, and the site must be usable by anyone in any context.
 
-**Color Accessibility (Critical — League Member Affected):**
-- Win/loss communicated through bold weight + text labels — never color alone
-- No red/purple pairings in the palette
-- Forest green and gold accent colors verified distinguishable under deuteranopia and protanopia
-- All SuperlativeBadges include text — icons alone never carry meaning
-- ChampionshipStars supplemented by `aria-label` count for screen readers
-
-**Contrast Ratios:**
-- Body text against warm off-white background: ≥ 4.5:1
-- Large text (≥ 24px or ≥ 18.66px bold): ≥ 3:1
-- Interactive elements: ≥ 3:1 against surrounding content
-- Muted secondary text verified against background at Caption size
+**Color & Contrast:**
+- All body text: minimum 4.5:1 contrast ratio against background
+- All large text (18px+ or 14px+ bold): minimum 3:1 contrast ratio
+- Interactive elements: minimum 3:1 contrast ratio
+- No information conveyed by color alone; every color signal has a text label, icon, or typographic treatment
+- No red/purple pairings anywhere
+- `--accent-warm` (rust/terra cotta) chosen for maximum distinguishability from `--accent-green` across protanopia and deuteranopia
+- All verified contrast ratios documented in Visual Design Foundation section
 
 **Keyboard Navigation:**
 - All interactive elements reachable via Tab key
-- Radix UI primitives handle focus trapping for tabs, tooltips, and dropdowns
-- Franchise picker navigable with arrow keys
-- Season selector navigable with arrow keys (`role="tablist"`)
-- Skip-to-content link as first focusable element on every page
-- Visible focus indicators on all interactive elements (forest green outline)
+- Visible focus indicators: 2px solid `--accent-green` with 2px offset
+- Skip-to-content link as the first focusable element on every page
+- Tab order follows visual layout (no unexpected jumps)
+- Escape key closes any expanded element (mobile nav, dropdowns)
 
-**Screen Reader Support:**
-- Semantic HTML throughout: `<nav>`, `<main>`, `<section>`, `<h1>`-`<h3>` hierarchy
-- `aria-label` on ChampionshipStars, LiveIndicator, and navigation landmarks
-- `aria-live="polite"` on ScorePoller for live score updates
-- `aria-current="page"` on active navigation items
-- VisuallyHidden component for icon-only elements that need text alternatives
+**Screen Readers:**
+- Semantic HTML: proper heading hierarchy (h1 > h2 > h3), landmark regions (nav, main, footer)
+- ARIA labels on interactive elements that lack visible text (e.g., hamburger menu button: `aria-label="Open navigation"`)
+- Live score updates use `aria-live="polite"` so screen readers announce score changes without interrupting
+- Decorative elements (trophy icon watermark, pulse animation) use `aria-hidden="true"`
+- Data tables use proper `<th>` headers with `scope` attributes
+- Images (player headshots) have descriptive `alt` text; fallback icons have `aria-hidden="true"` with surrounding text providing context
 
-**Motion Sensitivity:**
-- All ScrollReveal animations disabled when `prefers-reduced-motion` is set
-- Live score pulse animation disabled — scores update instantly
-- LiveIndicator dot remains solid (no pulse)
-- No auto-playing animations anywhere on the site
+**Touch Accessibility:**
+- Minimum tap target: 44x44px
+- Card tap targets extend to full card surface area
+- Minimum 8px gap between adjacent tap targets
+- No gestures required for any functionality (no swipe-to-navigate, no pinch-to-zoom for content)
 
 ### Testing Strategy
 
-**Practical Minimum (Appropriate for 12-Person Audience):**
+**Responsive Testing:**
+- Primary test devices: iPhone (latest Safari), Android phone (latest Chrome)
+- Secondary: iPad, desktop Chrome, Firefox, Safari, Edge
+- Playwright E2E tests run at mobile (375px) and desktop (1280px) viewport widths
+- Visual regression testing not required in Phase 1 (12-user scale)
 
-| Test Type | Method | When |
-|---|---|---|
-| **Mobile layout** | Test on your own phone (likely iPhone) + Chrome DevTools mobile emulation | During development of each page |
-| **Desktop layout** | Chrome on your development machine | During development |
-| **Safari** | Quick check on iPhone Safari before launch | Pre-launch |
-| **E2E flows** | Playwright tests covering critical journeys (homepage → records → H2H, homepage → franchise page, player search) | CI on every PR via GitHub Action |
-| **Accessibility audit** | Chrome Lighthouse accessibility score ≥ 90 on key pages | Pre-launch, then spot-check on new pages |
-| **Color-blind check** | Chrome DevTools "Emulate vision deficiencies" on key pages (standings, leaderboard, H2H, matchups) | Once before launch |
-| **Keyboard navigation** | Manual Tab-through on homepage, H2H franchise picker, and season selector | Once before launch |
+**Accessibility Testing:**
+- Automated: `axe-core` or similar accessibility linter integrated into development workflow
+- Manual: keyboard-only navigation test for all user journeys
+- Color blindness simulation: test all card types with Chromium DevTools color vision deficiency emulation (specifically protanopia and deuteranopia)
+- Screen reader: manual test with VoiceOver (macOS/iOS) for critical journeys (hub browse, player search, rivalry lookup)
+- Contrast: verify all text/background combinations meet WCAG AA ratios using browser DevTools or contrast checker
 
-**Not Needed for Phase 1:**
-- Cross-browser testing matrix (Firefox, Edge)
-- Screen reader testing with NVDA/JAWS
-- Automated axe-core in CI pipeline
-- Performance profiling or Lighthouse performance scores
-- Device lab testing
-
-These can be added in Phase 2 if the audience grows or if accessibility issues surface.
+**Testing Cadence:**
+- Accessibility linting runs on every build (automated)
+- Manual keyboard + screen reader testing: once per major feature addition
+- Color blindness simulation: once per new component type
+- Cross-browser responsive check: once per major layout change
 
 ### Implementation Guidelines
 
 **Responsive Development:**
-- Mobile-first Tailwind: write base styles for mobile, add `md:` and `lg:` for larger screens
-- Use `rem` for typography and spacing (Tailwind default) — respects user font size preferences
-- Test MobileTableView card conversion on every table component during development
-- Bottom tab bar: use `pb-[env(safe-area-inset-bottom)]` for notched device support
-- Content max-width enforced via a single wrapper component in root layout — never per-page
+- Mobile-first Tailwind classes: write base styles for mobile, add `md:` and `lg:` prefixes for larger screens
+- Use `rem` for font sizes, `px` for borders and shadows, Tailwind spacing tokens for padding/margin
+- Images: use `next/image` with responsive `sizes` attribute; serve appropriate resolution per device
+- No horizontal scroll on any page at any breakpoint (except intentional horizontal scroll containers like tab bars)
 
 **Accessibility Development:**
-- Semantic HTML first — `<nav>`, `<main>`, `<table>`, `<th>`, `<td>` — before adding ARIA
-- Radix UI handles ARIA for tabs, tooltips, and dropdown menus — don't override
-- Every `<img>` (including FranchiseLogo) gets an `alt` attribute — empty `alt=""` when decorative
-- Every page gets a single `<h1>` — use heading hierarchy (`h1` → `h2` → `h3`) correctly
-- Focus styles: `focus-visible:ring-2 focus-visible:ring-[forest-green] focus-visible:ring-offset-2` on all interactive elements
-- Skip link: `<a href="#main" class="sr-only focus:not-sr-only ...">Skip to content</a>` as first element in layout
+- Start with semantic HTML; add ARIA only when HTML semantics are insufficient
+- Every `<img>` has an `alt` attribute (descriptive for content images, empty for decorative)
+- Every form control has a visible `<label>` or `aria-label`
+- Focus management: when tabs switch content, focus stays on the tab (not the content); user navigates into content intentionally
+- Color is never the sole differentiator; always pair with text, icon, or weight
+- Test with keyboard after building every interactive component

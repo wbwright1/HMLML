@@ -5,9 +5,10 @@ import Link from "next/link";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { SeasonSelector } from "@/components/season-selector";
+import { EmptyState } from "@/components/empty-state";
 import type { LeaderboardEntry } from "@/lib/queries/records";
 
-type SortKey = "wins" | "losses" | "pointsScored" | "winPct" | "championships";
+type SortKey = "wins" | "losses" | "pointsScored" | "pointsAgainst" | "winPct" | "championships";
 
 interface LeaderboardTableProps {
   allTimeData: LeaderboardEntry[];
@@ -60,8 +61,12 @@ export function LeaderboardTable({
     return sortDesc ? " \u25BC" : " \u25B2";
   }
 
-  const headerClass =
-    "pb-3 pr-4 text-xs uppercase tracking-wider text-muted-foreground font-medium cursor-pointer hover:text-foreground transition-colors select-none";
+  function headerClassForKey(key: SortKey) {
+    const isActive = sortKey === key;
+    return `pb-3 pr-4 text-xs uppercase tracking-wider font-medium cursor-pointer transition-colors select-none ${
+      isActive ? "text-text-primary font-semibold" : "text-text-tertiary hover:text-text-secondary"
+    }`;
+  }
 
   return (
     <div className="space-y-6">
@@ -73,10 +78,11 @@ export function LeaderboardTable({
       />
 
       {data.length === 0 ? (
-        <p className="text-body-lg text-muted-foreground">
-          No leaderboard data available
-          {activeSeason !== "all-time" ? ` for ${activeSeason}` : ""}.
-        </p>
+        <EmptyState
+          icon="trophy"
+          title="No Leaderboard Data"
+          description={`No leaderboard data available${activeSeason !== "all-time" ? ` for ${activeSeason}` : ""}.`}
+        />
       ) : (
         <>
           {/* Desktop table */}
@@ -84,54 +90,75 @@ export function LeaderboardTable({
             <table className="w-full text-left">
               <thead>
                 <tr className="border-b border-border">
-                  <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-muted-foreground font-medium w-12">
+                  <th scope="col" className="pb-3 pr-4 text-xs uppercase tracking-wider text-text-tertiary font-medium w-12">
                     #
                   </th>
-                  <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-muted-foreground font-medium">
+                  <th scope="col" className="pb-3 pr-4 text-xs uppercase tracking-wider text-text-tertiary font-medium">
                     Team
                   </th>
                   <th
-                    className={`${headerClass} text-right`}
+                    scope="col"
+                    className={`${headerClassForKey("wins")} text-right`}
                     role="button"
                     tabIndex={0}
                     onClick={() => handleSort("wins")}
                     onKeyDown={(e) => handleSortKeyDown("wins", e)}
+                    aria-sort={sortKey === "wins" ? (sortDesc ? "descending" : "ascending") : undefined}
                   >
                     W{sortIndicator("wins")}
                   </th>
                   <th
-                    className={`${headerClass} text-right`}
+                    scope="col"
+                    className={`${headerClassForKey("losses")} text-right`}
                     role="button"
                     tabIndex={0}
                     onClick={() => handleSort("losses")}
                     onKeyDown={(e) => handleSortKeyDown("losses", e)}
+                    aria-sort={sortKey === "losses" ? (sortDesc ? "descending" : "ascending") : undefined}
                   >
                     L{sortIndicator("losses")}
                   </th>
                   <th
-                    className={`${headerClass} text-right`}
+                    scope="col"
+                    className={`${headerClassForKey("winPct")} text-right`}
                     role="button"
                     tabIndex={0}
                     onClick={() => handleSort("winPct")}
                     onKeyDown={(e) => handleSortKeyDown("winPct", e)}
+                    aria-sort={sortKey === "winPct" ? (sortDesc ? "descending" : "ascending") : undefined}
                   >
                     Win%{sortIndicator("winPct")}
                   </th>
                   <th
-                    className={`${headerClass} text-right`}
+                    scope="col"
+                    className={`${headerClassForKey("pointsScored")} text-right`}
                     role="button"
                     tabIndex={0}
                     onClick={() => handleSort("pointsScored")}
                     onKeyDown={(e) => handleSortKeyDown("pointsScored", e)}
+                    aria-sort={sortKey === "pointsScored" ? (sortDesc ? "descending" : "ascending") : undefined}
                   >
                     PF{sortIndicator("pointsScored")}
                   </th>
                   <th
-                    className={`${headerClass} text-right`}
+                    scope="col"
+                    className={`${headerClassForKey("pointsAgainst")} text-right`}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => handleSort("pointsAgainst")}
+                    onKeyDown={(e) => handleSortKeyDown("pointsAgainst", e)}
+                    aria-sort={sortKey === "pointsAgainst" ? (sortDesc ? "descending" : "ascending") : undefined}
+                  >
+                    PA{sortIndicator("pointsAgainst")}
+                  </th>
+                  <th
+                    scope="col"
+                    className={`${headerClassForKey("championships")} text-right`}
                     role="button"
                     tabIndex={0}
                     onClick={() => handleSort("championships")}
                     onKeyDown={(e) => handleSortKeyDown("championships", e)}
+                    aria-sort={sortKey === "championships" ? (sortDesc ? "descending" : "ascending") : undefined}
                   >
                     Titles{sortIndicator("championships")}
                   </th>
@@ -143,12 +170,14 @@ export function LeaderboardTable({
                   return (
                     <tr
                       key={entry.id}
-                      className="border-b border-border/50 last:border-0"
+                      className={`border-b border-border/50 last:border-0 hover:bg-surface-muted transition-colors ${
+                        index % 2 === 1 ? "bg-surface-muted/30" : ""
+                      }`}
                     >
                       <td className="py-4 pr-4">
                         <span
                           className={`text-sm tabular-nums font-bold ${
-                            rank <= 3 ? "text-gold" : "text-muted-foreground"
+                            rank <= 3 ? "text-accent-gold" : "text-text-tertiary"
                           }`}
                         >
                           {rank}
@@ -173,7 +202,7 @@ export function LeaderboardTable({
                         <div className="flex flex-wrap gap-1 mt-1">
                           {entry.championships > 0 && (
                             <SuperlativeBadge
-                              text={`${entry.championships}x Champ`}
+                              text={activeSeason === "all-time" ? `${entry.championships}x Champ` : "Champion"}
                               variant="gold"
                             />
                           )}
@@ -197,6 +226,9 @@ export function LeaderboardTable({
                       <td className="py-4 pr-4 text-right text-sm tabular-nums">
                         {entry.pointsScored.toFixed(1)}
                       </td>
+                      <td className="py-4 pr-4 text-right text-sm tabular-nums text-text-tertiary">
+                        {entry.pointsAgainst.toFixed(1)}
+                      </td>
                       <td className="py-4 text-right text-sm tabular-nums">
                         {entry.championships}
                       </td>
@@ -215,12 +247,12 @@ export function LeaderboardTable({
                 <Link
                   key={entry.id}
                   href={`/teams/${entry.slug}`}
-                  className="block rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/50"
+                  className="block rounded-xl border border-border bg-surface p-4 transition-colors hover:border-border-strong"
                 >
                   <div className="flex items-start gap-3">
                     <span
                       className={`text-lg tabular-nums font-bold mt-0.5 ${
-                        rank <= 3 ? "text-gold" : "text-muted-foreground"
+                        rank <= 3 ? "text-accent-gold" : "text-text-tertiary"
                       }`}
                     >
                       {rank}
@@ -239,7 +271,7 @@ export function LeaderboardTable({
                       <div className="flex flex-wrap gap-1 mt-1.5">
                         {entry.championships > 0 && (
                           <SuperlativeBadge
-                            text={`${entry.championships}x Champ`}
+                            text={activeSeason === "all-time" ? `${entry.championships}x Champ` : "Champion"}
                             variant="gold"
                           />
                         )}
@@ -247,18 +279,21 @@ export function LeaderboardTable({
                       <div className="flex flex-wrap gap-4 mt-2 text-sm">
                         <span className="tabular-nums">
                           <span className="font-bold">{entry.wins}</span>
-                          <span className="text-muted-foreground">W</span>
-                          <span className="text-muted-foreground mx-0.5">
+                          <span className="text-text-tertiary">W</span>
+                          <span className="text-text-tertiary mx-0.5">
                             -
                           </span>
                           <span>{entry.losses}</span>
-                          <span className="text-muted-foreground">L</span>
+                          <span className="text-text-tertiary">L</span>
                         </span>
-                        <span className="text-muted-foreground tabular-nums">
+                        <span className="text-text-tertiary tabular-nums">
                           {(entry.winPct * 100).toFixed(1)}%
                         </span>
-                        <span className="text-muted-foreground tabular-nums">
+                        <span className="text-text-tertiary tabular-nums">
                           {entry.pointsScored.toFixed(1)} PF
+                        </span>
+                        <span className="text-text-tertiary tabular-nums">
+                          {entry.pointsAgainst.toFixed(1)} PA
                         </span>
                       </div>
                     </div>

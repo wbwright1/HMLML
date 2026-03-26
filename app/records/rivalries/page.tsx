@@ -3,6 +3,7 @@ import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
+import { EmptyState } from "@/components/empty-state";
 import { getRivalries } from "@/lib/queries/records";
 import type { RivalrySummary } from "@/lib/queries/records";
 
@@ -43,11 +44,13 @@ export default async function RivalriesPage() {
         )}
       </PageSection>
 
-      <section className="pb-24 space-y-4">
+      <section className="pb-8 md:pb-12 space-y-6">
         {rivalries.length === 0 ? (
-          <p className="text-body-lg text-muted-foreground">
-            No rivalry data available yet. Check back once matchup data has been synced.
-          </p>
+          <EmptyState
+            icon="users"
+            title="No Rivalry Data"
+            description="Rivalry records will appear once matchup data has been synced."
+          />
         ) : (
           rivalries.map((rivalry, index) => {
             const { franchiseA, franchiseB, record, totalGames } = rivalry;

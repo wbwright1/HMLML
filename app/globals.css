@@ -53,6 +53,22 @@
     --color-gold: var(--gold);
     --color-loss: var(--loss);
 
+    /* HML named color tokens */
+    --color-canvas: var(--canvas);
+    --color-surface: var(--surface);
+    --color-surface-muted: var(--surface-muted);
+    --color-border-strong: var(--border-strong);
+    --color-text-primary: var(--text-primary);
+    --color-text-secondary: var(--text-secondary);
+    --color-text-tertiary: var(--text-tertiary);
+    --color-text-muted: var(--text-muted);
+    --color-accent-green: var(--accent-green);
+    --color-accent-green-light: var(--accent-green-light);
+    --color-accent-gold: var(--accent-gold);
+    --color-accent-gold-light: var(--accent-gold-light);
+    --color-accent-warm: var(--accent-warm);
+    --color-accent-warm-light: var(--accent-warm-light);
+
     /* Border radius */
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
@@ -62,65 +78,73 @@
     --radius-3xl: calc(var(--radius) * 2.2);
     --radius-4xl: calc(var(--radius) * 2.6);
 
-    /* Spacing tokens */
-    --spacing-xs: 0.5rem;
-    --spacing-sm: 1rem;
-    --spacing-md: 1.5rem;
-    --spacing-lg: 2rem;
-    --spacing-xl: 3rem;
-    --spacing-2xl: 4rem;
-    --spacing-3xl: 6rem;
-    --spacing-4xl: 8rem;
 }
 
 /* =========================================================================
    Press Box Design System — Light-only palette
    ========================================================================= */
 :root {
+    /* ---- Named semantic tokens (single source of truth for hex values) ---- */
+    --canvas: #FAF8F5;
+    --surface: #FFFFFF;
+    --surface-muted: #F5F2EE;
+    --border: #E8E4E0;
+    --border-strong: #D4CFC9;
+    --text-primary: #1A1A1A;
+    --text-secondary: #4A4540;
+    --text-tertiary: #7A756F;
+    --text-muted: #9C9590;
+    --accent-green: #2D5A3D;
+    --accent-green-light: #E8F0EB;
+    --accent-gold: #B8860B;
+    --accent-gold-light: #FDF6E3;
+    --accent-warm: #C45D3E;
+    --accent-warm-light: #FDF0EC;
+
+    /* ---- shadcn/ui aliases (reference named tokens via var()) ---- */
     /* Core surfaces */
-    --background: #FAF8F5;
-    --foreground: #1A1A1A;
-    --card: #FFFFFF;
-    --card-foreground: #1A1A1A;
-    --popover: #FFFFFF;
-    --popover-foreground: #1A1A1A;
+    --background: var(--canvas);
+    --foreground: var(--text-primary);
+    --card: var(--surface);
+    --card-foreground: var(--text-primary);
+    --popover: var(--surface);
+    --popover-foreground: var(--text-primary);
 
     /* Primary — forest green */
-    --primary: #2D5A3D;
-    --primary-foreground: #FFFFFF;
+    --primary: var(--accent-green);
+    --primary-foreground: var(--surface);
 
     /* Secondary — soft warm tint */
     --secondary: #F0ECE8;
-    --secondary-foreground: #1A1A1A;
+    --secondary-foreground: var(--text-primary);
 
     /* Muted — warm gray */
     --muted: #F0ECE8;
     --muted-foreground: #6B6560;
 
     /* Accent — forest green (alias of primary for shadcn consistency) */
-    --accent: #2D5A3D;
-    --accent-foreground: #FFFFFF;
+    --accent: var(--accent-green);
+    --accent-foreground: var(--surface);
 
     /* Destructive */
     --destructive: #B91C1C;
 
     /* Borders & inputs */
-    --border: #E8E4E0;
-    --input: #E8E4E0;
-    --ring: #2D5A3D;
+    --input: var(--border);
+    --ring: var(--accent-green);
 
     /* Achievement gold */
-    --gold: #B8860B;
+    --gold: var(--accent-gold);
 
     /* Loss/negative — warm red */
     --loss: #C4402F;
 
     /* Chart palette */
-    --chart-1: #2D5A3D;
-    --chart-2: #B8860B;
+    --chart-1: var(--accent-green);
+    --chart-2: var(--accent-gold);
     --chart-3: #6B6560;
-    --chart-4: #E8E4E0;
-    --chart-5: #1A1A1A;
+    --chart-4: var(--border);
+    --chart-5: var(--text-primary);
 
     --radius: 0.625rem;
 }
@@ -137,6 +161,11 @@
     }
     html {
         @apply font-sans;
+    }
+
+    /* Tabular figures for numeric content in tables */
+    td, th {
+        font-variant-numeric: tabular-nums;
     }
 
     /* Accessibility — visible focus rings for keyboard navigation */
@@ -164,49 +193,59 @@
    ========================================================================= */
 @layer utilities {
     .text-display {
-        font-size: clamp(3rem, 4vw, 4rem);   /* 48-64px */
-        line-height: 1.1;
+        font-size: clamp(3.5rem, 5vw, 4rem); /* 56-64px */
+        line-height: 1.05;
         font-weight: 900;
         letter-spacing: -0.02em;
     }
 
     .text-h1 {
         font-size: clamp(2.25rem, 3vw, 2.5rem); /* 36-40px */
+        line-height: 1.15;
+        font-weight: 700;
+        letter-spacing: -0.015em;
+    }
+
+    .text-h2 {
+        font-size: clamp(1.75rem, 2.5vw, 2rem); /* 28-32px */
         line-height: 1.2;
         font-weight: 700;
         letter-spacing: -0.01em;
     }
 
-    .text-h2 {
-        font-size: clamp(1.75rem, 2.5vw, 2rem); /* 28-32px */
-        line-height: 1.25;
-        font-weight: 700;
-    }
-
     .text-h3 {
         font-size: clamp(1.25rem, 2vw, 1.5rem); /* 20-24px */
-        line-height: 1.35;
+        line-height: 1.3;
         font-weight: 500;
     }
 
     .text-body-lg {
         font-size: 1.125rem; /* 18px */
-        line-height: 1.6;
+        line-height: 1.5;
     }
 
     .text-body {
         font-size: 1rem; /* 16px */
-        line-height: 1.6;
+        line-height: 1.5;
     }
 
     .text-body-sm {
         font-size: 0.875rem; /* 14px */
-        line-height: 1.5;
+        line-height: 1.45;
+        letter-spacing: 0.005em;
     }
 
     .text-caption {
         font-size: 0.75rem; /* 12px */
-        line-height: 1.5;
+        line-height: 1.35;
         font-weight: 500;
+        letter-spacing: 0.06em;
+    }
+
+    .text-stat {
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        line-height: 1.0;
+        font-variant-numeric: tabular-nums;
     }
 }

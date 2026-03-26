@@ -7,6 +7,7 @@ import { StatHero } from "@/components/stat-hero";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getPlayoffLabel, getPlayoffBadgeVariant } from "@/lib/playoff-labels";
+import { EmptyState } from "@/components/empty-state";
 
 interface FranchiseDetailPageProps {
   params: Promise<{ franchiseSlug: string }>;
@@ -68,7 +69,7 @@ export default async function FranchiseDetailPage({
     <>
       {/* Hero Section */}
       <section
-        className="py-24 space-y-8"
+        className="py-8 md:py-12 space-y-6"
         style={{
           background: franchise.brandingColor
             ? `linear-gradient(to bottom, ${franchise.brandingColor}0F, transparent 60%)`
@@ -144,9 +145,11 @@ export default async function FranchiseDetailPage({
       {/* Season History */}
       <PageSection label="Year by Year" title="Season History">
         {franchise.seasonHistory.length === 0 ? (
-          <p className="text-body-lg text-muted-foreground">
-            No season history available yet.
-          </p>
+          <EmptyState
+            icon="calendar"
+            title="No Season History"
+            description="Season history will appear after data sync completes."
+          />
         ) : (
           <div className="space-y-3">
             {franchise.seasonHistory.map((season, index) => (

@@ -34,6 +34,25 @@ export async function getAllSeasons() {
 }
 
 /**
+ * Returns the most recent season with status 'complete'.
+ * Used by preseason/offseason hubs to pull awards and recap from the last finished season.
+ */
+export async function getLastCompletedSeason() {
+  const [season] = await db
+    .select({
+      id: seasons.id,
+      seasonYear: seasons.seasonYear,
+      status: seasons.status,
+      playoffWeekStart: seasons.playoffWeekStart,
+    })
+    .from(seasons)
+    .where(eq(seasons.status, "complete"))
+    .orderBy(desc(seasons.seasonYear))
+    .limit(1);
+  return season ?? null;
+}
+
+/**
  * Returns a single season by year, with its franchise_seasons data joined.
  */
 export async function getSeasonByYear(year: number) {

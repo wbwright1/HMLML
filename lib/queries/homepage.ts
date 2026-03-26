@@ -234,11 +234,22 @@ export async function getLeagueAtAGlance() {
         seasonYear: seasons.seasonYear,
         championName: franchises.name,
         championSlug: franchises.slug,
+        championFranchiseId: seasons.championFranchiseId,
       })
       .from(seasons)
       .innerJoin(franchises, eq(seasons.championFranchiseId, franchises.id))
       .orderBy(desc(seasons.seasonYear))
       .limit(1);
+
+    // Reigning champion's total championship count
+    let reigningChampionshipCount = 0;
+    if (latestChampSeason?.championFranchiseId) {
+      const [champCount] = await db
+        .select({ count: sql<number>`COUNT(*)` })
+        .from(seasons)
+        .where(eq(seasons.championFranchiseId, latestChampSeason.championFranchiseId));
+      reigningChampionshipCount = champCount?.count ?? 0;
+    }
 
     // Total seasons
     const [seasonCount] = await db
@@ -265,6 +276,7 @@ export async function getLeagueAtAGlance() {
 
     return {
       reigningChampion: latestChampSeason ?? null,
+      reigningChampionshipCount,
       totalSeasons: seasonCount?.count ?? 0,
       totalMatchups: matchupCount?.count ?? 0,
       mostChampionships: mostChamps ?? null,
@@ -272,6 +284,7 @@ export async function getLeagueAtAGlance() {
   } catch {
     return {
       reigningChampion: null,
+      reigningChampionshipCount: 0,
       totalSeasons: 0,
       totalMatchups: 0,
       mostChampionships: null,

@@ -1,0 +1,33 @@
+{
+  "agent": "UXA",
+  "story": "1.3",
+  "completedAt": "2026-03-25",
+  "specFile": "_work/epic-1/story-1.3/uxa-spec.md",
+  "componentsSpecced": [
+    "SiteNav (update — Server/Client split, hamburger, nav links reorder)",
+    "SeasonalPillBadge (new — async Server Component, 4 variants)",
+    "SyncTimestamp (update — stale threshold split, stale color fix, text indicator)",
+    "SyncTimestampClient (update — warm color, (outdated) text label)",
+    "SectionHeader (new — pure presentational Server Component)",
+    "BottomTabBar (retire)"
+  ],
+  "keyDecisions": [
+    "SiteNav split: SiteNavServer (RSC) + SiteNavClient (client island). Client island owns hamburger state, pathname, nav links.",
+    "BottomTabBar confirmed for retirement. No orchestrator blocker needed — hamburger is the full replacement.",
+    "SeasonalPillBadge returns null when DB has no data. Does NOT default to 'Offseason'.",
+    "SyncTimestamp stale: #C4402F pre-1.2 fallback. Stale state adds '(outdated)' text label to satisfy BR-5 no-color-alone rule.",
+    "Hub nav item uses exact pathname === '/' match only. startsWith would incorrectly match all routes.",
+    "Mobile overlay: below-bar dropdown (fixed top-14), not full-screen modal."
+  ],
+  "openQuestions": [
+    "OQ-4 (from REQS): Confirm actual job_type values in sync_log for daily vs hourly branching in SyncTimestamp stale threshold.",
+    "OQ-3 (from REQS): Confirm existence of DB query for current NFL state in lib/queries/. If absent, implementor creates minimal one."
+  ],
+  "a11yFlags": [
+    "Hamburger button aria-label, aria-expanded, aria-controls all specified",
+    "Focus trap spec provided for mobile overlay",
+    "SeasonalPillBadge contrast ratios flagged for verification — Offseason variant may be borderline",
+    "SyncTimestamp stale state includes text indicator — BR-5 satisfied"
+  ],
+  "status": "complete"
+}

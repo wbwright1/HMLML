@@ -1,0 +1,28 @@
+{
+  "story": "5.2",
+  "title": "Trophy Case Enhancement",
+  "agent": "REQS",
+  "status": "reqs-complete",
+  "timestamp": "2026-03-25T00:00:00Z",
+  "stateTransition": "analysis -> reqs-complete",
+  "frsAddressed": ["FR19"],
+  "nfrsAddressed": ["NFR3", "NFR6"],
+  "uxDrsInherited": ["UX-DR9"],
+  "dependsOn": ["5.1"],
+  "forwardDependencies": ["5.3", "6.1"],
+  "filesModified": [],
+  "filesToModify": [
+    "app/records/trophies/page.tsx",
+    "lib/queries/records.ts"
+  ],
+  "databaseChanges": false,
+  "apiEndpointChanges": false,
+  "newComponents": false,
+  "openQuestions": [],
+  "flags": [],
+  "acceptanceCriteria": {
+    "ac1": "Championship entries show season year, FranchiseIdentity, gold SuperlativeBadge; featured champion uses StatHero lg",
+    "ac2": "Multi-championship years all visible and attributed to correct franchise",
+    "ac3": "Empty state shown when no championships exist"
+  }
+}

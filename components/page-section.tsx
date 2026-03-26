@@ -6,7 +6,7 @@ interface PageSectionProps {
 
 export function PageSection({ label, title, children }: PageSectionProps) {
   return (
-    <section className="py-24 space-y-12">
+    <section className="py-8 md:py-12 space-y-6">
       <div className="space-y-2">
         {label && (
           <p className="text-caption uppercase tracking-widest text-primary">

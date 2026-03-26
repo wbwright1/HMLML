@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
-import { getLeaderboard, getSeasonYears } from "@/lib/queries/records";
+import { getLeaderboard, getSeasonYears, getAllSeasonLeaderboards } from "@/lib/queries/records";
 import { LeaderboardTable } from "@/app/records/leaderboard-table";
 import type { LeaderboardEntry } from "@/lib/queries/records";
 
@@ -45,15 +45,10 @@ export default async function RecordsPage() {
       getSeasonYears(),
     ]);
 
-    // Pre-fetch leaderboard data for each season
-    const seasonResults = await Promise.all(
-      seasonYears.map(async (year) => {
-        const data = await getLeaderboard(year);
-        return [year, data] as [number, LeaderboardEntry[]];
-      })
-    );
-    for (const [year, data] of seasonResults) {
-      seasonDataRecord[String(year)] = data;
+    // Batch-fetch all season leaderboards in a single query
+    const allSeasonData = await getAllSeasonLeaderboards();
+    for (const [year, data] of Object.entries(allSeasonData)) {
+      seasonDataRecord[year] = data;
     }
   } catch {
     // DB may not be connected

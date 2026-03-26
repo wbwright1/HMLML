@@ -1,0 +1,33 @@
+{
+  "agent": "UXA",
+  "story": "1.2",
+  "storyTitle": "Press Box Evolved Theme Implementation",
+  "completedAt": "2026-03-25",
+  "outputFile": "_work/epic-1/story-1.2/uxa-spec.md",
+  "sections": [
+    "Section 1: Color Token Definitions (15 tokens, shadcn alias updates)",
+    "Section 2: Tailwind Token Registration (color + spacing)",
+    "Section 3: Typography Scale (corrections + new .text-stat class)",
+    "Section 4: Contrast Ratio Verification (3 verified, 2 flagged for developer)",
+    "Section 5: Global Base Rules (tabular-nums on td/th)",
+    "Section 6: Accessibility Requirements",
+    "Section 7: Implementation Order",
+    "Section 8: Visual Regression Concerns",
+    "Section 9: Exclusions"
+  ],
+  "flagsForDeveloper": [
+    "OQ-3: Verify Tailwind v4 spacing token naming convention for --spacing-space-N entries; document in cross-story-context.md",
+    "OQ-4: Calculate and document --text-tertiary and --text-muted contrast ratios; apply usage restrictions if below thresholds"
+  ],
+  "uxaExtrapolations": [
+    "--loss vs --accent-warm distinction: --loss stays at #C4402F for shadcn destructive roles; --accent-warm (#C45D3E) is the HML negative state token",
+    "Accent token contrast on --surface for gold and warm: estimated ratios noted as guidance for downstream stories"
+  ],
+  "noChangesRequired": [
+    "Geist Sans font loading (already complete in layout.tsx)",
+    "Focus ring rule (already correct in @layer base)",
+    "Reduced motion rule (already correct in @layer base)",
+    "--muted-foreground value (stays #6B6560 for shadcn compatibility)",
+    "--destructive value (stays #B91C1C, unused by HML Phase 1 features)"
+  ]
+}

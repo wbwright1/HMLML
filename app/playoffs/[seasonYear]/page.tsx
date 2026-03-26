@@ -5,6 +5,7 @@ import { FranchiseIdentity } from "@/components/franchise-identity";
 import { ChampionshipStars } from "@/components/championship-stars";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
+import { EmptyState } from "@/components/empty-state";
 import {
   getPlayoffMatchups,
   getSeasonByYearSimple,
@@ -363,21 +364,17 @@ export default async function PlayoffBracketPage({
       </PageSection>
 
       {!hasData ? (
-        <section className="pb-24">
-          <div className="rounded-xl border border-border bg-card p-8 text-center">
-            <p className="text-body-lg text-muted-foreground">
-              No playoff data available for the {year} season.
-            </p>
-            <Link
-              href={`/seasons/${year}`}
-              className="text-sm text-primary hover:text-primary/80 transition-colors underline underline-offset-4 mt-4 inline-block"
-            >
-              Back to {year} season
-            </Link>
-          </div>
+        <section className="pb-8 md:pb-12">
+          <EmptyState
+            icon="calendar"
+            title="No Playoff Data"
+            description={`No playoff data available for the ${year} season.`}
+            actionLabel={`Back to ${year} season`}
+            actionHref={`/seasons/${year}`}
+          />
         </section>
       ) : (
-        <section className="pb-24 space-y-12">
+        <section className="pb-8 md:pb-12 space-y-6">
           {/* Championship matchup */}
           {championshipMatchup && (
             <ScrollReveal delay={80}>

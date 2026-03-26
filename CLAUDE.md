@@ -1,7 +1,9 @@
 # Project Guidelines
 
 ## Project Overview
-Harambe Memorial League Memorial League (HML) Website: a public-facing Next.js web app serving as the permanent home for a 12-team dynasty fantasy football league. Centralizes league history, performance data, draft records, power rankings, and near-live matchup scoring in one always-available destination. All data sourced and synced automatically from the Sleeper API via a 3-tier sync pipeline. No login required (Phase 1). Carries forward history from the league's predecessor (a 10-team league).
+Harambe Memorial League Memorial League (HMLML) Website: a public-facing Next.js web app serving as the permanent home for a 12-team dynasty fantasy football league. The site is a trash talk arsenal disguised as a league history archive: it centralizes league history, performance data, draft records, power rankings, and near-live matchup scoring in one always-available destination with a confident, snarky editorial voice. All data sourced and synced automatically from the Sleeper API via a 3-tier sync pipeline. No login required (Phase 1). Carries forward history from the league's predecessor (a 10-team league).
+
+**Note:** The abbreviation is HMLML (the double "Memorial League" is intentional). Use "HMLML" in code, nav branding, and UI.
 
 ## Tech Stack
 - **Framework:** Next.js 16+ (App Router), TypeScript (strict mode)
@@ -40,12 +42,13 @@ app/                    -> Routes, layouts, pages (App Router)
     sync-daily/         -> Daily sync cron endpoint
     sync-hourly/        -> Hourly sync cron endpoint
     live-scores/        -> Client poller endpoint
-  seasons/              -> League history timeline, season detail
+  (hub)/                -> Homepage / seasonally-aware hub (page.tsx in app root)
   teams/                -> Franchise pages, rosters, draft history
-  matchups/             -> Current week matchups + live scores
   records/              -> Leaderboard, H2H, rivalries, power rankings, trophies
+  history/              -> League history timeline, season detail
   drafts/               -> Draft history index and per-season views
   players/              -> Player search + status
+  matchups/             -> Matchup detail pages (linked from hub, not in nav)
   playoffs/             -> Playoff bracket results
 components/             -> Shared UI components (nav, footer, tables, timestamp)
   ui/                   -> shadcn/ui primitives
@@ -119,31 +122,40 @@ Sleeper's `previous_league_id` field chains seasons. The sync layer traverses th
 
 ## Visual Design (Non-Negotiable)
 
-### Theme: "Press Box" -- Warm, Institutional, Premium
-| Role | Color |
-|---|---|
-| Background | Warm off-white / cream (`#FAF8F5` range) |
-| Surface | Soft warm white (`#FFFFFF` or `#FEFCF9`) |
-| Text Primary | Rich dark charcoal (`#1A1A1A` range) |
-| Text Secondary | Warm medium gray (`#6B6560` range) |
-| Text Tertiary | Light warm gray (`#9C9590` range) |
-| Brand Accent | Forest green (`#2D5A3D` range) |
-| Achievement | Warm antique gold (`#B8860B` range) |
-| Border / Divider | Warm light gray (`#E8E4E0` range) |
+### Theme: "Press Box Evolved" -- Warm, Institutional, with Confident Pops
+| Token | Hex | Role |
+|---|---|---|
+| `--canvas` | `#FAF8F5` | Page background |
+| `--surface` | `#FFFFFF` | Card backgrounds, elevated content |
+| `--surface-muted` | `#F5F2EE` | Alternating rows, subtle section dividers |
+| `--border` | `#E8E4E0` | Card borders, dividers, table rules |
+| `--border-strong` | `#D4CFC9` | Emphasized borders, active card outlines |
+| `--text-primary` | `#1A1A1A` | Headlines, stat numbers, bold callouts |
+| `--text-secondary` | `#4A4540` | Body text, descriptions (darkened for WCAG AA) |
+| `--text-tertiary` | `#7A756F` | Labels, metadata, timestamps |
+| `--text-muted` | `#9C9590` | Placeholder text, disabled states |
+| `--accent-green` | `#2D5A3D` | Brand accent, nav active, live indicators, CTAs |
+| `--accent-green-light` | `#E8F0EB` | Green tint backgrounds |
+| `--accent-gold` | `#B8860B` | Achievements, championships, awards |
+| `--accent-gold-light` | `#FDF6E3` | Gold tint card backgrounds |
+| `--accent-warm` | `#C45D3E` | Negative superlatives, "sting" moments (rust, NOT red) |
+| `--accent-warm-light` | `#FDF0EC` | Warm tint card backgrounds |
 
 ### Typography
 - Single typeface: Geist Sans via `next/font`
 - Weights: Regular (400), Medium (500), Bold (700), Black (900)
-- Display (48-64px, Black 900): Hero stats, defining numbers
-- H1 (36-40px, Bold 700): Page titles
-- H2 (28-32px, Bold 700): Section headers
-- H3 (20-24px, Medium 500): Subsection headers, card titles
-- Body Large (18px, Regular): Featured descriptions
+- Display (56-64px, Black 900, -0.02em tracking): Hero stats; one number per viewport
+- H1 (36-40px, Bold 700, -0.015em): Page titles
+- H2 (28-32px, Bold 700, -0.01em): Section headers, card group titles
+- H3 (20-24px, Medium 500): Card titles, subsection headers
+- Body Large (18px, Regular): Featured descriptions, hub card body
 - Body (16px, Regular): Standard text, table cells
-- Body Small (14px, Regular): Labels, metadata, timestamps
-- Caption (12px, Medium 500): Badges, tags, micro-labels
+- Body Small (14px, Regular, 0.005em): Labels, metadata, timestamps
+- Caption (12px, Medium 500, 0.06em, UPPERCASE): Badges, tags, micro-labels; wide tracking
+- Stat Number (contextual size, Bold 700, -0.01em): Stats in tables/cards; always `tabular-nums`
 - Key stats use Display or H1 weight; the number IS the visual moment
-- Superlative labels use Caption uppercase with tracking
+- Negative tracking on large text for premium magazine feel
+- Wide tracking on Caption for authority at small sizes
 - Tabular figures (`font-variant-numeric: tabular-nums`) on all score/stat numbers
 
 ### Spacing (8px base unit)
@@ -156,7 +168,10 @@ Sleeper's `previous_league_id` field chains seasons. The sync layer traverses th
 - **Wins:** Bold type weight + "W" label (no dedicated win color)
 - **Losses:** Regular/light type weight + "L" label
 - **Streaks/Records:** Gold accent for positive superlatives; bold type for all record callouts
-- **Live/Active:** Forest green dot or subtle pulse
+- **Live/Active:** Forest green dot + "LIVE" text label + subtle pulse
+- **Achievements/Awards:** `--accent-gold` + gold-tint card background
+- **Negative Superlatives ("Sting"):** `--accent-warm` + warm-tint card background + snarky label
+- **Snarky Labels:** Defined in a centralized content system (TypeScript constant), not hardcoded per component. Examples: "Point Machine", "Iron Curtain", "League Doormat", "Glass Cannon", "Coaching Malpractice"
 
 ### Accessibility (Non-Negotiable)
 - No information conveyed by color alone; every color signal has a text label, icon, or typographic treatment
@@ -165,14 +180,50 @@ Sleeper's `previous_league_id` field chains seasons. The sync layer traverses th
 - All color-coded badges include text labels ("W", "L", "CHAMP", "STREAK")
 - Cards over tables on mobile when >3-4 columns
 
+### Site Voice & Personality
+- The site has a confident, snarky editorial voice; think "the friend in the group chat who always has the receipts"
+- Superlative labels poke fun: "League Doormat", "Glass Cannon", "Coaching Malpractice"
+- Bad stats and losses are highlighted with the same design care as wins; the emotional range is part of the experience
+- Error messages are calm and confident, never panicked: "Something went wrong. We're showing the last available data." NOT "Oops!"
+- 404 page can be snarky: "This page doesn't exist. Maybe it was traded away."
+
 ### Design Principles
-- **Speed-to-stat:** minimize taps/clicks between question and answer
-- **Superlatives on the surface:** best, worst, most, least, longest streak should be prominent
-- **Screenshot-worthy:** layouts designed for group chat sharing
-- **Cool stage, not a toy:** professional and clean first, personality second (sports brand, not meme page)
+- **Trash talk first:** every design decision filters through "does this give someone something to brag about or roast someone with?"
+- **Speed-to-stat:** minimize taps/clicks between question and answer; never more than two taps from any stat
+- **Screenshot-worthy by default:** cards, awards, and stat callouts are self-contained visual moments; a screenshot should make sense in a group chat with no explanation
+- **The site knows what season it is:** hub content shifts automatically based on the football calendar (preseason, regular season, playoffs, offseason)
+- **Cards over tables, always on mobile:** data lives in cards on hub and mobile; tables reserved for deep-dive pages on larger screens
 - **Bold typography as the hero:** large, confident type for key stats and records
-- Do NOT use shadcn/ui default theme colors; everything redefined to match HML brand
+- **Curated over comprehensive:** the hub surfaces 4-6 compelling things, not a data dump
+- Do NOT use shadcn/ui default theme colors; everything redefined to match HMLML brand
 - Do NOT install additional UI libraries alongside shadcn/ui
+
+### Navigation Structure
+- **Primary nav:** Hub | Teams | Records | History | Drafts | Players
+- **Matchups are NOT a nav item;** live matchup cards surface on the hub during game windows; tapping goes to matchup detail pages
+- **Seasonal pill badge** in nav (right side): "Preseason", "Week 9", "Playoffs", "Offseason"
+- **Brand:** "HMLML" in nav bar left
+- **Mobile:** hamburger menu; fixed slim top bar
+
+### Seasonally-Aware Hub
+The homepage automatically renders different content based on the football calendar. State determined by the NFL state endpoint (`/v1/state/nfl`).
+
+| State | Top Banner | Content Below |
+|---|---|---|
+| **Preseason** | Champion Banner (green gradient, trophy) | Draft Countdown > Team Awards (2-col) > Player Awards (2-col) > Wall of Shame (full-width) > Draft Order |
+| **Regular Season** | Week Banner (week number, game status) | Live Matchups (game windows) OR Standings Snapshot > Weekly Superlatives ("This Week's Damage") > Power Rankings |
+| **Playoffs** | Week Banner (round name variant) | Playoff Bracket > Matchup Cards > Elimination Alerts |
+| **Offseason** | Champion Banner (new champion) | Offseason Recap > Transaction Activity > All-Time Records Updates |
+
+### Component Tiers
+- **Tier 1 (Signature, built from scratch):** Champion Banner, Week Banner, Draft Countdown, Player Award Card, Team Award Card, Sting Card, Live Matchup Card, Weekly Superlative Card, Playoff Bracket Card
+- **Tier 2 (Page-level):** Franchise Header, Rivalry Card, Season Timeline Card, Player Search Result, Roster Row
+- **Tier 3 (Utility, shadcn/ui restyled):** Table, Card, Tabs, Badge, Nav, Select, Input, Section Header, Sync Timestamp, Seasonal Pill Badge, Stat Callout
+
+### Animation Philosophy
+- No page transitions, no scroll-triggered animations, no loading spinners on server-rendered pages
+- **Allowed:** live score pulse (CSS), draft countdown tick (opacity transition), card hover border (150ms), tab content fade (100ms)
+- Movement is reserved for live data where it conveys real information
 
 ## Acceptance Testing Patterns
 

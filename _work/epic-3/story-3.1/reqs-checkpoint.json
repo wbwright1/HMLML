@@ -1,0 +1,38 @@
+{
+  "story": "3.1",
+  "title": "League Identity Hero",
+  "agent": "REQS",
+  "status": "reqs-complete",
+  "timestamp": "2026-03-25T00:00:00Z",
+  "verdict": "COMPLETE",
+  "stateTransition": "analysis -> reqs-complete",
+  "flags": [],
+  "requirementsCovered": {
+    "functional": ["FR1"],
+    "nonFunctional": ["NFR3", "NFR6"],
+    "uxDesign": ["UX-DR1"]
+  },
+  "acceptanceCriteria": [
+    "AC-1: Hero section renders on homepage",
+    "AC-2: League name in Display weight (56-64px, Black 900, -0.02em)",
+    "AC-3: Est. 2017 badge displayed",
+    "AC-4: One-line snarky league tagline",
+    "AC-5: Current season/week context in Body Small",
+    "AC-6: Subtle green background tint at 3-5% opacity",
+    "AC-7: Typography-only, no images",
+    "AC-8: Responsive, vertically stacked, centered"
+  ],
+  "databaseChanges": "none",
+  "apiChanges": "none",
+  "newFiles": [],
+  "modifiedFiles": [
+    "app/page.tsx"
+  ],
+  "testFiles": [
+    "e2e/story-3.1-hero.spec.ts"
+  ],
+  "issuesFound": [
+    "Em-dash character on line 89 of app/page.tsx violates CLAUDE.md writing style rule"
+  ],
+  "openQuestions": []
+}

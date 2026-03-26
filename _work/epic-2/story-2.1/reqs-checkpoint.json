@@ -1,0 +1,58 @@
+{
+  "story": "2.1",
+  "title": "Co-Owner Schema & Migration",
+  "agent": "REQS",
+  "status": "reqs-complete",
+  "timestamp": "2026-03-25T00:00:00Z",
+  "verdict": "COMPLETE",
+  "acceptanceCriteria": [
+    {
+      "id": "AC-1",
+      "description": "Nullable coOwnerDisplayName text field added to franchise_seasons table via migration",
+      "fr": "FR21",
+      "alreadyImplemented": true
+    },
+    {
+      "id": "AC-2",
+      "description": "Drizzle schema in lib/db/schema.ts updated with new column",
+      "fr": "FR21",
+      "alreadyImplemented": true
+    },
+    {
+      "id": "AC-3",
+      "description": "Drizzle migration generated and applies cleanly",
+      "fr": "FR21",
+      "alreadyImplemented": true
+    },
+    {
+      "id": "AC-4",
+      "description": "Field is queryable via Drizzle ORM",
+      "fr": "FR21",
+      "alreadyImplemented": true
+    },
+    {
+      "id": "AC-5",
+      "description": "Existing rows have null for coOwnerDisplayName",
+      "fr": "FR21",
+      "alreadyImplemented": true
+    }
+  ],
+  "databaseChanges": {
+    "table": "franchise_seasons",
+    "column": "co_owner_display_name",
+    "drizzleName": "coOwnerDisplayName",
+    "type": "text",
+    "nullable": true,
+    "default": null,
+    "migrationFile": "lib/db/migrations/0001_known_nebula.sql"
+  },
+  "conflicts": [],
+  "flags": [
+    "All acceptance criteria already implemented in codebase. Schema, migration, types, and downstream queries all exist. Story may only require verification pass."
+  ],
+  "forwardDependencies": ["2.2", "2.3"],
+  "openQuestions": [
+    "Verify migration has been applied to production/staging database",
+    "Confirm drizzle-kit generate produces no diff (schema and migrations in sync)"
+  ]
+}

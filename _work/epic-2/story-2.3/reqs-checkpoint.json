@@ -1,0 +1,65 @@
+{
+  "story": "2.3",
+  "epic": "2",
+  "title": "Co-Owner Display Across Site",
+  "agent": "REQS",
+  "status": "reqs-complete",
+  "verdict": "COMPLETE",
+  "timestamp": "2026-03-25T00:00:00Z",
+  "requirements_covered": ["FR23", "FR24"],
+  "ux_requirements_covered": ["UX-DR11"],
+  "nfrs_addressed": ["NFR1", "NFR3", "NFR6"],
+  "acceptance_criteria": {
+    "AC-1": {
+      "description": "FranchiseIdentity hero variant displays 'Owned by {owner} & {coOwner}'",
+      "status": "already-implemented",
+      "location": "components/franchise-identity.tsx, lines 55-59"
+    },
+    "AC-2": {
+      "description": "FranchiseIdentity standard variant displays combined owner in caption",
+      "status": "already-implemented",
+      "location": "components/franchise-identity.tsx, lines 82-85"
+    },
+    "AC-3": {
+      "description": "Co-owner displayed on all pages where owners appear",
+      "status": "already-implemented",
+      "locations": [
+        "app/page.tsx (homepage standings, lines 295, 345)",
+        "app/teams/page.tsx (teams overview, line 59)",
+        "app/teams/[franchiseSlug]/page.tsx (franchise detail hero line 95, season cards line 172)",
+        "app/seasons/[seasonYear]/page.tsx (season standings, lines 180, 267)"
+      ]
+    },
+    "AC-4": {
+      "description": "Formatting always uses ' & ' separator",
+      "status": "already-implemented",
+      "notes": "All 8 rendering locations use consistent ' & ' separator pattern"
+    },
+    "AC-5": {
+      "description": "No trailing ' & ' or empty space when no co-owner",
+      "status": "already-implemented",
+      "notes": "All locations use conditional: coOwnerName ? ` & ${coOwnerName}` : ''"
+    }
+  },
+  "critical_finding": "All acceptance criteria are already implemented in the codebase. The FranchiseIdentity component already handles coOwnerName prop in hero and standard variants. All four target pages already display co-owner data with correct formatting.",
+  "dependencies": {
+    "story_2.1": "complete (schema exists)",
+    "story_2.2": "complete (sync populates data)"
+  },
+  "files_involved": [
+    "components/franchise-identity.tsx",
+    "app/page.tsx",
+    "app/teams/page.tsx",
+    "app/teams/[franchiseSlug]/page.tsx",
+    "app/seasons/[seasonYear]/page.tsx",
+    "lib/queries/franchises.ts",
+    "lib/queries/seasons.ts"
+  ],
+  "database_changes": "none",
+  "api_changes": "none",
+  "new_dependencies": "none",
+  "conflicts": "none",
+  "open_questions": [
+    "Story appears already complete; recommend verification pass only (confirm co-owner data is populated via sync and visually correct on all pages)"
+  ]
+}
