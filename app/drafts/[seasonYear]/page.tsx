@@ -1,16 +1,13 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/lib/db";
-import { seasons, franchiseSeasons, franchises } from "@/lib/db/schema";
-import { eq, desc } from "drizzle-orm";
+import { seasons, franchiseSeasons, franchises, rosterPlayers, players } from "@/lib/db/schema";
+import { eq, desc, and, sql } from "drizzle-orm";
 import { PageSection } from "@/components/page-section";
+import { ScrollReveal } from "@/components/scroll-reveal";
 import { SuperlativeBadge } from "@/components/superlative-badge";
-import {
-  DraftBoard,
-  type DraftBoardTeam,
-  type DraftBoardRound,
-  type DraftBoardCell,
-} from "@/components/draft-board";
+import { MobileTableView } from "@/components/mobile-table-view";
+import { PositionBadge } from "@/components/position-badge";
 import {
   getDraftBySeasonYear,
   type DraftPickWithFranchise,
@@ -34,110 +31,6 @@ export async function generateMetadata({ params }: DraftDetailPageProps) {
   };
 }
 
-// ---------------------------------------------------------------------------
-// Data shaping: DraftPickWithFranchise[] -> DraftBoardProps
-// ---------------------------------------------------------------------------
-
-function formatRoundPick(round: number, pickInRound: number): string {
-  return `${round}.${String(pickInRound).padStart(2, "0")}`;
-}
-
-function shapeDraftBoard(
-  picks: DraftPickWithFranchise[],
-  isLegacy: boolean
-) {
-  if (picks.length === 0) return null;
-
-  // Determine team order from round 1 picks (first round pick order = column order)
-  const round1Picks = picks
-    .filter((p) => p.round === 1)
-    .sort((a, b) => a.pickNumber - b.pickNumber);
-
-  const totalTeams = round1Picks.length;
-  if (totalTeams === 0) return null;
-
-  // Build teams array in draft position order
-  const teams: DraftBoardTeam[] = round1Picks.map((pick, idx) => ({
-    franchiseId: pick.franchiseId ?? `unknown-${idx}`,
-    franchiseName: pick.franchiseName,
-    franchiseAbbreviation: pick.franchiseAbbreviation,
-    franchiseBrandingColor: pick.franchiseBrandingColor,
-    franchiseSlug: pick.franchiseSlug,
-    draftPosition: idx,
-  }));
-
-  // Map franchiseId to column index (draft position)
-  const franchiseColumnMap = new Map<string, number>();
-  for (const team of teams) {
-    franchiseColumnMap.set(team.franchiseId, team.draftPosition);
-  }
-
-  // Group picks by round
-  const roundsMap = new Map<number, DraftPickWithFranchise[]>();
-  for (const pick of picks) {
-    if (!roundsMap.has(pick.round)) {
-      roundsMap.set(pick.round, []);
-    }
-    roundsMap.get(pick.round)!.push(pick);
-  }
-
-  const roundNumbers = Array.from(roundsMap.keys()).sort((a, b) => a - b);
-
-  // Build rounds with cells in display order
-  const rounds: DraftBoardRound[] = roundNumbers.map((roundNum) => {
-    const roundPicks = roundsMap.get(roundNum)!;
-    roundPicks.sort((a, b) => a.pickNumber - b.pickNumber);
-
-    // Create cells array indexed by column position
-    const cellsByColumn: (DraftBoardCell | null)[] = new Array(totalTeams).fill(null);
-
-    for (let i = 0; i < roundPicks.length; i++) {
-      const pick = roundPicks[i];
-      const pickInRound = i + 1;
-
-      // For snake draft: odd rounds L-to-R, even rounds R-to-L
-      // Pick order is always ascending by pickNumber, so for odd rounds
-      // the i-th pick goes to column i, for even rounds column (totalTeams - 1 - i)
-      const isEvenRound = roundNum % 2 === 0;
-      const columnIdx = isEvenRound ? totalTeams - 1 - i : i;
-
-      cellsByColumn[columnIdx] = {
-        pickNumber: pick.pickNumber,
-        roundPickNumber: formatRoundPick(roundNum, pickInRound),
-        playerName: pick.playerName,
-        playerPosition: pick.playerPosition,
-        franchiseId: pick.franchiseId,
-        isEmpty: false,
-      };
-    }
-
-    // Fill any remaining null cells (shouldn't happen for complete drafts)
-    const cells: DraftBoardCell[] = cellsByColumn.map((cell, idx) => {
-      if (cell) return cell;
-      const pickInRound = idx + 1;
-      return {
-        pickNumber: (roundNum - 1) * totalTeams + pickInRound,
-        roundPickNumber: formatRoundPick(roundNum, pickInRound),
-        playerName: null,
-        playerPosition: null,
-        franchiseId: null,
-        isEmpty: true,
-      };
-    });
-
-    return {
-      roundNumber: roundNum,
-      cells,
-    };
-  });
-
-  return { teams, rounds, totalTeams };
-}
-
-// ---------------------------------------------------------------------------
-// Page
-// ---------------------------------------------------------------------------
-
 export default async function DraftDetailPage({
   params,
 }: DraftDetailPageProps) {
@@ -156,19 +49,17 @@ export default async function DraftDetailPage({
     // DB may not be connected in dev
   }
 
-  // If no picks exist, check if this is an upcoming draft
   const isUpcoming = !draftData || draftData.drafts.length === 0;
-  let upcomingBoard: { teams: DraftBoardTeam[]; rounds: DraftBoardRound[]; totalTeams: number } | null = null;
+  let upcomingPicks: UpcomingPick[] | null = null;
 
   if (isUpcoming) {
-    // Check if this season exists and has franchise data
     try {
-      upcomingBoard = await buildUpcomingDraftBoard(year);
+      upcomingPicks = await buildUpcomingDraftPicks(year);
     } catch {
       // Failed to build upcoming board
     }
 
-    if (!upcomingBoard) {
+    if (!upcomingPicks) {
       notFound();
     }
   }
@@ -194,27 +85,21 @@ export default async function DraftDetailPage({
         </div>
       </section>
 
-      {isUpcoming && upcomingBoard && (
-        <PageSection label="Rookie Draft" title="Rookie Draft">
-          <div className="flex flex-wrap items-center gap-3">
-            <SuperlativeBadge text="Upcoming" variant="green" />
-            <span className="text-sm text-text-tertiary">
-              {upcomingBoard.totalTeams} teams &middot; {upcomingBoard.rounds.length} rounds
-            </span>
-          </div>
-          <div className="mt-4">
-            <DraftBoard
-              teams={upcomingBoard.teams}
-              rounds={upcomingBoard.rounds}
-              totalTeams={upcomingBoard.totalTeams}
-              isUpcoming={true}
-            />
-          </div>
-        </PageSection>
+      {isUpcoming && upcomingPicks && (
+        <UpcomingDraftSection picks={upcomingPicks} />
       )}
 
       {!isUpcoming && draftData && draftData.drafts.map((draft) => {
-        const boardData = shapeDraftBoard(draft.picks, draft.isLegacyEra);
+        // Group picks by round
+        const roundsMap = new Map<number, DraftPickWithFranchise[]>();
+        for (const pick of draft.picks) {
+          if (!roundsMap.has(pick.round)) {
+            roundsMap.set(pick.round, []);
+          }
+          roundsMap.get(pick.round)!.push(pick);
+        }
+
+        const rounds = Array.from(roundsMap.keys()).sort((a, b) => a - b);
 
         return (
           <PageSection
@@ -235,21 +120,64 @@ export default async function DraftDetailPage({
                 </span>
               )}
               <span className="text-sm text-text-tertiary">
-                {draft.picks.length} picks &middot;{" "}
-                {boardData ? boardData.rounds.length : 0} rounds
+                {draft.picks.length} picks &middot; {rounds.length} rounds
               </span>
             </div>
 
-            {boardData && (
-              <div className="mt-4">
-                <DraftBoard
-                  teams={boardData.teams}
-                  rounds={boardData.rounds}
-                  totalTeams={boardData.totalTeams}
-                  isUpcoming={false}
-                />
-              </div>
-            )}
+            <div className="space-y-8 mt-4">
+              {rounds.map((roundNum) => {
+                const roundPicks = roundsMap.get(roundNum)!;
+
+                return (
+                  <ScrollReveal key={roundNum}>
+                    <div className="space-y-3">
+                      <h3 className="text-xs uppercase tracking-widest text-text-tertiary font-medium border-b border-border pb-2">
+                        Round {roundNum}
+                      </h3>
+
+                      <MobileTableView
+                        headers={["Pick", "Team", "Player", "Pos"]}
+                        keyColumns={[0, 1, 2, 3]}
+                        rows={roundPicks.map((pick) => [
+                          <span
+                            key="pick"
+                            className="tabular-nums text-text-tertiary"
+                          >
+                            {pick.pickNumber}
+                          </span>,
+                          <span key="team">
+                            {pick.franchiseSlug ? (
+                              <Link
+                                href={`/teams/${pick.franchiseSlug}`}
+                                className="font-medium text-primary hover:text-primary/80 transition-colors"
+                              >
+                                {pick.franchiseName ?? "Unknown"}
+                              </Link>
+                            ) : (
+                              <span className="text-text-tertiary">
+                                {pick.franchiseName ?? "Unknown"}
+                              </span>
+                            )}
+                            {pick.originalFranchiseName && (
+                              <span className="text-xs text-text-tertiary ml-1">
+                                (via {pick.originalFranchiseName})
+                              </span>
+                            )}
+                          </span>,
+                          <span key="player" className="font-medium">
+                            {pick.playerName ?? "Unknown Player"}
+                          </span>,
+                          <PositionBadge
+                            key="pos"
+                            position={pick.playerPosition}
+                          />,
+                        ])}
+                      />
+                    </div>
+                  </ScrollReveal>
+                );
+              })}
+            </div>
           </PageSection>
         );
       })}
@@ -258,10 +186,113 @@ export default async function DraftDetailPage({
 }
 
 // ---------------------------------------------------------------------------
-// Build upcoming draft board from Sleeper API + DB franchise data
+// Upcoming Draft Types & Section
 // ---------------------------------------------------------------------------
 
-async function buildUpcomingDraftBoard(year: number) {
+interface PositionCounts {
+  QB: number;
+  RB: number;
+  WR: number;
+  TE: number;
+}
+
+interface UpcomingPick {
+  pickNumber: number;
+  round: number;
+  franchiseId: string;
+  franchiseName: string;
+  franchiseSlug: string | null;
+  roster: PositionCounts;
+  originalFranchiseName: string | null;
+}
+
+function formatRoster(roster: PositionCounts): string {
+  return `${roster.QB} QB, ${roster.RB} RB, ${roster.WR} WR, ${roster.TE} TE`;
+}
+
+function UpcomingDraftSection({ picks }: { picks: UpcomingPick[] }) {
+  // Group by round
+  const roundsMap = new Map<number, UpcomingPick[]>();
+  for (const pick of picks) {
+    if (!roundsMap.has(pick.round)) {
+      roundsMap.set(pick.round, []);
+    }
+    roundsMap.get(pick.round)!.push(pick);
+  }
+
+  const rounds = Array.from(roundsMap.keys()).sort((a, b) => a - b);
+
+  return (
+    <PageSection label="Rookie Draft" title="Rookie Draft">
+      <div className="flex flex-wrap items-center gap-3">
+        <SuperlativeBadge text="Upcoming" variant="green" />
+        <span className="text-sm text-text-tertiary">
+          {picks.length} picks &middot; {rounds.length} rounds
+        </span>
+      </div>
+
+      <div className="space-y-8 mt-4">
+        {rounds.map((roundNum) => {
+          const roundPicks = roundsMap.get(roundNum)!;
+
+          return (
+            <ScrollReveal key={roundNum}>
+              <div className="space-y-3">
+                <h3 className="text-xs uppercase tracking-widest text-text-tertiary font-medium border-b border-border pb-2">
+                  Round {roundNum}
+                </h3>
+
+                <MobileTableView
+                  headers={["Pick", "Team", "Roster"]}
+                  keyColumns={[0, 1, 2]}
+                  rows={roundPicks.map((pick) => [
+                    <span
+                      key="pick"
+                      className="tabular-nums text-text-tertiary"
+                    >
+                      {pick.pickNumber}
+                    </span>,
+                    <span key="team">
+                      {pick.franchiseSlug ? (
+                        <Link
+                          href={`/teams/${pick.franchiseSlug}`}
+                          className="font-medium text-primary hover:text-primary/80 transition-colors"
+                        >
+                          {pick.franchiseName}
+                        </Link>
+                      ) : (
+                        <span className="text-text-secondary">
+                          {pick.franchiseName}
+                        </span>
+                      )}
+                      {pick.originalFranchiseName && (
+                        <span className="text-xs text-text-tertiary ml-1">
+                          (via {pick.originalFranchiseName})
+                        </span>
+                      )}
+                    </span>,
+                    <span
+                      key="roster"
+                      className="text-sm tabular-nums text-text-secondary"
+                    >
+                      {formatRoster(pick.roster)}
+                    </span>,
+                  ])}
+                />
+              </div>
+            </ScrollReveal>
+          );
+        })}
+      </div>
+    </PageSection>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Build upcoming draft picks from Sleeper API + DB franchise data
+// ---------------------------------------------------------------------------
+
+async function buildUpcomingDraftPicks(year: number): Promise<UpcomingPick[] | null> {
   // Verify the season exists
   const [season] = await db
     .select({ id: seasons.id, leagueId: seasons.leagueId })
@@ -272,14 +303,13 @@ async function buildUpcomingDraftBoard(year: number) {
   if (!season) return null;
 
   // Get franchise data for this season (or latest season with data)
+  let franchiseSeasonId = season.id;
   let franchiseData = await db
     .select({
       franchiseId: franchiseSeasons.franchiseId,
       rosterId: franchiseSeasons.rosterId,
       userId: franchiseSeasons.userId,
       franchiseName: franchises.name,
-      franchiseAbbreviation: franchises.abbreviation,
-      franchiseBrandingColor: franchises.brandingColor,
       franchiseSlug: franchises.slug,
     })
     .from(franchiseSeasons)
@@ -296,14 +326,13 @@ async function buildUpcomingDraftBoard(year: number) {
       .limit(1);
 
     if (latestWithData) {
+      franchiseSeasonId = latestWithData.id;
       franchiseData = await db
         .select({
           franchiseId: franchiseSeasons.franchiseId,
           rosterId: franchiseSeasons.rosterId,
           userId: franchiseSeasons.userId,
           franchiseName: franchises.name,
-          franchiseAbbreviation: franchises.abbreviation,
-          franchiseBrandingColor: franchises.brandingColor,
           franchiseSlug: franchises.slug,
         })
         .from(franchiseSeasons)
@@ -314,9 +343,58 @@ async function buildUpcomingDraftBoard(year: number) {
 
   if (franchiseData.length === 0) return null;
 
-  // Try to get draft order from Sleeper
-  const { getLeagueDrafts } = await import("@/lib/sleeper");
-  const draftsResult = await getLeagueDrafts(season.leagueId);
+  // Fetch positional counts per franchise in a single query
+  const positionRows = await db
+    .select({
+      franchiseId: rosterPlayers.franchiseId,
+      position: players.position,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(rosterPlayers)
+    .innerJoin(players, eq(rosterPlayers.playerId, players.id))
+    .where(
+      and(
+        eq(rosterPlayers.seasonId, franchiseSeasonId),
+        sql`${players.position} IN ('QB', 'RB', 'WR', 'TE')`
+      )
+    )
+    .groupBy(rosterPlayers.franchiseId, players.position);
+
+  const rosterMap = new Map<string, PositionCounts>();
+  for (const row of positionRows) {
+    if (!rosterMap.has(row.franchiseId)) {
+      rosterMap.set(row.franchiseId, { QB: 0, RB: 0, WR: 0, TE: 0 });
+    }
+    const counts = rosterMap.get(row.franchiseId)!;
+    const pos = row.position as keyof PositionCounts;
+    if (pos in counts) {
+      counts[pos] = row.count;
+    }
+  }
+
+  // Build lookup maps: rosterId -> franchise info
+  const rosterToFranchise = new Map<string, typeof franchiseData[number]>();
+  for (const f of franchiseData) {
+    rosterToFranchise.set(f.rosterId, f);
+  }
+
+  // Try to get draft order and traded picks from Sleeper
+  const { getLeagueDrafts, getLeagueTradedPicks } = await import("@/lib/sleeper");
+  const [draftsResult, tradedResult] = await Promise.all([
+    getLeagueDrafts(season.leagueId),
+    getLeagueTradedPicks(season.leagueId),
+  ]);
+
+  // Build traded picks map: { "round-originalRosterId" -> currentOwnerRosterId }
+  // Only where owner differs from original roster (i.e., pick was traded)
+  const tradedPickMap = new Map<string, string>();
+  if ("data" in tradedResult) {
+    for (const pick of tradedResult.data) {
+      if (pick.owner_id !== pick.roster_id) {
+        tradedPickMap.set(`${pick.round}-${pick.roster_id}`, String(pick.owner_id));
+      }
+    }
+  }
 
   let orderedTeams: typeof franchiseData = [];
 
@@ -326,13 +404,11 @@ async function buildUpcomingDraftBoard(year: number) {
     );
 
     if (upcomingDraft?.draft_order) {
-      // draft_order: { userId: slot }
       const userToSlot = new Map<string, number>();
       for (const [userId, slot] of Object.entries(upcomingDraft.draft_order)) {
         userToSlot.set(userId, slot);
       }
 
-      // Sort franchises by their draft slot
       orderedTeams = [...franchiseData].sort((a, b) => {
         const slotA = userToSlot.get(a.userId) ?? 99;
         const slotB = userToSlot.get(b.userId) ?? 99;
@@ -350,36 +426,38 @@ async function buildUpcomingDraftBoard(year: number) {
 
   const totalTeams = orderedTeams.length;
   const numRounds = 3; // Standard rookie draft rounds
+  const emptyRoster: PositionCounts = { QB: 0, RB: 0, WR: 0, TE: 0 };
 
-  const teams: DraftBoardTeam[] = orderedTeams.map((f, idx) => ({
-    franchiseId: f.franchiseId,
-    franchiseName: f.franchiseName,
-    franchiseAbbreviation: f.franchiseAbbreviation,
-    franchiseBrandingColor: f.franchiseBrandingColor,
-    franchiseSlug: f.franchiseSlug,
-    draftPosition: idx,
-  }));
+  const picks: UpcomingPick[] = [];
 
-  const rounds: DraftBoardRound[] = [];
   for (let round = 1; round <= numRounds; round++) {
-    const cells: DraftBoardCell[] = [];
-    for (let col = 0; col < totalTeams; col++) {
-      // Snake: even rounds reverse order
-      const isEven = round % 2 === 0;
-      const pickInRound = isEven ? totalTeams - col : col + 1;
-      const pickNumber = (round - 1) * totalTeams + pickInRound;
+    for (let i = 0; i < totalTeams; i++) {
+      // Rookie drafts (under 10 rounds) are linear; startup drafts are snake
+      const isSnake = numRounds >= 10;
+      const teamIdx = isSnake && round % 2 === 0 ? totalTeams - 1 - i : i;
+      const originalTeam = orderedTeams[teamIdx];
+      const pickNumber = (round - 1) * totalTeams + i + 1;
 
-      cells.push({
+      // Check if this pick was traded: look up by round + original roster_id
+      const tradedToRosterId = tradedPickMap.get(`${round}-${originalTeam.rosterId}`);
+      const currentOwner = tradedToRosterId
+        ? rosterToFranchise.get(tradedToRosterId)
+        : null;
+
+      const displayTeam = currentOwner ?? originalTeam;
+      const originalFranchiseName = currentOwner ? (originalTeam.franchiseName ?? "Unknown") : null;
+
+      picks.push({
         pickNumber,
-        roundPickNumber: `${round}.${String(pickInRound).padStart(2, "0")}`,
-        playerName: null,
-        playerPosition: null,
-        franchiseId: null,
-        isEmpty: true,
+        round,
+        franchiseId: displayTeam.franchiseId,
+        franchiseName: displayTeam.franchiseName ?? "Unknown",
+        franchiseSlug: displayTeam.franchiseSlug,
+        roster: rosterMap.get(displayTeam.franchiseId) ?? emptyRoster,
+        originalFranchiseName,
       });
     }
-    rounds.push({ roundNumber: round, cells });
   }
 
-  return { teams, rounds, totalTeams };
+  return picks;
 }
