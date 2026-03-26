@@ -3,7 +3,6 @@ import "./globals.css";
 import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { SiteNav } from "@/components/site-nav";
-import { BottomTabBar } from "@/components/bottom-tab-bar";
 import { SiteFooter } from "@/components/site-footer";
 import { Analytics } from "@vercel/analytics/next";
 
@@ -33,13 +32,12 @@ export default function RootLayout({
         <SiteNav />
 
         <div className="mx-auto w-full max-w-[1200px] px-4 md:px-6 lg:px-8">
-          <main id="main-content" className="pb-20 md:pb-0">
+          <main id="main-content" className="pt-14 md:pt-0">
             {children}
           </main>
         </div>
 
         <SiteFooter />
-        <BottomTabBar />
         <Analytics />
       </body>
     </html>

@@ -15,6 +15,12 @@ function getRelativeTime(date: Date): string {
   return `${diffDay} day${diffDay !== 1 ? "s" : ""} ago`;
 }
 
+/** Stale threshold in ms, branched by data type */
+export function getStaleThresholdMs(dataType: string): number {
+  if (dataType === "daily") return 93_600_000; // 26 hours
+  return 7_200_000; // 2 hours (hourly and all other types)
+}
+
 function ClockIcon() {
   return (
     <svg
@@ -63,7 +69,7 @@ export async function SyncTimestamp({
   });
 
   const diffMs = Date.now() - completedAt.getTime();
-  const isStale = diffMs > 3600000; // > 1 hour
+  const isStale = diffMs > getStaleThresholdMs(dataType);
 
   return (
     <SyncTimestampClient
