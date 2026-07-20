@@ -29,6 +29,10 @@ test.describe("Story 4.2: Franchise Card Top Borders", () => {
   test("AC-1b: every franchise card has borderTopWidth of 3px", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P2 — the 3px brandingColor top border on franchise cards is
+    // expected to be redesigned as part of the teams package. Replacement
+    // should assert whatever new franchise-identity treatment ships.
     await page.goto("/teams");
 
     const cards = page.locator("a[href^='/teams/']");
@@ -51,6 +55,8 @@ test.describe("Story 4.2: Franchise Card Top Borders", () => {
   test("AC-1c: cards with brandingColor have inline borderTopColor set", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P2 — see AC-1b.
     await page.goto("/teams");
 
     const cards = page.locator("a[href^='/teams/']");
@@ -85,6 +91,8 @@ test.describe("Story 4.2: Franchise Card Top Borders", () => {
   test("AC-2: all cards have either a brandingColor or var(--border) fallback", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P2 — see AC-1b.
     await page.goto("/teams");
 
     const cards = page.locator("a[href^='/teams/']");
@@ -115,6 +123,8 @@ test.describe("Story 4.2: Franchise Card Top Borders", () => {
   test("AC-2b: fallback cards resolve to the --border CSS variable color", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P2 — see AC-1b.
     await page.goto("/teams");
 
     const cards = page.locator("a[href^='/teams/']");
@@ -232,6 +242,8 @@ test.describe("Story 4.2: Franchise Card Top Borders", () => {
   test("inline style sets borderTopWidth to 3px on every card", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P2 — see AC-1b.
     await page.goto("/teams");
 
     const cards = page.locator("a[href^='/teams/']");

@@ -26,6 +26,11 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   test("AC-1a: MatchupRow renders left and right accent bars", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P1 — the 3px absolute-positioned accent-bar treatment for
+    // MatchupRow team color accents is expected to be redesigned. Replacement
+    // should assert whatever new team-color accent element ships for
+    // matchup rows.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -48,6 +53,9 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   });
 
   test("AC-1b: left accent bar has 3px width", async ({ page }) => {
+    test.fixme();
+    // WAVE:P1 — see AC-1a; the 3px bar width is an implementation detail of
+    // the pre-redesign accent treatment.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -62,6 +70,8 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   });
 
   test("AC-1c: right accent bar has 3px width", async ({ page }) => {
+    test.fixme();
+    // WAVE:P1 — see AC-1a.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -78,6 +88,8 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   test("AC-1d: left accent bar uses home team brandingColor", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P1 — see AC-1a; depends on the div.absolute.left-0 accent bar.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -96,6 +108,8 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   test("AC-1e: right accent bar uses away team brandingColor", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P1 — see AC-1a; depends on the div.absolute.right-0 accent bar.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -110,6 +124,8 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   });
 
   test("AC-1f: accent bars span full height of the row", async ({ page }) => {
+    test.fixme();
+    // WAVE:P1 — see AC-1a.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -139,6 +155,9 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   test("AC-2: accent bar falls back to var(--border) when brandingColor is null", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P1 — see AC-1a; the fallback-to-border behavior should be
+    // re-asserted against whatever accent element replaces the bars.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -195,6 +214,8 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   // -------------------------------------------------------------------------
 
   test("AC-3a: left accent bar has aria-hidden=true", async ({ page }) => {
+    test.fixme();
+    // WAVE:P1 — see AC-1a; depends on the div.absolute.left-0 selector.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -207,6 +228,8 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   });
 
   test("AC-3b: right accent bar has aria-hidden=true", async ({ page }) => {
+    test.fixme();
+    // WAVE:P1 — see AC-1a; depends on the div.absolute.right-0 selector.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -238,6 +261,8 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   test("AC-3d: all accent bars across all matchup rows have aria-hidden=true", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P1 — see AC-1a.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );

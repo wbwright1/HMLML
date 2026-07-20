@@ -1,12 +1,22 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { Geist } from "next/font/google";
+import { Geist, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { SiteNav } from "@/components/site-nav";
 import { SiteFooter } from "@/components/site-footer";
 import { Analytics } from "@vercel/analytics/next";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
+const instrumentSerif = Instrument_Serif({
+  subsets: ["latin"],
+  weight: "400",
+  style: ["normal", "italic"],
+  variable: "--font-serif",
+});
+const jetbrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-mono",
+});
 
 export const metadata: Metadata = {
   title: "Harambe Memorial League Memorial League",
@@ -24,7 +34,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("font-sans antialiased", geist.variable)}>
+    <html
+      lang="en"
+      className={cn(
+        "font-sans antialiased",
+        geist.variable,
+        instrumentSerif.variable,
+        jetbrainsMono.variable
+      )}
+    >
       <body className="bg-background text-foreground min-h-screen">
         <a
           href="#main-content"
@@ -36,7 +54,10 @@ export default function RootLayout({
         <SiteNav />
 
         <div className="mx-auto w-full max-w-[1200px] px-4 md:px-6 lg:px-8">
-          <main id="main-content" className="pt-14 md:pt-8">
+          <main
+            id="main-content"
+            className="pt-14 md:pt-8 pb-[calc(env(safe-area-inset-bottom)+120px)] lg:pb-8"
+          >
             {children}
           </main>
         </div>

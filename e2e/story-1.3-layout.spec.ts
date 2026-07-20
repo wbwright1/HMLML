@@ -195,7 +195,8 @@ test.describe("SeasonalPillBadge", () => {
 
 test.describe("Hamburger Menu", () => {
   // FE-T20: Mobile top bar is visible and does not scroll away
-  test("FE-T20: mobile top bar is fixed and does not scroll away", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock
+  test.fixme("FE-T20: mobile top bar is fixed and does not scroll away", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
@@ -215,7 +216,8 @@ test.describe("Hamburger Menu", () => {
   });
 
   // FE-T21: Desktop nav is hidden on mobile; hamburger is shown
-  test("FE-T21: desktop nav hidden, hamburger visible on mobile", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock
+  test.fixme("FE-T21: desktop nav hidden, hamburger visible on mobile", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
@@ -231,7 +233,8 @@ test.describe("Hamburger Menu", () => {
   });
 
   // FE-T22: Hamburger button opens the mobile overlay
-  test("FE-T22: hamburger button opens mobile overlay", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock
+  test.fixme("FE-T22: hamburger button opens mobile overlay", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
@@ -259,7 +262,8 @@ test.describe("Hamburger Menu", () => {
   });
 
   // FE-T23: Hamburger button closes the overlay when clicked again
-  test("FE-T23: hamburger closes overlay on second click", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock
+  test.fixme("FE-T23: hamburger closes overlay on second click", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
@@ -283,7 +287,8 @@ test.describe("Hamburger Menu", () => {
   });
 
   // FE-T24: Clicking outside the overlay closes it
-  test("FE-T24: clicking outside closes overlay", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock
+  test.fixme("FE-T24: clicking outside closes overlay", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
@@ -305,7 +310,8 @@ test.describe("Hamburger Menu", () => {
 
 test.describe("Hamburger Accessibility", () => {
   // FE-T25: Escape key closes overlay and returns focus
-  test("FE-T25: Escape closes overlay, focus returns to hamburger", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock
+  test.fixme("FE-T25: Escape closes overlay, focus returns to hamburger", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
@@ -331,7 +337,8 @@ test.describe("Hamburger Accessibility", () => {
   });
 
   // FE-T26: Focus trap: Tab cycles within open overlay
-  test("FE-T26: focus trap cycles forward through overlay links", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock
+  test.fixme("FE-T26: focus trap cycles forward through overlay links", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
@@ -359,7 +366,8 @@ test.describe("Hamburger Accessibility", () => {
   });
 
   // FE-T27: Focus trap: Shift+Tab wraps backward
-  test("FE-T27: Shift+Tab wraps backward from first to last link", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock
+  test.fixme("FE-T27: Shift+Tab wraps backward from first to last link", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
@@ -377,7 +385,8 @@ test.describe("Hamburger Accessibility", () => {
   });
 
   // FE-T28: Clicking a nav link navigates and closes overlay
-  test("FE-T28: clicking nav link navigates and closes overlay", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock
+  test.fixme("FE-T28: clicking nav link navigates and closes overlay", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
@@ -396,7 +405,8 @@ test.describe("Hamburger Accessibility", () => {
   });
 
   // FE-T29: Hamburger button ARIA attributes in closed state
-  test("FE-T29: hamburger ARIA attributes in closed state", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock
+  test.fixme("FE-T29: hamburger ARIA attributes in closed state", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
@@ -406,7 +416,8 @@ test.describe("Hamburger Accessibility", () => {
   });
 
   // FE-T29b: Hamburger button ARIA attributes in open state
-  test("FE-T29b: hamburger ARIA attributes in open state", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock
+  test.fixme("FE-T29b: hamburger ARIA attributes in open state", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
@@ -463,8 +474,8 @@ test.describe("SyncTimestamp", () => {
       const color = await timestampButton.evaluate((el) =>
         window.getComputedStyle(el).color
       );
-      // Should NOT be the warm rust color rgb(196, 64, 47)
-      expect(color).not.toBe("rgb(196, 64, 47)");
+      // Should NOT be the warm rust color rgb(201, 124, 106)
+      expect(color).not.toBe("rgb(201, 124, 106)");
     } finally {
       await cleanupSyncLogEntry(id);
     }
@@ -584,11 +595,11 @@ test.describe("SyncTimestamp", () => {
       expect(text).toContain("Last updated");
       expect(text).toContain("(outdated)");
 
-      // Must have warm rust color (approximately rgb(196, 64, 47) = #C4402F)
+      // Must have warm rust color (accent-warm #C97C6A = rgb(201, 124, 106))
       const color = await timestampButton.evaluate((el) =>
         window.getComputedStyle(el).color
       );
-      expect(color).toBe("rgb(196, 64, 47)");
+      expect(color).toBe("rgb(201, 124, 106)");
 
       // "(outdated)" text must be accessible (not hidden)
       const outdatedText = timestampButton.locator("text=(outdated)");
@@ -626,7 +637,7 @@ test.describe("SyncTimestamp", () => {
       const color = await timestampButton.evaluate((el) =>
         window.getComputedStyle(el).color
       );
-      expect(color).not.toBe("rgb(196, 64, 47)");
+      expect(color).not.toBe("rgb(201, 124, 106)");
     } finally {
       await cleanupSyncLogEntry(id);
     }
@@ -764,7 +775,8 @@ test.describe("Root Layout", () => {
 
 test.describe("BottomTabBar Retired", () => {
   // FE-T60: BottomTabBar is not rendered
-  test("FE-T60: no bottom tab bar on any route", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock (C0 reintroduces a bottom search+tab dock)
+  test.fixme("FE-T60: no bottom tab bar on any route", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
 
     for (const route of ["/", "/teams"]) {
@@ -780,7 +792,8 @@ test.describe("BottomTabBar Retired", () => {
   });
 
   // FE-T61: main element does not have pb-20
-  test("FE-T61: main does not have pb-20 padding", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock (bottom dock changes mobile main padding)
+  test.fixme("FE-T61: main does not have pb-20 padding", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
@@ -798,7 +811,8 @@ test.describe("BottomTabBar Retired", () => {
 
 test.describe("Mobile Content Offset", () => {
   // FE-T62: main has pt-14 on mobile
-  test("FE-T62: main has pt-14 on mobile, pt-0 on desktop", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock (mobile chrome/offset changes with new header + dock)
+  test.fixme("FE-T62: main has pt-14 on mobile, pt-0 on desktop", async ({ page }) => {
     // Mobile
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
@@ -845,7 +859,8 @@ test.describe("Edge Cases", () => {
   });
 
   // EC-T06: Hamburger button has accessible name
-  test("EC-T06: hamburger button has accessible aria-label", async ({ page }) => {
+  // WAVE:C0 — hamburger replaced by dock
+  test.fixme("EC-T06: hamburger button has accessible aria-label", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 

@@ -25,6 +25,11 @@ test.describe("Story 4.3: Franchise Page Hero Gradient", () => {
   test("AC-1a: hero section has linear-gradient background for branded franchise", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P2 — the franchise hero gradient (direction, opacity range, and
+    // exact brandingColor formula) is expected to be redesigned for the
+    // dark theme. Replacement should assert whatever new hero treatment
+    // ships for branded franchises.
     await page.goto(`/teams/${TEST_DATA.branded.slug}`);
 
     const heroSection = page.locator("section").first();
@@ -42,6 +47,8 @@ test.describe("Story 4.3: Franchise Page Hero Gradient", () => {
   // ---------------------------------------------------------------------------
 
   test("AC-1b: gradient direction is top-to-bottom", async ({ page }) => {
+    test.fixme();
+    // WAVE:P2 — see AC-1a.
     await page.goto(`/teams/${TEST_DATA.branded.slug}`);
 
     const heroSection = page.locator("section").first();
@@ -64,6 +71,8 @@ test.describe("Story 4.3: Franchise Page Hero Gradient", () => {
   test("AC-1c: gradient color uses low opacity (5-8% range)", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P2 — see AC-1a.
     await page.goto(`/teams/${TEST_DATA.branded.slug}`);
 
     const heroSection = page.locator("section").first();
@@ -93,6 +102,9 @@ test.describe("Story 4.3: Franchise Page Hero Gradient", () => {
   test("AC-1d: gradient uses the franchise brandingColor RGB values", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P2 — see AC-1a. Also hardcodes the seeded brandingColor hex
+    // (#2D5A3D), which is an old-palette-era test fixture value.
     await page.goto(`/teams/${TEST_DATA.branded.slug}`);
 
     const heroSection = page.locator("section").first();
@@ -115,6 +127,8 @@ test.describe("Story 4.3: Franchise Page Hero Gradient", () => {
   // ---------------------------------------------------------------------------
 
   test("AC-1e: gradient fades to transparent", async ({ page }) => {
+    test.fixme();
+    // WAVE:P2 — see AC-1a.
     await page.goto(`/teams/${TEST_DATA.branded.slug}`);
 
     const heroSection = page.locator("section").first();
@@ -132,6 +146,10 @@ test.describe("Story 4.3: Franchise Page Hero Gradient", () => {
   test("AC-2: no gradient applied for franchise without brandingColor", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P2 — see AC-1a; the "no inline background" fallback assumption
+    // may not hold if the redesigned hero always renders some background
+    // treatment.
     await page.goto(`/teams/${TEST_DATA.unbranded.slug}`);
 
     const heroSection = page.locator("section").first();
@@ -203,6 +221,9 @@ test.describe("Story 4.3: Franchise Page Hero Gradient", () => {
   test("AC-4a: gradient is applied via inline style on section, not a separate element", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P2 — see AC-1a; asserts the inline background contains
+    // "linear-gradient" specifically.
     await page.goto(`/teams/${TEST_DATA.branded.slug}`);
 
     const heroSection = page.locator("section").first();

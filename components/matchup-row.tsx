@@ -38,7 +38,7 @@ export function MatchupRow({ matchup, variant = "final" }: MatchupRowProps) {
 
   return (
     <div
-      className="relative flex items-center gap-3 rounded-xl border border-border bg-card p-4 transition-colors hover:border-border/80 overflow-hidden"
+      className="relative flex items-center gap-3 rounded-[14px] border border-border bg-surface p-4 transition-colors hover:border-border-strong overflow-hidden"
       role="group"
       aria-label={ariaLabel}
     >
@@ -65,8 +65,8 @@ export function MatchupRow({ matchup, variant = "final" }: MatchupRowProps) {
           </div>
           {variant !== "preview" && (
             <span
-              className={`tabular-nums text-lg shrink-0 ${
-                homeWins ? "font-bold text-foreground" : "font-normal text-muted-foreground"
+              className={`font-mono tabular-nums text-lg shrink-0 ${
+                homeWins ? "font-bold text-text-primary" : "font-normal text-text-tertiary"
               }`}
             >
               {homeScore.toFixed(1)}
@@ -78,15 +78,11 @@ export function MatchupRow({ matchup, variant = "final" }: MatchupRowProps) {
       {/* Center Divider */}
       <div className="flex flex-col items-center justify-center shrink-0 w-12">
         {variant === "preview" ? (
-          <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-            vs
-          </span>
+          <span className="text-kicker">vs</span>
         ) : variant === "live" ? (
           <LiveIndicator />
         ) : (
-          <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium">
-            Final
-          </span>
+          <span className="text-kicker">Final</span>
         )}
       </div>
 
@@ -95,8 +91,8 @@ export function MatchupRow({ matchup, variant = "final" }: MatchupRowProps) {
         <div className="flex items-center gap-3">
           {variant !== "preview" && (
             <span
-              className={`tabular-nums text-lg shrink-0 ${
-                awayWins ? "font-bold text-foreground" : "font-normal text-muted-foreground"
+              className={`font-mono tabular-nums text-lg shrink-0 ${
+                awayWins ? "font-bold text-text-primary" : "font-normal text-text-tertiary"
               }`}
             >
               {awayScore.toFixed(1)}

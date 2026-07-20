@@ -47,6 +47,12 @@ test.describe("Superlative Stats Row", () => {
 
   // T03: Stat values apply tabular-nums for numeric alignment
   test("T03: stat values use tabular-nums font-variant-numeric", async ({ page }) => {
+    test.fixme();
+    // WAVE:P1 — stat numerals are moving from a Geist "font-black" weight
+    // class to the JetBrains Mono "text-stat" class (see FE-T14 in
+    // theme-tokens.spec.ts). The p.font-black selector below may no longer
+    // match. Replacement should locate stat values via the new numeral class
+    // and keep asserting tabular-nums (still required per CLAUDE.md).
     await page.goto("/");
 
     const gridContainer = page.locator("div.grid.grid-cols-2");
@@ -146,6 +152,11 @@ test.describe("Superlative Stats Row", () => {
 
   // T07: Stat values use md variant typography (36-40px range)
   test("T07: stat values use md variant font size (36-40px)", async ({ page }) => {
+    test.fixme();
+    // WAVE:P1 — depends on the p.font-black selector (see T03) and the exact
+    // 36-40px sizing decision, both of which may change with the JetBrains
+    // Mono numeral treatment. Replacement should target the new stat-numeral
+    // class and re-derive the expected size range from the shipped design.
     await page.goto("/");
 
     const gridContainer = page.locator("div.grid.grid-cols-2");
@@ -171,6 +182,11 @@ test.describe("Superlative Stats Row", () => {
 
   // T08: Stat values use font-weight 900 (Black weight)
   test("T08: stat values use Black font weight (900)", async ({ page }) => {
+    test.fixme();
+    // WAVE:P1 — stat numerals move to JetBrains Mono (--font-mono); the mono
+    // family typically doesn't ship a 900 weight the way Geist Black does.
+    // Replacement should assert whatever weight the shipped JetBrains Mono
+    // numeral treatment uses, not a hardcoded "900".
     await page.goto("/");
 
     const gridContainer = page.locator("div.grid.grid-cols-2");

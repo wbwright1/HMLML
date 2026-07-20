@@ -1,3 +1,4 @@
+/** @deprecated Replaced by components/live-pill.tsx — deleted in Wave 1 (C0 chrome package). */
 import { getNflState } from "@/lib/queries/nfl-state";
 import { getLatestSeason } from "@/lib/queries/matchups";
 

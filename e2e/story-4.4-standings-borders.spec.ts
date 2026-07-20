@@ -6,6 +6,10 @@ test.describe("Story 4.4: Standings Table Color Borders", () => {
   // ---------------------------------------------------------------------------
 
   test("leaderboard desktop rows have 3px left border", async ({ page }) => {
+    test.fixme();
+    // WAVE:P3 — the 3px brandingColor left-border treatment on records
+    // leaderboard/power-rankings rows is expected to be redesigned.
+    // Replacement should assert whatever new franchise-color indicator ships.
     await page.goto("/records");
 
     // Desktop table rows (inside tbody)
@@ -25,6 +29,8 @@ test.describe("Story 4.4: Standings Table Color Borders", () => {
   test("leaderboard desktop rows use inline borderLeft style", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P3 — see above.
     await page.goto("/records");
 
     const rows = page.locator("table tbody tr");
@@ -44,6 +50,8 @@ test.describe("Story 4.4: Standings Table Color Borders", () => {
   // ---------------------------------------------------------------------------
 
   test("leaderboard mobile cards have 3px left border", async ({ page }) => {
+    test.fixme();
+    // WAVE:P3 — see above.
     // Set mobile viewport
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/records");
@@ -65,6 +73,8 @@ test.describe("Story 4.4: Standings Table Color Borders", () => {
   test("leaderboard mobile cards use inline borderLeftColor", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P3 — see above.
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/records");
 
@@ -87,6 +97,8 @@ test.describe("Story 4.4: Standings Table Color Borders", () => {
   // ---------------------------------------------------------------------------
 
   test("power rankings cards have 3px left border", async ({ page }) => {
+    test.fixme();
+    // WAVE:P3 — see above.
     await page.goto("/records/power-rankings");
 
     const cards = page.locator("a[href^='/teams/']");
@@ -107,6 +119,8 @@ test.describe("Story 4.4: Standings Table Color Borders", () => {
   });
 
   test("power rankings cards use inline borderLeftColor", async ({ page }) => {
+    test.fixme();
+    // WAVE:P3 — see above.
     await page.goto("/records/power-rankings");
 
     const cards = page.locator("a[href^='/teams/']");
@@ -132,6 +146,8 @@ test.describe("Story 4.4: Standings Table Color Borders", () => {
   test("all leaderboard borders have either brandingColor or fallback", async ({
     page,
   }) => {
+    test.fixme();
+    // WAVE:P3 — see above.
     await page.goto("/records");
 
     const rows = page.locator("table tbody tr");

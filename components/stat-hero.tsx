@@ -23,18 +23,18 @@ export function StatHero({
 }: StatHeroProps) {
   return (
     <figure className="flex flex-col items-center text-center" role="group">
-      {badge && (
-        <span className="text-caption uppercase tracking-widest text-primary mb-2">
-          {badge}
-        </span>
-      )}
+      {badge && <span className="text-kicker mb-2">{badge}</span>}
 
-      <p className={`font-black tabular-nums ${valueSizeMap[variant]}`}>{value}</p>
+      <p
+        className={`font-mono font-bold tabular-nums text-text-primary ${valueSizeMap[variant]}`}
+      >
+        {value}
+      </p>
 
       <figcaption className="mt-1 space-y-0.5">
-        <p className="text-body-sm font-medium text-muted-foreground">{label}</p>
+        <p className="text-body-sm font-medium text-text-tertiary">{label}</p>
         {context && (
-          <p className="text-caption text-muted-foreground">{context}</p>
+          <p className="text-caption text-text-tertiary">{context}</p>
         )}
       </figcaption>
     </figure>

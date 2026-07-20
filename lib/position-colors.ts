@@ -1,9 +1,12 @@
 // ---------------------------------------------------------------------------
-// Position Color System
+// Position Color System — Command Center palette
 // Canonical color map for all position-based styling across the site.
-// Two variants: "cell" (vivid bg, white text) and "badge" (tinted bg, colored text).
-// All contrast ratios verified against WCAG 2.1 AA (4.5:1 minimum).
-// No red/purple pairings. See Story 9.3 spec for full rationale.
+// Two variants:
+//   "cell"  — vivid color background with dark ink (#1A1613) text
+//   "badge" — vivid color text on a 14%-alpha tint of the same color
+// All six chip colors are light enough that dark ink on them clears WCAG 2.1 AA
+// (4.5:1); the vivid color as badge text over the dark canvas also clears 4.5:1
+// (QB is the tightest at ~4.66:1). No red/purple pairings.
 // ---------------------------------------------------------------------------
 
 export type PositionColorVariant = "cell" | "badge";
@@ -11,45 +14,50 @@ export type PositionColorVariant = "cell" | "badge";
 export interface PositionColorConfig {
   cell: {
     bg: string; // CSS hex color for full-bleed cell background
-    text: string; // Always '#FFFFFF' for cell variant
+    text: string; // Dark ink '#1A1613' for cell variant (dark-on-color)
   };
   badge: {
-    bg: string; // CSS hex color for badge background tint
-    text: string; // CSS hex color for badge text
+    bg: string; // 14%-alpha tint of the position color
+    text: string; // The vivid position color
   };
 }
 
-export const POSITION_COLORS: Record<string, PositionColorConfig> = {
-  QB: {
-    cell: { bg: "#C45D3E", text: "#FFFFFF" }, // --accent-warm
-    badge: { bg: "#FDF0EC", text: "#9A4428" },
-  },
-  RB: {
-    cell: { bg: "#2D5A3D", text: "#FFFFFF" }, // --accent-green
-    badge: { bg: "#E8F0EB", text: "#1E3D2A" },
-  },
-  WR: {
-    cell: { bg: "#5B7B9D", text: "#FFFFFF" }, // muted slate blue, warm undertone
-    badge: { bg: "#EDF1F5", text: "#3E566D" },
-  },
-  TE: {
-    cell: { bg: "#B8860B", text: "#FFFFFF" }, // --accent-gold
-    badge: { bg: "#FDF6E3", text: "#7A5A07" },
-  },
-  K: {
-    cell: { bg: "#8A8480", text: "#FFFFFF" },
-    badge: { bg: "#F5F2EE", text: "#5A5652" },
-  },
-  DEF: {
-    cell: { bg: "#6A6460", text: "#FFFFFF" },
-    badge: { bg: "#ECEAE7", text: "#3E3A38" },
-  },
+const QB: PositionColorConfig = {
+  cell: { bg: "#C97C6A", text: "#1A1613" },
+  badge: { bg: "rgba(201,124,106,0.14)", text: "#C97C6A" },
+};
+const RB: PositionColorConfig = {
+  cell: { bg: "#8FBF7F", text: "#1A1613" },
+  badge: { bg: "rgba(143,191,127,0.14)", text: "#8FBF7F" },
+};
+const WR: PositionColorConfig = {
+  cell: { bg: "#E2B858", text: "#1A1613" },
+  badge: { bg: "rgba(226,184,88,0.14)", text: "#E2B858" },
+};
+const TE: PositionColorConfig = {
+  cell: { bg: "#7FA8C9", text: "#1A1613" },
+  badge: { bg: "rgba(127,168,201,0.14)", text: "#7FA8C9" },
+};
+const K: PositionColorConfig = {
+  cell: { bg: "#9B8FC9", text: "#1A1613" },
+  badge: { bg: "rgba(155,143,201,0.14)", text: "#9B8FC9" },
+};
+const DEF: PositionColorConfig = {
+  cell: { bg: "#98917F", text: "#1A1613" },
+  badge: { bg: "rgba(152,145,127,0.14)", text: "#98917F" },
 };
 
-export const DEFAULT_POSITION_COLOR: PositionColorConfig = {
-  cell: { bg: "#8A8480", text: "#FFFFFF" },
-  badge: { bg: "#F5F2EE", text: "#5A5652" },
+export const POSITION_COLORS: Record<string, PositionColorConfig> = {
+  QB,
+  RB,
+  WR,
+  TE,
+  K,
+  DEF,
+  DST: DEF, // Sleeper uses "DEF"; some sources use "DST" — same treatment
 };
+
+export const DEFAULT_POSITION_COLOR: PositionColorConfig = DEF;
 
 /** Get color config for a position, with fallback for unknown/null positions. */
 export function getPositionColor(
