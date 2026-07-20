@@ -91,10 +91,10 @@ export function SeasonSelector({
     <div className="relative">
       {/* Fade indicators for horizontal scroll — only visible when content overflows */}
       {canScrollLeft && (
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-background to-transparent z-10" />
+        <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-canvas to-transparent z-10" />
       )}
       {canScrollRight && (
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-background to-transparent z-10" />
+        <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-canvas to-transparent z-10" />
       )}
       <div
         ref={tablistRef}
@@ -112,10 +112,10 @@ export function SeasonSelector({
             tabIndex={isActive ? 0 : -1}
             onClick={() => onSelect(item.value)}
             onKeyDown={handleKeyDown}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+            className={`shrink-0 rounded-full px-4 py-1.5 text-body-sm font-medium font-mono tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
               isActive
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                ? "bg-accent-gold-light text-accent-gold font-bold"
+                : "text-text-tertiary hover:text-text-primary hover:bg-surface-muted"
             }`}
           >
             {item.label}

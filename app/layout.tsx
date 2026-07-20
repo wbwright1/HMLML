@@ -54,10 +54,7 @@ export default function RootLayout({
         <SiteNav />
 
         <div className="mx-auto w-full max-w-[1200px] px-4 md:px-6 lg:px-8">
-          <main
-            id="main-content"
-            className="pt-14 md:pt-8 pb-[calc(env(safe-area-inset-bottom)+120px)] lg:pb-8"
-          >
+          <main id="main-content" className="pt-6 pb-8">
             {children}
           </main>
         </div>

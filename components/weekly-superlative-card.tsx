@@ -36,11 +36,11 @@ export function WeeklySuperlativeCard({
       href={`/seasons/${seasonYear}/week/${week}`}
       className={`block rounded-xl border border-border p-6 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${bgClass}`}
     >
-      <p className={`text-caption uppercase tracking-widest mb-2 ${accentClass}`}>
+      <p className={`text-kicker mb-2 ${accentClass}`}>
         {label}
       </p>
 
-      <p className="text-h2 tabular-nums text-text-primary mb-1">{stat}</p>
+      <p className="text-stat text-3xl text-text-primary mb-1">{stat}</p>
 
       <p className="text-body-sm text-text-secondary">{context}</p>
 

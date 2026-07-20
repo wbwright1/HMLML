@@ -43,7 +43,7 @@ export default async function SeasonsPage() {
   return (
     <>
       <PageSection label="Year by Year" title="League History">
-        <p className="text-body-lg text-muted-foreground max-w-prose">
+        <p className="text-body-lg text-text-secondary max-w-prose">
           A season-by-season look back at the Harambe Memorial League Memorial League —
           standings, champions, and the stories that shaped each year.
         </p>
@@ -60,23 +60,26 @@ export default async function SeasonsPage() {
             season.totalRosters !== null &&
             season.totalRosters > 0 &&
             season.totalRosters < 12;
+          const isChampion = Boolean(season.championName);
 
           return (
             <ScrollReveal key={season.id} delay={index * 60}>
               <Link
                 href={`/seasons/${season.seasonYear}`}
-                className="group block rounded-xl border border-border bg-card p-6 transition-colors hover:border-primary/40 hover:bg-card/80"
+                className={`group block rounded-lg border p-6 transition-colors duration-150 ${
+                  isChampion
+                    ? "border-accent-gold/20 bg-accent-gold-light hover:border-accent-gold/40"
+                    : "border-border bg-surface hover:border-border-strong"
+                }`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center gap-3">
-                      <h3 className="text-h3 group-hover:text-primary transition-colors">
+                      <h3 className="text-h3 group-hover:text-accent-gold transition-colors">
                         {season.seasonYear}
                       </h3>
                       {isLegacy && (
-                        <span className="text-xs uppercase tracking-wider text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
-                          Legacy Era
-                        </span>
+                        <SuperlativeBadge text="Legacy Era" variant="neutral" />
                       )}
                       {season.status === "complete" && (
                         <SuperlativeBadge text="Complete" variant="green" />
@@ -90,14 +93,14 @@ export default async function SeasonsPage() {
                     </div>
 
                     {season.championName ? (
-                      <p className="text-body text-muted-foreground">
+                      <p className="text-body text-text-tertiary">
                         Champion:{" "}
-                        <span className="text-foreground font-semibold">
+                        <span className="text-accent-gold font-bold">
                           {season.championName}
                         </span>
                       </p>
                     ) : season.status === "complete" ? (
-                      <p className="text-body text-muted-foreground">
+                      <p className="text-body text-text-tertiary">
                         Champion data not available
                       </p>
                     ) : null}
@@ -105,7 +108,7 @@ export default async function SeasonsPage() {
 
                   <div className="text-right shrink-0">
                     {season.totalRosters && (
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-body-sm font-mono tabular-nums text-text-tertiary">
                         {season.totalRosters} teams
                       </p>
                     )}

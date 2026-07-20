@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
+import { FranchiseLogo } from "@/components/franchise-logo";
 import { ChampionshipStars } from "@/components/championship-stars";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -193,12 +194,12 @@ function MatchupCard({
   return (
     <Link
       href={`/seasons/${seasonYear}/week/${matchup.week}`}
-      className={`block w-full rounded-xl border bg-card transition-colors hover:bg-muted/20 ${
-        isChamp ? "border-primary/40 ring-1 ring-primary/20" : "border-border"
+      className={`block w-full rounded-lg border bg-surface transition-colors hover:border-border-strong overflow-hidden ${
+        isChamp ? "border-accent-gold/30 ring-1 ring-accent-gold/20" : "border-border"
       }`}
     >
       <TeamRow team={homeTeam} isWinner={homeWins} accent={isChamp ? "championship" : "default"} />
-      <div className="h-px bg-border" />
+      <div className="h-px bg-divider" />
       <TeamRow team={awayTeam} isWinner={awayWins} accent={isChamp ? "championship" : "default"} />
     </Link>
   );
@@ -215,9 +216,9 @@ function TeamRow({
 }) {
   const bg =
     isWinner && accent === "championship"
-      ? "bg-primary/5"
+      ? "bg-accent-gold-light"
       : isWinner
-        ? "bg-muted/40"
+        ? "bg-surface-muted"
         : "";
 
   return (
@@ -232,8 +233,8 @@ function TeamRow({
         variant="compact"
       />
       <span
-        className={`tabular-nums text-sm shrink-0 ml-auto ${
-          isWinner ? "font-bold" : "text-muted-foreground"
+        className={`font-mono tabular-nums text-sm shrink-0 ml-auto ${
+          isWinner ? "font-bold text-text-primary" : "text-text-tertiary"
         }`}
       >
         {team.points > 0 ? team.points.toFixed(1) : "-"}
@@ -252,7 +253,7 @@ function PodiumEntry({
   badge: { text: string; variant: "gold" | "silver" | "green" | "neutral" | "brown" };
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-card px-4 py-3">
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3">
       <FranchiseIdentity
         franchise={{
           slug: franchise.slug,
@@ -263,7 +264,7 @@ function PodiumEntry({
         variant="compact"
       />
       <div className="flex items-center gap-2 shrink-0 ml-auto">
-        <span className="text-xs text-muted-foreground hidden sm:inline">
+        <span className="text-caption text-text-tertiary hidden sm:inline">
           {label}
         </span>
         <SuperlativeBadge text={badge.text} variant={badge.variant} />
@@ -343,7 +344,7 @@ export default async function PlayoffBracketPage({
         <div className="flex flex-wrap items-center gap-4">
           <Link
             href={`/seasons/${year}`}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
           >
             &larr; {year} Season
           </Link>
@@ -352,11 +353,21 @@ export default async function PlayoffBracketPage({
         {/* Champion hero */}
         {championInfo && (
           <ScrollReveal>
-            <div className="mt-6 rounded-xl border border-primary/30 bg-primary/5 p-6 text-center space-y-2">
-              <p className="text-caption uppercase tracking-widest text-primary mb-1">
+            <div className="mt-6 rounded-lg border border-gold/30 bg-gold/5 p-8 text-center space-y-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold mb-1">
                 Champion
               </p>
-              <p className="text-h3">{championInfo.name}</p>
+              <div className="flex justify-center">
+                <FranchiseLogo
+                  slug={championInfo.slug}
+                  name={championInfo.name}
+                  abbreviation={championInfo.abbreviation ?? undefined}
+                  brandingColor={championInfo.brandingColor ?? undefined}
+                  size="xl"
+                  decorative
+                />
+              </div>
+              <p className="text-h1 text-gold">{championInfo.name}</p>
               <ChampionshipStars count={1} variant="hero" />
             </div>
           </ScrollReveal>
@@ -380,11 +391,11 @@ export default async function PlayoffBracketPage({
             <ScrollReveal delay={80}>
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-xs font-semibold uppercase tracking-wider text-primary">
+                  <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-gold">
                     Championship
                   </h3>
-                  <span className="text-xs text-muted-foreground/50">
-                    Week {championshipMatchup.week}
+                  <span className="text-caption text-text-tertiary">
+                    Week <span className="font-mono tabular-nums">{championshipMatchup.week}</span>
                   </span>
                   <SuperlativeBadge text="Title Game" variant="gold" />
                 </div>
@@ -425,20 +436,20 @@ export default async function PlayoffBracketPage({
           {toiletBowlInfo && (
             <ScrollReveal delay={240}>
               <div className="flex items-center gap-3 mb-4">
-                <div className="h-px flex-1 bg-border" />
-                <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap">
+                <div className="h-px flex-1 bg-divider" />
+                <h2 className="text-kicker whitespace-nowrap">
                   Toilet Bowl
                 </h2>
-                <div className="h-px flex-1 bg-border" />
+                <div className="h-px flex-1 bg-divider" />
               </div>
-              <div className="rounded-xl border border-border bg-card p-6 text-center space-y-2 max-w-lg">
+              <div className="rounded-lg border border-accent-warm/25 bg-accent-warm-light p-6 text-center space-y-2 max-w-lg">
                 <div className="text-3xl mb-1" aria-hidden="true">
                   🚽
                 </div>
-                <p className="text-caption uppercase tracking-widest text-muted-foreground">
+                <p className="text-caption text-accent-warm">
                   Last Place
                 </p>
-                <p className="text-h3">{toiletBowlInfo.name}</p>
+                <p className="text-h3 text-text-primary">{toiletBowlInfo.name}</p>
                 <SuperlativeBadge text="Toilet Bowl" variant="brown" />
               </div>
             </ScrollReveal>

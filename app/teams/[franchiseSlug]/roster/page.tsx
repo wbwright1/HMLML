@@ -1,12 +1,16 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
-import { FranchiseIdentity } from "@/components/franchise-identity";
+import { FranchiseLogo } from "@/components/franchise-logo";
+import { FranchisePicker } from "@/components/franchise-picker";
 import { MobileTableView } from "@/components/mobile-table-view";
 import { PositionBadge } from "@/components/position-badge";
+import { PlayerStatusBadge } from "@/components/player-status-badge";
+import { PlayerHeadshot } from "@/components/player-headshot";
+import { NflTeamLogo } from "@/components/nfl-team-logo";
 import { EmptyState } from "@/components/empty-state";
 import {
+  getAllFranchises,
   getFranchiseBySlug,
   getFranchiseRoster,
 } from "@/lib/queries/franchises";
@@ -49,21 +53,6 @@ function getPositionSort(position: string | null): number {
   return positionOrder[position ?? ""] ?? 99;
 }
 
-// Slot display labels and sort order
-const slotLabels: Record<string, string> = {
-  starter: "Starters",
-  bench: "Bench",
-  ir: "Injured Reserve",
-  taxi: "Taxi Squad",
-};
-
-const slotOrder: Record<string, number> = {
-  starter: 1,
-  bench: 2,
-  taxi: 3,
-  ir: 4,
-};
-
 function getPlayerName(player: {
   fullName: string | null;
   firstName: string | null;
@@ -79,6 +68,91 @@ function getPlayerName(player: {
 type RosterPlayer = NonNullable<
   Awaited<ReturnType<typeof getFranchiseRoster>>
 >[number];
+
+function RosterSection({
+  label,
+  players,
+}: {
+  label: string;
+  players: RosterPlayer[];
+}) {
+  if (players.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <h2 className="text-kicker">
+        {label}
+        <span className="ml-2 text-text-muted normal-case tracking-normal font-normal">
+          ({players.length})
+        </span>
+      </h2>
+      <div className="card-surface p-4 md:p-5">
+        <MobileTableView
+          headers={["Slot", "Player", "Team", "Status", "Age", "Exp"]}
+          keyColumns={[0, 1, 2, 3]}
+          rows={players.map((player) => {
+            const name = getPlayerName(player);
+            return [
+              <PositionBadge key="slot" position={player.position} />,
+              <div key="player" className="flex items-center gap-2.5">
+                {player.position === "DEF" ? (
+                  <NflTeamLogo teamAbbrev={player.nflTeam} size={28} />
+                ) : (
+                  <PlayerHeadshot
+                    playerId={player.playerId}
+                    name={name}
+                    size={28}
+                    nflTeam={player.nflTeam}
+                  />
+                )}
+                <span className="font-medium text-text-primary truncate">
+                  {name}
+                </span>
+              </div>,
+              <span key="team" className="text-text-secondary">
+                {player.nflTeam ?? "FA"}
+              </span>,
+              <PlayerStatusBadge
+                key="status"
+                status={player.status}
+                injuryStatus={player.injuryStatus}
+              />,
+              <span key="age" className="font-mono tabular-nums text-text-secondary">
+                {player.age ?? "—"}
+              </span>,
+              <span key="exp" className="font-mono tabular-nums text-text-secondary">
+                {player.yearsExp ?? "—"}
+              </span>,
+            ];
+          })}
+        />
+      </div>
+    </div>
+  );
+}
+
+function SnapshotRow({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="flex items-center justify-between py-2.5 border-t border-divider first:border-t-0 first:pt-0">
+      <span className="text-body-sm text-text-tertiary">{label}</span>
+      <span
+        className={`text-body-sm font-mono font-semibold tabular-nums text-text-primary ${
+          valueClassName ?? ""
+        }`}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
 
 export default async function RosterPage({ params }: RosterPageProps) {
   const { franchiseSlug } = await params;
@@ -108,112 +182,152 @@ export default async function RosterPage({ params }: RosterPageProps) {
     }
   }
 
-  // Group roster by slot, sorted within each group by position
-  const groupedRoster = new Map<string, RosterPlayer[]>();
-  if (roster) {
-    const sorted = [...roster].sort(
-      (a, b) => getPositionSort(a.position) - getPositionSort(b.position)
-    );
-
-    for (const player of sorted) {
-      const slot = player.slot ?? "bench";
-      if (!groupedRoster.has(slot)) {
-        groupedRoster.set(slot, []);
-      }
-      groupedRoster.get(slot)!.push(player);
-    }
+  let allFranchises: Awaited<ReturnType<typeof getAllFranchises>> = null;
+  try {
+    allFranchises = await getAllFranchises();
+  } catch {
+    // DB may not be connected in dev
   }
 
-  // Sort slot groups by priority
-  const slotGroups = [...groupedRoster.entries()].sort(
-    ([a], [b]) => (slotOrder[a] ?? 5) - (slotOrder[b] ?? 5)
-  );
+  const sortedRoster = roster
+    ? [...roster].sort(
+        (a, b) => getPositionSort(a.position) - getPositionSort(b.position)
+      )
+    : [];
 
-  // Determine championship count for identity display
-  const championships = franchise.seasonHistory.filter(
-    (s) => s.playoffResult === "champion"
-  ).length;
+  const starters = sortedRoster.filter((p) => (p.slot ?? "bench") === "starter");
+  const benchAndIr = sortedRoster.filter((p) => (p.slot ?? "bench") !== "starter");
 
-  const seasonYear = latestSeason?.seasonYear;
+  const pointsFor = latestSeason?.pointsScored ?? 0;
+  const pointsAgainst = latestSeason?.pointsAgainst ?? null;
+  const pointDiff =
+    pointsAgainst != null ? pointsFor - pointsAgainst : null;
 
   return (
-    <>
-      <section className="py-8 md:py-12 space-y-6">
-        <Link
-          href={`/teams/${franchise.slug}`}
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          &larr; {franchise.name}
-        </Link>
+    <section className="py-8 md:py-12 space-y-8">
+      <ScrollReveal>
+        <div className="space-y-6">
+          <Link
+            href={`/teams/${franchise.slug}`}
+            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            &larr; {franchise.name}
+          </Link>
 
-        <ScrollReveal>
-          <FranchiseIdentity
-            franchise={{
-              slug: franchise.slug,
-              name: franchise.name,
-              abbreviation: franchise.abbreviation,
-              brandingColor: franchise.brandingColor,
-            }}
-            championships={championships}
-            variant="hero"
-          />
-        </ScrollReveal>
-      </section>
-
-      <PageSection
-        label={seasonYear ? `${seasonYear} Season` : "Current Season"}
-        title="Roster"
-      >
-        {slotGroups.length === 0 ? (
-          <EmptyState
-            icon="users"
-            title="No Roster Data"
-            description="Roster data will appear once rosters have been synced from Sleeper."
-          />
-        ) : (
-          <div className="space-y-10">
-            {slotGroups.map(([slot, players], groupIndex) => (
-              <ScrollReveal key={slot} delay={groupIndex * 80}>
-                <div className="space-y-4">
-                  <h3 className="text-h3">
-                    {slotLabels[slot] ?? slot}
-                    <span className="ml-2 text-body-sm text-muted-foreground font-normal">
-                      ({players.length})
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div
+                className="shrink-0"
+                style={
+                  franchise.brandingColor
+                    ? {
+                        boxShadow: `0 0 0 2px ${franchise.brandingColor}`,
+                        borderRadius: "13px",
+                      }
+                    : undefined
+                }
+              >
+                <FranchiseLogo
+                  slug={franchise.slug}
+                  name={franchise.name}
+                  abbreviation={franchise.abbreviation}
+                  brandingColor={franchise.brandingColor}
+                  size="md"
+                  decorative
+                />
+              </div>
+              <div>
+                <h1 className="text-h2">{franchise.name}</h1>
+                {latestSeason && (
+                  <p className="text-body-sm text-text-tertiary mt-1">
+                    <span className="font-mono tabular-nums font-semibold text-text-primary">
+                      {latestSeason.wins ?? 0}-{latestSeason.losses ?? 0}
                     </span>
-                  </h3>
+                    {latestSeason.standingsFinish != null && (
+                      <>
+                        <span className="mx-1.5">&middot;</span>
+                        <span className="font-mono tabular-nums">
+                          #{latestSeason.standingsFinish}
+                        </span>
+                      </>
+                    )}
+                    <span className="mx-1.5">&middot;</span>
+                    <span className="font-mono tabular-nums">
+                      {pointsFor.toFixed(1)} PF
+                    </span>
+                  </p>
+                )}
+              </div>
+            </div>
 
-                  <MobileTableView
-                    headers={["Player", "Pos", "Team", "Status"]}
-                    keyColumns={[0, 1, 2]}
-                    rows={players.map((player) => [
-                      <span key="name" className="font-medium">
-                        {getPlayerName(player)}
-                      </span>,
-                      <PositionBadge key="pos" position={player.position} />,
-                      player.nflTeam ?? "FA",
-                      player.injuryStatus ? (
-                        <span
-                          key="status"
-                          className="text-xs text-destructive"
-                        >
-                          {player.injuryStatus}
-                        </span>
-                      ) : (
-                        <span
-                          key="status"
-                          className="text-xs text-muted-foreground"
-                        >
-                          {player.status ?? "-"}
-                        </span>
-                      ),
-                    ])}
-                  />
-                </div>
-              </ScrollReveal>
-            ))}
+            {allFranchises && allFranchises.length > 0 && (
+              <FranchisePicker
+                franchises={allFranchises}
+                selectedSlug={franchise.slug}
+                basePath="/teams"
+              />
+            )}
           </div>
-        )}
-      </PageSection>
-    </>
+        </div>
+      </ScrollReveal>
+
+      {sortedRoster.length === 0 ? (
+        <EmptyState
+          icon="users"
+          title="No Roster Data"
+          description="Roster data will appear once rosters have been synced from Sleeper."
+        />
+      ) : (
+        <div className="grid gap-8 lg:grid-cols-[1fr_300px]">
+          <ScrollReveal delay={80}>
+            <div className="space-y-8">
+              <RosterSection label="Starting Lineup" players={starters} />
+              <RosterSection label="Bench & IR" players={benchAndIr} />
+            </div>
+          </ScrollReveal>
+
+          <ScrollReveal delay={140}>
+            <aside className="card-surface p-4 md:p-5">
+              <h2 className="text-kicker mb-3">Team Snapshot</h2>
+              <div>
+                {latestSeason && (
+                  <>
+                    <SnapshotRow
+                      label="Record"
+                      value={`${latestSeason.wins ?? 0}-${latestSeason.losses ?? 0}`}
+                    />
+                    {latestSeason.standingsFinish != null && (
+                      <SnapshotRow
+                        label="Standing"
+                        value={`#${latestSeason.standingsFinish}`}
+                      />
+                    )}
+                    <SnapshotRow
+                      label="Points For"
+                      value={pointsFor.toFixed(1)}
+                    />
+                    {pointsAgainst != null && (
+                      <SnapshotRow
+                        label="Points Against"
+                        value={pointsAgainst.toFixed(1)}
+                      />
+                    )}
+                    {pointDiff != null && (
+                      <SnapshotRow
+                        label="Point Diff"
+                        value={`${pointDiff >= 0 ? "+" : "−"}${Math.abs(pointDiff).toFixed(1)}`}
+                        valueClassName={
+                          pointDiff >= 0 ? "text-accent-green" : "text-accent-warm"
+                        }
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+            </aside>
+          </ScrollReveal>
+        </div>
+      )}
+    </section>
   );
 }

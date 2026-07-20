@@ -6,6 +6,13 @@ import {
 } from "./helpers/seed-matchups";
 
 // All tests in this file share seeded data and run serially to avoid races.
+//
+// components/matchup-row.tsx is a frozen shared primitive. It kept its team
+// brandingColor accent treatment: a 3px absolute-positioned bar on each edge of
+// the row (left = home color, right = away color, decorative / aria-hidden,
+// falling back to var(--border) when a franchise has no branding color). These
+// assertions verify that treatment as it actually renders now, plus behavior
+// (winner emphasis, Final label, color-independent identification).
 test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   test.describe.configure({ mode: "serial" });
 
@@ -26,11 +33,6 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   test("AC-1a: MatchupRow renders left and right accent bars", async ({
     page,
   }) => {
-    test.fixme();
-    // WAVE:P1 — the 3px absolute-positioned accent-bar treatment for
-    // MatchupRow team color accents is expected to be redesigned. Replacement
-    // should assert whatever new team-color accent element ships for
-    // matchup rows.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -53,9 +55,6 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   });
 
   test("AC-1b: left accent bar has 3px width", async ({ page }) => {
-    test.fixme();
-    // WAVE:P1 — see AC-1a; the 3px bar width is an implementation detail of
-    // the pre-redesign accent treatment.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -70,8 +69,6 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   });
 
   test("AC-1c: right accent bar has 3px width", async ({ page }) => {
-    test.fixme();
-    // WAVE:P1 — see AC-1a.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -88,8 +85,6 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   test("AC-1d: left accent bar uses home team brandingColor", async ({
     page,
   }) => {
-    test.fixme();
-    // WAVE:P1 — see AC-1a; depends on the div.absolute.left-0 accent bar.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -108,8 +103,6 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   test("AC-1e: right accent bar uses away team brandingColor", async ({
     page,
   }) => {
-    test.fixme();
-    // WAVE:P1 — see AC-1a; depends on the div.absolute.right-0 accent bar.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -124,8 +117,6 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   });
 
   test("AC-1f: accent bars span full height of the row", async ({ page }) => {
-    test.fixme();
-    // WAVE:P1 — see AC-1a.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -155,9 +146,6 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   test("AC-2: accent bar falls back to var(--border) when brandingColor is null", async ({
     page,
   }) => {
-    test.fixme();
-    // WAVE:P1 — see AC-1a; the fallback-to-border behavior should be
-    // re-asserted against whatever accent element replaces the bars.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -214,8 +202,6 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   // -------------------------------------------------------------------------
 
   test("AC-3a: left accent bar has aria-hidden=true", async ({ page }) => {
-    test.fixme();
-    // WAVE:P1 — see AC-1a; depends on the div.absolute.left-0 selector.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -228,8 +214,6 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   });
 
   test("AC-3b: right accent bar has aria-hidden=true", async ({ page }) => {
-    test.fixme();
-    // WAVE:P1 — see AC-1a; depends on the div.absolute.right-0 selector.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -261,8 +245,6 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   test("AC-3d: all accent bars across all matchup rows have aria-hidden=true", async ({
     page,
   }) => {
-    test.fixme();
-    // WAVE:P1 — see AC-1a.
     await page.goto(
       `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
     );
@@ -279,5 +261,42 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
       await expect(leftBar).toHaveAttribute("aria-hidden", "true");
       await expect(rightBar).toHaveAttribute("aria-hidden", "true");
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // AC-4: Behavior — winner emphasis + Final label (typography, not color)
+  // -------------------------------------------------------------------------
+
+  test("AC-4: final matchup emphasizes the winner and labels the result", async ({
+    page,
+  }) => {
+    await page.goto(
+      `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
+    );
+
+    const matchupRows = page.locator('[role="group"]');
+    const count = await matchupRows.count();
+
+    // Locate the Alpha (120.5, winner) vs Bravo (98.3) matchup.
+    let alphaRow = null;
+    for (let i = 0; i < count; i++) {
+      const text = await matchupRows.nth(i).innerText();
+      if (text.includes("Team Alpha") || text.includes("ALP")) {
+        alphaRow = matchupRows.nth(i);
+        break;
+      }
+    }
+    expect(alphaRow).not.toBeNull();
+
+    // The winning score renders with a bold weight (typographic emphasis, not color).
+    const winnerScore = alphaRow!
+      .locator("span.font-bold")
+      .filter({ hasText: "120.5" });
+    await expect(winnerScore).toBeVisible();
+
+    // A completed matchup carries a "Final" label.
+    await expect(
+      alphaRow!.getByText("Final", { exact: false })
+    ).toBeVisible();
   });
 });

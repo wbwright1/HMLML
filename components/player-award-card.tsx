@@ -1,4 +1,6 @@
 import { getAwardIcon } from "@/lib/award-icons";
+import { getPositionColor } from "@/lib/position-colors";
+import { PlayerHeadshot } from "@/components/player-headshot";
 
 interface PlayerAwardCardProps {
   category: string;
@@ -6,14 +8,12 @@ interface PlayerAwardCardProps {
   franchiseName: string;
   stat: string;
   position?: string;
+  /** Sleeper player ID. When present, renders a circular headshot instead of
+   * the position-color fallback circle. The current preseason awards query
+   * does not select this yet, so callers may omit it. */
+  playerId?: string;
+  nflTeam?: string | null;
 }
-
-const positionColors: Record<string, string> = {
-  QB: "bg-accent-warm text-white",
-  RB: "bg-accent-green text-white",
-  WR: "bg-accent-gold text-white",
-  TE: "bg-text-secondary text-white",
-};
 
 export function PlayerAwardCard({
   category,
@@ -21,32 +21,41 @@ export function PlayerAwardCard({
   franchiseName,
   stat,
   position,
+  playerId,
+  nflTeam,
 }: PlayerAwardCardProps) {
-  const badgeColor = position
-    ? positionColors[position] ?? "bg-text-muted text-white"
-    : "bg-text-muted text-white";
+  const color = getPositionColor(position ?? null);
 
   return (
-    <div className="rounded-lg border border-accent-gold/20 bg-accent-gold-light p-5 text-center">
-      <p className="text-caption uppercase text-accent-gold mb-3">
+    <div className="rounded-[14px] border border-accent-gold/20 bg-accent-gold-light p-5 text-center">
+      <p className="text-caption text-accent-gold mb-3">
         <span className="flex items-center justify-center gap-1.5">
           {getAwardIcon(category)}
           {category}
         </span>
       </p>
 
-      {/* Position badge circle */}
       <div className="flex justify-center mb-3">
-        <div
-          className={`flex items-center justify-center rounded-full w-16 h-16 text-body font-bold ${badgeColor}`}
-        >
-          {position ?? "?"}
-        </div>
+        {playerId ? (
+          <PlayerHeadshot
+            playerId={playerId}
+            name={playerName}
+            size={64}
+            nflTeam={nflTeam}
+          />
+        ) : (
+          <div
+            className="flex items-center justify-center rounded-full w-16 h-16 text-body font-bold"
+            style={{ backgroundColor: color.cell.bg, color: color.cell.text }}
+          >
+            {position ?? "?"}
+          </div>
+        )}
       </div>
 
       <p className="text-body font-bold text-text-primary">{playerName}</p>
       <p className="text-body-sm text-text-tertiary">{franchiseName}</p>
-      <p className="text-h3 font-bold text-text-primary mt-2 tabular-nums">
+      <p className="text-h3 font-mono font-bold tabular-nums text-text-primary mt-2">
         {stat}
       </p>
     </div>

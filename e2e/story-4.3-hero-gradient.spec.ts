@@ -19,17 +19,16 @@ test.describe("Story 4.3: Franchise Page Hero Gradient", () => {
   });
 
   // ---------------------------------------------------------------------------
-  // AC-1: Hero section has linear-gradient background when brandingColor exists
+  // AC-1 (Command Center redesign): the franchise-wide gradient wash is gone.
+  // The hero section renders on the plain dark canvas/surface frame for every
+  // franchise, branded or not; brandingColor survives only as a subtle ring
+  // around the dynasty crest (FranchiseIdentity's BrandedCrest wrapper,
+  // data-branding="true").
   // ---------------------------------------------------------------------------
 
-  test("AC-1a: hero section has linear-gradient background for branded franchise", async ({
+  test("AC-1a: hero section has no per-team gradient wash, branded or not", async ({
     page,
   }) => {
-    test.fixme();
-    // WAVE:P2 — the franchise hero gradient (direction, opacity range, and
-    // exact brandingColor formula) is expected to be redesigned for the
-    // dark theme. Replacement should assert whatever new hero treatment
-    // ships for branded franchises.
     await page.goto(`/teams/${TEST_DATA.branded.slug}`);
 
     const heroSection = page.locator("section").first();
@@ -39,104 +38,46 @@ test.describe("Story 4.3: Franchise Page Hero Gradient", () => {
       (el) => el.style.background
     );
 
-    expect(inlineBackground).toContain("linear-gradient");
+    // The hero frame is canvas/surface for every franchise now — no inline
+    // background style at all.
+    expect(inlineBackground).toBeFalsy();
   });
 
-  // ---------------------------------------------------------------------------
-  // AC-1b: Gradient direction is top-to-bottom (default, browser may omit "to bottom")
-  // ---------------------------------------------------------------------------
-
-  test("AC-1b: gradient direction is top-to-bottom", async ({ page }) => {
-    test.fixme();
-    // WAVE:P2 — see AC-1a.
-    await page.goto(`/teams/${TEST_DATA.branded.slug}`);
-
-    const heroSection = page.locator("section").first();
-    const inlineBackground = await heroSection.evaluate(
-      (el) => el.style.background
-    );
-
-    // Browser normalizes "to bottom" (default) by omitting it from the serialized value.
-    // Verify the gradient does NOT contain a non-default direction keyword.
-    expect(inlineBackground).toContain("linear-gradient(");
-    expect(inlineBackground).not.toMatch(/to (top|left|right)/);
-    expect(inlineBackground).not.toMatch(/\d+deg/);
-  });
-
-  // ---------------------------------------------------------------------------
-  // AC-1c: Gradient uses low opacity (5-8% range)
-  // Browser normalizes hex+alpha to rgba, so check rgba opacity value
-  // ---------------------------------------------------------------------------
-
-  test("AC-1c: gradient color uses low opacity (5-8% range)", async ({
+  test("AC-1b: branded franchise's crest carries a brandingColor ring", async ({
     page,
   }) => {
-    test.fixme();
-    // WAVE:P2 — see AC-1a.
     await page.goto(`/teams/${TEST_DATA.branded.slug}`);
 
     const heroSection = page.locator("section").first();
-    const inlineBackground = await heroSection.evaluate(
-      (el) => el.style.background
+    const ring = heroSection.locator('[data-branding="true"]').first();
+    await expect(ring).toHaveCount(1);
+
+    const boxShadow = await ring.evaluate(
+      (el) => window.getComputedStyle(el).boxShadow
     );
 
-    // Browser converts #RRGGBBAA to rgba(r, g, b, alpha)
-    // Extract the alpha value from the rgba() color stop
-    const rgbaMatch = inlineBackground.match(
-      /rgba\(\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*([\d.]+)\s*\)/
-    );
-    expect(rgbaMatch).toBeTruthy();
-
-    if (rgbaMatch) {
-      const alpha = parseFloat(rgbaMatch[1]);
-      // 5% = 0.05, 8% = 0.08; allow small rounding tolerance
-      expect(alpha).toBeGreaterThanOrEqual(0.04);
-      expect(alpha).toBeLessThanOrEqual(0.09);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // AC-1d: Gradient contains the franchise's brandingColor RGB values
-  // ---------------------------------------------------------------------------
-
-  test("AC-1d: gradient uses the franchise brandingColor RGB values", async ({
-    page,
-  }) => {
-    test.fixme();
-    // WAVE:P2 — see AC-1a. Also hardcodes the seeded brandingColor hex
-    // (#2D5A3D), which is an old-palette-era test fixture value.
-    await page.goto(`/teams/${TEST_DATA.branded.slug}`);
-
-    const heroSection = page.locator("section").first();
-    const inlineBackground = await heroSection.evaluate(
-      (el) => el.style.background
-    );
-
-    // Convert brandingColor (#2D5A3D) to expected RGB components
+    // brandingColor is #2D5A3D -> rgb(45, 90, 61)
     const hex = TEST_DATA.branded.brandingColor;
-    const r = parseInt(hex.slice(1, 3), 16); // 45
-    const g = parseInt(hex.slice(3, 5), 16); // 90
-    const b = parseInt(hex.slice(5, 7), 16); // 61
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
 
-    // The rgba string should contain these RGB values
-    expect(inlineBackground).toContain(`${r}, ${g}, ${b}`);
+    expect(boxShadow).toContain(`${r}, ${g}, ${b}`);
   });
 
-  // ---------------------------------------------------------------------------
-  // AC-1e: Gradient fades to transparent
-  // ---------------------------------------------------------------------------
-
-  test("AC-1e: gradient fades to transparent", async ({ page }) => {
-    test.fixme();
-    // WAVE:P2 — see AC-1a.
-    await page.goto(`/teams/${TEST_DATA.branded.slug}`);
+  test("AC-1c: unbranded franchise's crest carries no ring", async ({
+    page,
+  }) => {
+    await page.goto(`/teams/${TEST_DATA.unbranded.slug}`);
 
     const heroSection = page.locator("section").first();
-    const inlineBackground = await heroSection.evaluate(
-      (el) => el.style.background
-    );
+    const ring = heroSection.locator('[data-branding="true"]');
+    await expect(ring).toHaveCount(0);
 
-    expect(inlineBackground).toContain("transparent");
+    const unbrandedCrestWrapper = heroSection
+      .locator('[data-branding="false"]')
+      .first();
+    await expect(unbrandedCrestWrapper).toHaveCount(1);
   });
 
   // ---------------------------------------------------------------------------
@@ -146,10 +87,6 @@ test.describe("Story 4.3: Franchise Page Hero Gradient", () => {
   test("AC-2: no gradient applied for franchise without brandingColor", async ({
     page,
   }) => {
-    test.fixme();
-    // WAVE:P2 — see AC-1a; the "no inline background" fallback assumption
-    // may not hold if the redesigned hero always renders some background
-    // treatment.
     await page.goto(`/teams/${TEST_DATA.unbranded.slug}`);
 
     const heroSection = page.locator("section").first();
@@ -218,27 +155,29 @@ test.describe("Story 4.3: Franchise Page Hero Gradient", () => {
   // AC-4: Decorative only - gradient is CSS background, not semantic
   // ---------------------------------------------------------------------------
 
-  test("AC-4a: gradient is applied via inline style on section, not a separate element", async ({
+  test("AC-4a: brandingColor ring is CSS box-shadow on the crest wrapper, not a separate overlay element", async ({
     page,
   }) => {
-    test.fixme();
-    // WAVE:P2 — see AC-1a; asserts the inline background contains
-    // "linear-gradient" specifically.
     await page.goto(`/teams/${TEST_DATA.branded.slug}`);
 
     const heroSection = page.locator("section").first();
 
-    // No aria-hidden gradient overlay element
+    // No aria-hidden gradient/ring overlay element
     const overlayDivs = heroSection.locator(
       'div[aria-hidden="true"][style*="gradient"]'
     );
     await expect(overlayDivs).toHaveCount(0);
 
-    // The gradient is on the section element itself (inline style)
+    // The ring is a box-shadow on the crest wrapper itself (inline style),
+    // not a page-wide gradient.
+    const ring = heroSection.locator('[data-branding="true"]').first();
+    const inlineBoxShadow = await ring.evaluate((el) => el.style.boxShadow);
+    expect(inlineBoxShadow).toBeTruthy();
+
     const inlineBackground = await heroSection.evaluate(
       (el) => el.style.background
     );
-    expect(inlineBackground).toContain("linear-gradient");
+    expect(inlineBackground).toBeFalsy();
   });
 
   test("AC-4b: all content remains identifiable without gradient (decorative only)", async ({

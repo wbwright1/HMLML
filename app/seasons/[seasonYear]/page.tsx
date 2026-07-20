@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
+import { FranchiseLogo } from "@/components/franchise-logo";
 import { ChampionshipStars } from "@/components/championship-stars";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -74,6 +75,12 @@ export default async function SeasonDetailPage({
   const isLegacy = standings.some((s) => s.isLegacyEra);
   const playoffWeekStart = season.playoffWeekStart;
 
+  // Cross-reference standings (already fetched) to find the champion's
+  // franchise identity for the crest — no extra query needed.
+  const championEntry =
+    standings.find((s) => s.playoffResult === "champion") ??
+    standings.find((s) => s.standingsFinish === 1);
+
   return (
     <>
       <PageSection
@@ -106,9 +113,21 @@ export default async function SeasonDetailPage({
         )}
 
         {season.championName && (
-          <div className="mt-6 rounded-xl border border-gold/30 bg-gold/5 p-6 text-center space-y-2">
+          <div className="mt-6 rounded-lg border border-gold/30 bg-gold/5 p-6 text-center space-y-3">
+            {championEntry && (
+              <div className="flex justify-center">
+                <FranchiseLogo
+                  slug={championEntry.franchiseSlug}
+                  name={championEntry.franchiseName}
+                  abbreviation={championEntry.franchiseAbbreviation ?? undefined}
+                  brandingColor={championEntry.franchiseBrandingColor ?? undefined}
+                  size="lg"
+                  decorative
+                />
+              </div>
+            )}
             <ChampionshipStars count={1} variant="hero" />
-            <p className="text-h3">{season.championName}</p>
+            <p className="text-h3 text-gold">{season.championName}</p>
             <SuperlativeBadge text="League Champion" variant="gold" />
           </div>
         )}
@@ -127,22 +146,22 @@ export default async function SeasonDetailPage({
               <table className="w-full text-left">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-text-tertiary font-medium w-12">
+                    <th className="pb-3 pr-4 text-kicker w-12">
                       #
                     </th>
-                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-text-tertiary font-medium">
+                    <th className="pb-3 pr-4 text-kicker">
                       Team
                     </th>
-                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-text-tertiary font-medium text-center">
+                    <th className="pb-3 pr-4 text-kicker text-center">
                       Record
                     </th>
-                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-text-tertiary font-medium text-right">
+                    <th className="pb-3 pr-4 text-kicker text-right">
                       PF
                     </th>
-                    <th className="pb-3 pr-4 text-xs uppercase tracking-wider text-text-tertiary font-medium text-right">
+                    <th className="pb-3 pr-4 text-kicker text-right">
                       PA
                     </th>
-                    <th className="pb-3 text-xs uppercase tracking-wider text-text-tertiary font-medium text-right">
+                    <th className="pb-3 text-kicker text-right">
                       Playoff
                     </th>
                   </tr>
@@ -151,11 +170,11 @@ export default async function SeasonDetailPage({
                   {standings.map((entry) => (
                     <tr
                       key={entry.id}
-                      className="border-b border-border/50 last:border-0 hover:bg-surface-muted transition-colors"
+                      className="border-b border-divider last:border-0 hover:bg-surface-muted transition-colors"
                     >
                       <td className="py-4 pr-4">
                         <span
-                          className={`text-sm tabular-nums font-bold ${
+                          className={`font-mono text-sm tabular-nums font-bold ${
                             (entry.standingsFinish ?? 99) <= 3
                               ? "text-accent-gold"
                               : "text-text-tertiary"
@@ -182,7 +201,7 @@ export default async function SeasonDetailPage({
                           </p>
                         )}
                       </td>
-                      <td className="py-4 pr-4 text-center whitespace-nowrap">
+                      <td className="py-4 pr-4 text-center whitespace-nowrap font-mono">
                         <span className="text-sm font-bold tabular-nums">
                           {entry.wins ?? 0}
                         </span>
@@ -211,14 +230,14 @@ export default async function SeasonDetailPage({
                         )}
                       </td>
                       <td className="py-4 pr-4 text-right">
-                        <span className="text-sm tabular-nums">
+                        <span className="font-mono text-sm tabular-nums">
                           {entry.pointsScored != null
                             ? Number(entry.pointsScored).toFixed(1)
                             : "-"}
                         </span>
                       </td>
                       <td className="py-4 pr-4 text-right">
-                        <span className="text-sm tabular-nums text-text-tertiary">
+                        <span className="font-mono text-sm tabular-nums text-text-tertiary">
                           {entry.pointsAgainst != null
                             ? Number(entry.pointsAgainst).toFixed(1)
                             : "-"}
@@ -238,11 +257,11 @@ export default async function SeasonDetailPage({
               {standings.map((entry) => (
                 <ScrollReveal key={entry.id}>
                   <div
-                    className="rounded-xl border border-border bg-surface p-4"
+                    className="rounded-lg border border-border bg-surface p-4"
                   >
                     <div className="flex items-start gap-3">
                       <span
-                        className={`text-lg tabular-nums font-bold mt-0.5 ${
+                        className={`font-mono text-lg tabular-nums font-bold mt-0.5 ${
                           (entry.standingsFinish ?? 99) <= 3
                             ? "text-accent-gold"
                             : "text-text-tertiary"
@@ -267,7 +286,7 @@ export default async function SeasonDetailPage({
                             {entry.ownerDisplayName}{entry.coOwnerDisplayName ? ` & ${entry.coOwnerDisplayName}` : ""}
                           </p>
                         )}
-                        <div className="flex flex-wrap gap-4 mt-2 text-sm">
+                        <div className="flex flex-wrap gap-4 mt-2 text-sm font-mono">
                           <span className="tabular-nums">
                             <span className="font-bold">
                               {entry.wins ?? 0}
@@ -330,7 +349,7 @@ export default async function SeasonDetailPage({
                   <span className="block text-xs text-text-tertiary mb-0.5">
                     {isPlayoff ? "Playoff" : "Week"}
                   </span>
-                  {week}
+                  <span className="font-mono tabular-nums">{week}</span>
                 </Link>
               );
             })}
@@ -340,7 +359,7 @@ export default async function SeasonDetailPage({
             <div className="mt-6">
               <Link
                 href={`/playoffs/${year}`}
-                className="inline-flex items-center gap-2 text-sm text-accent-green hover:text-accent-green/80 transition-colors underline underline-offset-4 font-medium"
+                className="inline-flex items-center gap-2 text-body-sm font-medium text-accent-gold hover:brightness-110 transition-all"
               >
                 View Playoff Bracket &rarr;
               </Link>

@@ -22,8 +22,8 @@ export default async function HistoryPage() {
 
   return (
     <>
-      <PageSection label="All-Time" title="League History">
-        <p className="text-body-lg text-muted-foreground max-w-prose">
+      <PageSection label="League History" title="The Timeline.">
+        <p className="text-body-lg text-text-secondary max-w-prose">
           Every season in Harambe Memorial League Memorial League history.
           From the 10-team legacy era to the current 12-team dynasty format.
         </p>

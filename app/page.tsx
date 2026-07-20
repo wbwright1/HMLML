@@ -3,7 +3,6 @@ import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { MatchupRow } from "@/components/matchup-row";
 import { StatHero } from "@/components/stat-hero";
-import { SuperlativeBadge } from "@/components/superlative-badge";
 import { EmptyState } from "@/components/empty-state";
 import { ChampionBanner } from "@/components/champion-banner";
 import { WeekBanner } from "@/components/week-banner";
@@ -31,6 +30,7 @@ import { getPreseasonAwards } from "@/lib/queries/preseason";
 import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
 import { getOffseasonRecap, getRecentTransactions } from "@/lib/queries/offseason";
 import type { NflSeasonType } from "@/lib/queries/nfl-state";
+import type { PairedMatchup } from "@/lib/queries/matchups";
 
 export default async function HomePage() {
   // Fetch NFL state and core data in parallel
@@ -125,6 +125,90 @@ export default async function HomePage() {
 }
 
 // =============================================================================
+// Shared hub building blocks
+// =============================================================================
+
+/** Small left-aligned stat card for the hub hero row. */
+function StatChip({
+  label,
+  value,
+  context,
+}: {
+  label: string;
+  value: string;
+  context?: string;
+}) {
+  return (
+    <div className="card-surface px-4 py-3 min-w-[9rem]">
+      <p className="text-kicker mb-1.5">{label}</p>
+      <p className="text-stat text-2xl text-text-primary leading-none">
+        {value}
+        {context && (
+          <span className="ml-2 font-sans text-body-sm font-normal text-text-tertiary">
+            {context}
+          </span>
+        )}
+      </p>
+    </div>
+  );
+}
+
+/** Maps a PairedMatchup's status to the LiveMatchupCard status union. */
+function cardStatus(status: string): "live" | "final" | "upcoming" {
+  if (status === "in_progress") return "live";
+  if (status === "complete") return "final";
+  return "upcoming";
+}
+
+/** Renders a live/final game card for a paired matchup. */
+function GameCard({
+  matchup,
+  week,
+  seasonYear,
+}: {
+  matchup: PairedMatchup;
+  week: number;
+  seasonYear: number;
+}) {
+  return (
+    <LiveMatchupCard
+      matchupId={matchup.matchupId}
+      homeTeam={{
+        name: matchup.homeTeam.franchiseName,
+        slug: matchup.homeTeam.franchiseSlug,
+        score: matchup.homeTeam.points,
+        abbreviation: matchup.homeTeam.franchiseAbbreviation,
+        brandingColor: matchup.homeTeam.franchiseBrandingColor,
+      }}
+      awayTeam={{
+        name: matchup.awayTeam.franchiseName,
+        slug: matchup.awayTeam.franchiseSlug,
+        score: matchup.awayTeam.points,
+        abbreviation: matchup.awayTeam.franchiseAbbreviation,
+        brandingColor: matchup.awayTeam.franchiseBrandingColor,
+      }}
+      status={cardStatus(matchup.status)}
+      week={week}
+      seasonYear={seasonYear}
+    />
+  );
+}
+
+/** Maps standings rows to the ladder card's entry shape. */
+function toLadderEntries(
+  standings: Awaited<ReturnType<typeof getSeasonStandings>>
+) {
+  return standings.map((s, i) => ({
+    rank: s.standingsFinish ?? i + 1,
+    franchiseName: s.franchiseName,
+    franchiseSlug: s.franchiseSlug,
+    record: `${s.wins ?? 0}-${s.losses ?? 0}`,
+    abbreviation: s.franchiseAbbreviation,
+    brandingColor: s.franchiseBrandingColor,
+  }));
+}
+
+// =============================================================================
 // PRESEASON HUB
 // =============================================================================
 
@@ -182,6 +266,14 @@ async function PreseasonHub({
 
   return (
     <>
+      {/* Hero */}
+      <section className="pt-2 pb-4">
+        <p className="text-kicker mb-3">
+          Harambe Memorial League &middot; {latestSeason?.seasonYear ?? new Date().getFullYear()}
+        </p>
+        <h1 className="text-display">The Preseason.</h1>
+      </section>
+
       {/* Champion Banner */}
       {championData && (
         <ChampionBanner
@@ -302,65 +394,160 @@ async function RegularSeasonHub({
     }
   }
 
-  // Determine banner state
-  const allComplete = matchupData?.matchups.every((m) => m.status === "complete") ?? false;
+  const completedWeek = week > 1 ? week - 1 : week;
   const gamesInProgress = matchupData?.matchups.filter((m) => m.status === "in_progress").length ?? 0;
-  const bannerState = isGameWindow ? "game-window" : allComplete ? "complete" : "pre-kickoff";
+
+  // Hero stat chips derived from the current week's scores (existing data only).
+  const currentMatchups = matchupData?.matchups ?? [];
+  const teamScores = currentMatchups.flatMap((m) => [
+    { name: m.homeTeam.franchiseName, points: m.homeTeam.points },
+    { name: m.awayTeam.franchiseName, points: m.awayTeam.points },
+  ]);
+  const highScore = teamScores.length
+    ? teamScores.reduce((best, t) => (t.points > best.points ? t : best))
+    : null;
+  const closestGame = currentMatchups.length
+    ? currentMatchups.reduce<{ margin: number; a: string; b: string } | null>((best, m) => {
+        const margin = Math.abs(m.homeTeam.points - m.awayTeam.points);
+        if (best === null || margin < best.margin) {
+          return {
+            margin,
+            a: m.homeTeam.franchiseAbbreviation ?? m.homeTeam.franchiseName,
+            b: m.awayTeam.franchiseAbbreviation ?? m.awayTeam.franchiseName,
+          };
+        }
+        return best;
+      }, null)
+    : null;
+
+  const ladderEntries = toLadderEntries(standings);
 
   return (
     <>
-      {/* Week Banner */}
-      <WeekBanner
-        week={week}
-        seasonYear={seasonYear}
-        state={bannerState}
-        gamesInProgress={gamesInProgress}
-      />
+      {/* Hero */}
+      <section className="pt-2 pb-6 lg:flex lg:items-start lg:justify-between lg:gap-8">
+        <div>
+          <p className="text-kicker mb-3">
+            Harambe Memorial League &middot; {seasonYear}
+          </p>
+          <h1 className="text-display">Week {week}.</h1>
+        </div>
 
-      {/* Game Window: Show all matchups */}
+        {highScore && highScore.points > 0 && (
+          <div className="mt-6 lg:mt-0 flex flex-wrap gap-3">
+            {highScore && (
+              <StatChip
+                label="High Score"
+                value={highScore.points.toFixed(1)}
+                context={highScore.name}
+              />
+            )}
+            {closestGame && (
+              <StatChip
+                label="Closest Game"
+                value={`+${closestGame.margin.toFixed(1)}`}
+                context={`${closestGame.a} · ${closestGame.b}`}
+              />
+            )}
+          </div>
+        )}
+      </section>
+
+      {/* Game Window: all live matchups + ladder rail */}
       {isGameWindow && matchupData && matchupData.matchups.length > 0 && (
-        <ScrollReveal>
-          <PageSection
-            label={`${seasonYear} Season`}
-            title={`Week ${week} Matchups`}
-          >
+        <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+          {/* On the field */}
+          <div className="space-y-4">
+            <p className="text-kicker flex items-center justify-between">
+              <span>On the Field &middot; All Live</span>
+              <Link
+                href="/matchups"
+                className="text-accent-gold hover:brightness-110 normal-case tracking-normal"
+              >
+                Matchup detail &rarr;
+              </Link>
+            </p>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {matchupData.matchups.map((matchup) => (
-                <LiveMatchupCard
+                <GameCard
                   key={matchup.matchupId}
-                  matchupId={matchup.matchupId}
-                  homeTeam={{
-                    name: matchup.homeTeam.franchiseName,
-                    slug: matchup.homeTeam.franchiseSlug,
-                    score: matchup.homeTeam.points,
-                    brandingColor: matchup.homeTeam.franchiseBrandingColor,
-                  }}
-                  awayTeam={{
-                    name: matchup.awayTeam.franchiseName,
-                    slug: matchup.awayTeam.franchiseSlug,
-                    score: matchup.awayTeam.points,
-                    brandingColor: matchup.awayTeam.franchiseBrandingColor,
-                  }}
-                  status={
-                    matchup.status === "in_progress"
-                      ? "live"
-                      : matchup.status === "complete"
-                        ? "final"
-                        : "upcoming"
-                  }
+                  matchup={matchup}
                   week={week}
                   seasonYear={seasonYear}
                 />
               ))}
             </div>
             <ScorePoller initialIsGameWindow={isGameWindow} />
-          </PageSection>
-        </ScrollReveal>
+          </div>
+
+          {/* The ladder + weekly damage rail */}
+          <aside className="space-y-6">
+            {ladderEntries.length > 0 && (
+              <div className="space-y-3">
+                <p className="text-kicker flex items-center justify-between">
+                  <span>The Ladder</span>
+                  <Link
+                    href="/records"
+                    className="text-accent-gold hover:brightness-110 normal-case tracking-normal"
+                  >
+                    Records &rarr;
+                  </Link>
+                </p>
+                <StandingsSnapshotCard
+                  standings={ladderEntries}
+                  week={week}
+                  seasonYear={seasonYear}
+                />
+              </div>
+            )}
+
+            {weeklySuperlatives &&
+              (weeklySuperlatives.highestScorer || weeklySuperlatives.biggestBlowout) && (
+                <div className="space-y-3">
+                  <p className="text-kicker">Week {completedWeek} Damage</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {weeklySuperlatives.highestScorer && (
+                      <WeeklySuperlativeCard
+                        type="highest-scorer"
+                        label="High Score"
+                        stat={weeklySuperlatives.highestScorer.points.toFixed(1)}
+                        context={weeklySuperlatives.highestScorer.franchiseName}
+                        week={completedWeek}
+                        seasonYear={seasonYear}
+                      />
+                    )}
+                    {weeklySuperlatives.biggestBlowout && (
+                      <WeeklySuperlativeCard
+                        type="biggest-blowout"
+                        label="Mercy Rule"
+                        stat={weeklySuperlatives.biggestBlowout.margin.toFixed(1)}
+                        context={weeklySuperlatives.biggestBlowout.winner}
+                        week={completedWeek}
+                        seasonYear={seasonYear}
+                      />
+                    )}
+                  </div>
+                </div>
+              )}
+          </aside>
+        </div>
       )}
 
       {/* Outside Game Window: Standings + Superlatives */}
       {!isGameWindow && (
         <>
+          {/* Week banner (surface card) */}
+          <WeekBanner
+            week={week}
+            seasonYear={seasonYear}
+            state={
+              (matchupData?.matchups.every((m) => m.status === "complete") ?? false)
+                ? "complete"
+                : "pre-kickoff"
+            }
+            gamesInProgress={gamesInProgress}
+          />
+
           {/* Matchup Results (if complete) */}
           {matchupData && matchupData.matchups.length > 0 && (
             <ScrollReveal>
@@ -377,18 +564,23 @@ async function RegularSeasonHub({
                           ? "final"
                           : "preview";
                     return (
-                      <MatchupRow
+                      <Link
                         key={matchup.matchupId}
-                        matchup={{
-                          homeTeam: matchup.homeTeam,
-                          awayTeam: matchup.awayTeam,
-                          homeScore: matchup.homeTeam.points,
-                          awayScore: matchup.awayTeam.points,
-                          status: matchup.status,
-                          matchupId: matchup.matchupId,
-                        }}
-                        variant={variant}
-                      />
+                        href={`/matchups/${seasonYear}/${week}/${matchup.matchupId}`}
+                        className="block rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+                      >
+                        <MatchupRow
+                          matchup={{
+                            homeTeam: matchup.homeTeam,
+                            awayTeam: matchup.awayTeam,
+                            homeScore: matchup.homeTeam.points,
+                            awayScore: matchup.awayTeam.points,
+                            status: matchup.status,
+                            matchupId: matchup.matchupId,
+                          }}
+                          variant={variant}
+                        />
+                      </Link>
                     );
                   })}
                 </div>
@@ -396,18 +588,12 @@ async function RegularSeasonHub({
             </ScrollReveal>
           )}
 
-          {/* Standings Snapshot */}
-          {standings.length > 0 && (
+          {/* Standings (The Ladder) */}
+          {ladderEntries.length > 0 && (
             <ScrollReveal>
-              <PageSection label="Current" title="Standings">
+              <PageSection label="Current" title="The Ladder">
                 <StandingsSnapshotCard
-                  standings={standings.map((s, i) => ({
-                    rank: s.standingsFinish ?? i + 1,
-                    franchiseName: s.franchiseName,
-                    franchiseSlug: s.franchiseSlug,
-                    record: `${s.wins ?? 0}-${s.losses ?? 0}`,
-                    brandingColor: s.franchiseBrandingColor,
-                  }))}
+                  standings={ladderEntries}
                   week={week}
                   seasonYear={seasonYear}
                 />
@@ -416,56 +602,60 @@ async function RegularSeasonHub({
           )}
 
           {/* Weekly Superlatives */}
-          {weeklySuperlatives && (
-            <ScrollReveal>
-              <PageSection label="This Week's Damage" title="Superlatives">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {weeklySuperlatives.closestWin && (
-                    <WeeklySuperlativeCard
-                      type="closest-win"
-                      label="Closest Win"
-                      stat={`${weeklySuperlatives.closestWin.margin.toFixed(1)} pts`}
-                      context="Nail-biter of the week"
-                      teams={weeklySuperlatives.closestWin}
-                      week={week > 1 ? week - 1 : week}
-                      seasonYear={seasonYear}
-                    />
-                  )}
-                  {weeklySuperlatives.biggestBlowout && (
-                    <WeeklySuperlativeCard
-                      type="biggest-blowout"
-                      label="Biggest Blowout"
-                      stat={`${weeklySuperlatives.biggestBlowout.margin.toFixed(1)} pts`}
-                      context="Mercy rule material"
-                      teams={weeklySuperlatives.biggestBlowout}
-                      week={week > 1 ? week - 1 : week}
-                      seasonYear={seasonYear}
-                    />
-                  )}
-                  {weeklySuperlatives.highestScorer && (
-                    <WeeklySuperlativeCard
-                      type="highest-scorer"
-                      label="Highest Scorer"
-                      stat={`${weeklySuperlatives.highestScorer.points.toFixed(1)} pts`}
-                      context={weeklySuperlatives.highestScorer.franchiseName}
-                      week={week > 1 ? week - 1 : week}
-                      seasonYear={seasonYear}
-                    />
-                  )}
-                  {weeklySuperlatives.lowestScorer && (
-                    <WeeklySuperlativeCard
-                      type="lowest-scorer"
-                      label="Lowest Scorer"
-                      stat={`${weeklySuperlatives.lowestScorer.points.toFixed(1)} pts`}
-                      context={weeklySuperlatives.lowestScorer.franchiseName}
-                      week={week > 1 ? week - 1 : week}
-                      seasonYear={seasonYear}
-                    />
-                  )}
-                </div>
-              </PageSection>
-            </ScrollReveal>
-          )}
+          {weeklySuperlatives &&
+            (weeklySuperlatives.closestWin ||
+              weeklySuperlatives.biggestBlowout ||
+              weeklySuperlatives.highestScorer ||
+              weeklySuperlatives.lowestScorer) && (
+              <ScrollReveal>
+                <PageSection label="This Week's Damage" title="Superlatives">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {weeklySuperlatives.closestWin && (
+                      <WeeklySuperlativeCard
+                        type="closest-win"
+                        label="Closest Win"
+                        stat={`${weeklySuperlatives.closestWin.margin.toFixed(1)} pts`}
+                        context="Nail-biter of the week"
+                        teams={weeklySuperlatives.closestWin}
+                        week={completedWeek}
+                        seasonYear={seasonYear}
+                      />
+                    )}
+                    {weeklySuperlatives.biggestBlowout && (
+                      <WeeklySuperlativeCard
+                        type="biggest-blowout"
+                        label="Biggest Blowout"
+                        stat={`${weeklySuperlatives.biggestBlowout.margin.toFixed(1)} pts`}
+                        context="Mercy rule material"
+                        teams={weeklySuperlatives.biggestBlowout}
+                        week={completedWeek}
+                        seasonYear={seasonYear}
+                      />
+                    )}
+                    {weeklySuperlatives.highestScorer && (
+                      <WeeklySuperlativeCard
+                        type="highest-scorer"
+                        label="Highest Scorer"
+                        stat={`${weeklySuperlatives.highestScorer.points.toFixed(1)} pts`}
+                        context={weeklySuperlatives.highestScorer.franchiseName}
+                        week={completedWeek}
+                        seasonYear={seasonYear}
+                      />
+                    )}
+                    {weeklySuperlatives.lowestScorer && (
+                      <WeeklySuperlativeCard
+                        type="lowest-scorer"
+                        label="Lowest Scorer"
+                        stat={`${weeklySuperlatives.lowestScorer.points.toFixed(1)} pts`}
+                        context={weeklySuperlatives.lowestScorer.franchiseName}
+                        week={completedWeek}
+                        seasonYear={seasonYear}
+                      />
+                    )}
+                  </div>
+                </PageSection>
+              </ScrollReveal>
+            )}
 
           {/* Season Superlatives */}
           {superlatives && (
@@ -518,14 +708,14 @@ async function RegularSeasonHub({
                   {lastWeekResults.results.map((result) => (
                     <div
                       key={`${result.winner}-${result.loser}`}
-                      className="flex items-center justify-between rounded-lg border border-border/50 bg-surface px-4 py-3 text-sm"
+                      className="flex items-center justify-between rounded-[14px] border border-border bg-surface px-4 py-3 text-body-sm"
                     >
                       <span>
-                        <span className="font-semibold">{result.winner}</span>
+                        <span className="font-semibold text-text-primary">{result.winner}</span>
                         <span className="text-text-tertiary"> def. </span>
                         <span className="text-text-tertiary">{result.loser}</span>
                       </span>
-                      <span className="tabular-nums text-text-tertiary whitespace-nowrap ml-4">
+                      <span className="text-stat text-sm text-text-tertiary whitespace-nowrap ml-4">
                         {result.winnerScore.toFixed(1)} - {result.loserScore.toFixed(1)}
                       </span>
                     </div>
@@ -594,28 +784,9 @@ async function PlayoffsHub({
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {matchupData.matchups.map((matchup) => (
-                <LiveMatchupCard
+                <GameCard
                   key={matchup.matchupId}
-                  matchupId={matchup.matchupId}
-                  homeTeam={{
-                    name: matchup.homeTeam.franchiseName,
-                    slug: matchup.homeTeam.franchiseSlug,
-                    score: matchup.homeTeam.points,
-                    brandingColor: matchup.homeTeam.franchiseBrandingColor,
-                  }}
-                  awayTeam={{
-                    name: matchup.awayTeam.franchiseName,
-                    slug: matchup.awayTeam.franchiseSlug,
-                    score: matchup.awayTeam.points,
-                    brandingColor: matchup.awayTeam.franchiseBrandingColor,
-                  }}
-                  status={
-                    matchup.status === "in_progress"
-                      ? "live"
-                      : matchup.status === "complete"
-                        ? "final"
-                        : "upcoming"
-                  }
+                  matchup={matchup}
                   week={week}
                   seasonYear={seasonYear}
                 />
@@ -634,7 +805,7 @@ async function PlayoffsHub({
         <div className="text-center py-8">
           <Link
             href={`/playoffs/${seasonYear}`}
-            className="inline-flex items-center gap-2 text-sm text-accent-green hover:underline font-medium"
+            className="inline-flex items-center gap-2 text-body-sm text-accent-gold hover:brightness-110 font-medium"
           >
             View Full Playoff Bracket &rarr;
           </Link>
@@ -703,6 +874,14 @@ async function OffseasonHub({
 
   return (
     <>
+      {/* Hero */}
+      <section className="pt-2 pb-4">
+        <p className="text-kicker mb-3">
+          Harambe Memorial League &middot; {championSeasonYear ?? new Date().getFullYear()}
+        </p>
+        <h1 className="text-display">The Offseason.</h1>
+      </section>
+
       {/* Champion Banner */}
       {champion && championSeasonYear && (
         <ChampionBanner
@@ -810,7 +989,7 @@ async function OffseasonHub({
         <div className="text-center py-8">
           <Link
             href="/records"
-            className="inline-flex items-center gap-2 text-sm text-accent-green hover:underline font-medium"
+            className="inline-flex items-center gap-2 text-body-sm text-accent-gold hover:brightness-110 font-medium"
           >
             View All-Time Records &rarr;
           </Link>

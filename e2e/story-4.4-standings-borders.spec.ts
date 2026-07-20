@@ -1,104 +1,122 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Story 4.4: Standings Table Color Borders", () => {
+test.describe("Story 4.4: Standings Redesign (Command Center)", () => {
   // ---------------------------------------------------------------------------
-  // Records Leaderboard: Desktop table rows
+  // Records Leaderboard: crest + rank + mono numerals, no 3px border reliance
   // ---------------------------------------------------------------------------
 
-  test("leaderboard desktop rows have 3px left border", async ({ page }) => {
-    test.fixme();
-    // WAVE:P3 — the 3px brandingColor left-border treatment on records
-    // leaderboard/power-rankings rows is expected to be redesigned.
-    // Replacement should assert whatever new franchise-color indicator ships.
+  test("leaderboard desktop rows render crest, rank, and mono tabular numerals", async ({
+    page,
+  }) => {
     await page.goto("/records");
 
-    // Desktop table rows (inside tbody)
     const rows = page.locator("table tbody tr");
     const count = await rows.count();
     expect(count).toBeGreaterThanOrEqual(1);
 
     for (let i = 0; i < count; i++) {
       const row = rows.nth(i);
+
+      // No 3px left-border color-coding; franchise identity carries no
+      // semantic left-border indicator on this row.
       const borderLeftWidth = await row.evaluate(
         (el) => window.getComputedStyle(el).borderLeftWidth
       );
-      expect(borderLeftWidth).toBe("3px");
+      expect(borderLeftWidth).not.toBe("3px");
+
+      // Franchise crest (FranchiseLogo renders an <img>) present in the row.
+      const crest = row.locator("img");
+      await expect(crest.first()).toBeAttached();
+
+      // Rank + record numerals render in the monospace stat font.
+      const monoCells = row.locator(".font-mono");
+      const monoCount = await monoCells.count();
+      expect(monoCount).toBeGreaterThanOrEqual(1);
     }
   });
 
-  test("leaderboard desktop rows use inline borderLeft style", async ({
+  test("leaderboard mobile cards render crest, rank, and mono numerals with no 3px border", async ({
     page,
   }) => {
-    test.fixme();
-    // WAVE:P3 — see above.
+    await page.setViewportSize({ width: 375, height: 812 });
+    await page.goto("/records");
+
+    const cards = page.locator("div.md\\:hidden a[href^='/teams/']");
+    const count = await cards.count();
+    expect(count).toBeGreaterThanOrEqual(1);
+
+    for (let i = 0; i < count; i++) {
+      const card = cards.nth(i);
+
+      const borderLeftWidth = await card.evaluate(
+        (el) => window.getComputedStyle(el).borderLeftWidth
+      );
+      expect(borderLeftWidth).not.toBe("3px");
+
+      const crest = card.locator("img");
+      await expect(crest.first()).toBeAttached();
+
+      const monoCells = card.locator(".font-mono");
+      expect(await monoCells.count()).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  // ---------------------------------------------------------------------------
+  // Leader row highlight
+  // ---------------------------------------------------------------------------
+
+  test("leader row is visually distinguished from other rows", async ({
+    page,
+  }) => {
     await page.goto("/records");
 
     const rows = page.locator("table tbody tr");
     const count = await rows.count();
     expect(count).toBeGreaterThanOrEqual(1);
 
-    for (let i = 0; i < count; i++) {
-      const row = rows.nth(i);
-      const inlineStyle = await row.evaluate((el) => el.style.borderLeft);
-      // Inline style should contain "3px solid"
-      expect(inlineStyle).toContain("3px solid");
-    }
+    if (count < 2) return;
+
+    const leaderBg = await rows
+      .nth(0)
+      .evaluate((el) => window.getComputedStyle(el).backgroundColor);
+    const otherBg = await rows
+      .nth(count - 1)
+      .evaluate((el) => window.getComputedStyle(el).backgroundColor);
+
+    expect(leaderBg).not.toBe(otherBg);
   });
 
-  // ---------------------------------------------------------------------------
-  // Records Leaderboard: Mobile cards
-  // ---------------------------------------------------------------------------
-
-  test("leaderboard mobile cards have 3px left border", async ({ page }) => {
-    test.fixme();
-    // WAVE:P3 — see above.
-    // Set mobile viewport
-    await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto("/records");
-
-    // Mobile card links (inside the md:hidden container)
-    const cards = page.locator("div.md\\:hidden a[href^='/teams/']");
-    const count = await cards.count();
-    expect(count).toBeGreaterThanOrEqual(1);
-
-    for (let i = 0; i < count; i++) {
-      const card = cards.nth(i);
-      const borderLeftWidth = await card.evaluate(
-        (el) => window.getComputedStyle(el).borderLeftWidth
-      );
-      expect(borderLeftWidth).toBe("3px");
-    }
-  });
-
-  test("leaderboard mobile cards use inline borderLeftColor", async ({
+  test("leader row uses the accent-gold-light class token", async ({
     page,
   }) => {
-    test.fixme();
-    // WAVE:P3 — see above.
-    await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/records");
 
-    const cards = page.locator("div.md\\:hidden a[href^='/teams/']");
-    const count = await cards.count();
+    const rows = page.locator("table tbody tr");
+    const count = await rows.count();
     expect(count).toBeGreaterThanOrEqual(1);
 
-    for (let i = 0; i < count; i++) {
-      const card = cards.nth(i);
-      const inlineColor = await card.evaluate(
-        (el) => el.style.borderLeftColor
-      );
-      // Should be set to either a hex color or var(--border)
-      expect(inlineColor).toBeTruthy();
-    }
+    const leaderClass = await rows.nth(0).getAttribute("class");
+    expect(leaderClass).toContain("bg-accent-gold-light");
   });
 
   // ---------------------------------------------------------------------------
-  // Power Rankings cards
+  // Playoff berth legend (text-based, not color-only)
   // ---------------------------------------------------------------------------
 
-  test("power rankings cards have 3px left border", async ({ page }) => {
-    test.fixme();
-    // WAVE:P3 — see above.
+  test("playoff berth text legend is present", async ({ page }) => {
+    await page.goto("/records");
+
+    const legend = page.getByText(/playoff berth/i);
+    await expect(legend.first()).toBeVisible();
+  });
+
+  // ---------------------------------------------------------------------------
+  // Power Rankings: crest + rank rows, no 3px border reliance
+  // ---------------------------------------------------------------------------
+
+  test("power rankings rows render crest, rank, and mono numerals with no 3px border", async ({
+    page,
+  }) => {
     await page.goto("/records/power-rankings");
 
     const cards = page.locator("a[href^='/teams/']");
@@ -111,66 +129,25 @@ test.describe("Story 4.4: Standings Table Color Borders", () => {
 
     for (let i = 0; i < count; i++) {
       const card = cards.nth(i);
+
       const borderLeftWidth = await card.evaluate(
         (el) => window.getComputedStyle(el).borderLeftWidth
       );
-      expect(borderLeftWidth).toBe("3px");
-    }
-  });
+      expect(borderLeftWidth).not.toBe("3px");
 
-  test("power rankings cards use inline borderLeftColor", async ({ page }) => {
-    test.fixme();
-    // WAVE:P3 — see above.
-    await page.goto("/records/power-rankings");
+      const crest = card.locator("img");
+      await expect(crest.first()).toBeAttached();
 
-    const cards = page.locator("a[href^='/teams/']");
-    const count = await cards.count();
-
-    if (count === 0) {
-      return;
-    }
-
-    for (let i = 0; i < count; i++) {
-      const card = cards.nth(i);
-      const inlineColor = await card.evaluate(
-        (el) => el.style.borderLeftColor
-      );
-      expect(inlineColor).toBeTruthy();
+      const monoCells = card.locator(".font-mono");
+      expect(await monoCells.count()).toBeGreaterThanOrEqual(1);
     }
   });
 
   // ---------------------------------------------------------------------------
-  // Fallback: borders use var(--border) or a real color
+  // Decorative only: franchise name and record are text-based, not color-only
   // ---------------------------------------------------------------------------
 
-  test("all leaderboard borders have either brandingColor or fallback", async ({
-    page,
-  }) => {
-    test.fixme();
-    // WAVE:P3 — see above.
-    await page.goto("/records");
-
-    const rows = page.locator("table tbody tr");
-    const count = await rows.count();
-    expect(count).toBeGreaterThanOrEqual(1);
-
-    for (let i = 0; i < count; i++) {
-      const row = rows.nth(i);
-      const inlineStyle = await row.evaluate((el) => el.style.borderLeft);
-      // Must contain "3px solid" followed by either a hex value or var(--border)
-      expect(inlineStyle).toContain("3px solid");
-      const color = inlineStyle.replace("3px solid ", "").trim();
-      const isVariable = color === "var(--border)";
-      const isColorValue = color.length > 0 && color !== "var(--border)";
-      expect(isVariable || isColorValue).toBe(true);
-    }
-  });
-
-  // ---------------------------------------------------------------------------
-  // Decorative only: borders convey no semantic info
-  // ---------------------------------------------------------------------------
-
-  test("borders are decorative; franchise name and record are present", async ({
+  test("row identity and record are conveyed via text, not color alone", async ({
     page,
   }) => {
     await page.goto("/records");
@@ -184,15 +161,16 @@ test.describe("Story 4.4: Standings Table Color Borders", () => {
       const text = await row.innerText();
       // Each row should have text content (rank, name, record numbers)
       expect(text.trim().length).toBeGreaterThan(0);
-      // Should contain numeric data (wins, losses, points) proving identity is text-based
+      // Should contain numeric data (record, points) proving identity is text-based
       expect(text).toMatch(/\d/);
     }
 
-    // Table headers should label the columns (W, L columns exist)
+    // Table headers should label the columns
     const headers = page.locator("table thead th");
     const headerTexts = await headers.allInnerTexts();
     const headerStr = headerTexts.join(" ");
-    expect(headerStr).toContain("W");
-    expect(headerStr).toContain("L");
+    expect(headerStr).toContain("Rec");
+    expect(headerStr).toContain("PF");
+    expect(headerStr).toContain("PA");
   });
 });

@@ -93,15 +93,15 @@ export default async function FranchiseDraftsPage({
         />
 
         {draftHistory.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground pt-2">
+          <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground pt-2 font-mono">
             <span>
-              <span className="font-bold text-foreground tabular-nums">
+              <span className="font-bold text-text-primary tabular-nums">
                 {totalPicks}
               </span>{" "}
               total picks
             </span>
             <span>
-              <span className="font-bold text-foreground tabular-nums">
+              <span className="font-bold text-text-primary tabular-nums">
                 {draftHistory.length}
               </span>{" "}
               {draftHistory.length === 1 ? "draft" : "drafts"}
@@ -123,10 +123,8 @@ export default async function FranchiseDraftsPage({
             {draftHistory.map((draft, draftIndex) => (
               <ScrollReveal key={draft.draftId} delay={draftIndex * 60}>
                 <div
-                  className={`rounded-xl border bg-card p-5 transition-colors ${
-                    draft.isLegacyEra
-                      ? "border-border/60 bg-card/60"
-                      : "border-border"
+                  className={`rounded-xl border bg-surface p-5 transition-colors hover:border-border-strong ${
+                    draft.isLegacyEra ? "border-border/60 bg-surface/60" : "border-border"
                   }`}
                 >
                   {/* Draft header */}
@@ -146,11 +144,11 @@ export default async function FranchiseDraftsPage({
                       }
                     />
                     {draft.isLegacyEra && (
-                      <span className="text-xs uppercase tracking-wider text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                      <span className="text-caption text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                         Legacy Era
                       </span>
                     )}
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-sm text-muted-foreground font-mono tabular-nums">
                       {draft.picks.length} picks
                     </span>
                   </div>
@@ -162,20 +160,20 @@ export default async function FranchiseDraftsPage({
                     rows={draft.picks.map((pick) => [
                       <span
                         key="round"
-                        className="tabular-nums text-muted-foreground"
+                        className="font-mono tabular-nums text-muted-foreground"
                       >
                         Rd {pick.round}
                       </span>,
                       <span
                         key="pick"
-                        className="tabular-nums text-muted-foreground"
+                        className="font-mono tabular-nums text-muted-foreground"
                       >
                         #{pick.pickNumber}
                       </span>,
                       <span
                         key="player"
                         className={`font-medium ${
-                          draft.isLegacyEra ? "text-muted-foreground" : ""
+                          draft.isLegacyEra ? "text-muted-foreground" : "text-text-primary"
                         }`}
                       >
                         {pick.playerName ?? "Unknown Player"}

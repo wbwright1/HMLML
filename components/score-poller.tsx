@@ -178,7 +178,6 @@ export function ScorePoller({
             status={m.status}
             week={week}
             seasonYear={seasonYear}
-            topScorer={m.topScorer}
           />
         ))}
       </div>

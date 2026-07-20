@@ -40,7 +40,7 @@ export default async function DraftsPage() {
 
   if (drafts.length === 0 && !upcomingSeasonYear) {
     return (
-      <PageSection label="Draft Room" title="Drafts">
+      <PageSection label="Draft Room" title="The Drafts.">
         <EmptyState
           icon="calendar"
           title="No Draft Data"
@@ -64,7 +64,7 @@ export default async function DraftsPage() {
   const years = Array.from(draftsByYear.keys()).sort((a, b) => b - a);
 
   return (
-    <PageSection label="Draft Room" title="Drafts">
+    <PageSection label="Draft Room" title="The Drafts.">
       <p className="text-body-lg text-text-tertiary max-w-prose">
         Complete draft boards and pick-by-pick results for every Harambe
         Memorial League draft.
@@ -75,14 +75,14 @@ export default async function DraftsPage() {
           <ScrollReveal>
             <Link
               href={`/drafts/${upcomingSeasonYear}`}
-              className="group flex items-center justify-between rounded-xl border border-accent-green/30 bg-accent-green-light p-5 transition-colors hover:border-accent-green/50"
+              className="group flex items-center justify-between rounded-[14px] border border-accent-gold/30 bg-accent-gold-light p-5 transition-colors hover:border-accent-gold/50"
             >
               <div className="space-y-1">
-                <div className="flex items-center gap-3">
-                  <span className="text-h3 group-hover:text-accent-green transition-colors">
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="text-h3 group-hover:text-accent-gold transition-colors">
                     {upcomingSeasonYear}
                   </span>
-                  <SuperlativeBadge text="Upcoming" variant="green" />
+                  <SuperlativeBadge text="Upcoming" variant="gold" />
                   <SuperlativeBadge text="Rookie" variant="neutral" />
                 </div>
                 <p className="text-body-sm text-text-tertiary">
@@ -90,7 +90,7 @@ export default async function DraftsPage() {
                 </p>
               </div>
               <span
-                className="text-text-tertiary group-hover:text-accent-green transition-colors"
+                className="text-text-tertiary group-hover:text-accent-gold transition-colors"
                 aria-hidden="true"
               >
                 &rarr;
@@ -108,11 +108,11 @@ export default async function DraftsPage() {
             >
               <Link
                 href={`/drafts/${year}`}
-                className="group flex items-center justify-between rounded-xl border border-border bg-surface p-5 transition-colors hover:border-accent-green/40 hover:bg-surface/80"
+                className="group flex items-center justify-between rounded-[14px] border border-border bg-surface p-5 transition-colors hover:border-accent-gold/40 hover:bg-surface-muted"
               >
                 <div className="space-y-1">
-                  <div className="flex items-center gap-3">
-                    <span className="text-h3 group-hover:text-accent-green transition-colors">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-h3 group-hover:text-accent-gold transition-colors">
                       {year}
                     </span>
                     <DraftTypeBadge
@@ -126,7 +126,7 @@ export default async function DraftsPage() {
                 </div>
 
                 <span
-                  className="text-text-tertiary group-hover:text-foreground transition-colors"
+                  className="text-text-tertiary group-hover:text-accent-gold transition-colors"
                   aria-hidden="true"
                 >
                   &rarr;
@@ -151,10 +151,10 @@ function DraftTypeBadge({
     <div className="flex items-center gap-2">
       <SuperlativeBadge
         text={draftType === "startup" ? "Startup" : "Rookie"}
-        variant={draftType === "startup" ? "green" : "neutral"}
+        variant={draftType === "startup" ? "gold" : "neutral"}
       />
       {isLegacyEra && (
-        <span className="text-xs uppercase tracking-wider text-text-tertiary bg-surface-muted px-2 py-0.5 rounded-full">
+        <span className="text-caption text-text-tertiary bg-surface-muted px-2 py-0.5 rounded-full">
           Legacy Era
         </span>
       )}

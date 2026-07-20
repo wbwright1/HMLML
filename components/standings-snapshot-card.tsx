@@ -1,10 +1,13 @@
 import Link from "next/link";
+import { FranchiseLogo } from "@/components/franchise-logo";
+import { SNARKY_LABELS } from "@/lib/content";
 
 interface StandingsEntry {
   rank: number;
   franchiseName: string;
   franchiseSlug: string;
   record: string;
+  abbreviation?: string | null;
   brandingColor?: string | null;
 }
 
@@ -12,100 +15,127 @@ interface StandingsSnapshotCardProps {
   standings: StandingsEntry[];
   week: number;
   seasonYear: number;
+  /** Rank after which the "playoff line" divider is drawn. Defaults to 6. */
+  playoffLineAfter?: number;
 }
 
+/**
+ * "The Ladder" — the hub's full standings rail. Renders every team with its
+ * crest, a gold-tinted leader row, a serif "the playoff line" divider after the
+ * playoff cutoff, and doormat styling (rust + snarky label) on last place.
+ * On mobile the mid-pack rows collapse, leaving the top of the table, the
+ * playoff line, and the doormat.
+ */
 export function StandingsSnapshotCard({
   standings,
-  week,
-  seasonYear,
+  playoffLineAfter = 6,
 }: StandingsSnapshotCardProps) {
   if (standings.length === 0) return null;
 
-  // Show top 3 + last place
-  const top3 = standings.slice(0, 3);
-  const lastPlace = standings.length > 3 ? standings[standings.length - 1] : null;
-  const hasGap = lastPlace && lastPlace.rank > 4;
+  const lastRank = standings[standings.length - 1].rank;
 
   return (
-    <div className="rounded-xl border border-border bg-surface p-6">
-      <div className="flex items-center justify-between mb-4">
-        <p className="text-caption uppercase tracking-widest text-text-tertiary">
-          Standings, Week {week}
-        </p>
-        <Link
-          href="/records"
-          className="text-body-sm font-medium text-accent-green hover:underline"
-        >
-          View Full
-        </Link>
-      </div>
+    <div className="card-surface overflow-hidden">
+      <ul className="divide-y divide-divider">
+        {standings.map((entry) => {
+          const isLeader = entry.rank === 1;
+          const isDoormat = entry.rank === lastRank && standings.length > 3;
+          // Collapse mid-pack rows on mobile: keep the top of the table, the
+          // playoff line, and the doormat.
+          const collapseOnMobile =
+            entry.rank > playoffLineAfter + 1 && !isDoormat;
 
-      <div className="space-y-2">
-        {top3.map((entry) => (
-          <StandingsRow
-            key={entry.franchiseSlug}
-            entry={entry}
-            isLeader={entry.rank === 1}
-            isLastPlace={false}
-          />
-        ))}
-
-        {hasGap && (
-          <div className="flex justify-center py-1">
-            <span className="text-text-muted text-body-sm" aria-hidden="true">
-              &middot;&middot;&middot;
-            </span>
-          </div>
-        )}
-
-        {lastPlace && (
-          <StandingsRow
-            entry={lastPlace}
-            isLeader={false}
-            isLastPlace
-          />
-        )}
-      </div>
+          return (
+            <li key={entry.franchiseSlug}>
+              <LadderRow
+                entry={entry}
+                isLeader={isLeader}
+                isDoormat={isDoormat}
+                collapseOnMobile={collapseOnMobile}
+              />
+              {entry.rank === playoffLineAfter &&
+                entry.rank !== lastRank && <PlayoffLine />}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }
 
-function StandingsRow({
+function PlayoffLine() {
+  return (
+    <div
+      className="flex items-center gap-3 px-4 py-1.5"
+      aria-hidden="true"
+    >
+      <span className="h-px flex-1 bg-accent-gold/30" />
+      <span className="font-serif italic text-sm leading-none text-accent-gold/80">
+        the playoff line
+      </span>
+      <span className="h-px flex-1 bg-accent-gold/30" />
+    </div>
+  );
+}
+
+function LadderRow({
   entry,
   isLeader,
-  isLastPlace,
+  isDoormat,
+  collapseOnMobile,
 }: {
   entry: StandingsEntry;
   isLeader: boolean;
-  isLastPlace: boolean;
+  isDoormat: boolean;
+  collapseOnMobile: boolean;
 }) {
-  const accentColor = isLeader
-    ? "text-accent-green"
-    : isLastPlace
+  const rankColor = isLeader
+    ? "text-accent-gold"
+    : isDoormat
       ? "text-accent-warm"
       : "text-text-tertiary";
+
+  const nameColor = isLeader
+    ? "font-bold text-text-primary"
+    : isDoormat
+      ? "font-medium text-accent-warm"
+      : "font-medium text-text-secondary";
 
   return (
     <Link
       href={`/teams/${entry.franchiseSlug}`}
-      className="flex items-center gap-3 rounded-lg px-3 py-2 transition-colors hover:bg-surface-muted"
+      className={`${
+        collapseOnMobile ? "hidden md:flex" : "flex"
+      } items-center gap-3 px-4 py-2.5 transition-colors hover:bg-surface-muted ${
+        isLeader ? "bg-accent-gold-light" : isDoormat ? "bg-accent-warm-light" : ""
+      }`}
     >
       <span
-        className="inline-block w-[3px] h-5 rounded-full shrink-0"
-        style={{ backgroundColor: entry.brandingColor ?? "var(--border)" }}
-        aria-hidden="true"
-      />
-      <span className={`text-body-sm tabular-nums font-medium w-5 text-center ${accentColor}`}>
+        className={`text-stat text-sm w-6 text-center shrink-0 ${rankColor}`}
+      >
         {entry.rank}
       </span>
-      <span
-        className={`text-body flex-1 min-w-0 truncate ${
-          isLeader ? "font-bold text-text-primary" : "font-medium text-text-secondary"
-        }`}
-      >
+      <FranchiseLogo
+        slug={entry.franchiseSlug}
+        name={entry.franchiseName}
+        abbreviation={entry.abbreviation ?? undefined}
+        brandingColor={entry.brandingColor ?? undefined}
+        size="sm"
+        decorative
+      />
+      <span className={`text-body flex-1 min-w-0 truncate ${nameColor}`}>
         {entry.franchiseName}
       </span>
-      <span className="text-body-sm tabular-nums text-text-tertiary shrink-0">
+      {isDoormat && (
+        <span className="hidden sm:inline text-body-sm font-serif italic text-accent-warm shrink-0">
+          {SNARKY_LABELS.LEAGUE_DOORMAT.displayText.toLowerCase()}
+        </span>
+      )}
+      <span
+        className={`text-stat text-sm shrink-0 tabular-nums ${
+          isLeader ? "text-text-primary" : "text-text-tertiary"
+        }`}
+      >
         {entry.record}
       </span>
     </Link>

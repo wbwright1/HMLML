@@ -44,8 +44,7 @@ export default async function TeamsPage() {
           <ScrollReveal key={franchise.id} delay={index * 60}>
             <Link
               href={`/teams/${franchise.slug}`}
-              className="group block rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/40 hover:bg-card/80"
-              style={{ borderTopWidth: "3px", borderTopColor: franchise.brandingColor ?? "var(--border)" }}
+              className="group block card-surface p-5 sm:p-6 transition-colors duration-150 hover:border-border-strong"
             >
               <FranchiseIdentity
                 franchise={{
@@ -59,17 +58,17 @@ export default async function TeamsPage() {
                 coOwnerName={franchise.coOwnerName}
                 variant="standard"
               />
-              <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
-                <span className="tabular-nums">
-                  <span className="font-bold text-foreground">
+              <div className="mt-4 flex items-center justify-between border-t border-divider pt-3 text-sm">
+                <span className="font-mono tabular-nums">
+                  <span className="font-bold text-text-primary">
                     {franchise.totalWins}
                   </span>
-                  <span className="ml-0.5">W</span>
-                  <span className="mx-1">-</span>
-                  <span>{franchise.totalLosses}</span>
-                  <span className="ml-0.5">L</span>
+                  <span className="ml-0.5 text-text-tertiary">W</span>
+                  <span className="mx-1 text-text-tertiary">-</span>
+                  <span className="text-text-secondary">{franchise.totalLosses}</span>
+                  <span className="ml-0.5 text-text-tertiary">L</span>
                 </span>
-                <span className="tabular-nums">
+                <span className="font-mono tabular-nums text-text-tertiary">
                   {franchise.totalPointsScored.toFixed(1)} pts
                 </span>
               </div>

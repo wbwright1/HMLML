@@ -27,19 +27,19 @@ export default async function RivalriesPage() {
       <PageSection label="Records" title="Rivalries">
         <Link
           href="/records"
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
         >
           &larr; All Records
         </Link>
 
-        <p className="text-body-lg text-muted-foreground max-w-prose">
-          Every head-to-head pairing in league history — ranked
+        <p className="text-body-lg text-text-secondary max-w-prose">
+          Every head-to-head pairing in league history, ranked
           by total games played and competitiveness.
         </p>
 
         {rivalries.length > 0 && (
-          <p className="text-sm text-muted-foreground">
-            {rivalries.length} rivalry pairings
+          <p className="text-body-sm text-text-tertiary">
+            <span className="font-mono tabular-nums">{rivalries.length}</span> rivalry pairings
           </p>
         )}
       </PageSection>
@@ -61,7 +61,7 @@ export default async function RivalriesPage() {
               <ScrollReveal key={`${franchiseA.id}-${franchiseB.id}`} delay={index * 40}>
                 <Link
                   href={`/records/head-to-head?a=${franchiseA.slug}&b=${franchiseB.slug}`}
-                  className="block rounded-xl border border-border bg-card p-5 transition-colors hover:bg-muted/50"
+                  className="block rounded-[14px] border border-border bg-surface p-5 transition-colors hover:border-border-strong hover:bg-surface-muted"
                 >
                   <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                     {/* Team A */}
@@ -79,12 +79,12 @@ export default async function RivalriesPage() {
 
                     {/* Record */}
                     <div className="flex flex-col items-center gap-1 shrink-0">
-                      <span className="text-lg font-black tabular-nums">
+                      <span className="font-mono text-lg font-black tabular-nums text-text-primary">
                         {record.wins} - {record.losses}
                         {record.ties > 0 ? ` - ${record.ties}` : ""}
                       </span>
-                      <span className="text-xs text-muted-foreground">
-                        {totalGames} game{totalGames !== 1 ? "s" : ""}
+                      <span className="text-xs text-text-tertiary">
+                        <span className="font-mono tabular-nums">{totalGames}</span> game{totalGames !== 1 ? "s" : ""}
                       </span>
                       <div className="flex flex-wrap gap-1">
                         {isClose && (

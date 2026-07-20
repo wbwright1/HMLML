@@ -3,11 +3,10 @@ import Link from "next/link";
 import { db } from "@/lib/db";
 import { seasons, franchiseSeasons, franchises, rosterPlayers, players } from "@/lib/db/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
-import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { SuperlativeBadge } from "@/components/superlative-badge";
-import { MobileTableView } from "@/components/mobile-table-view";
-import { PositionBadge } from "@/components/position-badge";
+import { FranchiseLogo } from "@/components/franchise-logo";
+import { getPositionColor } from "@/lib/position-colors";
 import {
   getDraftBySeasonYear,
   type DraftPickWithFranchise,
@@ -15,6 +14,7 @@ import {
 
 interface DraftDetailPageProps {
   params: Promise<{ seasonYear: string }>;
+  searchParams: Promise<{ round?: string }>;
 }
 
 export async function generateMetadata({ params }: DraftDetailPageProps) {
@@ -33,8 +33,10 @@ export async function generateMetadata({ params }: DraftDetailPageProps) {
 
 export default async function DraftDetailPage({
   params,
+  searchParams,
 }: DraftDetailPageProps) {
   const { seasonYear } = await params;
+  const { round } = await searchParams;
   const year = parseInt(seasonYear, 10);
 
   if (isNaN(year)) {
@@ -64,124 +66,487 @@ export default async function DraftDetailPage({
     }
   }
 
+  const requestedRound = Number(round);
+  const activeRound =
+    Number.isFinite(requestedRound) && requestedRound > 0 ? requestedRound : 1;
+
+  const primaryDraft = !isUpcoming && draftData ? draftData.drafts[0] : null;
+  const kicker = isUpcoming
+    ? `${year} Rookie Draft · Upcoming`
+    : draftData!.drafts.length === 1
+      ? `${year} ${primaryDraft!.draftType === "startup" ? "Startup" : "Rookie"} Draft · Completed`
+      : `${year} Draft · Completed`;
+
   return (
     <>
-      <section className="py-8 md:py-12 space-y-6">
+      <section className="pt-8 pb-6 md:pt-12 md:pb-8 space-y-4">
         <Link
           href="/drafts"
-          className="text-sm text-text-tertiary hover:text-text-secondary transition-colors"
+          className="text-body-sm text-text-tertiary hover:text-text-secondary transition-colors"
         >
           &larr; All Drafts
         </Link>
 
-        <div className="space-y-2">
-          <p className="text-caption uppercase tracking-widest text-accent-green">
-            Draft Board
-          </p>
-          <div className="flex items-center gap-3">
-            <h1 className="text-h1">{year} Draft</h1>
-            {isUpcoming && <SuperlativeBadge text="Upcoming" variant="green" />}
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="space-y-2">
+            <p className="text-kicker">{kicker}</p>
+            <h1 className="text-h1">Draft Board.</h1>
           </div>
+          {isUpcoming && <SuperlativeBadge text="Upcoming" variant="gold" />}
         </div>
       </section>
 
       {isUpcoming && upcomingPicks && (
-        <UpcomingDraftSection picks={upcomingPicks} />
+        <UpcomingDraftSection picks={upcomingPicks} year={year} activeRound={activeRound} />
       )}
 
-      {!isUpcoming && draftData && draftData.drafts.map((draft) => {
-        // Group picks by round
-        const roundsMap = new Map<number, DraftPickWithFranchise[]>();
-        for (const pick of draft.picks) {
-          if (!roundsMap.has(pick.round)) {
-            roundsMap.set(pick.round, []);
-          }
-          roundsMap.get(pick.round)!.push(pick);
-        }
-
-        const rounds = Array.from(roundsMap.keys()).sort((a, b) => a - b);
-
-        return (
-          <PageSection
+      {!isUpcoming &&
+        draftData &&
+        draftData.drafts.map((draft) => (
+          <CompletedDraftSection
             key={draft.draftId}
-            label={
-              draft.draftType === "startup" ? "Startup Draft" : "Rookie Draft"
-            }
-            title={`${draft.draftType === "startup" ? "Startup" : "Rookie"} Draft`}
-          >
-            <div className="flex flex-wrap items-center gap-3">
-              <SuperlativeBadge
-                text={draft.draftType === "startup" ? "Startup" : "Rookie"}
-                variant={draft.draftType === "startup" ? "green" : "neutral"}
-              />
-              {draft.isLegacyEra && (
-                <span className="text-xs uppercase tracking-wider text-text-tertiary bg-surface-muted px-2 py-0.5 rounded-full">
-                  Legacy Era
-                </span>
-              )}
-              <span className="text-sm text-text-tertiary">
-                {draft.picks.length} picks &middot; {rounds.length} rounds
-              </span>
-            </div>
-
-            <div className="space-y-8 mt-4">
-              {rounds.map((roundNum) => {
-                const roundPicks = roundsMap.get(roundNum)!;
-
-                return (
-                  <ScrollReveal key={roundNum}>
-                    <div className="space-y-3">
-                      <h3 className="text-xs uppercase tracking-widest text-text-tertiary font-medium border-b border-border pb-2">
-                        Round {roundNum}
-                      </h3>
-
-                      <MobileTableView
-                        headers={["Pick", "Team", "Player", "Pos"]}
-                        keyColumns={[0, 1, 2, 3]}
-                        rows={roundPicks.map((pick) => [
-                          <span
-                            key="pick"
-                            className="tabular-nums text-text-tertiary"
-                          >
-                            {pick.pickNumber}
-                          </span>,
-                          <span key="team">
-                            {pick.franchiseSlug ? (
-                              <Link
-                                href={`/teams/${pick.franchiseSlug}`}
-                                className="font-medium text-primary hover:text-primary/80 transition-colors"
-                              >
-                                {pick.franchiseName ?? "Unknown"}
-                              </Link>
-                            ) : (
-                              <span className="text-text-tertiary">
-                                {pick.franchiseName ?? "Unknown"}
-                              </span>
-                            )}
-                            {pick.originalFranchiseName && (
-                              <span className="text-xs text-text-tertiary ml-1">
-                                (via {pick.originalFranchiseName})
-                              </span>
-                            )}
-                          </span>,
-                          <span key="player" className="font-medium">
-                            {pick.playerName ?? "Unknown Player"}
-                          </span>,
-                          <PositionBadge
-                            key="pos"
-                            position={pick.playerPosition}
-                          />,
-                        ])}
-                      />
-                    </div>
-                  </ScrollReveal>
-                );
-              })}
-            </div>
-          </PageSection>
-        );
-      })}
+            draft={draft}
+            year={year}
+            activeRound={activeRound}
+          />
+        ))}
     </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Shared board model — normalizes completed picks and upcoming (projected)
+// picks into one shape so the grid/list rendering logic is written once.
+//
+// Column assignment: each pick's ORIGINAL draft-slot owner determines its
+// column (established from round 1's pick order), not the current owner —
+// that's what keeps a team's column stable across rounds in a real snake
+// draft even when a specific round's pick was traded away. The cell then
+// shows who actually made the pick, with a "via" note when that differs
+// from the slot owner. This also means we never hardcode snake vs. linear:
+// whichever order the underlying picks actually happened in is what renders.
+// ---------------------------------------------------------------------------
+
+interface ColumnMeta {
+  key: string;
+  name: string;
+  slug: string | null;
+  abbreviation: string | null;
+  brandingColor: string | null;
+}
+
+interface NormalizedPick {
+  pickNumber: number;
+  round: number;
+  playerName: string | null;
+  playerPosition: string | null;
+  roster: PositionCounts | null;
+  currentId: string;
+  currentName: string;
+  currentSlug: string | null;
+  currentAbbreviation: string | null;
+  currentBrandingColor: string | null;
+  originalName: string | null;
+}
+
+interface DraftBoard {
+  rounds: number[];
+  columns: ColumnMeta[];
+  grid: Map<number, (NormalizedPick | null)[]>;
+  slots: Map<number, number>; // pickNumber -> 1-based slot within its round
+}
+
+function normalizeCompletedPick(pick: DraftPickWithFranchise): NormalizedPick {
+  return {
+    pickNumber: pick.pickNumber,
+    round: pick.round,
+    playerName: pick.playerName,
+    playerPosition: pick.playerPosition,
+    roster: null,
+    currentId: pick.franchiseId ?? pick.rosterId ?? `pick-${pick.id}`,
+    currentName: pick.franchiseName ?? "Unknown",
+    currentSlug: pick.franchiseSlug,
+    currentAbbreviation: pick.franchiseAbbreviation,
+    currentBrandingColor: pick.franchiseBrandingColor,
+    originalName: pick.originalFranchiseName,
+  };
+}
+
+function normalizeUpcomingPick(pick: UpcomingPick): NormalizedPick {
+  return {
+    pickNumber: pick.pickNumber,
+    round: pick.round,
+    playerName: null,
+    playerPosition: null,
+    roster: pick.roster,
+    currentId: pick.franchiseId,
+    currentName: pick.franchiseName,
+    currentSlug: pick.franchiseSlug,
+    currentAbbreviation: null,
+    currentBrandingColor: null,
+    originalName: pick.originalFranchiseName,
+  };
+}
+
+function buildDraftBoard(picks: NormalizedPick[]): DraftBoard {
+  const rounds = Array.from(new Set(picks.map((p) => p.round))).sort((a, b) => a - b);
+  if (rounds.length === 0) {
+    return { rounds: [], columns: [], grid: new Map(), slots: new Map() };
+  }
+
+  // Identity lookup sourced from wherever full franchise data appears as a
+  // CURRENT pick-maker anywhere in the draft — used to recover crest/slug
+  // info for a slot owner who traded away the specific pick we're looking at.
+  const infoByKey = new Map<string, ColumnMeta>();
+  for (const p of picks) {
+    const info: ColumnMeta = {
+      key: p.currentId,
+      name: p.currentName,
+      slug: p.currentSlug,
+      abbreviation: p.currentAbbreviation,
+      brandingColor: p.currentBrandingColor,
+    };
+    if (!infoByKey.has(p.currentId)) infoByKey.set(p.currentId, info);
+    if (!infoByKey.has(`name:${p.currentName}`)) infoByKey.set(`name:${p.currentName}`, info);
+  }
+
+  function resolveSlotOwner(p: NormalizedPick): { key: string; info: ColumnMeta } {
+    if (!p.originalName) {
+      return {
+        key: p.currentId,
+        info: infoByKey.get(p.currentId) ?? {
+          key: p.currentId,
+          name: p.currentName,
+          slug: p.currentSlug,
+          abbreviation: p.currentAbbreviation,
+          brandingColor: p.currentBrandingColor,
+        },
+      };
+    }
+    const key = `name:${p.originalName}`;
+    return {
+      key,
+      info: infoByKey.get(key) ?? {
+        key,
+        name: p.originalName,
+        slug: null,
+        abbreviation: null,
+        brandingColor: null,
+      },
+    };
+  }
+
+  const firstRound = rounds[0];
+  const firstRoundPicks = picks
+    .filter((p) => p.round === firstRound)
+    .sort((a, b) => a.pickNumber - b.pickNumber);
+
+  const columns: ColumnMeta[] = [];
+  const columnIndexByKey = new Map<string, number>();
+  for (const p of firstRoundPicks) {
+    const { key, info } = resolveSlotOwner(p);
+    if (!columnIndexByKey.has(key)) {
+      columnIndexByKey.set(key, columns.length);
+      columns.push(info);
+    }
+  }
+
+  const totalColumns = columns.length || 1;
+  const grid = new Map<number, (NormalizedPick | null)[]>();
+  const slots = new Map<number, number>();
+
+  for (const round of rounds) {
+    const row = new Array<NormalizedPick | null>(totalColumns).fill(null);
+    const roundPicks = picks
+      .filter((p) => p.round === round)
+      .sort((a, b) => a.pickNumber - b.pickNumber);
+
+    roundPicks.forEach((p, idx) => {
+      slots.set(p.pickNumber, idx + 1);
+      const { key } = resolveSlotOwner(p);
+      const col = columnIndexByKey.get(key) ?? Math.min(idx, totalColumns - 1);
+      row[col] = p;
+    });
+
+    grid.set(round, row);
+  }
+
+  return { rounds, columns, grid, slots };
+}
+
+// ---------------------------------------------------------------------------
+// Board cell / pick row — shared by completed and upcoming boards. Branches
+// on whether the pick carries a player (completed) or a roster breakdown
+// (upcoming/projected).
+// ---------------------------------------------------------------------------
+
+function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number }) {
+  if (!pick) {
+    return (
+      <div
+        className="min-h-[56px] rounded-lg border border-divider bg-surface/40"
+        aria-hidden="true"
+      />
+    );
+  }
+
+  return (
+    <div className="flex min-h-[56px] flex-col justify-between gap-1 rounded-lg border border-divider bg-surface p-2">
+      <div className="flex items-center justify-between gap-1">
+        <span className="font-mono text-[10px] tabular-nums text-text-muted">
+          {pick.round}.{slot ?? "-"}
+        </span>
+        {pick.playerPosition && (
+          <span
+            className="text-[10px] font-bold uppercase tracking-[0.02em]"
+            style={{ color: getPositionColor(pick.playerPosition).badge.text }}
+          >
+            {pick.playerPosition}
+          </span>
+        )}
+      </div>
+
+      {pick.playerName && (
+        <p className="truncate text-[11px] font-semibold leading-tight text-text-primary">
+          {pick.playerName}
+        </p>
+      )}
+
+      {pick.roster && (
+        <div className="flex flex-wrap gap-x-1.5 font-mono text-[9px] tabular-nums">
+          {(["QB", "RB", "WR", "TE"] as const).map((pos) => (
+            <span key={pos} style={{ color: getPositionColor(pos).badge.text }}>
+              {pick.roster![pos]}
+              {pos[0]}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {pick.originalName && (
+        <p className="truncate text-[9px] text-text-muted">via {pick.currentName}</p>
+      )}
+    </div>
+  );
+}
+
+function TeamCrest({
+  slug,
+  name,
+  abbreviation,
+  brandingColor,
+  size = "sm",
+}: {
+  slug: string | null;
+  name: string;
+  abbreviation: string | null;
+  brandingColor: string | null;
+  size?: "sm" | "md";
+}) {
+  if (slug) {
+    return (
+      <FranchiseLogo
+        slug={slug}
+        name={name}
+        abbreviation={abbreviation ?? undefined}
+        brandingColor={brandingColor ?? undefined}
+        size={size}
+      />
+    );
+  }
+
+  const px = size === "sm" ? "h-8 w-8" : "h-12 w-12";
+  return (
+    <div
+      className={`flex ${px} shrink-0 items-center justify-center rounded-md bg-surface-muted text-[10px] font-bold text-text-primary`}
+    >
+      {(abbreviation ?? name).slice(0, 2).toUpperCase()}
+    </div>
+  );
+}
+
+function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
+  return (
+    <div className="flex items-center gap-3 p-4">
+      <span className="w-10 shrink-0 font-mono text-body-sm tabular-nums text-accent-gold">
+        {pick.round}.{slot}
+      </span>
+      <TeamCrest
+        slug={pick.currentSlug}
+        name={pick.currentName}
+        abbreviation={pick.currentAbbreviation}
+        brandingColor={pick.currentBrandingColor}
+      />
+      <div className="min-w-0 flex-1">
+        {pick.playerName && (
+          <p className="truncate text-body font-semibold text-text-primary">{pick.playerName}</p>
+        )}
+        {pick.roster && (
+          <p className="truncate font-mono text-body-sm tabular-nums text-text-secondary">
+            {pick.roster.QB} QB, {pick.roster.RB} RB, {pick.roster.WR} WR, {pick.roster.TE} TE
+          </p>
+        )}
+        {pick.originalName && (
+          <p className="truncate text-body-sm text-text-tertiary">via {pick.originalName}</p>
+        )}
+      </div>
+      {pick.playerPosition && (
+        <span
+          className="shrink-0 rounded-full px-2 py-0.5 text-[12px] font-medium uppercase tracking-[0.06em]"
+          style={{
+            backgroundColor: getPositionColor(pick.playerPosition).badge.bg,
+            color: getPositionColor(pick.playerPosition).badge.text,
+          }}
+        >
+          {pick.playerPosition}
+        </span>
+      )}
+    </div>
+  );
+}
+
+function PositionLegend({ positions }: { positions: string[] }) {
+  if (positions.length === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-3.5">
+      {positions.map((pos) => (
+        <span key={pos} className="flex items-center gap-1.5 text-body-sm text-text-tertiary">
+          <span
+            className="inline-block h-2 w-2 rounded-[2px]"
+            style={{ backgroundColor: getPositionColor(pos).badge.text }}
+            aria-hidden="true"
+          />
+          {pos}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+function DesktopBoard({ board }: { board: DraftBoard }) {
+  if (board.columns.length === 0) return null;
+  const columnStyle = { gridTemplateColumns: `repeat(${board.columns.length}, minmax(72px, 1fr))` };
+
+  return (
+    <div className="hidden md:block card-surface overflow-x-auto p-4 lg:p-[18px]">
+      <div className="grid gap-1.5" style={columnStyle}>
+        {board.columns.map((col) => (
+          <div key={col.key} className="flex flex-col items-center gap-1.5 pb-2">
+            <TeamCrest
+              slug={col.slug}
+              name={col.name}
+              abbreviation={col.abbreviation}
+              brandingColor={col.brandingColor}
+              size="sm"
+            />
+            <span className="max-w-full truncate text-[9px] font-bold text-text-tertiary">
+              {col.abbreviation ?? col.name.slice(0, 3).toUpperCase()}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {board.rounds.map((round) => (
+        <div key={round} className="mt-1.5 grid gap-1.5" style={columnStyle}>
+          {board.grid.get(round)!.map((pick, i) => (
+            <BoardCell key={i} pick={pick} slot={pick ? board.slots.get(pick.pickNumber) : undefined} />
+          ))}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MobileBoard({
+  board,
+  basePath,
+  activeRound,
+}: {
+  board: DraftBoard;
+  basePath: string;
+  activeRound: number;
+}) {
+  if (board.rounds.length === 0) return null;
+  const round = board.rounds.includes(activeRound) ? activeRound : board.rounds[0];
+  const roundPicks = (board.grid.get(round) ?? [])
+    .filter((p): p is NormalizedPick => p !== null)
+    .sort((a, b) => a.pickNumber - b.pickNumber);
+
+  return (
+    <div className="md:hidden space-y-4">
+      <nav aria-label="Draft round" className="flex gap-2 overflow-x-auto pb-1">
+        {board.rounds.map((r) => {
+          const isActive = r === round;
+          return (
+            <Link
+              key={r}
+              href={`${basePath}?round=${r}`}
+              scroll={false}
+              aria-current={isActive ? "page" : undefined}
+              className={`shrink-0 rounded-full border px-4 py-2 text-body-sm font-medium transition-colors ${
+                isActive
+                  ? "border-accent-gold/30 bg-accent-gold-light text-accent-gold"
+                  : "border-border bg-surface text-text-tertiary"
+              }`}
+            >
+              Round {r}
+            </Link>
+          );
+        })}
+      </nav>
+
+      <div className="card-surface divide-y divide-divider">
+        {roundPicks.map((pick) => (
+          <PickRow key={pick.pickNumber} pick={pick} slot={board.slots.get(pick.pickNumber)!} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const POSITION_ORDER = ["QB", "RB", "WR", "TE", "K", "DEF", "DST"];
+
+function CompletedDraftSection({
+  draft,
+  year,
+  activeRound,
+}: {
+  draft: { draftId: string; draftType: string; isLegacyEra: boolean; picks: DraftPickWithFranchise[] };
+  year: number;
+  activeRound: number;
+}) {
+  const normalized = draft.picks.map(normalizeCompletedPick);
+  const board = buildDraftBoard(normalized);
+  const positionsPresent = new Set(
+    draft.picks.map((p) => p.playerPosition).filter((p): p is string => !!p)
+  );
+  const orderedPositions = POSITION_ORDER.filter((p) => positionsPresent.has(p));
+
+  return (
+    <section className="pb-10 md:pb-14 space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <SuperlativeBadge
+            text={draft.draftType === "startup" ? "Startup" : "Rookie"}
+            variant={draft.draftType === "startup" ? "gold" : "neutral"}
+          />
+          {draft.isLegacyEra && (
+            <span className="text-caption text-text-tertiary bg-surface-muted px-2 py-0.5 rounded-full">
+              Legacy Era
+            </span>
+          )}
+          <span className="text-body-sm text-text-tertiary">
+            {draft.picks.length} picks &middot; {board.rounds.length} rounds
+          </span>
+        </div>
+        <PositionLegend positions={orderedPositions} />
+      </div>
+
+      <ScrollReveal>
+        <DesktopBoard board={board} />
+      </ScrollReveal>
+      <MobileBoard board={board} basePath={`/drafts/${year}`} activeRound={activeRound} />
+    </section>
   );
 }
 
@@ -206,85 +571,35 @@ interface UpcomingPick {
   originalFranchiseName: string | null;
 }
 
-function formatRoster(roster: PositionCounts): string {
-  return `${roster.QB} QB, ${roster.RB} RB, ${roster.WR} WR, ${roster.TE} TE`;
-}
-
-function UpcomingDraftSection({ picks }: { picks: UpcomingPick[] }) {
-  // Group by round
-  const roundsMap = new Map<number, UpcomingPick[]>();
-  for (const pick of picks) {
-    if (!roundsMap.has(pick.round)) {
-      roundsMap.set(pick.round, []);
-    }
-    roundsMap.get(pick.round)!.push(pick);
-  }
-
-  const rounds = Array.from(roundsMap.keys()).sort((a, b) => a - b);
+function UpcomingDraftSection({
+  picks,
+  year,
+  activeRound,
+}: {
+  picks: UpcomingPick[];
+  year: number;
+  activeRound: number;
+}) {
+  const normalized = picks.map(normalizeUpcomingPick);
+  const board = buildDraftBoard(normalized);
 
   return (
-    <PageSection label="Rookie Draft" title="Rookie Draft">
-      <div className="flex flex-wrap items-center gap-3">
-        <SuperlativeBadge text="Upcoming" variant="green" />
-        <span className="text-sm text-text-tertiary">
-          {picks.length} picks &middot; {rounds.length} rounds
-        </span>
+    <section className="pb-10 md:pb-14 space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <SuperlativeBadge text="Upcoming" variant="gold" />
+          <span className="text-body-sm text-text-tertiary">
+            {picks.length} picks &middot; {board.rounds.length} rounds
+          </span>
+        </div>
+        <PositionLegend positions={["QB", "RB", "WR", "TE"]} />
       </div>
 
-      <div className="space-y-8 mt-4">
-        {rounds.map((roundNum) => {
-          const roundPicks = roundsMap.get(roundNum)!;
-
-          return (
-            <ScrollReveal key={roundNum}>
-              <div className="space-y-3">
-                <h3 className="text-xs uppercase tracking-widest text-text-tertiary font-medium border-b border-border pb-2">
-                  Round {roundNum}
-                </h3>
-
-                <MobileTableView
-                  headers={["Pick", "Team", "Roster"]}
-                  keyColumns={[0, 1, 2]}
-                  rows={roundPicks.map((pick) => [
-                    <span
-                      key="pick"
-                      className="tabular-nums text-text-tertiary"
-                    >
-                      {pick.pickNumber}
-                    </span>,
-                    <span key="team">
-                      {pick.franchiseSlug ? (
-                        <Link
-                          href={`/teams/${pick.franchiseSlug}`}
-                          className="font-medium text-primary hover:text-primary/80 transition-colors"
-                        >
-                          {pick.franchiseName}
-                        </Link>
-                      ) : (
-                        <span className="text-text-secondary">
-                          {pick.franchiseName}
-                        </span>
-                      )}
-                      {pick.originalFranchiseName && (
-                        <span className="text-xs text-text-tertiary ml-1">
-                          (via {pick.originalFranchiseName})
-                        </span>
-                      )}
-                    </span>,
-                    <span
-                      key="roster"
-                      className="text-sm tabular-nums text-text-secondary"
-                    >
-                      {formatRoster(pick.roster)}
-                    </span>,
-                  ])}
-                />
-              </div>
-            </ScrollReveal>
-          );
-        })}
-      </div>
-    </PageSection>
+      <ScrollReveal>
+        <DesktopBoard board={board} />
+      </ScrollReveal>
+      <MobileBoard board={board} basePath={`/drafts/${year}`} activeRound={activeRound} />
+    </section>
   );
 }
 

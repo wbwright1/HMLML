@@ -46,7 +46,7 @@ export function FranchisePairSelector({
       <div className="flex-1">
         <label
           htmlFor="franchise-a"
-          className="block text-xs uppercase tracking-wider text-muted-foreground font-medium mb-1.5"
+          className="text-kicker block mb-1.5"
         >
           Team A
         </label>
@@ -70,16 +70,16 @@ export function FranchisePairSelector({
                 MozAppearance: "none",
                 appearance: "none",
                 width: "100%",
-                borderRadius: "0.5rem",
-                backgroundColor: "var(--border)",
+                borderRadius: "0.625rem",
+                backgroundColor: "var(--surface-muted)",
                 paddingLeft: "1rem",
                 paddingRight: "2.5rem",
                 paddingTop: "0.625rem",
                 paddingBottom: "0.625rem",
                 fontSize: "0.875rem",
                 fontWeight: 600,
-                color: "var(--foreground)",
-                border: "none",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border)",
                 cursor: "pointer",
               }}
             >
@@ -95,7 +95,7 @@ export function FranchisePairSelector({
               ))}
             </select>
             <svg
-              style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", width: "1rem", height: "1rem", color: "var(--muted-foreground)", pointerEvents: "none" }}
+              style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", width: "1rem", height: "1rem", color: "var(--text-tertiary)", pointerEvents: "none" }}
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
@@ -110,17 +110,17 @@ export function FranchisePairSelector({
         </div>
       </div>
 
-      <span className="hidden sm:flex items-center text-muted-foreground font-bold text-lg pb-2">
+      <span className="hidden sm:flex items-center text-text-tertiary font-bold text-lg pb-2">
         vs
       </span>
-      <span className="sm:hidden text-center text-muted-foreground font-bold text-lg">
+      <span className="sm:hidden text-center text-text-tertiary font-bold text-lg">
         vs
       </span>
 
       <div className="flex-1">
         <label
           htmlFor="franchise-b"
-          className="block text-xs uppercase tracking-wider text-muted-foreground font-medium mb-1.5"
+          className="text-kicker block mb-1.5"
         >
           Team B
         </label>
@@ -144,16 +144,16 @@ export function FranchisePairSelector({
                 MozAppearance: "none",
                 appearance: "none",
                 width: "100%",
-                borderRadius: "0.5rem",
-                backgroundColor: "var(--border)",
+                borderRadius: "0.625rem",
+                backgroundColor: "var(--surface-muted)",
                 paddingLeft: "1rem",
                 paddingRight: "2.5rem",
                 paddingTop: "0.625rem",
                 paddingBottom: "0.625rem",
                 fontSize: "0.875rem",
                 fontWeight: 600,
-                color: "var(--foreground)",
-                border: "none",
+                color: "var(--text-primary)",
+                border: "1px solid var(--border)",
                 cursor: "pointer",
               }}
             >
@@ -169,7 +169,7 @@ export function FranchisePairSelector({
               ))}
             </select>
             <svg
-              style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", width: "1rem", height: "1rem", color: "var(--muted-foreground)", pointerEvents: "none" }}
+              style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", width: "1rem", height: "1rem", color: "var(--text-tertiary)", pointerEvents: "none" }}
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"

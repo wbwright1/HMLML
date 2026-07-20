@@ -23,16 +23,57 @@ test.describe("Story 4.2: Franchise Card Top Borders", () => {
   });
 
   // -------------------------------------------------------------------------
-  // AC-1b: Each card has a 3px top border
+  // AC-1b/AC-1c/AC-2/AC-2b (Command Center redesign): the per-team brandingColor
+  // top border is gone. Franchise identity is now crest-led — a FranchiseLogo
+  // (dynasty crest) rendered via FranchiseIdentity — inside a card-surface
+  // container, uniformly, regardless of whether the franchise has a
+  // brandingColor. No inline border styling of any kind is applied to the
+  // card link itself anymore.
   // -------------------------------------------------------------------------
 
-  test("AC-1b: every franchise card has borderTopWidth of 3px", async ({
+  test("AC-1b: every franchise card renders a dynasty crest image", async ({
     page,
   }) => {
-    test.fixme();
-    // WAVE:P2 — the 3px brandingColor top border on franchise cards is
-    // expected to be redesigned as part of the teams package. Replacement
-    // should assert whatever new franchise-identity treatment ships.
+    await page.goto("/teams");
+
+    const cards = page.locator("a[href^='/teams/']");
+    const count = await cards.count();
+    expect(count).toBeGreaterThanOrEqual(1);
+
+    for (let i = 0; i < count; i++) {
+      const card = cards.nth(i);
+      // FranchiseLogo always renders an <img> (branding image, falling back
+      // to an initials monogram behind it on load error).
+      const crestImages = card.locator("img");
+      expect(await crestImages.count()).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  test("AC-1c/AC-2: cards carry no inline borderTop styling, branded or not", async ({
+    page,
+  }) => {
+    await page.goto("/teams");
+
+    const cards = page.locator("a[href^='/teams/']");
+    const count = await cards.count();
+    expect(count).toBeGreaterThanOrEqual(1);
+
+    for (let i = 0; i < count; i++) {
+      const card = cards.nth(i);
+      const inline = await card.evaluate((el) => ({
+        width: el.style.borderTopWidth,
+        color: el.style.borderTopColor,
+      }));
+      // Identity no longer leans on a colored top border — branded and
+      // unbranded franchises render the same card-surface treatment.
+      expect(inline.width).toBe("");
+      expect(inline.color).toBe("");
+    }
+  });
+
+  test("AC-2b: every card uses the uniform card-surface hairline border", async ({
+    page,
+  }) => {
     await page.goto("/teams");
 
     const cards = page.locator("a[href^='/teams/']");
@@ -44,119 +85,9 @@ test.describe("Story 4.2: Franchise Card Top Borders", () => {
       const borderTopWidth = await card.evaluate(
         (el) => window.getComputedStyle(el).borderTopWidth
       );
-      expect(borderTopWidth).toBe("3px");
+      // card-surface's border is a 1px hairline, not the old 3px accent.
+      expect(borderTopWidth).toBe("1px");
     }
-  });
-
-  // -------------------------------------------------------------------------
-  // AC-1c: Cards with brandingColor use that color as borderTopColor
-  // -------------------------------------------------------------------------
-
-  test("AC-1c: cards with brandingColor have inline borderTopColor set", async ({
-    page,
-  }) => {
-    test.fixme();
-    // WAVE:P2 — see AC-1b.
-    await page.goto("/teams");
-
-    const cards = page.locator("a[href^='/teams/']");
-    const count = await cards.count();
-    expect(count).toBeGreaterThanOrEqual(1);
-
-    // Collect all inline borderTopColor values
-    const borderColors: string[] = [];
-    for (let i = 0; i < count; i++) {
-      const card = cards.nth(i);
-      const inlineBorderTopColor = await card.evaluate(
-        (el) => el.style.borderTopColor
-      );
-      borderColors.push(inlineBorderTopColor);
-    }
-
-    // Every card must have an inline borderTopColor set (either a hex/rgb value
-    // for branded franchises or "var(--border)" for unbranded ones)
-    for (const color of borderColors) {
-      expect(color).toBeTruthy();
-      // Must be either a CSS variable fallback or a color value (hex, rgb, named)
-      const isVariable = color === "var(--border)";
-      const isColorValue = color.length > 0 && color !== "var(--border)";
-      expect(isVariable || isColorValue).toBe(true);
-    }
-  });
-
-  // -------------------------------------------------------------------------
-  // AC-2: Cards without brandingColor fall back to var(--border)
-  // -------------------------------------------------------------------------
-
-  test("AC-2: all cards have either a brandingColor or var(--border) fallback", async ({
-    page,
-  }) => {
-    test.fixme();
-    // WAVE:P2 — see AC-1b.
-    await page.goto("/teams");
-
-    const cards = page.locator("a[href^='/teams/']");
-    const count = await cards.count();
-    expect(count).toBeGreaterThanOrEqual(1);
-
-    let hasBrandedCard = false;
-    let hasFallbackCard = false;
-
-    for (let i = 0; i < count; i++) {
-      const card = cards.nth(i);
-      const inlineBorderTopColor = await card.evaluate(
-        (el) => el.style.borderTopColor
-      );
-
-      if (inlineBorderTopColor === "var(--border)") {
-        hasFallbackCard = true;
-      } else if (inlineBorderTopColor.length > 0) {
-        hasBrandedCard = true;
-      }
-    }
-
-    // At least one type of card should exist (branded or fallback)
-    // The important thing is no card has an empty/missing borderTopColor
-    expect(hasBrandedCard || hasFallbackCard).toBe(true);
-  });
-
-  test("AC-2b: fallback cards resolve to the --border CSS variable color", async ({
-    page,
-  }) => {
-    test.fixme();
-    // WAVE:P2 — see AC-1b.
-    await page.goto("/teams");
-
-    const cards = page.locator("a[href^='/teams/']");
-    const count = await cards.count();
-
-    // Find a card with var(--border) fallback
-    let fallbackCard = null;
-    for (let i = 0; i < count; i++) {
-      const card = cards.nth(i);
-      const inlineColor = await card.evaluate(
-        (el) => el.style.borderTopColor
-      );
-      if (inlineColor === "var(--border)") {
-        fallbackCard = card;
-        break;
-      }
-    }
-
-    // If no fallback card exists (all franchises have brandingColor), skip gracefully
-    if (fallbackCard === null) {
-      // All franchises have a brandingColor set; fallback path is not exercised
-      // This is acceptable since the code path is verified by the inline style check
-      return;
-    }
-
-    // The computed borderTopColor should resolve to a real color (not empty)
-    const computedColor = await fallbackCard.evaluate(
-      (el) => window.getComputedStyle(el).borderTopColor
-    );
-    expect(computedColor).toBeTruthy();
-    // Should be an rgb() value (resolved from the CSS variable)
-    expect(computedColor).toMatch(/^rgb/);
   });
 
   // -------------------------------------------------------------------------
@@ -236,14 +167,10 @@ test.describe("Story 4.2: Franchise Card Top Borders", () => {
   });
 
   // -------------------------------------------------------------------------
-  // Inline style verification: borderTopWidth is always 3px in the style attr
+  // Inline style verification: no card carries an inline borderTopWidth
   // -------------------------------------------------------------------------
 
-  test("inline style sets borderTopWidth to 3px on every card", async ({
-    page,
-  }) => {
-    test.fixme();
-    // WAVE:P2 — see AC-1b.
+  test("no card sets an inline borderTopWidth", async ({ page }) => {
     await page.goto("/teams");
 
     const cards = page.locator("a[href^='/teams/']");
@@ -255,7 +182,7 @@ test.describe("Story 4.2: Franchise Card Top Borders", () => {
       const inlineWidth = await card.evaluate(
         (el) => el.style.borderTopWidth
       );
-      expect(inlineWidth).toBe("3px");
+      expect(inlineWidth).toBe("");
     }
   });
 });
