@@ -24,7 +24,7 @@ export default async function MatchupsPage() {
 
   if (!data || data.matchups.length === 0) {
     return (
-      <PageSection label="Head to Head" title="Matchups">
+      <PageSection label="Head to Head" title="Matchups.">
         <EmptyState
           icon="calendar"
           title="No Matchups Available"

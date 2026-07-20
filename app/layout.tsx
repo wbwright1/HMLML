@@ -21,7 +21,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Harambe Memorial League Memorial League",
   description:
-    "The official home of the Harambe Memorial League Memorial League — dynasty fantasy football history, records, and live scores.",
+    "The official home of the Harambe Memorial League Memorial League: dynasty fantasy football history, records, and live scores.",
 };
 
 export const viewport: Viewport = {

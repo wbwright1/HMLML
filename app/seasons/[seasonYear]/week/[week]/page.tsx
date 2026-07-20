@@ -72,7 +72,7 @@ export default async function WeekResultsPage({
   return (
     <>
       <PageSection
-        label={`${year} Season${isPlayoffWeek ? " — Playoffs" : ""}`}
+        label={`${year} Season${isPlayoffWeek ? " · Playoffs" : ""}`}
         title={`Week ${week}`}
       >
         <div className="flex flex-wrap items-center gap-4">

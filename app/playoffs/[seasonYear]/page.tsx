@@ -340,7 +340,7 @@ export default async function PlayoffBracketPage({
 
   return (
     <>
-      <PageSection label={`${year} Season`} title="Playoff Results">
+      <PageSection label={`${year} Season`} title="Playoff Results.">
         <div className="flex flex-wrap items-center gap-4">
           <Link
             href={`/seasons/${year}`}

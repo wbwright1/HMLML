@@ -24,7 +24,7 @@ export default async function PowerRankingsPage() {
 
   return (
     <>
-      <PageSection label="Records" title="Power Rankings">
+      <PageSection label="Records" title="Power Rankings.">
         <Link
           href="/records"
           className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"

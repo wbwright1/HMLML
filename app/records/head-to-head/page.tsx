@@ -55,7 +55,7 @@ export default async function HeadToHeadPage({
 
   return (
     <>
-      <PageSection label="Records" title="Head-to-Head">
+      <PageSection label="Records" title="Head-to-Head.">
         <Link
           href="/records"
           className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"

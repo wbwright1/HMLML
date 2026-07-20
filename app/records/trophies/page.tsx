@@ -50,7 +50,7 @@ export default async function TrophyCasePage() {
 
   return (
     <>
-      <PageSection label="Records" title="Trophy Case">
+      <PageSection label="Records" title="Trophy Case.">
         <Link
           href="/records"
           className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"

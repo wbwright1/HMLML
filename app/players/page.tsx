@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const metadata = {
   title: "Players | Harambe Memorial League Memorial League",
   description:
-    "Browse every player in the Harambe Memorial League Memorial League — sort by fantasy points, position, age, experience, and filter by team.",
+    "Browse every player in the Harambe Memorial League Memorial League: sort by fantasy points, position, age, experience, and filter by team.",
 };
 
 interface PlayersPageProps {

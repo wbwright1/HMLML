@@ -39,6 +39,16 @@ const subPages = [
     label: "Trophy Case",
     description: "Every champion in league history",
   },
+  {
+    href: "/history",
+    label: "History",
+    description: "The full season-by-season timeline",
+  },
+  {
+    href: "/seasons",
+    label: "Seasons",
+    description: "Browse standings and champions by year",
+  },
 ];
 
 interface RecordBookEntry {

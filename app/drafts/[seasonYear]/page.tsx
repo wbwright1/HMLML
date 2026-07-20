@@ -293,7 +293,7 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
   return (
     <div className="flex min-h-[56px] flex-col justify-between gap-1 rounded-lg border border-divider bg-surface p-2">
       <div className="flex items-center justify-between gap-1">
-        <span className="font-mono text-[10px] tabular-nums text-text-muted">
+        <span className="font-mono text-[10px] tabular-nums text-text-tertiary">
           {pick.round}.{slot ?? "-"}
         </span>
         {pick.playerPosition && (
@@ -324,7 +324,7 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
       )}
 
       {pick.originalName && (
-        <p className="truncate text-[9px] text-text-muted">via {pick.currentName}</p>
+        <p className="truncate text-[9px] text-text-tertiary">via {pick.currentName}</p>
       )}
     </div>
   );

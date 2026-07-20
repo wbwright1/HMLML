@@ -8,7 +8,7 @@ import { getAllFranchises } from "@/lib/queries/franchises";
 export const metadata = {
   title: "Franchises | Harambe Memorial League Memorial League",
   description:
-    "Every franchise in the Harambe Memorial League Memorial League — rosters, records, and dynasty histories.",
+    "Every franchise in the Harambe Memorial League Memorial League: rosters, records, and dynasty histories.",
 };
 
 export default async function TeamsPage() {
@@ -22,7 +22,7 @@ export default async function TeamsPage() {
 
   if (!franchises || franchises.length === 0) {
     return (
-      <PageSection label="Franchises" title="Teams">
+      <PageSection label="Franchises" title="Teams.">
         <EmptyState
           icon="users"
           title="Loading Franchises"
@@ -33,9 +33,9 @@ export default async function TeamsPage() {
   }
 
   return (
-    <PageSection label="Franchises" title="Teams">
+    <PageSection label="Franchises" title="Teams.">
       <p className="text-body-lg text-muted-foreground max-w-prose">
-        Every franchise in the Harambe Memorial League Memorial League — rosters, records, and
+        Every franchise in the Harambe Memorial League Memorial League: rosters, records, and
         dynasty histories.
       </p>
 

@@ -111,7 +111,7 @@ export default async function FranchiseDraftsPage({
       </section>
 
       {/* Draft History */}
-      <PageSection label="All Picks" title="Draft History">
+      <PageSection label="All Picks" title="Draft History.">
         {draftHistory.length === 0 ? (
           <EmptyState
             icon="calendar"

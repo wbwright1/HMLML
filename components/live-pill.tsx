@@ -26,8 +26,8 @@ const DEFAULT_LABELS: Record<Exclude<LivePillState, "live">, string> = {
 /**
  * Header/topbar pill. Presentational — callers resolve live counts and
  * seasonal state (see lib/queries/nfl-state.ts) and pass the result in via
- * props. Absorbs the seasonal states previously rendered by
- * components/seasonal-pill-badge.tsx (deprecated, see that file).
+ * props. Absorbs the seasonal states previously rendered by the
+ * now-removed seasonal pill badge component.
  */
 export function LivePill({
   state,

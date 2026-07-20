@@ -82,7 +82,7 @@ function RosterSection({
     <div className="space-y-3">
       <h2 className="text-kicker">
         {label}
-        <span className="ml-2 text-text-muted normal-case tracking-normal font-normal">
+        <span className="ml-2 text-text-tertiary normal-case tracking-normal font-normal">
           ({players.length})
         </span>
       </h2>

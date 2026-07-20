@@ -9,7 +9,7 @@ import { SeasonNavigator } from "./season-navigator";
 export const metadata = {
   title: "League History | Harambe Memorial League Memorial League",
   description:
-    "A season-by-season look back at the Harambe Memorial League Memorial League — standings, champions, and the stories that shaped each year.",
+    "A season-by-season look back at the Harambe Memorial League Memorial League: standings, champions, and the stories that shaped each year.",
 };
 
 export default async function SeasonsPage() {
@@ -23,7 +23,7 @@ export default async function SeasonsPage() {
 
   if (seasons.length === 0) {
     return (
-      <PageSection label="Year by Year" title="League History">
+      <PageSection label="Year by Year" title="League History.">
         <EmptyState
           icon="calendar"
           title="No Seasons Yet"
@@ -42,9 +42,9 @@ export default async function SeasonsPage() {
 
   return (
     <>
-      <PageSection label="Year by Year" title="League History">
+      <PageSection label="Year by Year" title="League History.">
         <p className="text-body-lg text-text-secondary max-w-prose">
-          A season-by-season look back at the Harambe Memorial League Memorial League —
+          A season-by-season look back at the Harambe Memorial League Memorial League:
           standings, champions, and the stories that shaped each year.
         </p>
 

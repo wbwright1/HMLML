@@ -24,7 +24,7 @@ export default async function RivalriesPage() {
 
   return (
     <>
-      <PageSection label="Records" title="Rivalries">
+      <PageSection label="Records" title="Rivalries.">
         <Link
           href="/records"
           className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
