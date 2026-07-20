@@ -52,7 +52,7 @@ export default async function MatchupsPage() {
 
   return (
     <>
-      <PageSection label={`${seasonYear} Season`} title={`Week ${week}`}>
+      <PageSection label={`${seasonYear} Season`} title={`Week ${week}.`}>
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-body-lg text-text-secondary">
             {allComplete
