@@ -271,20 +271,12 @@ async function syncRostersAndPicks(
 async function syncMatchupScores(
   leagueId: string,
   seasonId: number,
-  week: number
+  currentWeek: number
 ): Promise<SyncStepResult> {
   const startTime = Date.now();
   const logId = await logSyncStart("hourly", "matchups");
 
   try {
-    const result = await getLeagueMatchups(leagueId, week);
-
-    if ("error" in result) {
-      throw new Error(`Sleeper matchups API error: ${result.error.message}`);
-    }
-
-    const sleeperMatchups = result.data;
-
     const rosterToFranchise = await getRosterToFranchiseMap(seasonId);
 
     // Get season info for playoff detection
@@ -294,99 +286,127 @@ async function syncMatchupScores(
       .where(eq(seasons.id, seasonId));
 
     const playoffWeekStart = seasonRow?.playoffWeekStart ?? 15;
-    const isPlayoffWeek = week >= playoffWeekStart;
+
+    // Path A: sync every regular-season week (1..playoffWeekStart-1), not just
+    // currentWeek, so the full-season schedule lands in `matchups` and is
+    // queryable for forward-looking schedule views. Future weeks come back
+    // from Sleeper with points 0, which the status logic below already maps
+    // to "scheduled". Always include the real currentWeek too, since it may
+    // fall in the playoff range (>= playoffWeekStart) and would otherwise be
+    // skipped.
+    const weeksToSync = new Set<number>();
+    for (let w = 1; w < playoffWeekStart; w++) {
+      weeksToSync.add(w);
+    }
+    weeksToSync.add(currentWeek);
 
     let rowCount = 0;
 
-    // Group Sleeper matchups by matchup_id to determine winners
-    const grouped = new Map<number, typeof sleeperMatchups>();
-    for (const m of sleeperMatchups) {
-      if (m.matchup_id == null) continue;
-      if (!grouped.has(m.matchup_id)) {
-        grouped.set(m.matchup_id, []);
+    for (const week of Array.from(weeksToSync).sort((a, b) => a - b)) {
+      const result = await getLeagueMatchups(leagueId, week);
+
+      if ("error" in result) {
+        throw new Error(
+          `Sleeper matchups API error (week ${week}): ${result.error.message}`
+        );
       }
-      grouped.get(m.matchup_id)!.push(m);
-    }
 
-    for (const [sleeperMatchupId, pair] of grouped) {
-      // Check if every side in this matchup pairing has isWinner set (non-null),
-      // which indicates final scores are in and the matchup is complete.
-      const allHaveWinner =
-        pair.length === 2 &&
-        pair.every((p) => {
-          const opponent = pair.find((o) => o.roster_id !== p.roster_id);
-          const pts = p.points ?? 0;
-          const oppPts = opponent?.points ?? 0;
-          return pts > 0 && oppPts > 0;
-        });
+      const sleeperMatchups = result.data;
+      const isPlayoffWeek = week >= playoffWeekStart;
 
-      for (const m of pair) {
-        const rosterIdStr = String(m.roster_id);
-        const franchiseId = rosterToFranchise.get(rosterIdStr);
-        if (!franchiseId) continue;
+      // Group Sleeper matchups by matchup_id to determine winners
+      const grouped = new Map<number, typeof sleeperMatchups>();
+      for (const m of sleeperMatchups) {
+        if (m.matchup_id == null) continue;
+        if (!grouped.has(m.matchup_id)) {
+          grouped.set(m.matchup_id, []);
+        }
+        grouped.get(m.matchup_id)!.push(m);
+      }
 
-        const points = m.points ?? 0;
+      for (const [sleeperMatchupId, pair] of grouped) {
+        // Check if every side in this matchup pairing has isWinner set (non-null),
+        // which indicates final scores are in and the matchup is complete.
+        const allHaveWinner =
+          pair.length === 2 &&
+          pair.every((p) => {
+            const opponent = pair.find((o) => o.roster_id !== p.roster_id);
+            const pts = p.points ?? 0;
+            const oppPts = opponent?.points ?? 0;
+            return pts > 0 && oppPts > 0;
+          });
 
-        // Determine winner status if both sides have points
-        let isWinner: boolean | null = null;
-        if (pair.length === 2) {
-          const opponent = pair.find((p) => p.roster_id !== m.roster_id);
-          if (opponent && points > 0 && (opponent.points ?? 0) > 0) {
-            isWinner = points > (opponent.points ?? 0);
+        for (const m of pair) {
+          const rosterIdStr = String(m.roster_id);
+          const franchiseId = rosterToFranchise.get(rosterIdStr);
+          if (!franchiseId) continue;
+
+          const points = m.points ?? 0;
+
+          // Determine winner status if both sides have points
+          let isWinner: boolean | null = null;
+          if (pair.length === 2) {
+            const opponent = pair.find((p) => p.roster_id !== m.roster_id);
+            if (opponent && points > 0 && (opponent.points ?? 0) > 0) {
+              isWinner = points > (opponent.points ?? 0);
+            }
           }
-        }
 
-        // Determine status:
-        // - "complete" when both sides have points and winners are determined
-        // - "in_progress" when points > 0 but not yet finalized
-        // - "scheduled" otherwise
-        let status = "scheduled";
-        if (allHaveWinner) {
-          status = "complete";
-        } else if (points > 0) {
-          status = "in_progress";
-        }
+          // Determine status:
+          // - "complete" when both sides have points and winners are determined
+          // - "in_progress" when points > 0 but not yet finalized
+          // - "scheduled" otherwise (future weeks Sleeper has paired but not played)
+          let status = "scheduled";
+          if (allHaveWinner) {
+            status = "complete";
+          } else if (points > 0) {
+            status = "in_progress";
+          }
 
-        await db
-          .insert(matchups)
-          .values({
-            seasonId,
-            week,
-            matchupId: sleeperMatchupId,
-            franchiseId,
-            rosterId: rosterIdStr,
-            points,
-            isWinner,
-            isPlayoff: isPlayoffWeek,
-            status,
-          })
-          .onConflictDoUpdate({
-            target: [matchups.seasonId, matchups.week, matchups.rosterId],
-            set: {
+          await db
+            .insert(matchups)
+            .values({
+              seasonId,
+              week,
               matchupId: sleeperMatchupId,
               franchiseId,
+              rosterId: rosterIdStr,
               points,
               isWinner,
               isPlayoff: isPlayoffWeek,
               status,
-              updatedAt: new Date(),
-            },
-          });
+            })
+            .onConflictDoUpdate({
+              target: [matchups.seasonId, matchups.week, matchups.rosterId],
+              set: {
+                matchupId: sleeperMatchupId,
+                franchiseId,
+                points,
+                isWinner,
+                isPlayoff: isPlayoffWeek,
+                status,
+                updatedAt: new Date(),
+              },
+            });
 
-        rowCount++;
+          rowCount++;
+        }
       }
     }
 
     // Mark all matchups from prior weeks as "complete" if they are still
-    // in_progress. If we are syncing week N, any week < N is finished.
-    if (week > 1) {
+    // in_progress. This MUST key off the real currentWeek (the actual NFL
+    // week from /v1/state/nfl), never the loop variable above — otherwise
+    // future weeks synced ahead of schedule would get incorrectly marked
+    // complete before they've even been played.
+    if (currentWeek > 1) {
       await db
         .update(matchups)
         .set({ status: "complete", updatedAt: new Date() })
         .where(
           and(
             eq(matchups.seasonId, seasonId),
-            sql`${matchups.week} < ${week}`,
+            sql`${matchups.week} < ${currentWeek}`,
             sql`${matchups.status} != 'complete'`
           )
         );

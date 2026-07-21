@@ -334,6 +334,14 @@ export default async function SeasonDetailPage({
       {/* Week-by-Week Results */}
       {maxWeek > 0 && (
         <PageSection label="Week by Week" title="Game Results">
+          <div className="mb-4">
+            <Link
+              href={`/schedule?season=${year}`}
+              className="text-body-sm text-accent-gold hover:brightness-110 transition-colors"
+            >
+              View Full Season Schedule &rarr;
+            </Link>
+          </div>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-9 gap-2">
             {Array.from({ length: maxWeek }, (_, i) => i + 1).map((week) => {
               const isPlayoff =
