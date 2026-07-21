@@ -90,6 +90,7 @@ export default async function FranchiseDetailPage({
             championships={franchise.championships}
             ownerName={currentOwner ?? undefined}
             coOwnerName={currentCoOwner ?? undefined}
+            division={franchise.seasonHistory[0]?.divisionName ?? undefined}
             variant="hero"
           />
         </ScrollReveal>
@@ -223,6 +224,11 @@ export default async function FranchiseDetailPage({
                           #{season.standingsFinish}
                         </span>
                       )}
+
+                      {/* Division */}
+                      <span className="text-muted-foreground whitespace-nowrap normal-case tracking-normal">
+                        {season.divisionName ?? "—"}
+                      </span>
 
                       {/* Playoff result */}
                       <PlayoffBadge result={season.playoffResult} />

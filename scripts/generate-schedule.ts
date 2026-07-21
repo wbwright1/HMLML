@@ -35,6 +35,7 @@ import {
   type Pair,
   type Week,
 } from "@/lib/schedule/build-schedule";
+import { resolveDivisionName } from "@/lib/divisions";
 
 // ===========================================================================
 // CONFIG — the only knobs; divisions + finalists auto-populate from Sleeper
@@ -44,9 +45,6 @@ const SEASON_YEAR = 2026; // season being scheduled
 
 const DIVISIONAL_WEEKS = [6, 10, 14]; // 3 all-divisional weeks (must exclude wk 1)
 const PRIMETIME_WEEK = 14; // which divisional week is the marquee showcase
-
-// Optional friendly names for Sleeper's numbered divisions (1..3); labels only.
-const DIVISION_NAMES: Record<number, string> = { 1: "Division 1", 2: "Division 2", 3: "Division 3" };
 
 // Set to [championSlug, runnerUpSlug] to bypass finalist auto-derivation.
 const FINALISTS_OVERRIDE: [string, string] | null = null;
@@ -216,7 +214,7 @@ async function main() {
   const { divisions, numbers } = await fetchDivisions(season.leagueId, season.id);
   console.log("Divisions (from Sleeper):");
   divisions.forEach((ids, i) => {
-    const label = DIVISION_NAMES[numbers[i]] ?? `Division ${numbers[i]}`;
+    const label = resolveDivisionName(null, numbers[i]);
     console.log(`  ${label}: ${ids.map(fr.nameOf).join(", ")}`);
   });
 
@@ -276,7 +274,7 @@ async function main() {
     seasonYear: SEASON_YEAR,
     divisions: divisions.map((ids, i) => ({
       number: numbers[i],
-      name: DIVISION_NAMES[numbers[i]] ?? `Division ${numbers[i]}`,
+      name: resolveDivisionName(null, numbers[i]),
       teams: ids.map((id) => fr.nameOf(id)),
     })),
     weeks: weeks.map((w) => ({

@@ -9,13 +9,25 @@ interface StandingsEntry {
   record: string;
   abbreviation?: string | null;
   brandingColor?: string | null;
+  /** Division metadata; absent for legacy/pre-division seasons (RISK-B). */
+  division?: number | null;
+  divisionName?: string | null;
+  /** Projected playoff seed 1..6, when a projection was supplied. */
+  seed?: number | null;
+  isDivisionWinner?: boolean;
+  /** Whether the team is projected to make the playoff field. */
+  isIn?: boolean;
 }
 
 interface StandingsSnapshotCardProps {
   standings: StandingsEntry[];
   week: number;
   seasonYear: number;
-  /** Rank after which the "playoff line" divider is drawn. Defaults to 6. */
+  /**
+   * Rank after which the "playoff line" divider is drawn. Defaults to 6.
+   * Ignored when entries carry `isIn` (a real projection is present); the
+   * line is then drawn after the last `isIn: true` entry.
+   */
   playoffLineAfter?: number;
 }
 
@@ -34,6 +46,13 @@ export function StandingsSnapshotCard({
 
   const lastRank = standings[standings.length - 1].rank;
 
+  // When a real projection is present (entries carry isIn), the playoff line
+  // sits after the last projected-in team instead of the static default.
+  const hasProjection = standings.some((s) => s.isIn !== undefined);
+  const effectiveLineAfter = hasProjection
+    ? (standings.filter((s) => s.isIn).at(-1)?.rank ?? playoffLineAfter)
+    : playoffLineAfter;
+
   return (
     <div className="card-surface overflow-hidden">
       <ul className="divide-y divide-divider">
@@ -43,7 +62,7 @@ export function StandingsSnapshotCard({
           // Collapse mid-pack rows on mobile: keep the top of the table, the
           // playoff line, and the doormat.
           const collapseOnMobile =
-            entry.rank > playoffLineAfter + 1 && !isDoormat;
+            entry.rank > effectiveLineAfter + 1 && !isDoormat;
 
           return (
             <li key={entry.franchiseSlug}>
@@ -53,7 +72,7 @@ export function StandingsSnapshotCard({
                 isDoormat={isDoormat}
                 collapseOnMobile={collapseOnMobile}
               />
-              {entry.rank === playoffLineAfter &&
+              {entry.rank === effectiveLineAfter &&
                 entry.rank !== lastRank && <PlayoffLine />}
             </li>
           );
@@ -125,10 +144,36 @@ function LadderRow({
       />
       <span className={`text-body flex-1 min-w-0 truncate ${nameColor}`}>
         {entry.franchiseName}
+        {entry.divisionName && (
+          <span className="hidden lg:inline text-caption text-text-tertiary normal-case tracking-normal ml-2">
+            {entry.divisionName}
+          </span>
+        )}
       </span>
       {isDoormat && (
         <span className="hidden sm:inline text-body-sm font-serif italic text-accent-warm shrink-0">
           {SNARKY_LABELS.LEAGUE_DOORMAT.displayText.toLowerCase()}
+        </span>
+      )}
+      {entry.seed != null && (
+        <span
+          className={`hidden sm:inline text-caption shrink-0 ${
+            entry.isDivisionWinner ? "text-accent-gold" : "text-text-tertiary"
+          }`}
+          title={entry.isDivisionWinner ? "Division winner" : "Wildcard seed"}
+        >
+          {/* Seed number first so it never reads as a division number
+              (e.g. "#2 DIV", not "D2" which looks like "Division 2"). */}
+          {`#${entry.seed} ${entry.isDivisionWinner ? "DIV" : "WC"}`}
+        </span>
+      )}
+      {entry.isIn !== undefined && (
+        <span
+          className={`text-caption shrink-0 font-semibold ${
+            entry.isIn ? "text-accent-green" : "text-accent-warm"
+          }`}
+        >
+          {entry.isIn ? "IN" : "OUT"}
         </span>
       )}
       <span

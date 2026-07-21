@@ -21,6 +21,7 @@ import {
 } from "@/lib/sleeper";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { derivePlayoffResults } from "@/lib/sync/derive-playoffs";
+import { resolveDivisionName } from "@/lib/divisions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -118,6 +119,22 @@ async function syncLeagueSettings(): Promise<SyncStepResult> {
         ? league.settings.playoff_week_start
         : null;
 
+    // Division metadata: settings.divisions is the count; names come from
+    // league.metadata.division_N (absent in this league, so names default to
+    // "Division N" via resolveDivisionName). Nullable for pre-division leagues.
+    const divisionCount =
+      typeof league.settings.divisions === "number"
+        ? league.settings.divisions
+        : null;
+    const divisionNames: Record<string, string> | null = divisionCount
+      ? Object.fromEntries(
+          Array.from({ length: divisionCount }, (_, i) => i + 1).map((n) => [
+            String(n),
+            resolveDivisionName(league.metadata, n),
+          ]),
+        )
+      : null;
+
     await db
       .insert(seasons)
       .values({
@@ -127,6 +144,8 @@ async function syncLeagueSettings(): Promise<SyncStepResult> {
         status: league.status,
         totalRosters: league.total_rosters,
         playoffWeekStart,
+        divisionCount,
+        divisionNames,
         settingsJson: {
           settings: league.settings,
           roster_positions: league.roster_positions,
@@ -142,6 +161,8 @@ async function syncLeagueSettings(): Promise<SyncStepResult> {
           status: league.status,
           totalRosters: league.total_rosters,
           playoffWeekStart,
+          divisionCount,
+          divisionNames,
           settingsJson: {
             settings: league.settings,
             roster_positions: league.roster_positions,
@@ -282,6 +303,12 @@ async function syncUsersAndRosters(): Promise<SyncStepResult> {
       const fptsAgainstDecimal = roster.settings.fpts_against_decimal ?? 0;
       const pointsAgainst = fptsAgainst + fptsAgainstDecimal / 100;
 
+      const divisionNumber = roster.settings.division ?? null;
+      const divisionName =
+        divisionNumber != null
+          ? resolveDivisionName(leagueResult.data.metadata, divisionNumber)
+          : null;
+
       // Upsert franchise_season
       await db
         .insert(franchiseSeasons)
@@ -292,6 +319,8 @@ async function syncUsersAndRosters(): Promise<SyncStepResult> {
           userId: ownerId,
           ownerDisplayName: userData.displayName,
           coOwnerDisplayName,
+          division: divisionNumber,
+          divisionName,
           wins: roster.settings.wins ?? 0,
           losses: roster.settings.losses ?? 0,
           ties: roster.settings.ties ?? 0,
@@ -306,6 +335,8 @@ async function syncUsersAndRosters(): Promise<SyncStepResult> {
             userId: ownerId,
             ownerDisplayName: userData.displayName,
             coOwnerDisplayName,
+            division: divisionNumber,
+            divisionName,
             wins: roster.settings.wins ?? 0,
             losses: roster.settings.losses ?? 0,
             ties: roster.settings.ties ?? 0,

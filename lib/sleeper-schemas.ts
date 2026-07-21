@@ -13,6 +13,13 @@ export const SleeperLeagueSchema = z
     settings: z.record(z.string(), z.unknown()),
     roster_positions: z.array(z.string()),
     scoring_settings: z.record(z.string(), z.number()),
+    // Division names, when set, live at metadata.division_N keys (unset in
+    // this league; divisions default to "Division N" via resolveDivisionName).
+    // Values are typed unknown, NOT string: Sleeper does not guarantee every
+    // metadata value is a string, and a stricter schema would hard-fail the
+    // whole league parse (and thus daily + hourly sync) over a cosmetic
+    // field. resolveDivisionName string-guards before use.
+    metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   })
   .passthrough();
 
@@ -58,6 +65,7 @@ export const SleeperRosterSchema = z
         fpts_decimal: z.number().optional(),
         fpts_against: z.number().optional(),
         fpts_against_decimal: z.number().optional(),
+        division: z.number().optional(),
       })
       .passthrough(),
     metadata: z.record(z.string(), z.unknown()).nullable().optional(),

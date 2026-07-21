@@ -12,6 +12,9 @@ interface FranchiseHeaderProps {
   allTimeRecord: { wins: number; losses: number };
   championships: number;
   currentSeason?: { record: string; rank: number };
+  /** Current season's division name (e.g. "Division 2"); omitted for
+   * legacy/pre-division seasons. */
+  division?: string;
 }
 
 export function FranchiseHeader({
@@ -25,6 +28,7 @@ export function FranchiseHeader({
   allTimeRecord,
   championships,
   currentSeason,
+  division,
 }: FranchiseHeaderProps) {
   const totalGames = allTimeRecord.wins + allTimeRecord.losses;
   const winPct = totalGames > 0 ? (allTimeRecord.wins / totalGames) * 100 : 0;
@@ -56,6 +60,9 @@ export function FranchiseHeader({
           />
         </div>
         <div className="space-y-2">
+          {division && (
+            <p className="text-kicker text-accent-gold">{division}</p>
+          )}
           <h1 className="text-h1">{franchiseName}</h1>
           <ChampionshipStars count={championships} variant="hero" />
           {ownerLabel && (

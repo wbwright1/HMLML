@@ -98,6 +98,8 @@ export async function getFranchiseBySlug(slug: string) {
         userId: franchiseSeasons.userId,
         ownerDisplayName: franchiseSeasons.ownerDisplayName,
         coOwnerDisplayName: franchiseSeasons.coOwnerDisplayName,
+        division: franchiseSeasons.division,
+        divisionName: franchiseSeasons.divisionName,
         wins: franchiseSeasons.wins,
         losses: franchiseSeasons.losses,
         ties: franchiseSeasons.ties,

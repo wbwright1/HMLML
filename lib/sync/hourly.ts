@@ -28,6 +28,7 @@ import type {
 import { alignStarterSlots, computeProjectedPoints } from "@/lib/lineup-slots";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
+import { resolveDivisionName } from "@/lib/divisions";
 
 // Shape of the per-season settings blob stored in seasons.settings_json.
 interface SeasonSettingsJson {
@@ -145,8 +146,9 @@ async function syncRostersAndPicks(
   const logId = await logSyncStart("hourly", "rosters");
 
   try {
-    const [rostersResult] = await Promise.all([
+    const [rostersResult, leagueResult] = await Promise.all([
       getLeagueRosters(leagueId),
+      getLeague(leagueId),
     ]);
 
     if ("error" in rostersResult) {
@@ -154,8 +156,14 @@ async function syncRostersAndPicks(
         `Sleeper rosters API error: ${rostersResult.error.message}`
       );
     }
+    if ("error" in leagueResult) {
+      throw new Error(
+        `Sleeper league API error: ${leagueResult.error.message}`
+      );
+    }
 
     const rosters = rostersResult.data;
+    const leagueMetadata = leagueResult.data.metadata;
     let rowCount = 0;
 
     const rosterToFranchise = await getRosterToFranchiseMap(seasonId);
@@ -174,9 +182,17 @@ async function syncRostersAndPicks(
       const fptsAgainstDecimal = roster.settings.fpts_against_decimal ?? 0;
       const pointsAgainst = fptsAgainst + fptsAgainstDecimal / 100;
 
+      const divisionNumber = roster.settings.division ?? null;
+      const divisionName =
+        divisionNumber != null
+          ? resolveDivisionName(leagueMetadata, divisionNumber)
+          : null;
+
       await db
         .update(franchiseSeasons)
         .set({
+          division: divisionNumber,
+          divisionName,
           wins: roster.settings.wins ?? 0,
           losses: roster.settings.losses ?? 0,
           ties: roster.settings.ties ?? 0,
