@@ -12,6 +12,8 @@ import {
   type DraftPickWithFranchise,
 } from "@/lib/queries/drafts";
 
+export const dynamic = "force-dynamic";
+
 interface DraftDetailPageProps {
   params: Promise<{ seasonYear: string }>;
   searchParams: Promise<{ round?: string }>;

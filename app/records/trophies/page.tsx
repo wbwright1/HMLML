@@ -8,6 +8,8 @@ import { EmptyState } from "@/components/empty-state";
 import { getTrophyCase } from "@/lib/queries/records";
 import type { TrophyEntry } from "@/lib/queries/records";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Trophy Case | Harambe Memorial League Memorial League",
   description:

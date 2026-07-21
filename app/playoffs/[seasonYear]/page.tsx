@@ -15,6 +15,8 @@ import {
   type MatchupTeam,
 } from "@/lib/queries/matchups";
 
+export const dynamic = "force-dynamic";
+
 interface PlayoffBracketPageProps {
   params: Promise<{ seasonYear: string }>;
 }

@@ -6,6 +6,8 @@ import { SuperlativeBadge } from "@/components/superlative-badge";
 import { EmptyState } from "@/components/empty-state";
 import { SeasonNavigator } from "./season-navigator";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "League History | Harambe Memorial League Memorial League",
   description:

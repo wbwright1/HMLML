@@ -17,6 +17,8 @@ import {
 import { getNflState } from "@/lib/queries/nfl-state";
 import { getCurrentWeekProjectionsByPlayer } from "@/lib/queries/player-points";
 
+export const dynamic = "force-dynamic";
+
 interface RosterPageProps {
   params: Promise<{ franchiseSlug: string }>;
 }

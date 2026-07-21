@@ -35,6 +35,8 @@ import { getOffseasonRecap, getRecentTransactions } from "@/lib/queries/offseaso
 import type { NflSeasonType } from "@/lib/queries/nfl-state";
 import type { PairedMatchup } from "@/lib/queries/matchups";
 
+export const dynamic = "force-dynamic";
+
 export default async function HomePage() {
   // Fetch NFL state and core data in parallel
   let nflState: { seasonType: NflSeasonType; week: number; season: string } | null = null;

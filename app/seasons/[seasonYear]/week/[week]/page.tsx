@@ -10,6 +10,8 @@ import {
   getSeasonByYearSimple,
 } from "@/lib/queries/matchups";
 
+export const dynamic = "force-dynamic";
+
 interface WeekResultsPageProps {
   params: Promise<{ seasonYear: string; week: string }>;
 }

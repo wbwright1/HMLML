@@ -9,6 +9,8 @@ import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getPlayoffLabel, getPlayoffBadgeVariant } from "@/lib/playoff-labels";
 import { EmptyState } from "@/components/empty-state";
 
+export const dynamic = "force-dynamic";
+
 interface FranchiseDetailPageProps {
   params: Promise<{ franchiseSlug: string }>;
 }
