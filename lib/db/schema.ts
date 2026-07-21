@@ -239,6 +239,73 @@ export const rosterPlayers = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// player_week_points
+// ---------------------------------------------------------------------------
+// Per-player, per-week fantasy scoring for a roster in a matchup. Powers
+// lineup tables, win probability, players-left counts, and PROJ columns.
+// No FK to players: historical players may be missing from the players
+// snapshot, so queries left-join instead.
+export const playerWeekPoints = pgTable(
+  "player_week_points",
+  {
+    id: serial("id").primaryKey(),
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id),
+    week: integer("week").notNull(),
+    rosterId: text("roster_id").notNull(),
+    franchiseId: text("franchise_id")
+      .notNull()
+      .references(() => franchises.id),
+    matchupId: integer("matchup_id"), // Sleeper pairing ID, nullable
+    playerId: text("player_id").notNull(), // NO FK — historical players may be absent
+    points: real("points").notNull().default(0),
+    projectedPoints: real("projected_points"),
+    slot: text("slot"), // 'QB' | 'RB' | 'WR' | 'TE' | 'FLEX' | 'SUPER_FLEX' | 'K' | 'DEF' | ... | 'BN'
+    started: boolean("started").notNull().default(false),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_player_week_points_season_week_roster_player").on(
+      table.seasonId,
+      table.week,
+      table.rosterId,
+      table.playerId,
+    ),
+    index("idx_player_week_points_season_week").on(
+      table.seasonId,
+      table.week,
+    ),
+    index("idx_player_week_points_player_id").on(table.playerId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// nfl_games
+// ---------------------------------------------------------------------------
+// NFL schedule rows from Sleeper's schedule endpoint, keyed by game_id. Powers
+// per-starter "yet to play" classification: a starter's nfl_team joins here
+// through home_team/away_team to read the game's real status.
+export const nflGames = pgTable(
+  "nfl_games",
+  {
+    id: serial("id").primaryKey(),
+    gameId: text("game_id").notNull().unique(),
+    seasonYear: integer("season_year").notNull(),
+    week: integer("week").notNull(),
+    gameDate: text("game_date"),
+    homeTeam: text("home_team").notNull(),
+    awayTeam: text("away_team").notNull(),
+    status: text("status").notNull(), // 'pre_game' | 'complete' | 'canceled' | in-game value
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_nfl_games_season_week").on(table.seasonYear, table.week),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // sync_log
 // ---------------------------------------------------------------------------
 export const syncLog = pgTable(
@@ -286,6 +353,12 @@ export type NewTransaction = typeof transactions.$inferInsert;
 
 export type RosterPlayer = typeof rosterPlayers.$inferSelect;
 export type NewRosterPlayer = typeof rosterPlayers.$inferInsert;
+
+export type PlayerWeekPoints = typeof playerWeekPoints.$inferSelect;
+export type NewPlayerWeekPoints = typeof playerWeekPoints.$inferInsert;
+
+export type NflGame = typeof nflGames.$inferSelect;
+export type NewNflGame = typeof nflGames.$inferInsert;
 
 export type SyncLogEntry = typeof syncLog.$inferSelect;
 export type NewSyncLogEntry = typeof syncLog.$inferInsert;

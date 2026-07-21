@@ -12,6 +12,9 @@ import {
   SleeperPlayerSchema,
   SleeperBracketMatchSchema,
   SleeperPlayerStatsSchema,
+  SleeperProjectionsSchema,
+  SleeperTrendingAddSchema,
+  SleeperScheduleGameSchema,
   type SleeperLeague,
   type SleeperUser,
   type SleeperRoster,
@@ -24,11 +27,16 @@ import {
   type SleeperPlayer,
   type SleeperBracketMatch,
   type SleeperPlayerStats,
+  type SleeperProjections,
+  type SleeperTrendingAdd,
+  type SleeperScheduleGame,
 } from "./sleeper-schemas";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const SLEEPER_BASE_URL = "https://api.sleeper.app/v1";
+// The schedule endpoint lives at the API root, NOT under /v1.
+const SLEEPER_ROOT_URL = "https://api.sleeper.app";
 
 // ─── Result Type ─────────────────────────────────────────────────────────────
 
@@ -208,5 +216,52 @@ export async function getPlayerStats(
   return fetchSleeper(
     `https://api.sleeper.app/v1/stats/nfl/regular/${season}`,
     SleeperPlayerStatsSchema
+  );
+}
+
+/**
+ * Fetch per-player weekly projections for a given NFL season and week.
+ * Returns a record keyed by player_id with a stat map (pass_yd, rush_td,
+ * pts_ppr, pts_half_ppr, pts_std, etc.). Historical projections are served
+ * for past seasons.
+ */
+export async function getWeekProjections(
+  season: string | number,
+  week: number
+): Promise<SleeperResult<SleeperProjections>> {
+  return fetchSleeper(
+    `https://api.sleeper.app/v1/projections/nfl/regular/${season}/${week}`,
+    SleeperProjectionsSchema
+  );
+}
+
+/**
+ * Fetch the NFL schedule for a season type ("regular" | "post") and season.
+ * NOTE: this endpoint is served at the API root, not under /v1. Returns an
+ * array of games with an NFL-abbreviation home/away and a game status.
+ */
+export async function getNflSchedule(
+  seasonType: string,
+  season: string
+): Promise<SleeperResult<SleeperScheduleGame[]>> {
+  return fetchSleeper(
+    `${SLEEPER_ROOT_URL}/schedule/nfl/${seasonType}/${season}`,
+    z.array(SleeperScheduleGameSchema)
+  );
+}
+
+/**
+ * Fetch the players most-added across Sleeper in the lookback window.
+ * Returns an array of { player_id, count }, ordered by count descending.
+ * Cached for 1 hour since it is queried at render time from the players page.
+ */
+export async function getTrendingAdds(
+  lookbackHours = 24,
+  limit = 25
+): Promise<SleeperResult<SleeperTrendingAdd[]>> {
+  return fetchSleeper(
+    `/players/nfl/trending/add?lookback_hours=${lookbackHours}&limit=${limit}`,
+    SleeperTrendingAddSchema,
+    { revalidate: 3600 }
   );
 }

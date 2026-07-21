@@ -14,6 +14,8 @@ import {
   getFranchiseBySlug,
   getFranchiseRoster,
 } from "@/lib/queries/franchises";
+import { getNflState } from "@/lib/queries/nfl-state";
+import { getCurrentWeekProjectionsByPlayer } from "@/lib/queries/player-points";
 
 interface RosterPageProps {
   params: Promise<{ franchiseSlug: string }>;
@@ -72,11 +74,20 @@ type RosterPlayer = NonNullable<
 function RosterSection({
   label,
   players,
+  projectionsByPlayer,
+  showProjColumn,
 }: {
   label: string;
   players: RosterPlayer[];
+  projectionsByPlayer: Map<string, number>;
+  showProjColumn: boolean;
 }) {
   if (players.length === 0) return null;
+
+  const headers = showProjColumn
+    ? ["Slot", "Player", "Team", "Status", "Age", "Exp", "Proj"]
+    : ["Slot", "Player", "Team", "Status", "Age", "Exp"];
+  const keyColumns = showProjColumn ? [0, 1, 2, 3, 6] : [0, 1, 2, 3];
 
   return (
     <div className="space-y-3">
@@ -88,11 +99,11 @@ function RosterSection({
       </h2>
       <div className="card-surface p-4 md:p-5">
         <MobileTableView
-          headers={["Slot", "Player", "Team", "Status", "Age", "Exp"]}
-          keyColumns={[0, 1, 2, 3]}
+          headers={headers}
+          keyColumns={keyColumns}
           rows={players.map((player) => {
             const name = getPlayerName(player);
-            return [
+            const row = [
               <PositionBadge key="slot" position={player.position} />,
               <div key="player" className="flex items-center gap-2.5">
                 {player.position === "DEF" ? (
@@ -124,6 +135,20 @@ function RosterSection({
                 {player.yearsExp ?? "—"}
               </span>,
             ];
+
+            if (showProjColumn) {
+              const projection = projectionsByPlayer.get(player.playerId);
+              row.push(
+                <div
+                  key="proj"
+                  className="text-right font-mono tabular-nums text-text-tertiary"
+                >
+                  {projection != null ? projection.toFixed(1) : "—"}
+                </div>
+              );
+            }
+
+            return row;
           })}
         />
       </div>
@@ -172,22 +197,33 @@ export default async function RosterPage({ params }: RosterPageProps) {
   // Use the most recent season to fetch the roster
   const latestSeason = franchise.seasonHistory[0];
 
-  let roster: Awaited<ReturnType<typeof getFranchiseRoster>> = null;
+  // These three are independent; fetch in parallel. Each degrades to null on
+  // failure (roster data missing, DB down in dev, NFL state unavailable) so one
+  // failure doesn't sink the others.
+  const [roster, allFranchises, nflState] = await Promise.all([
+    latestSeason
+      ? getFranchiseRoster(franchise.id, latestSeason.seasonId).catch(() => null)
+      : Promise.resolve(null),
+    getAllFranchises().catch(() => null),
+    getNflState().catch(() => null),
+  ]);
 
-  if (latestSeason) {
+  const isCurrentSeason =
+    !!latestSeason && !!nflState && Number(nflState.season) === latestSeason.seasonYear;
+
+  let projectionsByPlayer = new Map<string, number>();
+  if (isCurrentSeason && latestSeason && nflState) {
     try {
-      roster = await getFranchiseRoster(franchise.id, latestSeason.seasonId);
+      projectionsByPlayer = await getCurrentWeekProjectionsByPlayer(
+        latestSeason.seasonId,
+        nflState.week
+      );
     } catch {
-      // Roster data may not be available
+      // Projections may not be available
     }
   }
 
-  let allFranchises: Awaited<ReturnType<typeof getAllFranchises>> = null;
-  try {
-    allFranchises = await getAllFranchises();
-  } catch {
-    // DB may not be connected in dev
-  }
+  const showProjColumn = isCurrentSeason && projectionsByPlayer.size > 0;
 
   const sortedRoster = roster
     ? [...roster].sort(
@@ -281,8 +317,18 @@ export default async function RosterPage({ params }: RosterPageProps) {
         <div className="grid gap-8 lg:grid-cols-[1fr_300px]">
           <ScrollReveal delay={80}>
             <div className="space-y-8">
-              <RosterSection label="Starting Lineup" players={starters} />
-              <RosterSection label="Bench & IR" players={benchAndIr} />
+              <RosterSection
+                label="Starting Lineup"
+                players={starters}
+                projectionsByPlayer={projectionsByPlayer}
+                showProjColumn={showProjColumn}
+              />
+              <RosterSection
+                label="Bench & IR"
+                players={benchAndIr}
+                projectionsByPlayer={projectionsByPlayer}
+                showProjColumn={showProjColumn}
+              />
             </div>
           </ScrollReveal>
 

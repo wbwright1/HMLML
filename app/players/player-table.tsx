@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback, type KeyboardEvent } from "react";
 import Link from "next/link";
-import { Search, ChevronUp, ChevronDown } from "lucide-react";
+import { Search, ChevronUp, ChevronDown, ArrowUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -18,6 +18,19 @@ import { PlayerHeadshot } from "@/components/player-headshot";
 import { EmptyState } from "@/components/empty-state";
 import type { RosteredPlayer } from "@/lib/queries/players";
 
+/**
+ * A RosteredPlayer enriched with the current-week PROJ signal and the
+ * trending-adds signal. Both fields are null when the page has no data for
+ * that player (no sync yet, or the player isn't in the trending list); the
+ * table decides whether to show the PROJ/TRD columns at all via
+ * showProjColumn / showTrdColumn, computed once in the page from whether any
+ * player has a non-null value.
+ */
+export interface PlayerRow extends RosteredPlayer {
+  projPoints: number | null;
+  trendingCount: number | null;
+}
+
 const POSITIONS = ["ALL", "QB", "RB", "WR", "TE"] as const;
 type PositionFilter = (typeof POSITIONS)[number];
 
@@ -25,8 +38,8 @@ type SortKey = "name" | "points" | "age" | "yearsExp" | "hmlTeam" | "status";
 type SortDir = "asc" | "desc";
 
 function compareValues(
-  a: RosteredPlayer,
-  b: RosteredPlayer,
+  a: PlayerRow,
+  b: PlayerRow,
   key: SortKey,
   dir: SortDir
 ): number {
@@ -119,6 +132,27 @@ function StatusIndicator({
   return <span className="text-body-sm text-text-tertiary">&ndash;</span>;
 }
 
+/**
+ * Small trending-adds marker: an up-arrow glyph plus the raw add count, so
+ * the signal never rests on color alone. Renders a plain dash for players
+ * outside the trending list.
+ */
+function TrendingSignal({ count }: { count: number | null }) {
+  if (count == null) {
+    return <span className="text-body-sm text-text-tertiary">-</span>;
+  }
+
+  return (
+    <span
+      className="inline-flex items-center justify-end gap-1 text-caption font-mono font-semibold text-accent-green"
+      title={`${count} adds in the last 24 hours`}
+    >
+      <ArrowUp className="size-3" aria-hidden="true" />
+      {count}
+    </span>
+  );
+}
+
 interface SortHeaderProps {
   label: string;
   sortKey: SortKey;
@@ -175,10 +209,14 @@ function SortHeader({
 type RosterFilter = "ALL" | "FA" | string; // string = franchise ID
 
 interface PlayerTableProps {
-  players: RosteredPlayer[];
+  players: PlayerRow[];
   franchises: { id: string; name: string; slug: string }[];
   statsSeason: number | null;
   initialQuery?: string;
+  /** Whether to render the PROJ column: false when no rows have a projection (no sync yet / offseason). */
+  showProjColumn?: boolean;
+  /** Whether to render the TRD column: false when the trending-adds list is empty. */
+  showTrdColumn?: boolean;
 }
 
 export function PlayerTable({
@@ -186,6 +224,8 @@ export function PlayerTable({
   franchises,
   statsSeason,
   initialQuery = "",
+  showProjColumn = false,
+  showTrdColumn = false,
 }: PlayerTableProps) {
   const [search, setSearch] = useState(initialQuery);
   const [posFilter, setPosFilter] = useState<PositionFilter>("ALL");
@@ -333,6 +373,11 @@ export function PlayerTable({
                 onSort={handleSort}
                 align="right"
               />
+              {showProjColumn && (
+                <th className="pb-3 pr-4 text-right text-caption text-text-tertiary">
+                  Proj
+                </th>
+              )}
               <SortHeader
                 label="Age"
                 sortKey="age"
@@ -363,6 +408,11 @@ export function PlayerTable({
                 activeDir={sortDir}
                 onSort={handleSort}
               />
+              {showTrdColumn && (
+                <th className="pb-3 pr-4 text-right text-caption text-text-tertiary">
+                  Trd
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -396,6 +446,15 @@ export function PlayerTable({
                       : "-"}
                   </span>
                 </td>
+                {showProjColumn && (
+                  <td className="py-3 pr-4 text-right">
+                    <span className="text-stat font-mono text-text-tertiary">
+                      {player.projPoints != null
+                        ? player.projPoints.toFixed(1)
+                        : "-"}
+                    </span>
+                  </td>
+                )}
                 <td className="py-3 pr-4 text-right">
                   <span className="text-stat text-text-secondary">
                     {player.age ?? "-"}
@@ -426,6 +485,11 @@ export function PlayerTable({
                     injuryStatus={player.injuryStatus}
                   />
                 </td>
+                {showTrdColumn && (
+                  <td className="py-3 pr-4 text-right">
+                    <TrendingSignal count={player.trendingCount} />
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -466,6 +530,23 @@ export function PlayerTable({
                 />
               </div>
             </div>
+            {(showProjColumn || (showTrdColumn && player.trendingCount != null)) && (
+              <div className="flex items-center gap-4 text-body-sm">
+                {showProjColumn && (
+                  <span className="text-text-tertiary">
+                    PROJ{" "}
+                    <span className="text-stat font-mono text-text-tertiary">
+                      {player.projPoints != null
+                        ? player.projPoints.toFixed(1)
+                        : "-"}
+                    </span>
+                  </span>
+                )}
+                {showTrdColumn && player.trendingCount != null && (
+                  <TrendingSignal count={player.trendingCount} />
+                )}
+              </div>
+            )}
             <div className="flex items-center justify-between border-t border-divider pt-2 text-body-sm">
               <span className="text-text-tertiary">HMLML Team</span>
               {player.ownerFranchiseSlug && player.ownerFranchiseName ? (
