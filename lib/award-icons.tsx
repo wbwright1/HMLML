@@ -64,6 +64,32 @@ const icons: Record<string, ReactNode> = {
       <line x1="9.5" y1="7.5" x2="6.5" y2="10.5" />
     </svg>
   ),
+  "paper tiger": (
+    <svg {...iconProps}>
+      <path d="M8 2.5c2.5 0 4.5 1.5 4.5 4 0 3-2 4-2 6.5H5.5c0-2.5-2-3.5-2-6.5 0-2.5 2-4 4.5-4z" />
+      <path d="M6 4.5v-2M10 4.5v-2" />
+    </svg>
+  ),
+  "rock bottom": (
+    <svg {...iconProps}>
+      <path d="M8 2v7" />
+      <path d="M5 6l3 3 3-3" />
+      <path d="M2.5 13.5h11" />
+    </svg>
+  ),
+
+  // Neutral / narrative superlatives
+  "on fire": (
+    <svg {...iconProps}>
+      <path d="M8 1.5s3 3 3 6a3 3 0 01-6 0c0-1 .5-1.5.5-1.5s.5 1 1.5 1c1 0 1-1 1-1.5 0-1-1-2-1-2s2 0 3.5 2.5c.5 1 .5 2 .5 2.5" />
+    </svg>
+  ),
+  "what could've been": (
+    <svg {...iconProps}>
+      <circle cx="8" cy="7" r="4.5" />
+      <path d="M8 5.5v3M6.5 12.5h3" />
+    </svg>
+  ),
 
   // Player Awards (gold)
   "best qb": (

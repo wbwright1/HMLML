@@ -44,6 +44,10 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
     description: 'Franchise that allowed the most points against in the season (high PA)',
     tone: 'sting',
   },
+  // DRAFT_DAY_GENIUS and WASTED_PICKS are intentionally unwired: draft ROI
+  // needs a pick-value baseline (e.g. positional ADP or expected-value curve)
+  // that is not stored anywhere in the schema today. Leave them defined here,
+  // do not compute or render them, until a draft-value model exists.
   DRAFT_DAY_GENIUS: {
     key: 'DRAFT_DAY_GENIUS',
     displayText: 'Draft Day Genius',

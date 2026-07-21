@@ -31,7 +31,9 @@ import { computeWinProbability } from "@/lib/win-probability";
 import { getNflState } from "@/lib/queries/nfl-state";
 import { getPreseasonAwards } from "@/lib/queries/preseason";
 import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
+import { getWeeklyLineupAwards } from "@/lib/queries/lineup-efficiency";
 import { getOffseasonRecap, getRecentTransactions } from "@/lib/queries/offseason";
+import { SNARKY_LABELS } from "@/lib/content";
 import type { NflSeasonType } from "@/lib/queries/nfl-state";
 import type { PairedMatchup } from "@/lib/queries/matchups";
 
@@ -408,6 +410,7 @@ async function RegularSeasonHub({
   let superlatives: Awaited<ReturnType<typeof getHomepageSuperlatives>> | null = null;
   let weeklySuperlatives: Awaited<ReturnType<typeof getWeeklySuperlatives>> | null = null;
   let lastWeekResults: Awaited<ReturnType<typeof getLastWeekResults>> | null = null;
+  let weeklyCoachingMalpractice: Awaited<ReturnType<typeof getWeeklyLineupAwards>> | null = null;
   // Per-roster live inputs (players left, projected remaining) for win-prob
   // bars and the Players Left hero stat. Empty when the backfill has not run.
   let hubLive: HubLiveData | undefined;
@@ -422,7 +425,10 @@ async function RegularSeasonHub({
 
       // Get weekly superlatives for the latest completed week
       const completedWeek = week > 1 ? week - 1 : week;
-      weeklySuperlatives = await getWeeklySuperlatives(latestSeason.id, completedWeek);
+      [weeklySuperlatives, weeklyCoachingMalpractice] = await Promise.all([
+        getWeeklySuperlatives(latestSeason.id, completedWeek),
+        getWeeklyLineupAwards(latestSeason.id, completedWeek),
+      ]);
     } catch {
       // Data may not be available
     }
@@ -563,7 +569,7 @@ async function RegularSeasonHub({
                     {weeklySuperlatives.biggestBlowout && (
                       <WeeklySuperlativeCard
                         type="biggest-blowout"
-                        label="Mercy Rule"
+                        label={SNARKY_LABELS.MERCY_RULE.displayText}
                         stat={weeklySuperlatives.biggestBlowout.margin.toFixed(1)}
                         context={weeklySuperlatives.biggestBlowout.winner}
                         week={completedWeek}
@@ -650,14 +656,15 @@ async function RegularSeasonHub({
             (weeklySuperlatives.closestWin ||
               weeklySuperlatives.biggestBlowout ||
               weeklySuperlatives.highestScorer ||
-              weeklySuperlatives.lowestScorer) && (
+              weeklySuperlatives.lowestScorer ||
+              weeklyCoachingMalpractice) && (
               <ScrollReveal>
                 <PageSection label="This Week's Damage" title="Superlatives">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {weeklySuperlatives.closestWin && (
                       <WeeklySuperlativeCard
                         type="closest-win"
-                        label="Closest Win"
+                        label={SNARKY_LABELS.CARDIAC_CREW.displayText}
                         stat={`${weeklySuperlatives.closestWin.margin.toFixed(1)} pts`}
                         context="Nail-biter of the week"
                         teams={weeklySuperlatives.closestWin}
@@ -668,7 +675,7 @@ async function RegularSeasonHub({
                     {weeklySuperlatives.biggestBlowout && (
                       <WeeklySuperlativeCard
                         type="biggest-blowout"
-                        label="Biggest Blowout"
+                        label={SNARKY_LABELS.MERCY_RULE.displayText}
                         stat={`${weeklySuperlatives.biggestBlowout.margin.toFixed(1)} pts`}
                         context="Mercy rule material"
                         teams={weeklySuperlatives.biggestBlowout}
@@ -696,6 +703,16 @@ async function RegularSeasonHub({
                         seasonYear={seasonYear}
                       />
                     )}
+                    {weeklyCoachingMalpractice && (
+                      <WeeklySuperlativeCard
+                        type="coaching-malpractice"
+                        label={weeklyCoachingMalpractice.displayText}
+                        stat={weeklyCoachingMalpractice.stat}
+                        context={weeklyCoachingMalpractice.franchiseName}
+                        week={completedWeek}
+                        seasonYear={seasonYear}
+                      />
+                    )}
                   </div>
                 </PageSection>
               </ScrollReveal>
@@ -719,7 +736,7 @@ async function RegularSeasonHub({
                     <StatHero
                       value={`${superlatives.longestStreak.streak}W`}
                       label={superlatives.longestStreak.franchiseName}
-                      badge="Win Streak"
+                      badge={SNARKY_LABELS.ON_FIRE.displayText}
                       variant="md"
                     />
                   )}
