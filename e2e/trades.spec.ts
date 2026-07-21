@@ -1,4 +1,9 @@
 import { test, expect } from "@playwright/test";
+import {
+  seedTradeData,
+  cleanupTradeData,
+  TRADE_TEST_DATA,
+} from "./helpers/seed-trades";
 
 /**
  * Trade history page (/trades): completed trades render as cards with
@@ -6,14 +11,92 @@ import { test, expect } from "@playwright/test";
  * team filters push query params and update the visible list; a franchise
  * page's "Trade History" link lands on the filtered, team-scoped view.
  *
- * Runs against a real dev server + real Postgres (no mocks). Discovers real
- * data rather than seeding/hardcoding; no-ops gracefully when the database
- * has no completed trades in this environment, matching the pattern used by
- * the rest of this suite (see e2e/drafts-board.spec.ts).
+ * Runs against a real dev server + real Postgres (no mocks). The first
+ * describe block SEEDS a known completed trade (fixed franchises, players and
+ * a pick) and asserts on the resolved output, so it fails if getTrades()'
+ * roster/player/pick resolution regresses (not vacuous). The second block
+ * exercises the UI generically against whatever real data exists, no-opping
+ * gracefully when empty, matching the pattern used elsewhere in this suite
+ * (see e2e/drafts-board.spec.ts).
  */
 
 const DESKTOP_VIEWPORT = { width: 1280, height: 900 };
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
+
+test.describe("Trade history page (seeded fixture)", () => {
+  let seededSeasonId: number;
+
+  test.beforeAll(async () => {
+    seededSeasonId = await seedTradeData();
+  });
+
+  test.afterAll(async () => {
+    if (seededSeasonId != null) {
+      await cleanupTradeData(seededSeasonId);
+    }
+  });
+
+  test("resolves the seeded trade: both franchises, received players, and pick", async ({
+    page,
+  }) => {
+    const t = TRADE_TEST_DATA;
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+
+    // Filter to the seeded season so the fixture is isolated from real data.
+    await page.goto(`/trades?season=${t.seasonYear}`);
+
+    const card = page
+      .locator(".card-surface", { hasText: "Trade" })
+      .filter({ hasText: t.franchiseA.name });
+    await expect(card).toHaveCount(1);
+
+    // Both franchise names appear (both sides resolved from roster IDs).
+    await expect(card).toContainText(t.franchiseA.name);
+    await expect(card).toContainText(t.franchiseB.name);
+
+    // Both franchise links present (one per side).
+    const franchiseLinks = card.locator('a[href^="/teams/"]');
+    expect(await franchiseLinks.count()).toBeGreaterThanOrEqual(2);
+
+    // Received players resolved by name (only visible if adds->roster and the
+    // player-name join both ran): player 2 to franchise A, player 1 to B.
+    await expect(card).toContainText(t.player1.fullName);
+    await expect(card).toContainText(t.player2.fullName);
+
+    // Position badges and NFL teams resolved from the players table.
+    await expect(card).toContainText(t.player1.position);
+    await expect(card).toContainText(t.player2.position);
+    await expect(card).toContainText(t.player1.nflTeam);
+
+    // The received pick resolved from draftPicksInvolved (owner_id === roster).
+    await expect(card).toContainText(t.pick.season);
+    await expect(card).toContainText(`Round ${t.pick.round} pick`);
+
+    // The "Trade" badge is present.
+    await expect(card.getByText("Trade", { exact: true }).first()).toBeVisible();
+  });
+
+  test("team filter scopes to the seeded franchise and keeps its resolved trade", async ({
+    page,
+  }) => {
+    const t = TRADE_TEST_DATA;
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+
+    await page.goto(`/trades?team=${t.franchiseA.slug}`);
+
+    // Franchise hero header renders for the scoped team.
+    await expect(page.getByRole("heading", { name: t.franchiseA.name })).toBeVisible();
+
+    // The seeded trade survives franchise-level filtering with full resolution.
+    const card = page
+      .locator(".card-surface", { hasText: "Trade" })
+      .filter({ hasText: t.franchiseA.name });
+    await expect(card).toHaveCount(1);
+    await expect(card).toContainText(t.franchiseB.name);
+    await expect(card).toContainText(t.player2.fullName);
+    await expect(card).toContainText(`Round ${t.pick.round} pick`);
+  });
+});
 
 test.describe("Trade history page", () => {
   test("renders trade cards with two franchise names, a player or pick, and a Trade badge", async ({
@@ -31,10 +114,11 @@ test.describe("Trade history page", () => {
     const firstCard = cards.first();
     await expect(firstCard.getByText("Trade", { exact: true }).first()).toBeVisible();
 
-    // At least two franchise name links should appear in a trade card (both sides).
+    // Both sides of a standard 2-team trade should resolve to franchise links,
+    // so a broken/unresolved side is caught rather than passing on one link.
     const franchiseLinks = firstCard.locator('a[href^="/teams/"]');
     const franchiseLinkCount = await franchiseLinks.count();
-    expect(franchiseLinkCount).toBeGreaterThanOrEqual(1);
+    expect(franchiseLinkCount).toBeGreaterThanOrEqual(2);
 
     // Should show at least a player name or a pick line.
     const hasPickText = await firstCard.getByText(/Round \d+ pick/).count();
