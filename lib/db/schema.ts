@@ -27,6 +27,10 @@ export const seasons = pgTable(
     totalRosters: integer("total_rosters"),
     playoffWeekStart: integer("playoff_week_start"),
     settingsJson: jsonb("settings_json"),
+    // Division metadata for the season. Nullable: legacy/pre-division seasons
+    // have no divisions at all. divisionNames shape: {"1":"Division 1", ...}.
+    divisionCount: integer("division_count"),
+    divisionNames: jsonb("division_names"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
   },
@@ -68,6 +72,10 @@ export const franchiseSeasons = pgTable(
     userId: text("user_id").notNull(),
     ownerDisplayName: text("owner_display_name"),
     coOwnerDisplayName: text("co_owner_display_name"),
+    // Division assignment for this franchise in this season. Nullable:
+    // legacy/pre-division seasons and the predecessor league have none.
+    division: integer("division"),
+    divisionName: text("division_name"),
     wins: integer("wins").default(0),
     losses: integer("losses").default(0),
     ties: integer("ties").default(0),
@@ -86,6 +94,10 @@ export const franchiseSeasons = pgTable(
     ),
     index("idx_franchise_seasons_franchise_id").on(table.franchiseId),
     index("idx_franchise_seasons_season_id").on(table.seasonId),
+    index("idx_franchise_seasons_season_division").on(
+      table.seasonId,
+      table.division,
+    ),
   ],
 );
 

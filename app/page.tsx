@@ -34,6 +34,7 @@ import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
 import { getWeeklyLineupAwards } from "@/lib/queries/lineup-efficiency";
 import { getOffseasonRecap, getRecentTransactions } from "@/lib/queries/offseason";
 import { SNARKY_LABELS } from "@/lib/content";
+import { getPlayoffProjection } from "@/lib/queries/divisions";
 import type { NflSeasonType } from "@/lib/queries/nfl-state";
 import type { PairedMatchup } from "@/lib/queries/matchups";
 
@@ -228,18 +229,42 @@ function GameCard({
   );
 }
 
-/** Maps standings rows to the ladder card's entry shape. */
+/** Maps standings rows to the ladder card's entry shape. RISK-A: rank is
+ * always derived from record (wins DESC, points DESC), never
+ * standingsFinish, which is null in-season and only populated by the legacy
+ * importer post-season. Optionally merges a playoff projection's seed/in-out
+ * data keyed by franchiseId. */
 function toLadderEntries(
-  standings: Awaited<ReturnType<typeof getSeasonStandings>>
+  standings: Awaited<ReturnType<typeof getSeasonStandings>>,
+  projection?: Awaited<ReturnType<typeof getPlayoffProjection>>
 ) {
-  return standings.map((s, i) => ({
-    rank: s.standingsFinish ?? i + 1,
-    franchiseName: s.franchiseName,
-    franchiseSlug: s.franchiseSlug,
-    record: `${s.wins ?? 0}-${s.losses ?? 0}`,
-    abbreviation: s.franchiseAbbreviation,
-    brandingColor: s.franchiseBrandingColor,
-  }));
+  const projectionById = new Map(
+    (projection?.field ?? []).map((t) => [t.franchiseId, t])
+  );
+  const bubbleById = projection?.firstOut
+    ? new Map([[projection.firstOut.franchiseId, projection.firstOut]])
+    : new Map();
+
+  const ordered = [...standings].sort(
+    (a, b) => (b.wins ?? 0) - (a.wins ?? 0) || (b.pointsScored ?? 0) - (a.pointsScored ?? 0)
+  );
+
+  return ordered.map((s, i) => {
+    const projected = projectionById.get(s.franchiseId) ?? bubbleById.get(s.franchiseId);
+    return {
+      rank: i + 1,
+      franchiseName: s.franchiseName,
+      franchiseSlug: s.franchiseSlug,
+      record: `${s.wins ?? 0}-${s.losses ?? 0}`,
+      abbreviation: s.franchiseAbbreviation,
+      brandingColor: s.franchiseBrandingColor,
+      division: s.division,
+      divisionName: s.divisionName,
+      seed: projected?.seed ?? null,
+      isDivisionWinner: projected?.isDivisionWinner ?? false,
+      isIn: projection ? (projected?.isIn ?? false) : undefined,
+    };
+  });
 }
 
 // =============================================================================
@@ -416,6 +441,9 @@ async function RegularSeasonHub({
   // Per-roster live inputs (players left, projected remaining) for win-prob
   // bars and the Players Left hero stat. Empty when the backfill has not run.
   let hubLive: HubLiveData | undefined;
+  // Playoff projection drives the ladder's seed badges and playoff-line cutoff;
+  // undefined when unavailable (RISK-A/RISK-B degrade to the current default).
+  let projection: Awaited<ReturnType<typeof getPlayoffProjection>> | undefined;
 
   if (latestSeason) {
     try {
@@ -433,6 +461,12 @@ async function RegularSeasonHub({
       ]);
     } catch {
       // Data may not be available
+    }
+
+    try {
+      projection = await getPlayoffProjection(latestSeason.id);
+    } catch {
+      // Projection may not be available; ladder falls back to plain standings.
     }
   }
 
@@ -464,7 +498,7 @@ async function RegularSeasonHub({
       }, null)
     : null;
 
-  const ladderEntries = toLadderEntries(standings);
+  const ladderEntries = toLadderEntries(standings, projection);
 
   return (
     <>

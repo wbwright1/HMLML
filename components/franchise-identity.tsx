@@ -12,6 +12,9 @@ interface FranchiseIdentityProps {
   ownerName?: string;
   coOwnerName?: string;
   variant?: "compact" | "standard" | "hero";
+  /** Current season's division name (e.g. "Division 2"); omitted for
+   * legacy/pre-division seasons. Rendered only on the hero variant. */
+  division?: string;
 }
 
 // Mirrors FranchiseLogo's internal crest radius formula (components/franchise-logo.tsx
@@ -63,6 +66,7 @@ export function FranchiseIdentity({
   ownerName,
   coOwnerName,
   variant = "standard",
+  division,
 }: FranchiseIdentityProps) {
   if (variant === "compact") {
     return (
@@ -83,6 +87,9 @@ export function FranchiseIdentity({
       <div className="flex flex-col items-center gap-4 text-center">
         <BrandedCrest franchise={franchise} size="xl" />
         <div className="space-y-2">
+          {division && (
+            <p className="text-kicker text-accent-gold">{division}</p>
+          )}
           <h1 className="text-h1">{franchise.name}</h1>
           <ChampionshipStars count={championships} variant="hero" />
           {ownerName && (

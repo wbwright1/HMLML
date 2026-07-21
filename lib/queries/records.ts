@@ -27,6 +27,9 @@ export interface LeaderboardEntry {
   championships: number;
   winPct: number;
   seasonsPlayed: number;
+  // Present only on season-specific rows; null/absent for all-time rows.
+  division?: number | null;
+  divisionName?: string | null;
 }
 
 export interface CareerStats {
@@ -147,6 +150,8 @@ export async function getLeaderboard(
           pointsScored: franchiseSeasons.pointsScored,
           pointsAgainst: franchiseSeasons.pointsAgainst,
           playoffResult: franchiseSeasons.playoffResult,
+          division: franchiseSeasons.division,
+          divisionName: franchiseSeasons.divisionName,
         })
         .from(franchiseSeasons)
         .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
@@ -173,6 +178,8 @@ export async function getLeaderboard(
           championships: r.playoffResult === "champion" ? 1 : 0,
           winPct: total > 0 ? w / total : 0,
           seasonsPlayed: 1,
+          division: r.division,
+          divisionName: r.divisionName,
         };
       });
     }
@@ -255,6 +262,8 @@ export async function getAllSeasonLeaderboards(): Promise<
         pointsScored: franchiseSeasons.pointsScored,
         pointsAgainst: franchiseSeasons.pointsAgainst,
         playoffResult: franchiseSeasons.playoffResult,
+        division: franchiseSeasons.division,
+        divisionName: franchiseSeasons.divisionName,
       })
       .from(franchiseSeasons)
       .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
@@ -286,6 +295,8 @@ export async function getAllSeasonLeaderboards(): Promise<
         championships: r.playoffResult === "champion" ? 1 : 0,
         winPct: total > 0 ? w / total : 0,
         seasonsPlayed: 1,
+        division: r.division,
+        divisionName: r.divisionName,
       });
     }
 

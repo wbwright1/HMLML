@@ -14,8 +14,10 @@ import {
 import { getLatestSeason } from "@/lib/queries/matchups";
 import { getSeasonSuperlatives, type SeasonSuperlative } from "@/lib/queries/superlatives";
 import { getSeasonLineupAwards, type LineupAward } from "@/lib/queries/lineup-efficiency";
+import { getPlayoffProjection } from "@/lib/queries/divisions";
 import { LeaderboardTable } from "@/app/records/leaderboard-table";
 import type { LeaderboardEntry, PowerRankingEntry } from "@/lib/queries/records";
+import type { PlayoffProjection } from "@/lib/queries/divisions";
 
 export const dynamic = "force-dynamic";
 
@@ -139,6 +141,7 @@ export default async function RecordsPage() {
   let seasonSuperlatives: SeasonSuperlative[] = [];
   let coachingMalpractice: LineupAward | null = null;
   let whatCouldveBeen: LineupAward | null = null;
+  let projection: PlayoffProjection | null = null;
 
   try {
     [allTimeData, seasonYears, powerRankings] = await Promise.all([
@@ -156,15 +159,20 @@ export default async function RecordsPage() {
     // The Superlatives: season awards + optimal-lineup awards for the latest
     // season. Lineup awards return null for legacy (pre-Sleeper) seasons that
     // never got player_week_points, which the render below hides gracefully.
+    // Also the playoff projection for the current season only; hasDivisions
+    // gates whether that block renders at all (RISK-B: nothing worth showing
+    // for a legacy/no-division season, or when there's no current season).
     const latestSeason = await getLatestSeason();
     if (latestSeason) {
-      const [superlatives, lineupAwards] = await Promise.all([
+      const [superlatives, lineupAwards, playoffProjection] = await Promise.all([
         getSeasonSuperlatives(latestSeason.id),
         getSeasonLineupAwards(latestSeason.id),
+        getPlayoffProjection(latestSeason.id),
       ]);
       seasonSuperlatives = superlatives;
       coachingMalpractice = lineupAwards?.coachingMalpractice ?? null;
       whatCouldveBeen = lineupAwards?.whatCouldveBeen ?? null;
+      projection = playoffProjection;
     }
   } catch {
     // DB may not be connected
@@ -203,6 +211,66 @@ export default async function RecordsPage() {
                   {recordBook.map((entry) => (
                     <RecordBookCard key={entry.label} {...entry} />
                   ))}
+                </div>
+              </div>
+            )}
+
+            {projection && projection.hasDivisions && projection.field.length > 0 && (
+              <div>
+                <p className="text-kicker mb-4">Projected Playoff Field</p>
+                <div className="space-y-1">
+                  {projection.field.map((team) => (
+                    <Link
+                      key={team.franchiseId}
+                      href={`/teams/${team.slug}`}
+                      className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-muted"
+                    >
+                      <span className="font-mono text-sm tabular-nums text-text-tertiary w-4 shrink-0">
+                        {team.seed}
+                      </span>
+                      <FranchiseLogo
+                        slug={team.slug}
+                        name={team.name}
+                        abbreviation={team.abbreviation ?? undefined}
+                        brandingColor={team.brandingColor ?? undefined}
+                        size="sm"
+                        decorative
+                      />
+                      <span className="text-body-sm font-medium text-text-primary truncate flex-1">
+                        {team.name}
+                      </span>
+                      {team.isDivisionWinner ? (
+                        <span className="text-caption text-accent-gold shrink-0">
+                          {team.divisionName ?? "Div winner"}
+                        </span>
+                      ) : (
+                        <span className="text-caption text-text-tertiary shrink-0">
+                          Wildcard
+                        </span>
+                      )}
+                    </Link>
+                  ))}
+                  {projection.firstOut && (
+                    <div className="flex items-center gap-3 rounded-lg px-2 py-2 border-t border-divider mt-2 pt-3">
+                      <span className="text-caption text-text-tertiary w-4 shrink-0">
+                        &mdash;
+                      </span>
+                      <FranchiseLogo
+                        slug={projection.firstOut.slug}
+                        name={projection.firstOut.name}
+                        abbreviation={projection.firstOut.abbreviation ?? undefined}
+                        brandingColor={projection.firstOut.brandingColor ?? undefined}
+                        size="sm"
+                        decorative
+                      />
+                      <span className="text-body-sm font-medium text-text-secondary truncate flex-1">
+                        {projection.firstOut.name}
+                      </span>
+                      <span className="text-caption text-accent-warm shrink-0">
+                        First Out
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
