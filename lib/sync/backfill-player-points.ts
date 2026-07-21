@@ -1,10 +1,14 @@
 import { db } from "@/lib/db";
 import { seasons } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { getLeagueMatchups, getWeekProjections } from "@/lib/sleeper";
+import {
+  getLeagueMatchups,
+  getWeekProjections,
+  getNflSchedule,
+} from "@/lib/sleeper";
 import type { SleeperProjections } from "@/lib/sleeper-schemas";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
-import { upsertPlayerWeekPoints } from "@/lib/sync/hourly";
+import { upsertPlayerWeekPoints, upsertNflGames } from "@/lib/sync/hourly";
 import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
 
 // Shape of the per-season settings blob stored in seasons.settings_json.
@@ -58,6 +62,15 @@ export async function runPlayerPointsBackfill(
 
     // roster_id -> franchise_id mapping for this season (stable across weeks)
     const rosterToFranchise = await getRosterToFranchiseMap(season.id);
+
+    // Upsert the season's NFL schedule once so historical weeks classify their
+    // starters (yet-to-play vs finished) the same way live weeks do. Fantasy
+    // weeks are all NFL regular-season weeks, so the regular schedule suffices;
+    // a schedule failure is non-fatal (weeks then hide players-left, correctly).
+    const scheduleResult = await getNflSchedule("regular", String(seasonYear));
+    if (!("error" in scheduleResult)) {
+      await upsertNflGames(seasonYear, scheduleResult.data);
+    }
 
     // NFL regular season grew to 18 weeks in 2021; Sleeper fantasy playoff
     // weeks fall within this range too, so iterate the full span.

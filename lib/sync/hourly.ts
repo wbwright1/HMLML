@@ -6,7 +6,9 @@ import {
   franchiseSeasons,
   rosterPlayers,
   playerWeekPoints,
+  nflGames,
   type NewPlayerWeekPoints,
+  type NewNflGame,
 } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import {
@@ -16,8 +18,13 @@ import {
   getLeagueTransactions,
   getLeagueRosters,
   getWeekProjections,
+  getNflSchedule,
 } from "@/lib/sleeper";
-import type { SleeperMatchup, SleeperProjections } from "@/lib/sleeper-schemas";
+import type {
+  SleeperMatchup,
+  SleeperProjections,
+  SleeperScheduleGame,
+} from "@/lib/sleeper-schemas";
 import { alignStarterSlots, computeProjectedPoints } from "@/lib/lineup-slots";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
@@ -629,6 +636,106 @@ async function syncPlayerWeekPoints(
 }
 
 // ---------------------------------------------------------------------------
+// Step E: Sync NFL Schedule (game statuses)
+// ---------------------------------------------------------------------------
+
+/**
+ * Batch-upserts NFL schedule rows into nfl_games, keyed on game_id. Shared by
+ * the hourly sync step and the historical backfill (like upsertPlayerWeekPoints).
+ * Updates status/date/week/teams on conflict. Returns the number of rows written.
+ */
+export async function upsertNflGames(
+  seasonYear: number,
+  games: SleeperScheduleGame[]
+): Promise<number> {
+  // Dedupe by game_id so a repeated id can't trigger an "ON CONFLICT cannot
+  // affect row a second time" error within a single batch insert.
+  const rowMap = new Map<string, NewNflGame>();
+  const now = new Date();
+
+  for (const g of games) {
+    rowMap.set(g.game_id, {
+      gameId: g.game_id,
+      seasonYear,
+      week: g.week,
+      gameDate: g.date ?? null,
+      homeTeam: g.home,
+      awayTeam: g.away,
+      status: g.status,
+      updatedAt: now,
+    });
+  }
+
+  const rows = [...rowMap.values()];
+  if (rows.length === 0) return 0;
+
+  for (const batch of chunk(rows, 100)) {
+    await db
+      .insert(nflGames)
+      .values(batch)
+      .onConflictDoUpdate({
+        target: nflGames.gameId,
+        set: {
+          seasonYear: sql`excluded.season_year`,
+          week: sql`excluded.week`,
+          gameDate: sql`excluded.game_date`,
+          homeTeam: sql`excluded.home_team`,
+          awayTeam: sql`excluded.away_team`,
+          status: sql`excluded.status`,
+          updatedAt: sql`excluded.updated_at`,
+        },
+      });
+  }
+
+  return rows.length;
+}
+
+/**
+ * Fetches the current season's NFL schedule and upserts it into nfl_games. The
+ * regular-season schedule is required; the post-season schedule is fetched too
+ * and upserted only when the endpoint serves games (it returns [] for a season
+ * whose playoffs haven't been scheduled).
+ */
+async function syncNflSchedule(seasonYear: number): Promise<SyncStepResult> {
+  const startTime = Date.now();
+  const logId = await logSyncStart("hourly", "nfl_games");
+
+  try {
+    const seasonStr = String(seasonYear);
+
+    const regularResult = await getNflSchedule("regular", seasonStr);
+    if ("error" in regularResult) {
+      throw new Error(
+        `Sleeper schedule API error (regular): ${regularResult.error.message}`
+      );
+    }
+
+    let rowCount = await upsertNflGames(seasonYear, regularResult.data);
+
+    // Post-season is optional: absent/empty for seasons not yet in the playoffs.
+    const postResult = await getNflSchedule("post", seasonStr);
+    if (!("error" in postResult) && postResult.data.length > 0) {
+      rowCount += await upsertNflGames(seasonYear, postResult.data);
+    }
+
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "success", rowCount);
+    return { dataType: "nfl_games", status: "success", rowCount, durationMs };
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "failure", 0, errorMessage);
+    return {
+      dataType: "nfl_games",
+      status: "failure",
+      rowCount: 0,
+      durationMs,
+      error: errorMessage,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main: Run Hourly Sync
 // ---------------------------------------------------------------------------
 
@@ -695,6 +802,7 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
     syncRostersAndPicks(leagueId, seasonId),
     syncMatchupScores(leagueId, seasonId, currentWeek),
     syncPlayerWeekPoints(leagueId, seasonId, seasonYear, currentWeek),
+    syncNflSchedule(seasonYear),
   ]);
 
   const stepResults: SyncStepResult[] = results.map((r, i) => {
@@ -706,6 +814,7 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
       "rosters",
       "matchups",
       "player_week_points",
+      "nfl_games",
     ];
     return {
       dataType: dataTypes[i],

@@ -235,6 +235,23 @@ export const SleeperProjectionsSchema = z.record(
 );
 export type SleeperProjections = z.infer<typeof SleeperProjectionsSchema>;
 
+// ─── Schedule Game ────────────────────────────────────────────────────────────
+// From api.sleeper.app/schedule/nfl/{seasonType}/{season} (NOT under /v1).
+// status is left permissive (plain string): observed "pre_game", "complete",
+// "canceled", plus an in-game value during live windows.
+export const SleeperScheduleGameSchema = z
+  .object({
+    game_id: z.string(),
+    week: z.number(),
+    date: z.string().nullable().optional(),
+    home: z.string(),
+    away: z.string(),
+    status: z.string(),
+  })
+  .passthrough();
+
+export type SleeperScheduleGame = z.infer<typeof SleeperScheduleGameSchema>;
+
 // ─── Trending Add ─────────────────────────────────────────────────────────────
 
 export const SleeperTrendingAddSchema = z.array(

@@ -1,8 +1,9 @@
 import { db } from "@/lib/db";
-import { playerWeekPoints, players, seasons } from "@/lib/db/schema";
+import { playerWeekPoints, players, seasons, nflGames } from "@/lib/db/schema";
 import { eq, and, isNotNull, inArray } from "drizzle-orm";
 import { getTrendingAdds } from "@/lib/sleeper";
 import { deriveStartingSlots } from "@/lib/lineup-slots";
+import { classifyStarter } from "@/lib/game-status";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -199,13 +200,19 @@ export async function getMatchupLineups(
 }
 
 /**
- * Single-scan live stats per roster for a season/week. Runs one SELECT over
- * started player_week_points rows and computes, per rosterId, the starter
- * count (total), how many have yet to score (left), and their summed projected
- * points still to come (projRemaining). Heuristic: a starter counts as "left"
- * when its points are 0 and its projection is > 0 (we have no per-game clock
- * status). Every roster with starters appears; projRemaining is 0 when all
- * starters have scored.
+ * Single-scan live stats per roster for a season/week. Computes, per rosterId,
+ * the starter count (total), how many have yet to play (left), and their summed
+ * projected points still to come (projRemaining).
+ *
+ * A starter's state comes from the real NFL game status of their team, joined
+ * through nfl_games (see classifyStarter): a finished game means the player has
+ * played even if they scored 0.0, and a not-yet-started game means they are
+ * "left". Every roster with starters appears; projRemaining is 0 once all its
+ * starters have played.
+ *
+ * CRITICAL: if nfl_games has zero rows for this (seasonYear, week), we return an
+ * EMPTY map. The UI hides players-left and win-probability when the map is empty,
+ * which is the correct behavior; we never fall back to a points heuristic.
  */
 export async function getStarterLiveStats(
   seasonId: number,
@@ -214,13 +221,49 @@ export async function getStarterLiveStats(
   const result = new Map<string, StarterLiveStats>();
 
   try {
+    // Resolve the calendar year for this season; nfl_games is keyed on it.
+    const [seasonRow] = await db
+      .select({ seasonYear: seasons.seasonYear })
+      .from(seasons)
+      .where(eq(seasons.id, seasonId));
+
+    if (!seasonRow) return result;
+    const seasonYear = seasonRow.seasonYear;
+
+    // Build nflTeam -> game status for the week. Both home and away map to the
+    // same game's status.
+    const gameRows = await db
+      .select({
+        homeTeam: nflGames.homeTeam,
+        awayTeam: nflGames.awayTeam,
+        status: nflGames.status,
+      })
+      .from(nflGames)
+      .where(
+        and(
+          eq(nflGames.seasonYear, seasonYear),
+          eq(nflGames.week, week)
+        )
+      );
+
+    // No schedule for this week: hide, do not guess. Return an empty map.
+    if (gameRows.length === 0) return result;
+
+    const statusByTeam = new Map<string, string>();
+    for (const g of gameRows) {
+      statusByTeam.set(g.homeTeam, g.status);
+      statusByTeam.set(g.awayTeam, g.status);
+    }
+
     const rows = await db
       .select({
         rosterId: playerWeekPoints.rosterId,
         points: playerWeekPoints.points,
         projectedPoints: playerWeekPoints.projectedPoints,
+        nflTeam: players.nflTeam,
       })
       .from(playerWeekPoints)
+      .leftJoin(players, eq(playerWeekPoints.playerId, players.id))
       .where(
         and(
           eq(playerWeekPoints.seasonId, seasonId),
@@ -233,11 +276,16 @@ export async function getStarterLiveStats(
       const entry =
         result.get(row.rosterId) ?? { left: 0, total: 0, projRemaining: 0 };
       entry.total += 1;
-      const projected = row.projectedPoints ?? 0;
-      if (row.points === 0 && projected > 0) {
-        entry.left += 1;
-        entry.projRemaining += projected;
-      }
+
+      const gameStatus = row.nflTeam ? statusByTeam.get(row.nflTeam) ?? null : null;
+      const { yetToPlay, projRemaining } = classifyStarter(
+        gameStatus,
+        row.points,
+        row.projectedPoints
+      );
+      if (yetToPlay) entry.left += 1;
+      entry.projRemaining += projRemaining;
+
       result.set(row.rosterId, entry);
     }
 

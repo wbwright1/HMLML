@@ -36,6 +36,13 @@
       "when": 1784643188149,
       "tag": "0004_equal_darwin",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1784645389894,
+      "tag": "0005_friendly_shadowcat",
+      "breakpoints": true
     }
   ]
 }

@@ -14,6 +14,7 @@ import {
   SleeperPlayerStatsSchema,
   SleeperProjectionsSchema,
   SleeperTrendingAddSchema,
+  SleeperScheduleGameSchema,
   type SleeperLeague,
   type SleeperUser,
   type SleeperRoster,
@@ -28,11 +29,14 @@ import {
   type SleeperPlayerStats,
   type SleeperProjections,
   type SleeperTrendingAdd,
+  type SleeperScheduleGame,
 } from "./sleeper-schemas";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 const SLEEPER_BASE_URL = "https://api.sleeper.app/v1";
+// The schedule endpoint lives at the API root, NOT under /v1.
+const SLEEPER_ROOT_URL = "https://api.sleeper.app";
 
 // ─── Result Type ─────────────────────────────────────────────────────────────
 
@@ -228,6 +232,21 @@ export async function getWeekProjections(
   return fetchSleeper(
     `https://api.sleeper.app/v1/projections/nfl/regular/${season}/${week}`,
     SleeperProjectionsSchema
+  );
+}
+
+/**
+ * Fetch the NFL schedule for a season type ("regular" | "post") and season.
+ * NOTE: this endpoint is served at the API root, not under /v1. Returns an
+ * array of games with an NFL-abbreviation home/away and a game status.
+ */
+export async function getNflSchedule(
+  seasonType: string,
+  season: string
+): Promise<SleeperResult<SleeperScheduleGame[]>> {
+  return fetchSleeper(
+    `${SLEEPER_ROOT_URL}/schedule/nfl/${seasonType}/${season}`,
+    z.array(SleeperScheduleGameSchema)
   );
 }
 

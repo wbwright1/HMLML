@@ -282,6 +282,30 @@ export const playerWeekPoints = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// nfl_games
+// ---------------------------------------------------------------------------
+// NFL schedule rows from Sleeper's schedule endpoint, keyed by game_id. Powers
+// per-starter "yet to play" classification: a starter's nfl_team joins here
+// through home_team/away_team to read the game's real status.
+export const nflGames = pgTable(
+  "nfl_games",
+  {
+    id: serial("id").primaryKey(),
+    gameId: text("game_id").notNull().unique(),
+    seasonYear: integer("season_year").notNull(),
+    week: integer("week").notNull(),
+    gameDate: text("game_date"),
+    homeTeam: text("home_team").notNull(),
+    awayTeam: text("away_team").notNull(),
+    status: text("status").notNull(), // 'pre_game' | 'complete' | 'canceled' | in-game value
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_nfl_games_season_week").on(table.seasonYear, table.week),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // sync_log
 // ---------------------------------------------------------------------------
 export const syncLog = pgTable(
@@ -332,6 +356,9 @@ export type NewRosterPlayer = typeof rosterPlayers.$inferInsert;
 
 export type PlayerWeekPoints = typeof playerWeekPoints.$inferSelect;
 export type NewPlayerWeekPoints = typeof playerWeekPoints.$inferInsert;
+
+export type NflGame = typeof nflGames.$inferSelect;
+export type NewNflGame = typeof nflGames.$inferInsert;
 
 export type SyncLogEntry = typeof syncLog.$inferSelect;
 export type NewSyncLogEntry = typeof syncLog.$inferInsert;

@@ -12,10 +12,8 @@ interface MatchupLineupsProps {
   awayWins: boolean;
 }
 
-const DEFENSE_POSITIONS = new Set(["DEF", "DST"]);
-
 function isDefenseRow(row: LineupRow): boolean {
-  return DEFENSE_POSITIONS.has((row.position ?? "").toUpperCase());
+  return (row.position ?? "").toUpperCase() === "DEF";
 }
 
 function sumPoints(rows: LineupRow[]): number {
