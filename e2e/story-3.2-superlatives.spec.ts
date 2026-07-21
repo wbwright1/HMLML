@@ -89,8 +89,8 @@ test.describe("Superlative Stats Row", () => {
     const figureCount = await figures.count();
 
     for (let i = 0; i < figureCount; i++) {
-      // The badge is a <span> with uppercase tracking-widest
-      const badge = figures.nth(i).locator("span.uppercase");
+      // The badge is StatHero's kicker <span> (text-kicker renders uppercase).
+      const badge = figures.nth(i).locator("span.text-kicker");
       const badgeCount = await badge.count();
       // Each StatHero should have a badge label
       expect(badgeCount).toBeGreaterThanOrEqual(1);

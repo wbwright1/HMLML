@@ -168,9 +168,11 @@ test.describe("Story 4.4: Standings Redesign (Command Center)", () => {
     // Table headers should label the columns
     const headers = page.locator("table thead th");
     const headerTexts = await headers.allInnerTexts();
-    const headerStr = headerTexts.join(" ");
-    expect(headerStr).toContain("Rec");
-    expect(headerStr).toContain("PF");
-    expect(headerStr).toContain("PA");
+    // Column headers render through an uppercase text-transform, so compare
+    // case-insensitively while still proving the Rec/PF/PA labels are present.
+    const headerStr = headerTexts.join(" ").toLowerCase();
+    expect(headerStr).toContain("rec");
+    expect(headerStr).toContain("pf");
+    expect(headerStr).toContain("pa");
   });
 });

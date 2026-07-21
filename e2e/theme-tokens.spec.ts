@@ -89,15 +89,48 @@ test.describe("FE-T01 through FE-T10: Computed Color Token Values", () => {
 });
 
 test.describe("FE-T11: Translucent white surface tokens", () => {
-  // surface / surface-muted / border / border-strong / divider are all
-  // rgba(255,255,255,α) — assert they carry the expected alpha channel.
-  const alphaTokens: Array<{ property: string; alpha: string }> = [
-    { property: "--surface", alpha: "0.045" },
-    { property: "--surface-muted", alpha: "0.07" },
-    { property: "--border", alpha: "0.08" },
-    { property: "--border-strong", alpha: "0.14" },
-    { property: "--divider", alpha: "0.05" },
+  // surface / surface-muted / border / border-strong / divider are all authored
+  // as rgba(255,255,255,α). The browser normalizes the computed custom-property
+  // value to 8-digit hex (#ffffffAA); parse whichever format is returned and
+  // assert white RGB channels plus the expected alpha (within 1/255 rounding).
+  const alphaTokens: Array<{ property: string; alpha: number }> = [
+    { property: "--surface", alpha: 0.045 },
+    { property: "--surface-muted", alpha: 0.07 },
+    { property: "--border", alpha: 0.08 },
+    { property: "--border-strong", alpha: 0.14 },
+    { property: "--divider", alpha: 0.05 },
   ];
+
+  /** Parse "rgba(r,g,b,a)" or "#rrggbbaa" into {r,g,b,a} (a in 0..1). */
+  function parseWhiteAlpha(value: string): {
+    r: number;
+    g: number;
+    b: number;
+    a: number;
+  } {
+    const v = value.trim().toLowerCase();
+    const hex8 = v.match(/^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/);
+    if (hex8) {
+      return {
+        r: parseInt(hex8[1], 16),
+        g: parseInt(hex8[2], 16),
+        b: parseInt(hex8[3], 16),
+        a: parseInt(hex8[4], 16) / 255,
+      };
+    }
+    const rgba = v.match(
+      /rgba?\(\s*(\d+)\s*,?\s*(\d+)\s*,?\s*(\d+)\s*[,/]?\s*([\d.]+)?\s*\)/
+    );
+    if (rgba) {
+      return {
+        r: parseInt(rgba[1], 10),
+        g: parseInt(rgba[2], 10),
+        b: parseInt(rgba[3], 10),
+        a: rgba[4] !== undefined ? parseFloat(rgba[4]) : 1,
+      };
+    }
+    throw new Error(`Unrecognized color format: ${value}`);
+  }
 
   for (const { property, alpha } of alphaTokens) {
     test(`${property} is a translucent white with alpha ${alpha}`, async ({
@@ -109,7 +142,13 @@ test.describe("FE-T11: Translucent white surface tokens", () => {
           .getPropertyValue(prop)
           .trim();
       }, property);
-      expect(value.replace(/\s+/g, "")).toContain(`255,255,255,${alpha}`);
+      const parsed = parseWhiteAlpha(value);
+      expect(parsed.r).toBe(255);
+      expect(parsed.g).toBe(255);
+      expect(parsed.b).toBe(255);
+      // 8-bit alpha quantization means the exact authored alpha is only
+      // preserved to within 1/255; assert closeness rather than equality.
+      expect(Math.abs(parsed.a - alpha)).toBeLessThanOrEqual(1 / 255 + 1e-6);
     });
   }
 });

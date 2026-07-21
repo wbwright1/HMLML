@@ -83,9 +83,9 @@ test.describe("Story 5.3: Season Champion Gold Highlight", () => {
     const badge = goldSection.getByText("League Champion", { exact: true });
     await expect(badge).toBeVisible();
 
-    // Badge should use gold variant styling classes
-    await expect(badge).toHaveClass(/bg-gold/);
-    await expect(badge).toHaveClass(/text-gold/);
+    // Badge should use SuperlativeBadge's gold variant styling tokens.
+    await expect(badge).toHaveClass(/bg-accent-gold-light/);
+    await expect(badge).toHaveClass(/text-accent-gold/);
   });
 
   test("champion name is displayed within the gold section", async ({
@@ -147,9 +147,9 @@ test.describe("Story 5.3: Season Champion Gold Highlight", () => {
     test.skip(!url, "No season with a champion found in database");
     await page.goto(url!);
 
-    // The champion container should have text-center and rounded-xl classes
+    // The champion container should have text-center and rounded corners.
     const goldSection = page.locator('[class*="bg-gold"]').first();
     await expect(goldSection).toHaveClass(/text-center/);
-    await expect(goldSection).toHaveClass(/rounded-xl/);
+    await expect(goldSection).toHaveClass(/rounded-lg/);
   });
 });

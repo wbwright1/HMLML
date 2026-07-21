@@ -199,7 +199,11 @@ test.describe("Mobile Dock", () => {
     page,
   }) => {
     await page.goto("/");
-    const brand = page.locator('a[aria-label="HMLML, Home"]').first();
+    // Both the desktop topbar and the mobile header carry this brand link; at a
+    // mobile viewport the topbar one is display:none, so target the visible one.
+    const brand = page
+      .locator('a[aria-label="HMLML, Home"]')
+      .filter({ visible: true });
     await expect(brand).toBeVisible();
 
     await page.evaluate(() => window.scrollBy(0, 600));
@@ -226,8 +230,12 @@ test.describe("Mobile Dock", () => {
     const dock = page.locator('nav[aria-label="Mobile navigation"]');
     const links = dock.locator("a");
     await expect(links).toHaveCount(5);
-    const texts = (await links.allInnerTexts()).map((t) => t.trim());
-    expect(texts).toEqual(PILLS.map((p) => p.label));
+    // The dock renders its labels through the caption style's uppercase
+    // text-transform, so innerText comes back uppercased; compare case-insensitively.
+    const texts = (await links.allInnerTexts()).map((t) =>
+      t.trim().toLowerCase()
+    );
+    expect(texts).toEqual(PILLS.map((p) => p.label.toLowerCase()));
 
     await expect(
       page.getByRole("button", { name: "Search teams, players, records" })
@@ -295,8 +303,9 @@ test.describe("SyncTimestamp", () => {
       const timestampButton = footer.locator("button");
       await expect(timestampButton).toBeVisible();
 
-      const text = await timestampButton.innerText();
-      expect(text).toContain("Last updated");
+      // Caption text renders uppercased via text-transform; compare lowercased.
+      const text = (await timestampButton.innerText()).toLowerCase();
+      expect(text).toContain("last updated");
       expect(text).not.toContain("(outdated)");
 
       const color = await timestampButton.evaluate(
@@ -329,8 +338,8 @@ test.describe("SyncTimestamp", () => {
       await expect(timestampButton).toBeVisible();
 
       await timestampButton.click();
-      const expandedText = await timestampButton.innerText();
-      expect(expandedText).toContain("Last updated");
+      const expandedText = (await timestampButton.innerText()).toLowerCase();
+      expect(expandedText).toContain("last updated");
       const spans = timestampButton.locator("span");
       const spanCount = await spans.count();
       expect(spanCount).toBeGreaterThanOrEqual(2);
@@ -357,7 +366,7 @@ test.describe("SyncTimestamp", () => {
     const fallbackText = footer.locator("text=Data may be outdated");
     await expect(fallbackText).toBeVisible();
 
-    const fullText = await fallbackText.innerText();
+    const fullText = (await fallbackText.innerText()).toLowerCase();
     expect(fullText).not.toContain("(outdated)");
   });
 
@@ -379,8 +388,8 @@ test.describe("SyncTimestamp", () => {
       const timestampButton = footer.locator("button");
       await expect(timestampButton).toBeVisible();
 
-      const text = await timestampButton.innerText();
-      expect(text).toContain("Last updated");
+      const text = (await timestampButton.innerText()).toLowerCase();
+      expect(text).toContain("last updated");
     } finally {
       await cleanupSyncLogEntry(id);
     }
@@ -408,8 +417,8 @@ test.describe("SyncTimestamp", () => {
       });
       await expect(timestampButton).toBeVisible();
 
-      const text = await timestampButton.innerText();
-      expect(text).toContain("Last updated");
+      const text = (await timestampButton.innerText()).toLowerCase();
+      expect(text).toContain("last updated");
       expect(text).toContain("(outdated)");
 
       const color = await timestampButton.evaluate(
@@ -444,8 +453,9 @@ test.describe("SyncTimestamp", () => {
       const timestampButton = footer.locator("button");
       await expect(timestampButton).toBeVisible();
 
-      const text = await timestampButton.innerText();
-      expect(text).toContain("Last updated");
+      // Caption text renders uppercased via text-transform; compare lowercased.
+      const text = (await timestampButton.innerText()).toLowerCase();
+      expect(text).toContain("last updated");
       expect(text).not.toContain("(outdated)");
 
       const color = await timestampButton.evaluate(
