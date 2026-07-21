@@ -68,10 +68,12 @@ export function FranchiseIdentity({
     return (
       <div className="flex items-center gap-2">
         <BrandedCrest franchise={franchise} size="sm" />
-        <span className="text-body-sm font-semibold text-text-primary truncate">
+        <span className="text-body-sm font-semibold text-text-primary truncate min-w-0 flex-1">
           {franchise.name}
         </span>
-        <ChampionshipStars count={championships} variant="inline" />
+        <span className="shrink-0">
+          <ChampionshipStars count={championships} variant="inline" />
+        </span>
       </div>
     );
   }
@@ -99,11 +101,13 @@ export function FranchiseIdentity({
     <div className="flex items-center gap-3">
       <BrandedCrest franchise={franchise} size="md" />
       <div className="min-w-0">
-        <div className="flex items-center gap-1.5">
-          <span className="font-serif italic text-lg text-text-primary truncate">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <span className="font-serif italic text-lg text-text-primary truncate min-w-0 flex-1">
             {franchise.name}
           </span>
-          <ChampionshipStars count={championships} variant="inline" />
+          <span className="shrink-0">
+            <ChampionshipStars count={championships} variant="inline" />
+          </span>
         </div>
         {ownerName && (
           <p className="text-caption text-muted-foreground">

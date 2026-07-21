@@ -23,7 +23,7 @@ export function DraftOrderCard({ picks, seasonYear }: DraftOrderCardProps) {
             <span className="w-6 text-center font-bold text-text-primary tabular-nums">
               {pick.rank}
             </span>
-            <span className="flex-1 min-w-0">
+            <span className="flex-1 min-w-0 truncate">
               <span className="font-medium text-text-primary">
                 {pick.franchiseName}
               </span>
@@ -33,7 +33,7 @@ export function DraftOrderCard({ picks, seasonYear }: DraftOrderCardProps) {
                 </span>
               )}
             </span>
-            <span className="text-text-tertiary tabular-nums">
+            <span className="text-text-tertiary tabular-nums shrink-0 whitespace-nowrap">
               {pick.record}
             </span>
           </li>

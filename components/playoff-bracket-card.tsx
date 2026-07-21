@@ -150,7 +150,7 @@ function BracketTeamRow({
         </span>
       )}
       <span
-        className={`text-sm flex-1 truncate ${
+        className={`text-sm flex-1 min-w-0 truncate ${
           isWinner ? "font-bold text-text-primary" : isLoser ? "text-text-tertiary" : "text-text-secondary"
         }`}
       >
