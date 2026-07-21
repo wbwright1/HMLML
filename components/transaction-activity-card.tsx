@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 
 interface TransactionItem {
@@ -26,9 +27,17 @@ export function TransactionActivityCard({
 
   return (
     <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-      <p className="text-kicker">
-        Recent Moves
-      </p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-kicker">
+          Recent Moves
+        </p>
+        <Link
+          href="/trades"
+          className="text-body-sm text-accent-gold hover:underline whitespace-nowrap"
+        >
+          View all trades &rarr;
+        </Link>
+      </div>
 
       <div className="space-y-3">
         {transactions.map((txn) => {
