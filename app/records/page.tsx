@@ -207,9 +207,25 @@ export default async function RecordsPage() {
                         size="sm"
                         decorative
                       />
-                      <span className="text-body-sm font-medium text-text-primary truncate">
+                      <span className="text-body-sm font-medium text-text-primary truncate flex-1">
                         {entry.name}
                       </span>
+                      {entry.formDelta === 0 ? (
+                        <span className="flex items-center gap-0.5 font-mono text-xs tabular-nums text-text-tertiary shrink-0">
+                          <span aria-hidden>–</span>
+                          <span>0</span>
+                        </span>
+                      ) : entry.formDelta > 0 ? (
+                        <span className="flex items-center gap-0.5 font-mono text-xs font-bold tabular-nums text-accent-green shrink-0">
+                          <span aria-hidden>▲</span>
+                          <span>{entry.formDelta}</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-0.5 font-mono text-xs tabular-nums text-accent-warm shrink-0">
+                          <span aria-hidden>▼</span>
+                          <span>{Math.abs(entry.formDelta)}</span>
+                        </span>
+                      )}
                     </Link>
                   ))}
                 </div>

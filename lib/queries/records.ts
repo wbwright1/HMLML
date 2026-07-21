@@ -3,9 +3,11 @@ import {
   franchises,
   franchiseSeasons,
   matchups,
+  players,
+  rosterPlayers,
   seasons,
 } from "@/lib/db/schema";
-import { eq, and, desc, sql, sum, count } from "drizzle-orm";
+import { eq, and, desc, inArray, sql, sum, count } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -103,6 +105,12 @@ export interface PowerRankingEntry {
   pointsScored: number;
   pointsAgainst: number;
   championships: number;
+  // Recent-form model additions
+  powerScore: number;
+  formDelta: number;
+  standingsRank: number;
+  windowGames: number;
+  injuryCount: number;
 }
 
 export interface TrophyEntry {
@@ -666,8 +674,158 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
 }
 
 // ---------------------------------------------------------------------------
-// 4.6 — Power Rankings
+// 4.6 — Power Rankings (recent-form model)
 // ---------------------------------------------------------------------------
+//
+// v1 model: a rolling 4-week window of completed games, weighted so the most
+// recent game counts most (linear recency weighting). Opponent strength and
+// margin-of-victory are deliberately deferred (a win is a win, in v1); so are
+// week-over-week rank snapshots (the "vs standings" indicator below is
+// computed live from the current window/season, not stored history).
+//
+//   powerScore = 0.50 * resultScore + 0.35 * scoringScore + 0.15 * (1 - injuryPenalty)
+//
+// resultScore: weighted win rate over the window (win=1, tie=0.5, loss=0).
+// scoringScore: weighted-avg points, min-max normalized across the 12
+//   franchises for the window (all-equal guards to 0.5, never NaN).
+// injuryPenalty: severity of CURRENT starters' injury statuses, capped/
+//   normalized to [0,1].
+
+const WINDOW_SIZE = 4;
+
+// Keys are Sleeper's raw `injury_status` enum values (passed through untouched
+// by lib/sync/daily.ts). Note the suspension value is "Sus", NOT "Suspended";
+// "COV" (COVID reserve) also renders the starter unavailable.
+const INJURY_SEVERITY: Record<string, number> = {
+  Out: 1.0,
+  IR: 1.0,
+  PUP: 1.0,
+  Sus: 1.0,
+  COV: 1.0,
+  Doubtful: 0.6,
+  Questionable: 0.3,
+};
+
+const INJURY_SEVERITY_CAP = 3.0;
+
+export interface PowerFormGame {
+  week: number;
+  points: number;
+  isWinner: boolean | null;
+}
+
+export interface PowerFranchiseInput {
+  franchiseId: string;
+  games: PowerFormGame[];
+  injuryPenalty: number; // pre-clamped [0,1]
+  injuryCount: number;
+  standingsRank: number;
+}
+
+export interface PowerScoreResult {
+  franchiseId: string;
+  rank: number;
+  powerScore: number;
+  resultScore: number;
+  scoringScore: number;
+  weightedAvgPoints: number;
+  windowGames: number;
+  standingsRank: number;
+  formDelta: number;
+  injuryPenalty: number;
+  injuryCount: number;
+}
+
+/**
+ * Pure, DB-free power-score calculator. Takes the raw per-franchise window of
+ * games plus a precomputed injury penalty and standings rank, and returns a
+ * ranked list with formDelta (standingsRank - powerRank; positive = rising).
+ */
+export function computePowerScore(
+  franchises: PowerFranchiseInput[]
+): PowerScoreResult[] {
+  const perFranchise = franchises.map((f) => {
+    // Newest game first (k=1 = newest); linear weight = windowSize - k + 1,
+    // i.e. weight n for the newest of n games down to weight 1 for the oldest.
+    const sorted = [...f.games].sort((a, b) => b.week - a.week);
+    const n = sorted.length;
+
+    if (n === 0) {
+      return {
+        franchiseId: f.franchiseId,
+        resultScore: 0,
+        weightedAvgPoints: 0,
+        windowGames: 0,
+        injuryPenalty: f.injuryPenalty,
+        injuryCount: f.injuryCount,
+        standingsRank: f.standingsRank,
+      };
+    }
+
+    const rawWeights = sorted.map((_, k) => n - k);
+    const weightSum = rawWeights.reduce((s, w) => s + w, 0);
+    const weights = rawWeights.map((w) => w / weightSum);
+
+    let resultScore = 0;
+    let weightedAvgPoints = 0;
+    sorted.forEach((g, idx) => {
+      const outcome = g.isWinner === true ? 1 : g.isWinner === null ? 0.5 : 0;
+      resultScore += outcome * weights[idx];
+      weightedAvgPoints += g.points * weights[idx];
+    });
+
+    return {
+      franchiseId: f.franchiseId,
+      resultScore,
+      weightedAvgPoints,
+      windowGames: n,
+      injuryPenalty: f.injuryPenalty,
+      injuryCount: f.injuryCount,
+      standingsRank: f.standingsRank,
+    };
+  });
+
+  // Min-max normalize weighted-avg points across franchises that played in
+  // the window. All-equal (or nobody played) guards to a neutral 0.5.
+  const pointsValues = perFranchise
+    .filter((p) => p.windowGames > 0)
+    .map((p) => p.weightedAvgPoints);
+  const minPoints = pointsValues.length ? Math.min(...pointsValues) : 0;
+  const maxPoints = pointsValues.length ? Math.max(...pointsValues) : 0;
+  const range = maxPoints - minPoints;
+
+  const scored = perFranchise.map((p) => {
+    const scoringScore =
+      p.windowGames === 0 || range === 0
+        ? 0.5
+        : (p.weightedAvgPoints - minPoints) / range;
+
+    const powerScore =
+      0.5 * p.resultScore + 0.35 * scoringScore + 0.15 * (1 - p.injuryPenalty);
+
+    return {
+      franchiseId: p.franchiseId,
+      powerScore,
+      resultScore: p.resultScore,
+      scoringScore,
+      weightedAvgPoints: p.weightedAvgPoints,
+      windowGames: p.windowGames,
+      standingsRank: p.standingsRank,
+      injuryPenalty: p.injuryPenalty,
+      injuryCount: p.injuryCount,
+    };
+  });
+
+  scored.sort((a, b) => {
+    if (b.powerScore !== a.powerScore) return b.powerScore - a.powerScore;
+    return b.weightedAvgPoints - a.weightedAvgPoints;
+  });
+
+  return scored.map((s, idx) => {
+    const rank = idx + 1;
+    return { ...s, rank, formDelta: s.standingsRank - rank };
+  });
+}
 
 export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
   try {
@@ -680,6 +838,8 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
 
     if (!latestSeason) return [];
 
+    // Standings (also gives us franchise identity + standingsRank, since this
+    // is already ordered wins desc, pointsScored desc).
     const rows = await db
       .select({
         id: franchises.id,
@@ -701,6 +861,8 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
         desc(franchiseSeasons.pointsScored)
       );
 
+    const standingsRankMap = new Map(rows.map((r, i) => [r.id, i + 1]));
+
     // Get championship counts for each franchise
     const champCounts = await db
       .select({
@@ -716,20 +878,124 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
       champCounts.map((c) => [c.franchiseId, c.championships])
     );
 
-    return rows.map((r, index) => ({
-      rank: index + 1,
-      id: r.id,
-      slug: r.slug,
-      name: r.name,
-      abbreviation: r.abbreviation ?? undefined,
-      brandingColor: r.brandingColor ?? undefined,
-      wins: r.wins ?? 0,
-      losses: r.losses ?? 0,
-      ties: r.ties ?? 0,
-      pointsScored: Number(r.pointsScored ?? 0),
-      pointsAgainst: Number(r.pointsAgainst ?? 0),
-      championships: champMap.get(r.id) ?? 0,
-    }));
+    // Rolling window: last min(4, availableWeeks) completed weeks of the
+    // latest season (mirrors the "latest completed week" pattern used in
+    // lib/queries/homepage.ts).
+    const weekRows = await db
+      .selectDistinct({ week: matchups.week })
+      .from(matchups)
+      .where(
+        and(
+          eq(matchups.seasonId, latestSeason.id),
+          eq(matchups.status, "complete")
+        )
+      )
+      .orderBy(desc(matchups.week))
+      .limit(WINDOW_SIZE);
+
+    const windowWeeks = weekRows.map((w) => w.week);
+
+    const gamesByFranchise = new Map<string, PowerFormGame[]>();
+
+    if (windowWeeks.length > 0) {
+      const gameRows = await db
+        .select({
+          week: matchups.week,
+          franchiseId: matchups.franchiseId,
+          points: matchups.points,
+          isWinner: matchups.isWinner,
+        })
+        .from(matchups)
+        .where(
+          and(
+            eq(matchups.seasonId, latestSeason.id),
+            eq(matchups.status, "complete"),
+            inArray(matchups.week, windowWeeks)
+          )
+        );
+
+      for (const g of gameRows) {
+        const list = gamesByFranchise.get(g.franchiseId) ?? [];
+        list.push({
+          week: g.week,
+          points: Number(g.points ?? 0),
+          isWinner: g.isWinner,
+        });
+        gamesByFranchise.set(g.franchiseId, list);
+      }
+    }
+
+    // Current-roster injury penalty: only starters count.
+    const injuryRows = await db
+      .select({
+        franchiseId: rosterPlayers.franchiseId,
+        injuryStatus: players.injuryStatus,
+      })
+      .from(rosterPlayers)
+      .innerJoin(players, eq(rosterPlayers.playerId, players.id))
+      .where(
+        and(
+          eq(rosterPlayers.seasonId, latestSeason.id),
+          eq(rosterPlayers.slot, "starter")
+        )
+      );
+
+    const injurySeverityByFranchise = new Map<string, number>();
+    const injuryCountByFranchise = new Map<string, number>();
+    for (const row of injuryRows) {
+      const severity = row.injuryStatus
+        ? (INJURY_SEVERITY[row.injuryStatus] ?? 0)
+        : 0;
+      if (severity > 0) {
+        injurySeverityByFranchise.set(
+          row.franchiseId,
+          (injurySeverityByFranchise.get(row.franchiseId) ?? 0) + severity
+        );
+        injuryCountByFranchise.set(
+          row.franchiseId,
+          (injuryCountByFranchise.get(row.franchiseId) ?? 0) + 1
+        );
+      }
+    }
+
+    const inputs: PowerFranchiseInput[] = rows.map((r) => {
+      const severitySum = injurySeverityByFranchise.get(r.id) ?? 0;
+      return {
+        franchiseId: r.id,
+        games: gamesByFranchise.get(r.id) ?? [],
+        injuryPenalty: Math.min(severitySum / INJURY_SEVERITY_CAP, 1),
+        injuryCount: injuryCountByFranchise.get(r.id) ?? 0,
+        standingsRank: standingsRankMap.get(r.id) ?? rows.length,
+      };
+    });
+
+    const scores = computePowerScore(inputs);
+    const scoreByFranchise = new Map(scores.map((s) => [s.franchiseId, s]));
+
+    return rows
+      .map((r) => {
+        const score = scoreByFranchise.get(r.id);
+        return {
+          rank: score?.rank ?? 0,
+          id: r.id,
+          slug: r.slug,
+          name: r.name,
+          abbreviation: r.abbreviation ?? undefined,
+          brandingColor: r.brandingColor ?? undefined,
+          wins: r.wins ?? 0,
+          losses: r.losses ?? 0,
+          ties: r.ties ?? 0,
+          pointsScored: Number(r.pointsScored ?? 0),
+          pointsAgainst: Number(r.pointsAgainst ?? 0),
+          championships: champMap.get(r.id) ?? 0,
+          powerScore: score?.powerScore ?? 0,
+          formDelta: score?.formDelta ?? 0,
+          standingsRank: score?.standingsRank ?? standingsRankMap.get(r.id) ?? 0,
+          windowGames: score?.windowGames ?? 0,
+          injuryCount: injuryCountByFranchise.get(r.id) ?? 0,
+        };
+      })
+      .sort((a, b) => a.rank - b.rank);
   } catch {
     return [];
   }

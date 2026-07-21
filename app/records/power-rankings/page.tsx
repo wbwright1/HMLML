@@ -35,7 +35,7 @@ export default async function PowerRankingsPage() {
         </Link>
 
         <p className="text-body-lg text-text-secondary max-w-prose">
-          Current season rankings based on record and points scored.
+          Ranked on the last 4 weeks: recent results, scoring trend, and injuries. Not season-long record.
         </p>
       </PageSection>
 
@@ -96,7 +96,36 @@ export default async function PowerRankingsPage() {
                             variant="gold"
                           />
                         )}
+                        {entry.injuryCount > 0 && (
+                          <SuperlativeBadge
+                            text={`${entry.injuryCount} Banged Up`}
+                            variant="brown"
+                          />
+                        )}
                       </div>
+                    </div>
+
+                    {/* Form vs standings */}
+                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                      {entry.formDelta === 0 ? (
+                        <span className="flex items-center gap-1 font-mono text-sm tabular-nums text-text-tertiary">
+                          <span aria-hidden>–</span>
+                          <span>0</span>
+                        </span>
+                      ) : entry.formDelta > 0 ? (
+                        <span className="flex items-center gap-1 font-mono text-sm font-bold tabular-nums text-accent-green">
+                          <span aria-hidden>▲</span>
+                          <span>{entry.formDelta}</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-1 font-mono text-sm tabular-nums text-accent-warm">
+                          <span aria-hidden>▼</span>
+                          <span>{Math.abs(entry.formDelta)}</span>
+                        </span>
+                      )}
+                      <span className="text-caption text-text-tertiary normal-case tracking-normal">
+                        vs standings (#{entry.standingsRank})
+                      </span>
                     </div>
 
                     {/* Stats */}
