@@ -40,32 +40,44 @@ test.describe("Standings by division", () => {
     await expect(seasonTab).toBeVisible({ timeout: 15000 });
     await seasonTab.click();
 
-    // Division East header shows the aggregate record: A(5-3) + B(4-4) + C(2-6) = 11-13.
-    const eastHeader = page.getByText(DIVISIONS.east.name, { exact: true }).first();
-    await expect(eastHeader).toBeVisible();
-    await expect(eastHeader.locator("xpath=ancestor::p[1]")).toContainText("11-13");
+    // Division header rows carry the aggregate division record. Key off the
+    // unique aggregate (only produced by summing this season's grouped rows)
+    // and assert the paired division name, rather than off the shared
+    // division name (which also appears in the projection rail and could
+    // belong to the parallel "latest season" spec). East: A(5-5)+B(4-6)+
+    // C(3-7)+D(2-8) = 14-26; West: 9-1+8-2+7-3+7-3 = 31-9; North: 9-1+8-2+
+    // 4-6+1-9 = 22-18.
+    const eastAgg = page.locator("p").filter({ hasText: "14-26" }).first();
+    await expect(eastAgg).toBeVisible();
+    await expect(eastAgg).toContainText(DIVISIONS.east.name);
 
-    // Division West header shows the aggregate record: D(7-1) + E(6-2) + F(4-4) = 17-7.
-    const westHeader = page.getByText(DIVISIONS.west.name, { exact: true }).first();
-    await expect(westHeader).toBeVisible();
-    await expect(westHeader.locator("xpath=ancestor::p[1]")).toContainText("17-7");
+    const westAgg = page.locator("p").filter({ hasText: "31-9" }).first();
+    await expect(westAgg).toBeVisible();
+    await expect(westAgg).toContainText(DIVISIONS.west.name);
+
+    const northAgg = page.locator("p").filter({ hasText: "22-18" }).first();
+    await expect(northAgg).toBeVisible();
+    await expect(northAgg).toContainText(DIVISIONS.north.name);
 
     // Every seeded team name appears somewhere on the page.
-    for (const f of Object.values(fixture.franchises)) {
-      await expect(page.getByText(f.name).first()).toBeVisible();
+    for (const franchise of Object.values(fixture.franchises)) {
+      await expect(page.getByText(franchise.name).first()).toBeVisible();
     }
 
-    // Within Division East, Alpha (5-3) must render above Bravo (4-4) above
-    // Charlie (2-6) — proves the real per-division record sort ran (RISK-A),
-    // not an arbitrary/insertion order.
+    // Within Division East, Alpha (5-5) must render above Bravo (4-6) above
+    // Charlie (3-7) above Delta (2-8) — proves the real per-division record
+    // sort ran (RISK-A), not an arbitrary/insertion order.
     const bodyText = await page.locator("body").innerText();
     const alphaIdx = bodyText.indexOf(fixture.franchises.a.name);
     const bravoIdx = bodyText.indexOf(fixture.franchises.b.name);
     const charlieIdx = bodyText.indexOf(fixture.franchises.c.name);
+    const deltaIdx = bodyText.indexOf(fixture.franchises.d.name);
     expect(alphaIdx).toBeGreaterThan(-1);
     expect(bravoIdx).toBeGreaterThan(-1);
     expect(charlieIdx).toBeGreaterThan(-1);
+    expect(deltaIdx).toBeGreaterThan(-1);
     expect(alphaIdx).toBeLessThan(bravoIdx);
     expect(bravoIdx).toBeLessThan(charlieIdx);
+    expect(charlieIdx).toBeLessThan(deltaIdx);
   });
 });

@@ -13,16 +13,35 @@ interface LeaderboardTableProps {
   allTimeData: LeaderboardEntry[];
   seasonData: Record<string, LeaderboardEntry[]>;
   seasonYears: number[];
+  /**
+   * The season year the playoff projection applies to (the current season),
+   * and the franchise ids projected INTO its field. When the user selects
+   * this season, the berth line uses the real projection (division-winner
+   * auto-qualify) so the table agrees with the "Projected Playoff Field"
+   * block. Absent for seasons with no projection; those fall back to the
+   * straight top-6-by-record berth line below.
+   */
+  projectionSeasonYear?: number | null;
+  projectionFieldIds?: string[];
 }
 
 // How many teams make the playoffs; determines the berth line in the
-// standings. Derived purely from already-fetched rows, no new query.
+// standings when no real projection applies. Derived purely from
+// already-fetched rows, no new query.
 const PLAYOFF_BERTH_COUNT = 6;
+
+/** Win percentage (ties count as half), for fair mid-season ordering. */
+function winPctOf(e: LeaderboardEntry): number {
+  const total = e.wins + e.losses + e.ties;
+  return total > 0 ? (e.wins + e.ties * 0.5) / total : 0;
+}
 
 export function LeaderboardTable({
   allTimeData,
   seasonData,
   seasonYears,
+  projectionSeasonYear,
+  projectionFieldIds,
 }: LeaderboardTableProps) {
   const [activeSeason, setActiveSeason] = useState<number | "all-time">(
     "all-time"
@@ -46,13 +65,24 @@ export function LeaderboardTable({
     [source]
   );
   const leader = standingsOrder[0];
-  const playoffBerthIds = useMemo(
-    () =>
-      new Set(
-        standingsOrder.slice(0, PLAYOFF_BERTH_COUNT).map((entry) => entry.id)
-      ),
-    [standingsOrder]
-  );
+  // Prefer the real projection field (division-winner auto-qualify) when the
+  // selected season is the projected one; this keeps the table's berth line
+  // in agreement with the "Projected Playoff Field" block on the same page.
+  // Otherwise (all-time, historical, or no-division seasons) fall back to the
+  // straight top-6-by-record line.
+  const playoffBerthIds = useMemo(() => {
+    if (
+      projectionSeasonYear != null &&
+      activeSeason === projectionSeasonYear &&
+      projectionFieldIds &&
+      projectionFieldIds.length > 0
+    ) {
+      return new Set(projectionFieldIds);
+    }
+    return new Set(
+      standingsOrder.slice(0, PLAYOFF_BERTH_COUNT).map((entry) => entry.id)
+    );
+  }, [standingsOrder, activeSeason, projectionSeasonYear, projectionFieldIds]);
   const overallRank = useMemo(
     () => new Map(standingsOrder.map((entry, i) => [entry.id, i + 1])),
     [standingsOrder]
@@ -91,9 +121,10 @@ export function LeaderboardTable({
       .sort((a, b) => (a.division ?? Infinity) - (b.division ?? Infinity))
       .map((g) => ({
         ...g,
-        // RISK-A: sort within division by record, never standingsFinish.
+        // RISK-A: sort within division by record (win% DESC so unequal games
+        // played mid-season rank fairly, then points), never standingsFinish.
         entries: [...g.entries].sort(
-          (a, b) => b.wins - a.wins || b.pointsScored - a.pointsScored
+          (a, b) => winPctOf(b) - winPctOf(a) || b.pointsScored - a.pointsScored
         ),
         record: g.entries.reduce(
           (acc, e) => ({
@@ -355,6 +386,7 @@ function DesktopRow({
 
   return (
     <tr
+      data-berth={isBerth}
       className={`border-b border-divider last:border-0 transition-colors hover:bg-surface-muted ${
         isLeader ? "bg-accent-gold-light" : ""
       }`}

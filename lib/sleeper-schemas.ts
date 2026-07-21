@@ -15,7 +15,11 @@ export const SleeperLeagueSchema = z
     scoring_settings: z.record(z.string(), z.number()),
     // Division names, when set, live at metadata.division_N keys (unset in
     // this league; divisions default to "Division N" via resolveDivisionName).
-    metadata: z.record(z.string(), z.string()).nullable().optional(),
+    // Values are typed unknown, NOT string: Sleeper does not guarantee every
+    // metadata value is a string, and a stricter schema would hard-fail the
+    // whole league parse (and thus daily + hourly sync) over a cosmetic
+    // field. resolveDivisionName string-guards before use.
+    metadata: z.record(z.string(), z.unknown()).nullable().optional(),
   })
   .passthrough();
 

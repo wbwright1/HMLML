@@ -142,6 +142,7 @@ export default async function RecordsPage() {
   let coachingMalpractice: LineupAward | null = null;
   let whatCouldveBeen: LineupAward | null = null;
   let projection: PlayoffProjection | null = null;
+  let projectionSeasonYear: number | null = null;
 
   try {
     [allTimeData, seasonYears, powerRankings] = await Promise.all([
@@ -173,6 +174,7 @@ export default async function RecordsPage() {
       coachingMalpractice = lineupAwards?.coachingMalpractice ?? null;
       whatCouldveBeen = lineupAwards?.whatCouldveBeen ?? null;
       projection = playoffProjection;
+      projectionSeasonYear = latestSeason.seasonYear;
     }
   } catch {
     // DB may not be connected
@@ -199,6 +201,14 @@ export default async function RecordsPage() {
               allTimeData={allTimeData}
               seasonData={seasonDataRecord}
               seasonYears={seasonYears}
+              projectionSeasonYear={
+                projection?.hasDivisions ? projectionSeasonYear : null
+              }
+              projectionFieldIds={
+                projection?.hasDivisions
+                  ? projection.field.map((t) => t.franchiseId)
+                  : undefined
+              }
             />
           </div>
 

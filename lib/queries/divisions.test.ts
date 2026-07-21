@@ -85,6 +85,64 @@ describe("seedTeams", () => {
     const top3 = ranked.slice(0, 3).map((t) => t.franchiseId);
     expect(top3).toEqual(["a", "b", "c"]);
   });
+
+  it("resolves a 3-way record tie deterministically via aggregate intra-group H2H (no cycle)", () => {
+    // a, b, c all 8-2. Pairwise H2H forms a rock-paper-scissors CYCLE:
+    // a beat b, b beat c, c beat a — non-transitive, so a naive pairwise
+    // comparator inside sort would be order-dependent. With aggregate
+    // intra-group differential every team is +0 (1 win, 1 loss within the
+    // group), so the tie falls through to points for: a(1200) > b(1100) >
+    // c(1000). The result must be stable no matter the input order.
+    const base = [
+      team({ franchiseId: "a", wins: 8, losses: 2, pointsScored: 1200 }),
+      team({ franchiseId: "b", wins: 8, losses: 2, pointsScored: 1100 }),
+      team({ franchiseId: "c", wins: 8, losses: 2, pointsScored: 1000 }),
+    ];
+    const h2hLookup = new Map([
+      ["a|b", { wins: 1, losses: 0, ties: 0 }],
+      ["b|a", { wins: 0, losses: 1, ties: 0 }],
+      ["b|c", { wins: 1, losses: 0, ties: 0 }],
+      ["c|b", { wins: 0, losses: 1, ties: 0 }],
+      ["c|a", { wins: 1, losses: 0, ties: 0 }],
+      ["a|c", { wins: 0, losses: 1, ties: 0 }],
+    ]);
+
+    const expected = ["a", "b", "c"];
+    // Every permutation of the input must produce the same total order.
+    const permutations = [
+      [base[0], base[1], base[2]],
+      [base[2], base[1], base[0]],
+      [base[1], base[2], base[0]],
+      [base[2], base[0], base[1]],
+    ];
+    for (const perm of permutations) {
+      const ranked = seedTeams(perm, h2hLookup, new Map());
+      expect(ranked.map((t) => t.franchiseId)).toEqual(expected);
+    }
+  });
+
+  it("breaks a 3-way tie by aggregate intra-group H2H when one team swept the group", () => {
+    // a, b, c all 8-2. a beat BOTH b and c (diff +2); b and c split with each
+    // other (diff 0 each, resolved by PF). a must seed first purely on the
+    // aggregate H2H differential, ahead of higher-PF teams.
+    const teams = [
+      team({ franchiseId: "a", wins: 8, losses: 2, pointsScored: 900 }),
+      team({ franchiseId: "b", wins: 8, losses: 2, pointsScored: 1300 }),
+      team({ franchiseId: "c", wins: 8, losses: 2, pointsScored: 1200 }),
+    ];
+    const h2hLookup = new Map([
+      ["a|b", { wins: 1, losses: 0, ties: 0 }],
+      ["b|a", { wins: 0, losses: 1, ties: 0 }],
+      ["a|c", { wins: 1, losses: 0, ties: 0 }],
+      ["c|a", { wins: 0, losses: 1, ties: 0 }],
+      ["b|c", { wins: 1, losses: 0, ties: 0 }],
+      ["c|b", { wins: 0, losses: 1, ties: 0 }],
+    ]);
+    const ranked = seedTeams(teams, h2hLookup, new Map());
+    // a swept (+2), then b beat c (+0 vs c's -0... b has diff 0 from a-loss
+    // +c-win = 0, c has diff -0... both 0) -> PF: b(1300) > c(1200).
+    expect(ranked.map((t) => t.franchiseId)).toEqual(["a", "b", "c"]);
+  });
 });
 
 describe("buildDivisionalField", () => {

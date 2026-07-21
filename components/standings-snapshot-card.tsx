@@ -162,7 +162,9 @@ function LadderRow({
           }`}
           title={entry.isDivisionWinner ? "Division winner" : "Wildcard seed"}
         >
-          {entry.isDivisionWinner ? `D${entry.seed}` : `WC${entry.seed}`}
+          {/* Seed number first so it never reads as a division number
+              (e.g. "#2 DIV", not "D2" which looks like "Division 2"). */}
+          {`#${entry.seed} ${entry.isDivisionWinner ? "DIV" : "WC"}`}
         </span>
       )}
       {entry.isIn !== undefined && (

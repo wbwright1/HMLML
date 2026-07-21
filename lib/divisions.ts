@@ -6,8 +6,13 @@
  * the schedule generator script, and query code never drift on the fallback.
  */
 export function resolveDivisionName(
-  metadata: Record<string, string> | null | undefined,
+  metadata: Record<string, unknown> | null | undefined,
   divisionNumber: number,
 ): string {
-  return metadata?.[`division_${divisionNumber}`]?.trim() || `Division ${divisionNumber}`;
+  // String-guard: Sleeper does not guarantee metadata values are strings, so
+  // the schema types them as unknown. Only a non-empty string overrides the
+  // "Division N" default.
+  const raw = metadata?.[`division_${divisionNumber}`];
+  const name = typeof raw === "string" ? raw.trim() : "";
+  return name || `Division ${divisionNumber}`;
 }

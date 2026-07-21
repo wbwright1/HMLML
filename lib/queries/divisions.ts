@@ -83,52 +83,90 @@ function h2hKey(a: string, b: string): H2HKey {
 }
 
 /**
- * Compares two teams for seeding purposes using the tiebreaker chain:
- *   1. win% DESC
- *   2. head-to-head between the two teams (only meaningful for a 2-way
- *      comparison; skipped when no games were played between them)
- *   3. division record (win% within the team's own division) DESC
- *   4. points for DESC
- * Returns <0 if a ranks ahead of b, >0 if b ranks ahead of a, 0 if truly tied.
+ * Aggregate head-to-head differential (wins minus losses) for one team
+ * counting ONLY games played against other members of `groupIds`. Computed
+ * once per team relative to a fixed tie group, so it is a scalar the sort can
+ * order transitively (unlike a pairwise A-beat-B comparison inside sort,
+ * which can form a non-transitive A>B>C>A cycle).
  */
-function compareTeams(
-  a: SeededTeam,
-  b: SeededTeam,
+function intraGroupH2HDiff(
+  teamId: string,
+  groupIds: Set<string>,
+  h2hLookup: Map<H2HKey, H2HRecord>,
+): number {
+  let diff = 0;
+  for (const otherId of groupIds) {
+    if (otherId === teamId) continue;
+    const rec = h2hLookup.get(h2hKey(teamId, otherId));
+    if (rec) diff += rec.wins - rec.losses;
+  }
+  return diff;
+}
+
+/**
+ * Resolves the order of a set of teams already tied on win%, using the
+ * remaining tiebreak chain as a TOTAL order (every step is a scalar compared
+ * with a deterministic final fallback, so equal inputs always sort the same):
+ *   1. aggregate intra-group head-to-head differential DESC
+ *   2. division record (win% within the team's own division) DESC
+ *   3. points for DESC
+ *   4. franchise id ASC (stable, guarantees determinism)
+ */
+function orderTieGroup(
+  group: SeededTeam[],
   h2hLookup: Map<H2HKey, H2HRecord>,
   divisionRecord: Map<string, DivisionRecord>,
-): number {
-  const pctDiff = winPct(b) - winPct(a);
-  if (pctDiff !== 0) return pctDiff;
+): SeededTeam[] {
+  if (group.length <= 1) return group;
+  const groupIds = new Set(group.map((t) => t.franchiseId));
+  const h2hDiff = new Map(
+    group.map((t) => [t.franchiseId, intraGroupH2HDiff(t.franchiseId, groupIds, h2hLookup)]),
+  );
 
-  const h2h = h2hLookup.get(h2hKey(a.franchiseId, b.franchiseId));
-  if (h2h && h2h.wins !== h2h.losses) {
-    return h2h.losses - h2h.wins; // more h2h wins for `a` -> negative -> a first
-  }
+  return [...group].sort((a, b) => {
+    const diffA = h2hDiff.get(a.franchiseId) ?? 0;
+    const diffB = h2hDiff.get(b.franchiseId) ?? 0;
+    if (diffA !== diffB) return diffB - diffA;
 
-  const aDiv = divisionRecord.get(a.franchiseId);
-  const bDiv = divisionRecord.get(b.franchiseId);
-  if (aDiv && bDiv) {
-    const aDivPct = winPct(aDiv);
-    const bDivPct = winPct(bDiv);
+    const aDiv = divisionRecord.get(a.franchiseId);
+    const bDiv = divisionRecord.get(b.franchiseId);
+    const aDivPct = aDiv ? winPct(aDiv) : -1;
+    const bDivPct = bDiv ? winPct(bDiv) : -1;
     if (aDivPct !== bDivPct) return bDivPct - aDivPct;
-  }
 
-  if (b.pointsScored !== a.pointsScored) return b.pointsScored - a.pointsScored;
+    if (b.pointsScored !== a.pointsScored) return b.pointsScored - a.pointsScored;
 
-  return 0;
+    // Deterministic final fallback so truly-equal teams sort identically
+    // regardless of the arbitrary base order handed to us.
+    return a.franchiseId < b.franchiseId ? -1 : a.franchiseId > b.franchiseId ? 1 : 0;
+  });
 }
 
 /**
  * Sorts teams best-to-worst using the full tiebreaker chain. Pure,
- * synchronous, dependency-free: all lookups are gathered by the caller and
- * passed in.
+ * synchronous, dependency-free, and a TOTAL order: teams are first bucketed
+ * by win% (primary), then each bucket is resolved by orderTieGroup, so the
+ * head-to-head step operates on a fixed tie set (transitive) rather than
+ * pairwise inside the sort. All lookups are gathered by the caller.
  */
 export function seedTeams(
   teams: SeededTeam[],
   h2hLookup: Map<H2HKey, H2HRecord>,
   divisionRecord: Map<string, DivisionRecord>,
 ): SeededTeam[] {
-  return [...teams].sort((a, b) => compareTeams(a, b, h2hLookup, divisionRecord));
+  const byPct = new Map<number, SeededTeam[]>();
+  for (const t of teams) {
+    const pct = winPct(t);
+    if (!byPct.has(pct)) byPct.set(pct, []);
+    byPct.get(pct)!.push(t);
+  }
+
+  const pcts = [...byPct.keys()].sort((a, b) => b - a); // win% DESC
+  const result: SeededTeam[] = [];
+  for (const pct of pcts) {
+    result.push(...orderTieGroup(byPct.get(pct)!, h2hLookup, divisionRecord));
+  }
+  return result;
 }
 
 /**
@@ -280,10 +318,21 @@ function toSeededTeam(s: Awaited<ReturnType<typeof getSeasonStandings>>[number])
 // ---------------------------------------------------------------------------
 
 /**
+ * Compares two teams by standings order for display: win% DESC (so teams that
+ * have played unequal numbers of games mid-season are ranked fairly, matching
+ * seedTeams' primary key), then points for DESC. RISK-A: never relies on
+ * standingsFinish, which is null in-season.
+ */
+function byRecordDesc(a: SeededTeam, b: SeededTeam): number {
+  const pctDiff = winPct(b) - winPct(a);
+  if (pctDiff !== 0) return pctDiff;
+  return b.pointsScored - a.pointsScored;
+}
+
+/**
  * Groups a season's standings by division, sorted within each group by
- * record (wins DESC, points DESC — RISK-A: never rely on standingsFinish,
- * which is null in-season). Falls back to a single "League" group when the
- * season predates divisions (RISK-B: every row's division is null).
+ * record (win% DESC, points DESC). Falls back to a single "League" group when
+ * the season predates divisions (RISK-B: every row's division is null).
  */
 export async function getDivisionStandings(seasonId: number): Promise<DivisionGroup[]> {
   const standings = await getSeasonStandings(seasonId);
@@ -292,9 +341,7 @@ export async function getDivisionStandings(seasonId: number): Promise<DivisionGr
   const hasDivisions = teams.some((t) => t.division != null);
 
   if (!hasDivisions) {
-    const sorted = [...teams].sort(
-      (a, b) => b.wins - a.wins || b.pointsScored - a.pointsScored,
-    );
+    const sorted = [...teams].sort(byRecordDesc);
     return [{ division: null, divisionName: "League", teams: sorted }];
   }
 
@@ -308,9 +355,7 @@ export async function getDivisionStandings(seasonId: number): Promise<DivisionGr
   return [...byDivision.entries()]
     .sort((a, b) => a[0] - b[0])
     .map(([division, divTeams]) => {
-      const sorted = [...divTeams].sort(
-        (a, b) => b.wins - a.wins || b.pointsScored - a.pointsScored,
-      );
+      const sorted = [...divTeams].sort(byRecordDesc);
       const record = sorted.reduce(
         (acc, t) => ({
           wins: acc.wins + t.wins,
