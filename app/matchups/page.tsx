@@ -85,6 +85,12 @@ export default async function MatchupsPage() {
           >
             Full {seasonYear} Season
           </Link>
+          <Link
+            href={`/schedule?season=${seasonYear}`}
+            className="text-body-sm text-accent-gold hover:brightness-110 transition-colors"
+          >
+            Full Season Schedule
+          </Link>
         </div>
       </PageSection>
 

@@ -19,6 +19,10 @@ const FRANCHISE_D_ID = `${TEST_PREFIX}-franchise-d`;
 export const TEST_DATA = {
   seasonYear: SEASON_YEAR,
   week: 1,
+  // Extra weeks seeded alongside week 1 so schedule views can exercise
+  // completed / in-progress / scheduled (upcoming) status distinctions.
+  weekInProgress: 2,
+  weekScheduled: 3,
   franchiseA: {
     id: FRANCHISE_A_ID,
     slug: `${TEST_PREFIX}-team-alpha`,
@@ -179,6 +183,52 @@ export async function seedMatchupData(): Promise<number> {
       points: 110.7,
       isWinner: true,
       status: "complete",
+    },
+
+    // Week 2, matchup 911: Team Alpha vs Team Charlie, in progress (points
+    // posted, no winner determined yet).
+    {
+      seasonId,
+      week: TEST_DATA.weekInProgress,
+      matchupId: 911,
+      franchiseId: TEST_DATA.franchiseA.id,
+      rosterId: `${TEST_PREFIX}-roster-a`,
+      points: 42.1,
+      isWinner: null,
+      status: "in_progress",
+    },
+    {
+      seasonId,
+      week: TEST_DATA.weekInProgress,
+      matchupId: 911,
+      franchiseId: TEST_DATA.franchiseC.id,
+      rosterId: `${TEST_PREFIX}-roster-c`,
+      points: 38.6,
+      isWinner: null,
+      status: "in_progress",
+    },
+
+    // Week 3, matchup 921: Team Bravo vs Team Delta, scheduled (not yet
+    // played; Sleeper has paired them but points are still 0).
+    {
+      seasonId,
+      week: TEST_DATA.weekScheduled,
+      matchupId: 921,
+      franchiseId: TEST_DATA.franchiseB.id,
+      rosterId: `${TEST_PREFIX}-roster-b`,
+      points: 0,
+      isWinner: null,
+      status: "scheduled",
+    },
+    {
+      seasonId,
+      week: TEST_DATA.weekScheduled,
+      matchupId: 921,
+      franchiseId: TEST_DATA.franchiseD.id,
+      rosterId: `${TEST_PREFIX}-roster-d`,
+      points: 0,
+      isWinner: null,
+      status: "scheduled",
     },
   ]);
 

@@ -139,6 +139,12 @@ export default async function FranchiseDetailPage({
               >
                 Trade History
               </Link>
+              <Link
+                href={`/teams/${franchise.slug}/schedule`}
+                className="inline-flex items-center justify-center rounded-lg border border-border bg-surface px-4 py-2 text-body-sm font-medium text-text-primary transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Schedule
+              </Link>
             </div>
           </ScrollReveal>
         )}
