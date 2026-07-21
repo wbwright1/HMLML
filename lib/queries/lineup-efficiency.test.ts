@@ -69,6 +69,47 @@ describe("bestPossibleLineup", () => {
     expect(total).toBeCloseTo(30 + 15 + 14 + 10 + 12 + 28, 5);
   });
 
+  it("handles the real league roster shape (two FLEX + one SUPER_FLEX)", () => {
+    // The actual HMLML starting lineup: QB, two RB, two WR, TE, two FLEX,
+    // one SUPER_FLEX. Verify the greedy solver fills fixed slots first, then
+    // both FLEX (RB/WR/TE), then SUPER_FLEX (any of QB/RB/WR/TE) with the
+    // best remaining scorers.
+    const REAL_POSITIONS = [
+      "QB",
+      "RB",
+      "RB",
+      "WR",
+      "WR",
+      "TE",
+      "FLEX",
+      "FLEX",
+      "SUPER_FLEX",
+      "BN",
+      "BN",
+      "BN",
+    ];
+    const roster = [
+      p("qb1", "QB", 28),
+      p("qb2", "QB", 24), // second-best any-position, should land in SUPER_FLEX
+      p("rb1", "RB", 22),
+      p("rb2", "RB", 18),
+      p("rb3", "RB", 16), // FLEX candidate
+      p("wr1", "WR", 21),
+      p("wr2", "WR", 19),
+      p("wr3", "WR", 17), // FLEX candidate
+      p("te1", "TE", 12),
+      p("te2", "TE", 5), // bench filler, lowest, unused
+    ];
+
+    // Fixed: QB(28) + RB(22) + RB(18) + WR(21) + WR(19) + TE(12) = 120
+    // Remaining pool after fixed: qb2(24), rb3(16), wr3(17), te2(5)
+    // Two FLEX (RB/WR/TE) take the two best of {rb3,wr3,te2} = wr3(17)+rb3(16)
+    // SUPER_FLEX (any) takes best remaining = qb2(24)
+    // Total = 120 + 17 + 16 + 24 = 177
+    const total = bestPossibleLineup(REAL_POSITIONS, roster);
+    expect(total).toBeCloseTo(177, 5);
+  });
+
   it("returns 0 for an empty roster", () => {
     expect(bestPossibleLineup(STANDARD_POSITIONS, [])).toBe(0);
   });

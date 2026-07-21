@@ -243,7 +243,7 @@ export async function getSeasonLineupAwards(
             )
           : null,
       whatCouldveBeen:
-        couldveBeenId
+        couldveBeenId && couldveBeenTotal > 0
           ? buildAward(
               "WHAT_COULDVE_BEEN",
               couldveBeenId,

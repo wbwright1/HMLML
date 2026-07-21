@@ -210,7 +210,7 @@ export async function getSeasonSuperlatives(
     const byPF = [...standings].sort(
       (a, b) => (b.pointsScored ?? 0) - (a.pointsScored ?? 0)
     );
-    if (byPF[0]) {
+    if (byPF[0] && (byPF[0].pointsScored ?? 0) > 0) {
       push(
         "POINT_MACHINE",
         byPF[0].franchiseName,
@@ -224,7 +224,7 @@ export async function getSeasonSuperlatives(
     const byPA = [...standings].sort(
       (a, b) => (a.pointsAgainst ?? 0) - (b.pointsAgainst ?? 0)
     );
-    if (byPA[0]) {
+    if (byPA[0] && (byPA[0].pointsAgainst ?? 0) > 0) {
       push(
         "IRON_CURTAIN",
         byPA[0].franchiseName,
@@ -258,7 +258,7 @@ export async function getSeasonSuperlatives(
     const byMostPA = [...standings].sort(
       (a, b) => (b.pointsAgainst ?? 0) - (a.pointsAgainst ?? 0)
     );
-    if (byMostPA[0]) {
+    if (byMostPA[0] && (byMostPA[0].pointsAgainst ?? 0) > 0) {
       push(
         "PAPER_TIGER",
         byMostPA[0].franchiseName,

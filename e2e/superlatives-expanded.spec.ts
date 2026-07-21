@@ -44,11 +44,18 @@ test.describe("Records: The Superlatives section", () => {
     const cardCount = await cards.count();
     expect(cardCount).toBeGreaterThanOrEqual(1);
 
-    // Stat values use font-mono with tabular-nums somewhere in each card.
+    // Every award card must carry a MEANINGFUL, non-zero stat. A card whose
+    // stat parses to 0 (e.g. "0.0 PF") is the pre-data bug these superlatives
+    // are gated against; it must never render, so assert > 0 here.
     for (let i = 0; i < cardCount; i++) {
       const card = cards.nth(i);
       const statText = await card.innerText();
       expect(statText.trim().length).toBeGreaterThan(0);
+
+      const match = statText.match(/(\d+(?:\.\d+)?)/);
+      expect(match, `card ${i} should contain a numeric stat: ${statText}`).not.toBeNull();
+      const value = parseFloat(match![1]);
+      expect(value, `card ${i} stat must be non-zero: ${statText}`).toBeGreaterThan(0);
     }
   });
 
@@ -95,6 +102,16 @@ test.describe("Records: The Superlatives section", () => {
         (el) => window.getComputedStyle(el).fontVariantNumeric
       );
       expect(fontVariantNumeric).toContain("tabular-nums");
+
+      // The stat must be a MEANINGFUL non-zero value. "0.0" here would mean the
+      // award rendered against a season with no real data (the shipped bug).
+      const statText = await statNode.innerText();
+      const match = statText.match(/(\d+(?:\.\d+)?)/);
+      expect(match, `"${label}" stat should be numeric: ${statText}`).not.toBeNull();
+      expect(
+        parseFloat(match![1]),
+        `"${label}" stat must be non-zero: ${statText}`
+      ).toBeGreaterThan(0);
     });
   }
 
@@ -148,8 +165,15 @@ test.describe("Hub: weekly Coaching Malpractice card", () => {
     );
     expect(fontVariantNumeric).toContain("tabular-nums");
 
+    // The weekly award only surfaces when a real bench gap exists, so the
+    // "N.N pts left on bench" value must parse to a non-zero number.
     const statText = await statNode.innerText();
-    expect(statText).toMatch(/[0-9]/);
     expect(statText).not.toContain("—");
+    const match = statText.match(/(\d+(?:\.\d+)?)/);
+    expect(match, `weekly malpractice stat should be numeric: ${statText}`).not.toBeNull();
+    expect(
+      parseFloat(match![1]),
+      `weekly malpractice stat must be non-zero: ${statText}`
+    ).toBeGreaterThan(0);
   });
 });
