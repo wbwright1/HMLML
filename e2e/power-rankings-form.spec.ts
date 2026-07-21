@@ -38,19 +38,16 @@ test.describe("Recent-form power rankings", () => {
   }) => {
     await page.goto("/records/power-rankings");
 
-    const riserLink = page.locator("a", { hasText: TEST_DATA.riser.name });
-    const leaderLink = page.locator("a", { hasText: TEST_DATA.leader.name });
-
-    const riserCount = await riserLink.count();
-    const leaderCount = await leaderLink.count();
-
-    if (riserCount === 0 || leaderCount === 0) {
-      // Power rankings page couldn't resolve our seeded season as "latest"
-      // (e.g. a real season with an even higher year exists). Nothing to
-      // assert against.
-      test.skip();
-      return;
-    }
+    // The seed forces a far-future season (year 2999) so it is unambiguously
+    // the "latest" season the power-rankings model reads. If the seeded teams
+    // are absent, either the seed failed or the latest-season assumption
+    // broke; fail loudly instead of skipping to a false green.
+    await expect(
+      page.locator("a").filter({ hasText: TEST_DATA.riser.name })
+    ).toBeVisible();
+    await expect(
+      page.locator("a").filter({ hasText: TEST_DATA.leader.name })
+    ).toBeVisible();
 
     // DOM order: the riser's card must appear before the leader's card.
     const allRowNames = await page
@@ -75,12 +72,10 @@ test.describe("Recent-form power rankings", () => {
   }) => {
     await page.goto("/records");
 
+    // Same far-future-season guarantee as T01: the rail must render and must
+    // contain both seeded franchises. Assert rather than skip.
     const railHeading = page.locator("h3", { hasText: "Power Ranking" });
-    const headingCount = await railHeading.count();
-    if (headingCount === 0) {
-      test.skip();
-      return;
-    }
+    await expect(railHeading).toBeVisible();
 
     // The rail's link list is the sibling <div> right after the heading's
     // wrapper div; scope to it so we don't also match the season standings
@@ -90,19 +85,14 @@ test.describe("Recent-form power rankings", () => {
     );
     const railNames = await railContainer.locator("a").allTextContents();
 
-    if (railNames.length === 0) {
-      test.skip();
-      return;
-    }
-
     const riserIndex = railNames.findIndex((t) => t.includes(TEST_DATA.riser.name));
     const leaderIndex = railNames.findIndex((t) => t.includes(TEST_DATA.leader.name));
 
-    // Riser should appear at or before the leader in the top-4 rail (only
-    // present at all if it made the top 4, which it should given the model).
+    // Both seeded franchises must be present in the top-4 rail (the seeded
+    // season has exactly these two), and the riser must rank ahead of the
+    // standings leader.
     expect(riserIndex).toBeGreaterThanOrEqual(0);
-    if (leaderIndex >= 0) {
-      expect(riserIndex).toBeLessThan(leaderIndex);
-    }
+    expect(leaderIndex).toBeGreaterThanOrEqual(0);
+    expect(riserIndex).toBeLessThan(leaderIndex);
   });
 });

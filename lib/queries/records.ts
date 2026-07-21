@@ -693,11 +693,15 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
 
 const WINDOW_SIZE = 4;
 
+// Keys are Sleeper's raw `injury_status` enum values (passed through untouched
+// by lib/sync/daily.ts). Note the suspension value is "Sus", NOT "Suspended";
+// "COV" (COVID reserve) also renders the starter unavailable.
 const INJURY_SEVERITY: Record<string, number> = {
   Out: 1.0,
   IR: 1.0,
   PUP: 1.0,
-  Suspended: 1.0,
+  Sus: 1.0,
+  COV: 1.0,
   Doubtful: 0.6,
   Questionable: 0.3,
 };
