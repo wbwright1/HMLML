@@ -1,4 +1,4 @@
-import { Star } from "lucide-react";
+import { Trophy } from "lucide-react";
 
 interface ChampionshipStarsProps {
   count: number;
@@ -24,7 +24,7 @@ export function ChampionshipStars({
       role="img"
     >
       {Array.from({ length: count }, (_, i) => (
-        <Star
+        <Trophy
           key={i}
           size={size}
           className="text-gold"

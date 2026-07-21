@@ -1,13 +1,13 @@
 import { test, expect } from "@playwright/test";
 
-test.describe("Story 5.1: ChampionshipStars SVG Upgrade", () => {
-  test("trophies page renders championship stars as SVG elements", async ({
+test.describe("Story 5.1: ChampionshipStars SVG Upgrade (now trophies)", () => {
+  test("trophies page renders championship trophies as SVG elements", async ({
     page,
   }) => {
     await page.goto("/records/trophies");
     await expect(page.locator("h1, h2").first()).toBeVisible();
 
-    // Find all championship star containers
+    // Find all championship trophy containers
     const starContainers = page.locator('[role="img"][aria-label*="championship"]');
     const containerCount = await starContainers.count();
 
@@ -18,20 +18,20 @@ test.describe("Story 5.1: ChampionshipStars SVG Upgrade", () => {
       return;
     }
 
-    // Verify stars are rendered as SVG elements (not text characters)
+    // Verify trophies are rendered as SVG elements (not text characters)
     const firstContainer = starContainers.first();
     const svgs = firstContainer.locator("svg");
     const svgCount = await svgs.count();
     expect(svgCount).toBeGreaterThan(0);
 
-    // Verify each SVG is a real Lucide Star (has a path child, not text content)
+    // Verify each SVG is a real Lucide Trophy (has a path child, not text content)
     const firstSvg = svgs.first();
     await expect(firstSvg).toBeVisible();
     const pathCount = await firstSvg.locator("path").count();
     expect(pathCount).toBeGreaterThan(0);
   });
 
-  test("star containers have correct aria-label with proper pluralization", async ({
+  test("trophy containers have correct aria-label with proper pluralization", async ({
     page,
   }) => {
     await page.goto("/records/trophies");
@@ -65,7 +65,7 @@ test.describe("Story 5.1: ChampionshipStars SVG Upgrade", () => {
     }
   });
 
-  test("individual star SVGs have aria-hidden for accessibility", async ({
+  test("individual trophy SVGs have aria-hidden for accessibility", async ({
     page,
   }) => {
     await page.goto("/records/trophies");
@@ -76,7 +76,7 @@ test.describe("Story 5.1: ChampionshipStars SVG Upgrade", () => {
 
     if (containerCount === 0) return;
 
-    // Each individual SVG star should have aria-hidden="true"
+    // Each individual SVG trophy should have aria-hidden="true"
     const firstContainer = starContainers.first();
     const svgs = firstContainer.locator("svg");
     const svgCount = await svgs.count();
@@ -87,7 +87,7 @@ test.describe("Story 5.1: ChampionshipStars SVG Upgrade", () => {
     }
   });
 
-  test("stars use gold color from design tokens", async ({ page }) => {
+  test("trophies use gold color from design tokens", async ({ page }) => {
     await page.goto("/records/trophies");
     await expect(page.locator("h1, h2").first()).toBeVisible();
 
@@ -96,7 +96,7 @@ test.describe("Story 5.1: ChampionshipStars SVG Upgrade", () => {
 
     if (containerCount === 0) return;
 
-    // Get computed color of a star SVG
+    // Get computed color of a trophy SVG
     const firstSvg = starContainers.first().locator("svg").first();
     await expect(firstSvg).toBeVisible();
 
@@ -125,8 +125,8 @@ test.describe("Story 5.1: ChampionshipStars SVG Upgrade", () => {
     await expect(page.locator("h1, h2").first()).toBeVisible();
 
     // The ChampionshipStars component with count=0 should return null.
-    // We verify this by checking that every star container present has at least 1 SVG.
-    // There should be no empty star containers in the DOM.
+    // We verify this by checking that every trophy container present has at least 1 SVG.
+    // There should be no empty trophy containers in the DOM.
     const starContainers = page.locator('[role="img"][aria-label*="championship"]');
     const count = await starContainers.count();
 
@@ -136,7 +136,7 @@ test.describe("Story 5.1: ChampionshipStars SVG Upgrade", () => {
     }
   });
 
-  test("star count matches championship count in container aria-label", async ({
+  test("trophy count matches championship count in container aria-label", async ({
     page,
   }) => {
     await page.goto("/records/trophies");
@@ -154,7 +154,7 @@ test.describe("Story 5.1: ChampionshipStars SVG Upgrade", () => {
     }
   });
 
-  test("star containers have role=img for screen readers", async ({
+  test("trophy containers have role=img for screen readers", async ({
     page,
   }) => {
     await page.goto("/records/trophies");
@@ -169,7 +169,7 @@ test.describe("Story 5.1: ChampionshipStars SVG Upgrade", () => {
     }
   });
 
-  test("stars render with fill for solid appearance", async ({ page }) => {
+  test("trophies render with fill for solid appearance", async ({ page }) => {
     await page.goto("/records/trophies");
     await expect(page.locator("h1, h2").first()).toBeVisible();
 
@@ -182,7 +182,7 @@ test.describe("Story 5.1: ChampionshipStars SVG Upgrade", () => {
     const firstSvg = starContainers.first().locator("svg").first();
     await expect(firstSvg).toBeVisible();
 
-    // Lucide renders fill as an attribute; verify the star is filled
+    // Lucide renders fill as an attribute; verify the trophy is filled
     const fill = await firstSvg.evaluate((el) => {
       return window.getComputedStyle(el).fill;
     });
