@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SuperlativeBadge } from "@/components/superlative-badge";
+import { LiveIndicator } from "@/components/live-indicator";
 
 interface BracketTeam {
   name: string;
@@ -39,14 +40,14 @@ export function PlayoffBracketCard({
     variant === "compact" ? rounds.slice(-1) : rounds;
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6 space-y-6">
+    <div className="rounded-lg border border-border bg-surface p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-h3">
           {variant === "compact" ? "Current Round" : "Playoff Bracket"}
         </h3>
         {championName && (
           <div className="flex items-center gap-2">
-            <span className="text-body-sm font-bold text-gold">
+            <span className="text-body-sm font-bold text-accent-gold">
               {championName}
             </span>
             <SuperlativeBadge text="CHAMP" variant="gold" />
@@ -57,7 +58,7 @@ export function PlayoffBracketCard({
       <div className={`space-y-8 ${variant === "full" ? "md:flex md:gap-8 md:space-y-0" : ""}`}>
         {displayRounds.map((round) => (
           <div key={round.name} className="flex-1 space-y-3">
-            <p className="text-caption uppercase tracking-widest text-muted-foreground">
+            <p className="text-kicker">
               {round.name}
             </p>
             <div className="space-y-2">
@@ -76,9 +77,9 @@ export function PlayoffBracketCard({
       {variant === "compact" && (
         <Link
           href={`/playoffs/${seasonYear}`}
-          className="text-sm text-accent-green hover:underline"
+          className="inline-flex items-center gap-1 text-body-sm font-medium text-accent-gold hover:brightness-110 transition-all"
         >
-          View Full Bracket
+          View Full Bracket &rarr;
         </Link>
       )}
     </div>
@@ -97,7 +98,7 @@ function BracketMatchupCard({
   return (
     <Link
       href={`/seasons/${seasonYear}/week/${matchup.week}`}
-      className="block rounded-lg border border-border bg-surface hover:bg-muted/30 transition-colors overflow-hidden"
+      className="block rounded-lg border border-border bg-surface hover:border-border-strong transition-colors overflow-hidden"
     >
       <BracketTeamRow
         team={teamA}
@@ -105,7 +106,7 @@ function BracketMatchupCard({
         isLoser={winner === "b"}
         isLive={isLive}
       />
-      <div className="h-px bg-border" />
+      <div className="h-px bg-divider" />
       <BracketTeamRow
         team={teamB}
         isWinner={winner === "b"}
@@ -113,9 +114,8 @@ function BracketMatchupCard({
         isLive={isLive}
       />
       {isLive && (
-        <div className="flex items-center gap-1.5 px-3 py-1 bg-accent-green-light">
-          <span className="w-2 h-2 rounded-full bg-accent-green animate-pulse" aria-hidden="true" />
-          <span className="text-xs font-medium text-accent-green">LIVE</span>
+        <div className="flex items-center px-3 py-1.5 bg-accent-green-light border-t border-divider">
+          <LiveIndicator />
         </div>
       )}
     </Link>
@@ -136,8 +136,8 @@ function BracketTeamRow({
   return (
     <div
       className={`flex items-center gap-3 px-3 py-2 ${
-        isWinner ? "bg-muted/40" : ""
-      } ${isLoser ? "opacity-50" : ""}`}
+        isWinner ? "bg-surface-muted" : ""
+      }`}
       style={{
         borderLeft: team.brandingColor
           ? `3px solid ${team.brandingColor}`
@@ -145,20 +145,20 @@ function BracketTeamRow({
       }}
     >
       {team.seed != null && (
-        <span className="text-xs text-muted-foreground tabular-nums w-4">
+        <span className="font-mono text-xs text-text-tertiary tabular-nums w-4">
           {team.seed}
         </span>
       )}
       <span
         className={`text-sm flex-1 truncate ${
-          isWinner ? "font-bold" : ""
+          isWinner ? "font-bold text-text-primary" : isLoser ? "text-text-tertiary" : "text-text-secondary"
         }`}
       >
         {team.name}
       </span>
       <span
-        className={`text-sm tabular-nums shrink-0 ${
-          isWinner ? "font-bold" : "text-muted-foreground"
+        className={`font-mono text-sm tabular-nums shrink-0 ${
+          isWinner ? "font-bold text-text-primary" : "text-text-tertiary"
         }`}
       >
         {team.score > 0 || isLive ? team.score.toFixed(1) : "-"}

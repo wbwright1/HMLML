@@ -28,6 +28,12 @@ function getInitials(name: string, abbreviation?: string): string {
   return name.slice(0, 2).toUpperCase();
 }
 
+// Dynasty crest shape: rounded square at ~28% of size, distinct from the
+// circular crop used for player headshots (see player-headshot.tsx).
+function crestRadius(px: number): string {
+  return `${Math.round(px * 0.28)}px`;
+}
+
 export function FranchiseLogo({
   slug,
   name,
@@ -39,19 +45,26 @@ export function FranchiseLogo({
   const px = sizeMap[size];
   const altText = decorative ? "" : name;
   const logoSrc = `/logos/${slug}.png`;
+  const radius = crestRadius(px);
 
   return (
     <div
-      className="relative shrink-0 overflow-hidden rounded-lg"
-      style={{ width: px, height: px }}
+      className="relative shrink-0 overflow-hidden"
+      style={{ width: px, height: px, borderRadius: radius }}
     >
       {/* Fallback — always rendered behind the image */}
       <div
-        className="absolute inset-0 flex items-center justify-center rounded-lg"
-        style={{ backgroundColor: brandingColor ?? "var(--muted-foreground)" }}
+        className="absolute inset-0 flex items-center justify-center"
+        style={{
+          background: brandingColor ?? "linear-gradient(140deg, #E2B858, #8E6E2A)",
+          borderRadius: radius,
+        }}
         aria-hidden="true"
       >
-        <span className={`font-bold text-white select-none ${textSizeMap[size]}`}>
+        <span
+          className={`font-bold select-none ${textSizeMap[size]}`}
+          style={{ color: "#1A1613" }}
+        >
           {getInitials(name, abbreviation)}
         </span>
       </div>
@@ -62,6 +75,7 @@ export function FranchiseLogo({
         width={px}
         height={px}
         className="relative z-10 object-cover"
+        style={{ borderRadius: radius }}
       />
     </div>
   );

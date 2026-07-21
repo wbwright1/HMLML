@@ -3,28 +3,33 @@
 @import "shadcn/tailwind.css";
 
 /* =========================================================================
-   Link & Button Visual Hierarchy — Press Box Design System
+   HMLML "Command Center" Design System — Warm Charcoal & Gold (dark)
    =========================================================================
-   Primary action links (navigation, "View all"):
-     text-primary font-medium hover:underline
+   The whole site renders on a warm charcoal canvas (#1A1613). There is no
+   light theme; tokens are centralized so a future light mode is a re-point,
+   not a rewrite.
 
-   Secondary action links (breadcrumbs, back links, contextual):
-     text-muted-foreground hover:text-foreground transition-colors
+   Links & active states are GOLD, not underlined by default:
+     Primary/nav/inline links:   text-accent-gold hover:brightness-110
+     Active nav pill:            accent-tint background (accent-gold-light) +
+                                 gold text (a filled pill, not an underline)
+     Secondary links:            text-text-tertiary hover:text-text-primary
 
-   Card/row links (franchise names in tables, season years):
-     text-primary hover:underline
+   Three-font rule (see layout.tsx for the next/font wiring):
+     Instrument Serif (italic)  display / titles / wordmark  -> .text-display/-h1/-h2, font-serif
+     Geist                      all UI, labels, body         -> default / font-sans
+     JetBrains Mono (tabular)   every numeral / score / stat -> .text-stat, font-mono
 
-   Active nav links:
-     text-primary underline underline-offset-4 decoration-primary
-
-   Disabled/muted links:
-     text-muted-foreground pointer-events-none
+   Cards use .card-surface (gradient + inset highlight + drop shadow) and may
+   layer .card-glows (gold + sage radial blobs). Section labels use .text-kicker.
    ========================================================================= */
 
 @theme inline {
-    /* Fonts */
-    --font-heading: var(--font-sans);
+    /* Fonts — bound to the next/font CSS variables set on <html> */
+    --font-heading: var(--font-serif);
+    --font-serif: var(--font-serif);
     --font-sans: var(--font-sans);
+    --font-mono: var(--font-mono);
 
     /* shadcn/ui color mappings */
     --color-background: var(--background);
@@ -58,6 +63,7 @@
     --color-surface: var(--surface);
     --color-surface-muted: var(--surface-muted);
     --color-border-strong: var(--border-strong);
+    --color-divider: var(--divider);
     --color-text-primary: var(--text-primary);
     --color-text-secondary: var(--text-secondary);
     --color-text-tertiary: var(--text-tertiary);
@@ -69,7 +75,7 @@
     --color-accent-warm: var(--accent-warm);
     --color-accent-warm-light: var(--accent-warm-light);
 
-    /* Border radius */
+    /* Border radius (cards are 14px = --radius) */
     --radius-sm: calc(var(--radius) * 0.6);
     --radius-md: calc(var(--radius) * 0.8);
     --radius-lg: var(--radius);
@@ -81,72 +87,78 @@
 }
 
 /* =========================================================================
-   Press Box Design System — Light-only palette
+   Command Center palette — dark-only
+   Mock vocabulary -> token:  ink -> --text-primary, muted -> --text-tertiary,
+   dim -> --text-muted, accent -> --accent-gold.
    ========================================================================= */
 :root {
-    /* ---- Named semantic tokens (single source of truth for hex values) ---- */
-    --canvas: #FAF8F5;
-    --surface: #FFFFFF;
-    --surface-muted: #F5F2EE;
-    --border: #E8E4E0;
-    --border-strong: #D4CFC9;
-    --text-primary: #1A1A1A;
-    --text-secondary: #4A4540;
-    --text-tertiary: #7A756F;
-    --text-muted: #9C9590;
-    --accent-green: #2D5A3D;
-    --accent-green-light: #E8F0EB;
-    --accent-gold: #B8860B;
-    --accent-gold-light: #FDF6E3;
-    --accent-warm: #C45D3E;
-    --accent-warm-light: #FDF0EC;
+    /* ---- Named semantic tokens (single source of truth) ---- */
+    --canvas: #1A1613;
+    --surface: rgba(255, 255, 255, 0.045);
+    --surface-muted: rgba(255, 255, 255, 0.07);
+    --border: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --divider: rgba(255, 255, 255, 0.05);
+    --text-primary: #F2EADC; /* mock "ink" */
+    --text-secondary: #B8B0A0; /* interpolated ink<->muted; AA-safe on canvas */
+    --text-tertiary: #98917F; /* mock "muted" */
+    /* mock "dim". Contrast on canvas is ~3.2:1 — FAILS WCAG AA for normal body
+       text. Use ONLY for decorative fills, disabled states, or large text (24px+). */
+    --text-muted: #6E6759;
+    --accent-green: #8FBF7F;
+    --accent-green-light: rgba(143, 191, 127, 0.14);
+    --accent-gold: #E2B858;
+    --accent-gold-light: rgba(226, 184, 88, 0.13);
+    --accent-warm: #C97C6A;
+    --accent-warm-light: rgba(201, 124, 106, 0.14);
 
     /* ---- shadcn/ui aliases (reference named tokens via var()) ---- */
     /* Core surfaces */
     --background: var(--canvas);
     --foreground: var(--text-primary);
+    /* Flat card fill; primary cards layer .card-surface's gradient on top */
     --card: var(--surface);
     --card-foreground: var(--text-primary);
-    --popover: var(--surface);
+    /* Popovers/menus need an OPAQUE fill so content behind does not bleed
+       through (the rgba surfaces are translucent by design). */
+    --popover: #211C18;
     --popover-foreground: var(--text-primary);
 
-    /* Primary — forest green */
-    --primary: var(--accent-green);
-    --primary-foreground: var(--surface);
+    /* Primary — gold with dark ink for legibility on the accent */
+    --primary: var(--accent-gold);
+    --primary-foreground: #1A1613;
 
-    /* Secondary — soft warm tint */
-    --secondary: #F0ECE8;
+    /* Secondary / muted — the translucent white surfaces, light foreground */
+    --secondary: var(--surface-muted);
     --secondary-foreground: var(--text-primary);
+    --muted: var(--surface);
+    --muted-foreground: var(--text-tertiary);
 
-    /* Muted — warm gray */
-    --muted: #F0ECE8;
-    --muted-foreground: #6B6560;
+    /* Accent — gold tint background, gold foreground (the active-pill pattern) */
+    --accent: var(--accent-gold-light);
+    --accent-foreground: var(--accent-gold);
 
-    /* Accent — forest green (alias of primary for shadcn consistency) */
-    --accent: var(--accent-green);
-    --accent-foreground: var(--surface);
+    /* Destructive — warm rust (never red; a member has red/purple blindness) */
+    --destructive: var(--accent-warm);
 
-    /* Destructive */
-    --destructive: #B91C1C;
-
-    /* Borders & inputs */
+    /* Borders & inputs — the hairline rgba */
     --input: var(--border);
-    --ring: var(--accent-green);
+    --ring: var(--accent-gold);
 
     /* Achievement gold */
     --gold: var(--accent-gold);
 
-    /* Loss/negative — warm red */
-    --loss: #C4402F;
+    /* Loss/negative — warm rust */
+    --loss: var(--accent-warm);
 
-    /* Chart palette */
-    --chart-1: var(--accent-green);
-    --chart-2: var(--accent-gold);
-    --chart-3: #6B6560;
-    --chart-4: var(--border);
-    --chart-5: var(--text-primary);
+    /* Chart palette — gold, sage, rust, TE blue, K purple */
+    --chart-1: var(--accent-gold);
+    --chart-2: var(--accent-green);
+    --chart-3: var(--accent-warm);
+    --chart-4: #7FA8C9;
+    --chart-5: #9B8FC9;
 
-    --radius: 0.625rem;
+    --radius: 0.875rem; /* 14px */
 }
 
 /* =========================================================================
@@ -168,13 +180,14 @@
         font-variant-numeric: tabular-nums;
     }
 
-    /* Accessibility — visible focus rings for keyboard navigation */
+    /* Accessibility — visible focus rings for keyboard navigation (gold) */
     :focus-visible {
-        outline: 2px solid var(--primary);
+        outline: 2px solid var(--ring);
         outline-offset: 2px;
     }
 
-    /* Reduce motion for users who prefer it */
+    /* Reduce motion for users who prefer it — neutralizes the live pulse and
+       all other animations/transitions. */
     @media (prefers-reduced-motion: reduce) {
         *,
         *::before,
@@ -188,33 +201,40 @@
 }
 
 /* =========================================================================
-   Typography utility classes — Press Box type scale
-   Geist Sans is loaded via next/font and bound to --font-sans
+   Typography utility classes — Command Center type scale
+   Display/titles = Instrument Serif italic (var(--font-serif));
+   UI/body = Geist (var(--font-sans)); numerals = JetBrains Mono (var(--font-mono)).
    ========================================================================= */
 @layer utilities {
     .text-display {
-        font-size: clamp(3.5rem, 5vw, 4rem); /* 56-64px */
+        font-family: var(--font-serif);
+        font-style: italic;
+        font-weight: 400;
+        font-size: clamp(2.5rem, 5vw, 3.5rem); /* 40-56px */
         line-height: 1.05;
-        font-weight: 900;
-        letter-spacing: -0.02em;
+        letter-spacing: -0.01em; /* serif needs less than Geist did */
     }
 
     .text-h1 {
-        font-size: clamp(2.25rem, 3vw, 2.5rem); /* 36-40px */
-        line-height: 1.15;
-        font-weight: 700;
-        letter-spacing: -0.015em;
-    }
-
-    .text-h2 {
-        font-size: clamp(1.75rem, 2.5vw, 2rem); /* 28-32px */
-        line-height: 1.2;
-        font-weight: 700;
+        font-family: var(--font-serif);
+        font-style: italic;
+        font-weight: 400;
+        font-size: clamp(2.25rem, 4vw, 2.75rem); /* 36-44px */
+        line-height: 1.1;
         letter-spacing: -0.01em;
     }
 
+    .text-h2 {
+        font-family: var(--font-serif);
+        font-style: italic;
+        font-weight: 400;
+        font-size: clamp(1.75rem, 3vw, 2rem); /* 28-32px */
+        line-height: 1.15;
+        letter-spacing: -0.005em;
+    }
+
     .text-h3 {
-        font-size: clamp(1.25rem, 2vw, 1.5rem); /* 20-24px */
+        font-size: clamp(1.25rem, 2vw, 1.5rem); /* 20-24px, Geist */
         line-height: 1.3;
         font-weight: 500;
     }
@@ -240,12 +260,86 @@
         line-height: 1.35;
         font-weight: 500;
         letter-spacing: 0.06em;
+        text-transform: uppercase;
+    }
+
+    /* Section kicker — small uppercase eyebrow above titles */
+    .text-kicker {
+        font-size: 0.6875rem; /* 11px */
+        line-height: 1.2;
+        font-weight: 600;
+        letter-spacing: 0.18em;
+        text-transform: uppercase;
+        color: var(--text-tertiary);
     }
 
     .text-stat {
+        font-family: var(--font-mono);
         font-weight: 700;
-        letter-spacing: -0.01em;
         line-height: 1.0;
         font-variant-numeric: tabular-nums;
+    }
+}
+
+/* =========================================================================
+   Card language — Command Center
+   ========================================================================= */
+@layer components {
+    /* Primary card: gradient fill, hairline border, inset top highlight, drop
+       shadow. Radius 14px. */
+    .card-surface {
+        background: linear-gradient(
+            180deg,
+            rgba(255, 255, 255, 0.05),
+            rgba(255, 255, 255, 0.02)
+        );
+        border: 1px solid var(--border);
+        border-radius: var(--radius); /* 14px */
+        box-shadow:
+            0 24px 60px rgba(0, 0, 0, 0.3),
+            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    }
+
+    /* Ambient inner glows: gold blob top-left, sage blob top-right. Sized as a
+       fraction of the card so it scales (the mock used fixed 640x480 px tuned to
+       the large hub card). Requires a positioned, clipped host. */
+    .card-glows {
+        position: relative;
+        overflow: hidden;
+    }
+    .card-glows::before {
+        content: "";
+        position: absolute;
+        top: -30%;
+        left: -20%;
+        width: 60%;
+        height: 75%;
+        border-radius: 50%;
+        background: radial-gradient(closest-side, rgba(226, 184, 88, 0.09), transparent);
+        pointer-events: none;
+    }
+    .card-glows::after {
+        content: "";
+        position: absolute;
+        top: -25%;
+        right: -15%;
+        width: 55%;
+        height: 65%;
+        border-radius: 50%;
+        background: radial-gradient(closest-side, rgba(120, 150, 110, 0.06), transparent);
+        pointer-events: none;
+    }
+}
+
+/* Live indicator pulse ring (used by the score poller / live pills).
+   Neutralized by the prefers-reduced-motion block above. */
+@keyframes live-pulse {
+    0% {
+        transform: scale(1);
+        opacity: 0.75;
+    }
+    100% {
+        transform: scale(2.4);
+        opacity: 0;
     }
 }

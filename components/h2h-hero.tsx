@@ -55,11 +55,11 @@ export function H2HHero({ teamA, teamB, record, streak }: H2HHeroProps) {
         <StatHero
           value={
             <span>
-              <span className={record.wins > record.losses ? "text-primary" : record.losses > record.wins ? "text-loss" : "text-foreground"}>
+              <span className={record.wins > record.losses ? "text-accent-gold" : record.losses > record.wins ? "text-text-tertiary" : "text-text-primary"}>
                 {record.wins}
               </span>
               {" - "}
-              <span className={record.losses > record.wins ? "text-primary" : record.wins > record.losses ? "text-loss" : "text-foreground"}>
+              <span className={record.losses > record.wins ? "text-accent-gold" : record.wins > record.losses ? "text-text-tertiary" : "text-text-primary"}>
                 {record.losses}
               </span>
             </span>
@@ -84,7 +84,7 @@ export function H2HHero({ teamA, teamB, record, streak }: H2HHeroProps) {
       </div>
 
       <div className="flex flex-wrap items-center justify-center gap-3">
-        <span className="text-sm text-muted-foreground">
+        <span className="text-body-sm text-text-tertiary">
           All-time regular season
         </span>
         {streak && <SuperlativeBadge text={streak} variant="green" />}

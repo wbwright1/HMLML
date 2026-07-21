@@ -35,7 +35,7 @@ export function SyncTimestampClient({
     <button
       type="button"
       onClick={() => setShowAbsolute((prev) => !prev)}
-      className={`text-caption text-left ${isStale ? "text-[#C4402F]" : "text-muted-foreground"}`}
+      className={`text-caption text-left ${isStale ? "text-accent-warm" : "text-muted-foreground"}`}
     >
       <span>
         <ClockIcon /> Last updated {relativeTime}

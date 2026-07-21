@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { PositionBadge } from "@/components/position-badge";
+import { PlayerHeadshot } from "@/components/player-headshot";
 import { PlayerStatusBadge } from "@/components/player-status-badge";
 
 interface PlayerSearchResultCardProps {
+  playerId: string;
   playerName: string;
   position: string | null;
   nflTeam: string | null;
@@ -16,6 +17,7 @@ interface PlayerSearchResultCardProps {
 }
 
 export function PlayerSearchResultCard({
+  playerId,
   playerName,
   position,
   nflTeam,
@@ -25,17 +27,19 @@ export function PlayerSearchResultCard({
   pointsPpr,
 }: PlayerSearchResultCardProps) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/30">
+    <div className="rounded-2xl border border-border bg-surface p-4 transition-colors hover:bg-surface-muted">
       <div className="flex items-center gap-4">
-        {/* Position circle */}
-        <div className="shrink-0 flex items-center justify-center w-16 h-16 rounded-full bg-surface-muted border border-border">
-          <PositionBadge position={position} />
-        </div>
+        <PlayerHeadshot
+          playerId={playerId}
+          name={playerName}
+          size={52}
+          nflTeam={nflTeam}
+        />
 
         {/* Player info */}
         <div className="flex-1 min-w-0 space-y-1">
-          <p className="text-body font-bold truncate">{playerName}</p>
-          <div className="flex flex-wrap items-center gap-2 text-body-sm text-muted-foreground">
+          <p className="text-body font-bold text-text-primary truncate">{playerName}</p>
+          <div className="flex flex-wrap items-center gap-2 text-body-sm text-text-tertiary">
             {position && <span>{position}</span>}
             {nflTeam && (
               <>
@@ -53,12 +57,12 @@ export function PlayerSearchResultCard({
             {ownerFranchise ? (
               <Link
                 href={`/teams/${ownerFranchise.slug}`}
-                className="text-xs text-accent-green hover:underline"
+                className="text-caption text-accent-gold hover:brightness-110"
               >
                 {ownerFranchise.name}
               </Link>
             ) : (
-              <span className="text-xs text-muted-foreground">Unowned</span>
+              <span className="text-caption text-text-tertiary">Unowned</span>
             )}
           </div>
         </div>
@@ -66,10 +70,10 @@ export function PlayerSearchResultCard({
         {/* Points */}
         {pointsPpr != null && pointsPpr > 0 && (
           <div className="shrink-0 text-right">
-            <p className="text-h3 font-bold tabular-nums">
+            <p className="text-stat text-h3 text-text-primary">
               {pointsPpr.toFixed(1)}
             </p>
-            <p className="text-caption text-muted-foreground">PPR pts</p>
+            <p className="text-caption text-text-tertiary">PPR pts</p>
           </div>
         )}
       </div>

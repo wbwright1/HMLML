@@ -72,13 +72,13 @@ export default async function WeekResultsPage({
   return (
     <>
       <PageSection
-        label={`${year} Season${isPlayoffWeek ? " — Playoffs" : ""}`}
-        title={`Week ${week}`}
+        label={`${year} Season${isPlayoffWeek ? " · Playoffs" : ""}`}
+        title={`Week ${week}.`}
       >
         <div className="flex flex-wrap items-center gap-4">
           <Link
             href={`/seasons/${year}`}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+            className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
           >
             &larr; {year} Season
           </Link>
@@ -98,9 +98,9 @@ export default async function WeekResultsPage({
           {week > 1 ? (
             <Link
               href={`/seasons/${year}/week/${week - 1}`}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-4 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-4 py-1.5 text-body-sm font-medium text-text-tertiary hover:text-text-primary hover:bg-surface-muted transition-colors"
             >
-              &larr; Week {week - 1}
+              &larr; Week <span className="font-mono tabular-nums">{week - 1}</span>
             </Link>
           ) : (
             <span />
@@ -108,9 +108,9 @@ export default async function WeekResultsPage({
           {nextWeekHasData && (
             <Link
               href={`/seasons/${year}/week/${week + 1}`}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-card px-4 py-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-4 py-1.5 text-body-sm font-medium text-text-tertiary hover:text-text-primary hover:bg-surface-muted transition-colors"
             >
-              Week {week + 1} &rarr;
+              Week <span className="font-mono tabular-nums">{week + 1}</span> &rarr;
             </Link>
           )}
         </div>
@@ -128,23 +128,29 @@ export default async function WeekResultsPage({
         ) : (
           matchups.map((matchup, index) => (
             <ScrollReveal key={matchup.matchupId} delay={index * 40}>
-              <MatchupRow
-                matchup={{
-                  homeTeam: matchup.homeTeam,
-                  awayTeam: matchup.awayTeam,
-                  homeScore: matchup.homeTeam.points,
-                  awayScore: matchup.awayTeam.points,
-                  status: matchup.status,
-                  matchupId: matchup.matchupId,
-                }}
-                variant={
-                  matchup.status === "in_progress"
-                    ? "live"
-                    : matchup.status === "complete"
-                      ? "final"
-                      : "preview"
-                }
-              />
+              <Link
+                href={`/matchups/${year}/${week}/${matchup.matchupId}`}
+                className="block rounded-lg transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                aria-label={`View matchup detail: ${matchup.homeTeam.franchiseName} versus ${matchup.awayTeam.franchiseName}`}
+              >
+                <MatchupRow
+                  matchup={{
+                    homeTeam: matchup.homeTeam,
+                    awayTeam: matchup.awayTeam,
+                    homeScore: matchup.homeTeam.points,
+                    awayScore: matchup.awayTeam.points,
+                    status: matchup.status,
+                    matchupId: matchup.matchupId,
+                  }}
+                  variant={
+                    matchup.status === "in_progress"
+                      ? "live"
+                      : matchup.status === "complete"
+                        ? "final"
+                        : "preview"
+                  }
+                />
+              </Link>
             </ScrollReveal>
           ))
         )}

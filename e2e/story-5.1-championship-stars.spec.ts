@@ -104,9 +104,20 @@ test.describe("Story 5.1: ChampionshipStars SVG Upgrade", () => {
       return window.getComputedStyle(el).color;
     });
 
-    // The gold color #B8860B in RGB is rgb(184, 134, 11)
-    // Allow for slight variations from CSS variable resolution
-    expect(color).toMatch(/rgb\(184,\s*134,\s*11\)/);
+    // Resolve the current --accent-gold token instead of hardcoding a hex
+    // literal, so this stays correct across theme changes.
+    const goldToken = await page.evaluate(() =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--accent-gold")
+        .trim()
+    );
+    const hexMatch = goldToken.match(/^#([0-9a-f]{6})$/i);
+    expect(hexMatch).toBeTruthy();
+    const r = parseInt(hexMatch![1].slice(0, 2), 16);
+    const g = parseInt(hexMatch![1].slice(2, 4), 16);
+    const b = parseInt(hexMatch![1].slice(4, 6), 16);
+    const expectedRgb = new RegExp(`rgb\\(${r},\\s*${g},\\s*${b}\\)`);
+    expect(color).toMatch(expectedRgb);
   });
 
   test("zero championships renders no container", async ({ page }) => {

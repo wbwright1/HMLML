@@ -18,7 +18,7 @@ export function MobileTableView({
         {rows.map((row, rowIndex) => (
           <div
             key={rowIndex}
-            className="rounded-xl border border-border bg-card p-4 space-y-2"
+            className="rounded-[14px] border border-border bg-surface p-4 space-y-2"
             role="listitem"
           >
             {visibleColumns.map((colIndex) => (
@@ -26,10 +26,10 @@ export function MobileTableView({
                 key={`${rowIndex}-${headers[colIndex]}`}
                 className="flex items-center justify-between gap-4"
               >
-                <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium shrink-0">
+                <span className="text-kicker shrink-0">
                   {headers[colIndex]}
                 </span>
-                <span className="text-sm font-medium text-right truncate">
+                <span className="text-sm font-medium text-right truncate tabular-nums text-text-primary">
                   {row[colIndex]}
                 </span>
               </div>
@@ -46,7 +46,7 @@ export function MobileTableView({
               {headers.map((header) => (
                 <th
                   key={header}
-                  className="pb-3 pr-4 last:pr-0 text-xs uppercase tracking-wider text-muted-foreground font-medium"
+                  className="pb-3 pr-4 last:pr-0 text-left text-kicker"
                 >
                   {header}
                 </th>
@@ -57,12 +57,12 @@ export function MobileTableView({
             {rows.map((row, rowIndex) => (
               <tr
                 key={rowIndex}
-                className="border-b border-border/50 last:border-0"
+                className="border-b border-divider last:border-0"
               >
                 {row.map((cell, cellIndex) => (
                   <td
                     key={`${rowIndex}-${headers[cellIndex]}`}
-                    className="py-4 pr-4 last:pr-0 text-sm"
+                    className="py-4 pr-4 last:pr-0 text-sm text-text-secondary tabular-nums"
                   >
                     {cell}
                   </td>

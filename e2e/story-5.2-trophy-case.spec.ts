@@ -105,8 +105,9 @@ test.describe("Story 5.2: Trophy Case Enhancement", () => {
       if (cardCount > 0) {
         // Each leader card should have franchise identity content
         const firstCard = leaderCards.first();
-        // FranchiseIdentity renders franchise name in a span with font-semibold
-        const nameSpan = firstCard.locator(".font-semibold").first();
+        // FranchiseIdentity (standard variant) renders the franchise name in a
+        // serif-italic span.
+        const nameSpan = firstCard.locator("span.font-serif").first();
         await expect(nameSpan).toBeVisible();
       }
     }

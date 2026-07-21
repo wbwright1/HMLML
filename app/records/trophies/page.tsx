@@ -50,15 +50,15 @@ export default async function TrophyCasePage() {
 
   return (
     <>
-      <PageSection label="Records" title="Trophy Case">
+      <PageSection label="Records" title="Trophy Case.">
         <Link
           href="/records"
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
         >
           &larr; All Records
         </Link>
 
-        <p className="text-body-lg text-muted-foreground max-w-prose">
+        <p className="text-body-lg text-text-secondary max-w-prose">
           Every championship and accolade in league history.
         </p>
       </PageSection>
@@ -69,7 +69,7 @@ export default async function TrophyCasePage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {allTimeChamps.map((champ, index) => (
               <ScrollReveal key={champ.name} delay={index * 60}>
-                <div className="rounded-xl border border-primary/30 bg-primary/5 p-6 space-y-3">
+                <div className="rounded-[14px] border border-primary/30 bg-primary/5 p-6 space-y-3 transition-colors hover:border-primary/50">
                   <Link
                     href={champ.slug ? `/teams/${champ.slug}` : "#"}
                     className="block hover:opacity-80 transition-opacity"
@@ -110,10 +110,10 @@ export default async function TrophyCasePage() {
           />
         ) : (
           <div className="space-y-3">
-            {/* Most recent champion — featured */}
+            {/* Most recent champion: featured */}
             {trophies.length > 0 && trophies[0].championName && (
               <ScrollReveal>
-                <div className="rounded-xl border border-gold/30 bg-gold/5 p-8 text-center space-y-4">
+                <div className="rounded-[14px] border border-gold/30 bg-gold/5 p-8 text-center space-y-4">
                   <StatHero
                     value={trophies[0].seasonYear}
                     label="Reigning Champion"
@@ -138,7 +138,7 @@ export default async function TrophyCasePage() {
                   </div>
                   <SuperlativeBadge text="League Champion" variant="gold" />
                   {trophies[0].runnerUpName && (
-                    <p className="text-sm text-muted-foreground">
+                    <p className="text-body-sm text-text-tertiary">
                       defeated {trophies[0].runnerUpName}
                     </p>
                   )}
@@ -150,17 +150,17 @@ export default async function TrophyCasePage() {
             {trophies.slice(1).map((trophy, index) => (
               <ScrollReveal key={trophy.seasonYear} delay={(index + 1) * 40}>
                 <div
-                  className={`rounded-xl border p-5 transition-colors ${
+                  className={`rounded-[14px] border p-5 transition-colors ${
                     trophy.championName
                       ? "border-primary/30 bg-primary/5"
-                      : "border-border bg-card"
+                      : "border-border bg-surface"
                   }`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-4">
                     <div className="space-y-1">
                       <Link
                         href={`/seasons/${trophy.seasonYear}`}
-                        className="text-h3 hover:text-primary transition-colors"
+                        className="text-h3 font-mono tabular-nums hover:text-primary transition-colors"
                       >
                         {trophy.seasonYear}
                       </Link>
@@ -192,18 +192,18 @@ export default async function TrophyCasePage() {
 
                       {trophy.runnerUpName && (
                         <div className="flex items-center gap-2">
-                          <span className="text-xs text-muted-foreground">
+                          <span className="text-xs text-text-tertiary">
                             vs
                           </span>
                           {trophy.runnerUpSlug ? (
                             <Link
                               href={`/teams/${trophy.runnerUpSlug}`}
-                              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                              className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
                             >
                               {trophy.runnerUpName}
                             </Link>
                           ) : (
-                            <span className="text-sm text-muted-foreground">
+                            <span className="text-body-sm text-text-tertiary">
                               {trophy.runnerUpName}
                             </span>
                           )}

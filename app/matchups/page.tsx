@@ -24,7 +24,7 @@ export default async function MatchupsPage() {
 
   if (!data || data.matchups.length === 0) {
     return (
-      <PageSection label="Head to Head" title="Matchups">
+      <PageSection label="Head to Head" title="Matchups.">
         <EmptyState
           icon="calendar"
           title="No Matchups Available"
@@ -52,9 +52,9 @@ export default async function MatchupsPage() {
 
   return (
     <>
-      <PageSection label={`${seasonYear} Season`} title={`Week ${week}`}>
+      <PageSection label={`${seasonYear} Season`} title={`Week ${week}.`}>
         <div className="flex flex-wrap items-center gap-3">
-          <p className="text-body-lg text-muted-foreground">
+          <p className="text-body-lg text-text-secondary">
             {allComplete
               ? "Final results"
               : hasLiveMatchups
@@ -68,38 +68,44 @@ export default async function MatchupsPage() {
         </div>
 
         {/* Week navigation links */}
-        <div className="flex flex-wrap items-center gap-3 mt-2">
+        <div className="flex flex-wrap items-center gap-4 mt-2">
           {week > 1 && (
             <Link
               href={`/seasons/${seasonYear}/week/${week - 1}`}
-              className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+              className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
             >
               &larr; Week {week - 1}
             </Link>
           )}
           <Link
             href={`/seasons/${seasonYear}`}
-            className="text-sm text-primary hover:text-primary/80 transition-colors underline underline-offset-4"
+            className="text-body-sm text-accent-gold hover:brightness-110 transition-colors"
           >
             Full {seasonYear} Season
           </Link>
         </div>
       </PageSection>
 
-      <section className="pb-8 md:pb-12 space-y-6">
+      <section className="pb-8 md:pb-12 space-y-4">
         {matchups.map((matchup, index) => (
           <ScrollReveal key={matchup.matchupId} delay={index * 40}>
-            <MatchupRow
-              matchup={{
-                homeTeam: matchup.homeTeam,
-                awayTeam: matchup.awayTeam,
-                homeScore: matchup.homeTeam.points,
-                awayScore: matchup.awayTeam.points,
-                status: matchup.status,
-                matchupId: matchup.matchupId,
-              }}
-              variant={getVariant(matchup.status)}
-            />
+            <Link
+              href={`/matchups/${seasonYear}/${week}/${matchup.matchupId}`}
+              className="block rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+              aria-label={`${matchup.homeTeam.franchiseName} versus ${matchup.awayTeam.franchiseName}, view detail`}
+            >
+              <MatchupRow
+                matchup={{
+                  homeTeam: matchup.homeTeam,
+                  awayTeam: matchup.awayTeam,
+                  homeScore: matchup.homeTeam.points,
+                  awayScore: matchup.awayTeam.points,
+                  status: matchup.status,
+                  matchupId: matchup.matchupId,
+                }}
+                variant={getVariant(matchup.status)}
+              />
+            </Link>
           </ScrollReveal>
         ))}
 

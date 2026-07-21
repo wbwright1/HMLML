@@ -4,11 +4,11 @@ interface SuperlativeBadgeProps {
 }
 
 const variantClasses: Record<string, string> = {
-  gold: "bg-gold/10 text-gold",
-  silver: "bg-blue-800/15 text-blue-800",
-  green: "bg-primary/10 text-primary",
+  gold: "bg-accent-gold-light text-accent-gold",
+  silver: "bg-surface-muted text-text-secondary",
+  green: "bg-accent-green-light text-accent-green",
   neutral: "bg-muted text-muted-foreground",
-  brown: "bg-amber-800/10 text-amber-800",
+  brown: "bg-accent-warm-light text-accent-warm",
 };
 
 export function SuperlativeBadge({

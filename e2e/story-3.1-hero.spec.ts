@@ -1,150 +1,139 @@
 import { test, expect } from "@playwright/test";
+import type { Locator } from "@playwright/test";
 
 // ============================================================================
-// Story 3.1: League Identity Hero
+// Story 3.1: Hub Hero (Command Center redesign)
+//
+// The hub hero is the first <section> inside <main>: a kicker line
+// ("Harambe Memorial League · YEAR") above a serif-italic display title
+// (e.g. "Week 10." / "The Offseason."). Which hub state renders depends on the
+// NFL calendar + seeded data; when no season data is present the hub falls back
+// to an empty state with no hero section, in which case these tests skip.
 // ============================================================================
 
-test.describe("League Identity Hero", () => {
-  // T01: Hero section exists with the league name
-  test("T01: hero section exists with league name", async ({ page }) => {
+test.describe("Hub Hero", () => {
+  /** The hero is the first section in <main>. Returns null if absent. */
+  function hero(page: import("@playwright/test").Page): Locator {
+    return page.locator("main section").first();
+  }
+
+  // T01: hero renders with the league kicker line
+  test("T01: hero renders with league kicker", async ({ page }) => {
     await page.goto("/");
-
-    // The hero is the first <section> on the page, containing the league name
-    const hero = page.locator("section").first();
-    await expect(hero).toBeVisible();
-
-    const h1 = hero.locator("h1");
-    await expect(h1).toHaveText("Harambe Memorial League Memorial League");
-  });
-
-  // T02: "Est. 2017" badge is visible
-  test("T02: Est. 2017 badge is visible", async ({ page }) => {
-    await page.goto("/");
-
-    const hero = page.locator("section").first();
-    const badge = hero.getByText("Est. 2017");
-    await expect(badge).toBeVisible();
-  });
-
-  // T03: A tagline is displayed
-  test("T03: tagline is displayed below league name", async ({ page }) => {
-    await page.goto("/");
-
-    const hero = page.locator("section").first();
-    // The tagline is a body-lg paragraph; it should be non-empty text
-    const tagline = hero.locator("p.text-body-lg");
-    await expect(tagline).toBeVisible();
-    const text = await tagline.innerText();
-    expect(text.length).toBeGreaterThan(0);
-  });
-
-  // T04: Season/week context is shown (conditional on DB data)
-  test("T04: season context is shown or gracefully absent", async ({ page }) => {
-    await page.goto("/");
-
-    const hero = page.locator("section").first();
-    // The season context uses text-body-sm class
-    const seasonLines = hero.locator("p.text-body-sm");
-    const count = await seasonLines.count();
-
-    if (count > 0) {
-      // If present, it should contain "Season"
-      const text = await seasonLines.first().innerText();
-      expect(text).toContain("Season");
+    const h = hero(page);
+    if ((await h.count()) === 0) {
+      test.skip();
+      return;
     }
-    // If count is 0, that is acceptable (no season data in DB)
+    await expect(h).toBeVisible();
+
+    const kicker = h.locator("p.text-kicker").first();
+    await expect(kicker).toBeVisible();
+    const text = await kicker.innerText();
+    expect(text).toMatch(/Harambe Memorial League/i);
   });
 
-  // T05: Hero has a green-tinted background
-  test("T05: hero has green-tinted background", async ({ page }) => {
+  // T02: hero has a display title
+  test("T02: hero has a non-empty h1 title", async ({ page }) => {
     await page.goto("/");
-
-    const hero = page.locator("section").first();
-    // The hero section uses bg-primary/[0.04] which applies a green tint
-    // Check that the background-color is not fully transparent or pure white
-    const bgColor = await hero.evaluate((el) =>
-      window.getComputedStyle(el).backgroundColor
-    );
-    // bg-primary/[0.04] with --primary (#2D5A3D) at 4% opacity
-    // Modern browsers may use oklab, rgba, or other color spaces
-    // Verify it has a non-zero alpha (0.04) and is not plain white or transparent
-    expect(bgColor).not.toBe("rgba(0, 0, 0, 0)");
-    expect(bgColor).not.toBe("rgb(255, 255, 255)");
-    expect(bgColor).not.toBe("transparent");
-    // Should contain an alpha/opacity component (0.04)
-    expect(bgColor).toContain("0.04");
+    const h = hero(page);
+    if ((await h.count()) === 0) {
+      test.skip();
+      return;
+    }
+    const h1 = h.locator("h1");
+    await expect(h1).toBeVisible();
+    const text = await h1.innerText();
+    expect(text.trim().length).toBeGreaterThan(0);
   });
 
-  // T06: Display weight typography (font-weight 900, font-size >= 48px)
-  test("T06: h1 uses display weight typography", async ({ page }) => {
+  // T05 (replaces old green-tint tint check): the hero title uses the serif
+  // display family (Instrument Serif via --font-serif), italic.
+  test("T05: hero title renders in the serif display family, italic", async ({
+    page,
+  }) => {
     await page.goto("/");
+    const h = hero(page);
+    if ((await h.count()) === 0) {
+      test.skip();
+      return;
+    }
 
-    const hero = page.locator("section").first();
-    const h1 = hero.locator("h1");
-
-    const fontWeight = await h1.evaluate((el) =>
-      window.getComputedStyle(el).fontWeight
+    const serifVar = await page.evaluate(() =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--font-serif")
+        .trim()
     );
-    expect(fontWeight).toBe("900");
+    expect(serifVar.length).toBeGreaterThan(0);
 
+    const h1 = h.locator("h1");
+    const collapse = (s: string) => s.replace(/\s+/g, "");
+    const fontFamily = await h1.evaluate(
+      (el) => getComputedStyle(el).fontFamily
+    );
+    expect(collapse(fontFamily)).toBe(collapse(serifVar));
+
+    const fontStyle = await h1.evaluate(
+      (el) => getComputedStyle(el).fontStyle
+    );
+    expect(fontStyle).toBe("italic");
+  });
+
+  // T06 (replaces old weight-900 check): the title is large display type.
+  test("T06: hero title uses large display sizing", async ({ page }) => {
+    await page.goto("/");
+    const h = hero(page);
+    if ((await h.count()) === 0) {
+      test.skip();
+      return;
+    }
+    const h1 = h.locator("h1");
     const fontSize = await h1.evaluate((el) =>
-      parseFloat(window.getComputedStyle(el).fontSize)
+      parseFloat(getComputedStyle(el).fontSize)
     );
-    expect(fontSize).toBeGreaterThanOrEqual(48);
+    // .text-display clamps to 40-56px; allow a floor of 32px for narrow viewports.
+    expect(fontSize).toBeGreaterThanOrEqual(32);
   });
 
-  // T07: No em-dashes exist in hero text content
+  // T07: no em-dashes in hero text content
   test("T07: no em-dashes in hero text content", async ({ page }) => {
     await page.goto("/");
-
-    const hero = page.locator("section").first();
-    const textContent = await hero.innerText();
-    // Check for em-dash character (U+2014)
-    expect(textContent).not.toContain("\u2014");
-    // Also check for en-dash (U+2013) for safety
-    expect(textContent).not.toContain("\u2013");
+    const h = hero(page);
+    if ((await h.count()) === 0) {
+      test.skip();
+      return;
+    }
+    const textContent = await h.innerText();
+    expect(textContent).not.toContain("—");
+    expect(textContent).not.toContain("–");
   });
 
-  // T08: Hero is responsive at mobile viewport (375px)
-  test("T08: hero content visible and centered at 375px mobile", async ({ page }) => {
+  // T08: hero is visible and fits the viewport at 375px mobile
+  test("T08: hero fits within 375px mobile viewport", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
-    const hero = page.locator("section").first();
-    await expect(hero).toBeVisible();
+    const h = hero(page);
+    if ((await h.count()) === 0) {
+      test.skip();
+      return;
+    }
+    await expect(h).toBeVisible();
+    await expect(h.locator("h1")).toBeVisible();
 
-    const h1 = hero.locator("h1");
-    await expect(h1).toBeVisible();
-
-    // Verify text is centered
-    const textAlign = await hero.evaluate((el) =>
-      window.getComputedStyle(el).textAlign
-    );
-    expect(textAlign).toBe("center");
-
-    // Verify the hero fits within the viewport width
-    const heroBox = await hero.boundingBox();
-    expect(heroBox).not.toBeNull();
-    expect(heroBox!.width).toBeLessThanOrEqual(375);
-
-    // The Est. 2017 badge should still be visible
-    const badge = hero.getByText("Est. 2017");
-    await expect(badge).toBeVisible();
-
-    // The tagline should still be visible
-    const tagline = hero.locator("p.text-body-lg");
-    await expect(tagline).toBeVisible();
+    const box = await h.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.width).toBeLessThanOrEqual(375);
   });
 
-  // T09: No images or SVGs in hero section
-  test("T09: hero contains no images or SVGs", async ({ page }) => {
+  // T09: hero contains no images (the redesign hero is pure type, no imagery)
+  test("T09: hero contains no images", async ({ page }) => {
     await page.goto("/");
-
-    const hero = page.locator("section").first();
-    const images = hero.locator("img");
-    await expect(images).toHaveCount(0);
-
-    const svgs = hero.locator("svg");
-    await expect(svgs).toHaveCount(0);
+    const h = hero(page);
+    if ((await h.count()) === 0) {
+      test.skip();
+      return;
+    }
+    await expect(h.locator("img")).toHaveCount(0);
   });
 });

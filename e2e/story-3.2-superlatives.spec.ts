@@ -47,6 +47,8 @@ test.describe("Superlative Stats Row", () => {
 
   // T03: Stat values apply tabular-nums for numeric alignment
   test("T03: stat values use tabular-nums font-variant-numeric", async ({ page }) => {
+    // StatHero numerals now render via JetBrains Mono (the font-mono class),
+    // replacing the old Geist font-black weight. tabular-nums is still required.
     await page.goto("/");
 
     const gridContainer = page.locator("div.grid.grid-cols-2");
@@ -60,9 +62,9 @@ test.describe("Superlative Stats Row", () => {
     const figureCount = await figures.count();
     expect(figureCount).toBeGreaterThanOrEqual(1);
 
-    // Check each stat value element (the <p> with font-black class inside figure)
+    // Check each stat value element (the <p> with font-mono class inside figure)
     for (let i = 0; i < figureCount; i++) {
-      const valueParagraph = figures.nth(i).locator("p.font-black");
+      const valueParagraph = figures.nth(i).locator("p.font-mono");
       await expect(valueParagraph).toBeVisible();
 
       const fontVariantNumeric = await valueParagraph.evaluate((el) =>
@@ -87,8 +89,8 @@ test.describe("Superlative Stats Row", () => {
     const figureCount = await figures.count();
 
     for (let i = 0; i < figureCount; i++) {
-      // The badge is a <span> with uppercase tracking-widest
-      const badge = figures.nth(i).locator("span.uppercase");
+      // The badge is StatHero's kicker <span> (text-kicker renders uppercase).
+      const badge = figures.nth(i).locator("span.text-kicker");
       const badgeCount = await badge.count();
       // Each StatHero should have a badge label
       expect(badgeCount).toBeGreaterThanOrEqual(1);
@@ -146,6 +148,8 @@ test.describe("Superlative Stats Row", () => {
 
   // T07: Stat values use md variant typography (36-40px range)
   test("T07: stat values use md variant font size (36-40px)", async ({ page }) => {
+    // md StatHero variant renders at text-[38px]; the numeral now lives on the
+    // font-mono paragraph.
     await page.goto("/");
 
     const gridContainer = page.locator("div.grid.grid-cols-2");
@@ -159,7 +163,7 @@ test.describe("Superlative Stats Row", () => {
     const figureCount = await figures.count();
 
     for (let i = 0; i < figureCount; i++) {
-      const valueParagraph = figures.nth(i).locator("p.font-black");
+      const valueParagraph = figures.nth(i).locator("p.font-mono");
       const fontSize = await valueParagraph.evaluate((el) =>
         parseFloat(window.getComputedStyle(el).fontSize)
       );
@@ -169,8 +173,10 @@ test.describe("Superlative Stats Row", () => {
     }
   });
 
-  // T08: Stat values use font-weight 900 (Black weight)
-  test("T08: stat values use Black font weight (900)", async ({ page }) => {
+  // T08: Stat numerals render in the JetBrains Mono family (--font-mono)
+  test("T08: stat values render in the mono numeral family", async ({ page }) => {
+    // Numerals moved from Geist Black (weight 900) to JetBrains Mono. Assert the
+    // family matches --font-mono rather than a hardcoded weight.
     await page.goto("/");
 
     const gridContainer = page.locator("div.grid.grid-cols-2");
@@ -180,13 +186,21 @@ test.describe("Superlative Stats Row", () => {
       return;
     }
 
-    const figures = gridContainer.first().locator("figure[role='group']");
-    const valueParagraph = figures.first().locator("p.font-black");
-
-    const fontWeight = await valueParagraph.evaluate((el) =>
-      window.getComputedStyle(el).fontWeight
+    const monoVar = await page.evaluate(() =>
+      getComputedStyle(document.documentElement)
+        .getPropertyValue("--font-mono")
+        .trim()
     );
-    expect(fontWeight).toBe("900");
+    expect(monoVar.length).toBeGreaterThan(0);
+
+    const figures = gridContainer.first().locator("figure[role='group']");
+    const valueParagraph = figures.first().locator("p.font-mono");
+
+    const collapse = (s: string) => s.replace(/\s+/g, "");
+    const fontFamily = await valueParagraph.evaluate((el) =>
+      window.getComputedStyle(el).fontFamily
+    );
+    expect(collapse(fontFamily)).toBe(collapse(monoVar));
   });
 
   // T09: No em-dashes in superlative text content

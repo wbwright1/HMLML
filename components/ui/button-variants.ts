@@ -5,15 +5,16 @@ export const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-primary text-primary-foreground [a]:hover:bg-primary/80",
+        default:
+          "bg-primary text-primary-foreground hover:brightness-110",
         outline:
-          "border-border bg-background hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:border-input dark:bg-input/30 dark:hover:bg-input/50",
+          "border-border bg-surface text-text-primary hover:bg-surface-muted hover:border-border-strong aria-expanded:bg-surface-muted aria-expanded:text-text-primary",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-secondary/80 aria-expanded:bg-secondary aria-expanded:text-secondary-foreground",
+          "bg-secondary text-secondary-foreground hover:bg-surface-muted aria-expanded:bg-surface-muted aria-expanded:text-secondary-foreground",
         ghost:
-          "hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground dark:hover:bg-muted/50",
+          "text-text-primary hover:bg-surface hover:text-text-primary aria-expanded:bg-surface aria-expanded:text-text-primary",
         destructive:
-          "bg-destructive/10 text-destructive hover:bg-destructive/20 focus-visible:border-destructive/40 focus-visible:ring-destructive/20 dark:bg-destructive/20 dark:hover:bg-destructive/30 dark:focus-visible:ring-destructive/40",
+          "bg-destructive text-primary-foreground hover:brightness-110 focus-visible:ring-destructive/40",
         link: "text-primary underline-offset-4 hover:underline",
       },
       size: {

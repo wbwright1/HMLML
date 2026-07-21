@@ -55,15 +55,15 @@ export default async function HeadToHeadPage({
 
   return (
     <>
-      <PageSection label="Records" title="Head-to-Head">
+      <PageSection label="Records" title="Head-to-Head.">
         <Link
           href="/records"
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
         >
           &larr; All Records
         </Link>
 
-        <p className="text-body-lg text-muted-foreground max-w-prose">
+        <p className="text-body-lg text-text-secondary max-w-prose">
           Select two franchises to compare their all-time head-to-head record.
         </p>
 
@@ -112,22 +112,20 @@ export default async function HeadToHeadPage({
                     className="text-right min-w-[5rem]"
                   >
                     <span
-                      className="text-h3 font-bold block text-foreground"
+                      className="text-h3 font-mono font-bold tabular-nums block text-text-primary"
                     >
                       {history
                         .reduce((sum, g) => sum + g.pointsA, 0)
                         .toFixed(1)}
                     </span>
                     <span
-                      className="text-xs block text-muted-foreground"
+                      className="text-xs block text-text-tertiary"
                     >
                       {teamA.name}
                     </span>
                   </span>
 
-                  <span
-                    className="text-sm font-medium uppercase tracking-widest text-muted-foreground"
-                  >
+                  <span className="text-kicker">
                     Total Points
                   </span>
 
@@ -135,14 +133,14 @@ export default async function HeadToHeadPage({
                     className="text-left min-w-[5rem]"
                   >
                     <span
-                      className="text-h3 font-bold block text-foreground"
+                      className="text-h3 font-mono font-bold tabular-nums block text-text-primary"
                     >
                       {history
                         .reduce((sum, g) => sum + g.pointsB, 0)
                         .toFixed(1)}
                     </span>
                     <span
-                      className="text-xs block text-muted-foreground"
+                      className="text-xs block text-text-tertiary"
                     >
                       {teamB.name}
                     </span>
@@ -161,8 +159,8 @@ export default async function HeadToHeadPage({
               />
             ) : (
               <>
-                <p className="text-sm text-muted-foreground mb-2">
-                  {history.length} game{history.length !== 1 ? "s" : ""} played
+                <p className="text-body-sm text-text-tertiary mb-2">
+                  <span className="font-mono tabular-nums">{history.length}</span> game{history.length !== 1 ? "s" : ""} played
                   all-time
                 </p>
                 <div className="space-y-2">
@@ -175,13 +173,14 @@ export default async function HeadToHeadPage({
                       >
                         <Link
                           href={`/seasons/${game.seasonYear}/week/${game.week}`}
-                          className="block rounded-xl border border-border bg-card p-4 transition-colors hover:bg-muted/50"
+                          className="block rounded-[14px] border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-muted"
                         >
                           <div className="flex flex-wrap items-center justify-between gap-3">
                             <div className="space-y-0.5">
                               <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">
-                                  {game.seasonYear} — Week {game.week}
+                                <span className="text-body-sm font-medium text-text-primary">
+                                  <span className="font-mono tabular-nums">{game.seasonYear}</span> &middot; Week{" "}
+                                  <span className="font-mono tabular-nums">{game.week}</span>
                                 </span>
                                 {game.isPlayoff && (
                                   <SuperlativeBadge
@@ -192,22 +191,22 @@ export default async function HeadToHeadPage({
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-4 text-sm tabular-nums">
+                            <div className="flex items-center gap-4 font-mono text-sm tabular-nums">
                               <span
                                 className={
                                   aWon
-                                    ? "font-bold text-primary"
-                                    : "text-loss"
+                                    ? "font-bold text-accent-gold"
+                                    : "text-text-tertiary"
                                 }
                               >
                                 {teamA.name} {game.pointsA.toFixed(1)}
                               </span>
-                              <span className="text-muted-foreground">-</span>
+                              <span className="text-text-tertiary">-</span>
                               <span
                                 className={
                                   !aWon
-                                    ? "font-bold text-primary"
-                                    : "text-loss"
+                                    ? "font-bold text-accent-gold"
+                                    : "text-text-tertiary"
                                 }
                               >
                                 {game.pointsB.toFixed(1)} {teamB.name}

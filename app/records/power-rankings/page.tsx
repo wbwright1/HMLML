@@ -24,15 +24,15 @@ export default async function PowerRankingsPage() {
 
   return (
     <>
-      <PageSection label="Records" title="Power Rankings">
+      <PageSection label="Records" title="Power Rankings.">
         <Link
           href="/records"
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
         >
           &larr; All Records
         </Link>
 
-        <p className="text-body-lg text-muted-foreground max-w-prose">
+        <p className="text-body-lg text-text-secondary max-w-prose">
           Current season rankings based on record and points scored.
         </p>
       </PageSection>
@@ -54,16 +54,15 @@ export default async function PowerRankingsPage() {
               <ScrollReveal key={entry.id} delay={index * 40}>
                 <Link
                   href={`/teams/${entry.slug}`}
-                  className="block rounded-xl border border-border bg-card p-5 transition-colors hover:bg-muted/50"
-                  style={{ borderLeftWidth: "3px", borderLeftColor: entry.brandingColor ?? "var(--border)" }}
+                  className="block rounded-[14px] border border-border bg-surface p-5 transition-colors hover:border-border-strong hover:bg-surface-muted"
                 >
                   <div className="flex flex-wrap items-center gap-4">
                     {/* Rank */}
                     <span
-                      className={`text-2xl font-black tabular-nums w-10 text-center shrink-0 ${
+                      className={`font-mono text-2xl font-black tabular-nums w-10 text-center shrink-0 ${
                         entry.rank <= 3
-                          ? "text-gold"
-                          : "text-muted-foreground"
+                          ? "text-accent-gold"
+                          : "text-text-tertiary"
                       }`}
                     >
                       {entry.rank}
@@ -100,40 +99,40 @@ export default async function PowerRankingsPage() {
 
                     {/* Stats */}
                     <div className="flex flex-col items-end gap-1 text-sm shrink-0">
-                      <span className="tabular-nums whitespace-nowrap">
-                        <span className="font-bold">{entry.wins}</span>
-                        <span className="text-xs text-muted-foreground ml-0.5">
+                      <span className="font-mono tabular-nums whitespace-nowrap">
+                        <span className="font-bold text-text-primary">{entry.wins}</span>
+                        <span className="text-xs text-text-tertiary ml-0.5">
                           W
                         </span>
-                        <span className="text-muted-foreground mx-1">-</span>
-                        <span>{entry.losses}</span>
-                        <span className="text-xs text-muted-foreground ml-0.5">
+                        <span className="text-text-tertiary mx-1">-</span>
+                        <span className="text-text-primary">{entry.losses}</span>
+                        <span className="text-xs text-text-tertiary ml-0.5">
                           L
                         </span>
                         {entry.ties > 0 && (
                           <>
-                            <span className="text-muted-foreground mx-1">
+                            <span className="text-text-tertiary mx-1">
                               -
                             </span>
-                            <span>{entry.ties}</span>
-                            <span className="text-xs text-muted-foreground ml-0.5">
+                            <span className="text-text-primary">{entry.ties}</span>
+                            <span className="text-xs text-text-tertiary ml-0.5">
                               T
                             </span>
                           </>
                         )}
                       </span>
-                      <div className="flex items-center gap-3">
-                        <span className="text-xs text-muted-foreground tabular-nums">
+                      <div className="flex items-center gap-3 font-mono">
+                        <span className="text-xs text-text-tertiary tabular-nums">
                           {winPct.toFixed(0)}%
                         </span>
-                        <span className="hidden sm:inline text-xs text-muted-foreground tabular-nums">
+                        <span className="hidden sm:inline text-xs text-text-tertiary tabular-nums">
                           {entry.pointsScored.toFixed(1)} PF
                         </span>
                         <span
                           className={`hidden sm:inline text-xs tabular-nums ${
                             pointsDiff >= 0
-                              ? "text-primary"
-                              : "text-muted-foreground"
+                              ? "text-accent-green"
+                              : "text-text-tertiary"
                           }`}
                         >
                           {pointsDiff >= 0 ? "+" : ""}

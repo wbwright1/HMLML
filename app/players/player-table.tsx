@@ -3,34 +3,26 @@
 import { useState, useMemo, useCallback, type KeyboardEvent } from "react";
 import Link from "next/link";
 import { Search, ChevronUp, ChevronDown } from "lucide-react";
-import { PositionBadge } from "@/components/position-badge";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { PlayerHeadshot } from "@/components/player-headshot";
 import { EmptyState } from "@/components/empty-state";
 import type { RosteredPlayer } from "@/lib/queries/players";
 
 const POSITIONS = ["ALL", "QB", "RB", "WR", "TE"] as const;
 type PositionFilter = (typeof POSITIONS)[number];
 
-type SortKey =
-  | "name"
-  | "position"
-  | "nflTeam"
-  | "points"
-  | "age"
-  | "yearsExp"
-  | "hmlTeam"
-  | "status";
+type SortKey = "name" | "points" | "age" | "yearsExp" | "hmlTeam" | "status";
 type SortDir = "asc" | "desc";
-
-const POSITION_ORDER: Record<string, number> = {
-  QB: 0,
-  RB: 1,
-  WR: 2,
-  TE: 3,
-};
-
-function getPositionOrder(pos: string | null): number {
-  return pos ? (POSITION_ORDER[pos] ?? 6) : 6;
-}
 
 function compareValues(
   a: RosteredPlayer,
@@ -43,13 +35,6 @@ function compareValues(
   switch (key) {
     case "name":
       cmp = (a.fullName ?? "").localeCompare(b.fullName ?? "");
-      break;
-    case "position":
-      cmp = getPositionOrder(a.position) - getPositionOrder(b.position);
-      if (cmp === 0) cmp = (a.fullName ?? "").localeCompare(b.fullName ?? "");
-      break;
-    case "nflTeam":
-      cmp = (a.nflTeam ?? "ZZZ").localeCompare(b.nflTeam ?? "ZZZ");
       break;
     case "points":
       cmp = (a.pointsPpr ?? 0) - (b.pointsPpr ?? 0);
@@ -76,6 +61,29 @@ function compareValues(
   return dir === "desc" ? -cmp : cmp;
 }
 
+const INJURY_LABELS: Record<string, string> = {
+  Out: "OUT",
+  Doubtful: "DOUBTFUL",
+  Questionable: "Q",
+  IR: "IR",
+  PUP: "PUP",
+  Suspended: "SUSP",
+  NFI: "NFI",
+  COV: "COVID",
+};
+
+// Injury statuses that read as a clear negative (rust); "Questionable" reads
+// as a caution rather than a hard negative, so it gets the gold treatment.
+const NEGATIVE_INJURY_STATUSES = new Set([
+  "Out",
+  "Doubtful",
+  "IR",
+  "PUP",
+  "Suspended",
+  "NFI",
+  "COV",
+]);
+
 function StatusIndicator({
   status,
   injuryStatus,
@@ -84,49 +92,31 @@ function StatusIndicator({
   injuryStatus: string | null;
 }) {
   if (injuryStatus) {
-    const injuryLabels: Record<string, { text: string; className: string }> = {
-      Out: { text: "OUT", className: "text-orange-400 bg-orange-500/15" },
-      Doubtful: {
-        text: "DOUBTFUL",
-        className: "text-orange-400 bg-orange-500/15",
-      },
-      Questionable: {
-        text: "Q",
-        className: "text-amber-400 bg-amber-500/15",
-      },
-      IR: { text: "IR", className: "text-orange-400 bg-orange-500/15" },
-      PUP: { text: "PUP", className: "text-orange-400 bg-orange-500/15" },
-      Suspended: {
-        text: "SUSP",
-        className: "text-orange-400 bg-orange-500/15",
-      },
-      NFI: { text: "NFI", className: "text-orange-400 bg-orange-500/15" },
-      COV: { text: "COVID", className: "text-orange-400 bg-orange-500/15" },
-    };
-
-    const config = injuryLabels[injuryStatus] ?? {
-      text: injuryStatus.toUpperCase(),
-      className: "text-amber-400 bg-amber-500/15",
-    };
+    const label = INJURY_LABELS[injuryStatus] ?? injuryStatus.toUpperCase();
+    const isNegative = NEGATIVE_INJURY_STATUSES.has(injuryStatus);
 
     return (
       <span
-        className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${config.className}`}
+        className={`inline-block text-caption px-2 py-0.5 rounded-full ${
+          isNegative
+            ? "text-accent-warm bg-accent-warm-light"
+            : "text-accent-gold bg-accent-gold-light"
+        }`}
       >
-        {config.text}
+        {label}
       </span>
     );
   }
 
   if (status && status !== "Active") {
     return (
-      <span className="inline-block text-xs px-2 py-0.5 rounded-full text-muted-foreground bg-muted">
+      <span className="inline-block text-caption px-2 py-0.5 rounded-full text-text-tertiary bg-surface-muted">
         {status}
       </span>
     );
   }
 
-  return <span className="text-sm text-muted-foreground">-</span>;
+  return <span className="text-body-sm text-text-tertiary">&ndash;</span>;
 }
 
 interface SortHeaderProps {
@@ -161,7 +151,7 @@ function SortHeader({
       tabIndex={0}
       onClick={() => onSort(sortKey)}
       onKeyDown={handleKeyDown}
-      className={`pb-3 pr-4 text-xs uppercase tracking-wider text-muted-foreground font-medium cursor-pointer select-none hover:text-foreground transition-colors ${align === "right" ? "text-right" : "text-left"}`}
+      className={`pb-3 pr-4 text-caption text-text-tertiary cursor-pointer select-none hover:text-text-primary transition-colors ${align === "right" ? "text-right" : "text-left"}`}
       aria-sort={
         isActive ? (activeDir === "asc" ? "ascending" : "descending") : "none"
       }
@@ -188,10 +178,16 @@ interface PlayerTableProps {
   players: RosteredPlayer[];
   franchises: { id: string; name: string; slug: string }[];
   statsSeason: number | null;
+  initialQuery?: string;
 }
 
-export function PlayerTable({ players, franchises, statsSeason }: PlayerTableProps) {
-  const [search, setSearch] = useState("");
+export function PlayerTable({
+  players,
+  franchises,
+  statsSeason,
+  initialQuery = "",
+}: PlayerTableProps) {
+  const [search, setSearch] = useState(initialQuery);
   const [posFilter, setPosFilter] = useState<PositionFilter>("ALL");
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>("FA");
   const [sortKey, setSortKey] = useState<SortKey>("points");
@@ -245,164 +241,86 @@ export function PlayerTable({ players, franchises, statsSeason }: PlayerTablePro
 
   const ptsLabel = statsSeason ? `${statsSeason} Pts` : "Pts";
 
-  // Roster filter label for display
-  const rosterLabel =
-    rosterFilter === "FA"
-      ? "Free Agents"
-      : rosterFilter === "ALL"
-        ? "All Players"
-        : franchises.find((f) => f.id === rosterFilter)?.name ?? "Team";
-
   return (
-    <div className="mt-8 space-y-8">
-      {/* Search bar */}
-      <div style={{ position: "relative", width: "100%" }}>
-        <label htmlFor="player-filter" className="sr-only">
-          Filter players
-        </label>
-        <svg
-          style={{ position: "absolute", left: "1.25rem", top: "50%", transform: "translateY(-50%)", width: "1.25rem", height: "1.25rem", color: "var(--muted-foreground)", pointerEvents: "none" }}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden="true"
+    <div className="mt-8 space-y-6">
+      {/* Filter row: position pills + search + roster select */}
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <Tabs
+          value={posFilter}
+          onValueChange={(value) => setPosFilter(value as PositionFilter)}
         >
-          <circle cx="11" cy="11" r="8" />
-          <path d="m21 21-4.3-4.3" />
-        </svg>
-        <input
-          id="player-filter"
-          type="search"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search players, NFL teams, or HMLML teams..."
-          autoComplete="off"
-          style={{ paddingLeft: "3.25rem", paddingRight: "1.25rem", paddingTop: "1rem", paddingBottom: "1rem", fontSize: "1.125rem", width: "100%", borderRadius: "0.75rem", border: "1px solid var(--border)", backgroundColor: "var(--card)", color: "var(--foreground)" }}
-        />
-      </div>
+          <TabsList aria-label="Position filter">
+            {POSITIONS.map((pos) => (
+              <TabsTrigger key={pos} value={pos}>
+                {pos}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
-      {/* Filters row */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        {/* Left side: position pills */}
-        <div className="flex items-center gap-4">
-          <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium shrink-0">
-            Position
-          </span>
-          <div className="flex gap-2" role="radiogroup" aria-label="Position filter">
-            {POSITIONS.map((pos) => {
-              const isActive = posFilter === pos;
-              return (
-                <button
-                  key={pos}
-                  role="radio"
-                  aria-checked={isActive}
-                  onClick={() => setPosFilter(pos)}
-                  style={{
-                    minWidth: "3.25rem",
-                    padding: "0.5rem 1rem",
-                    borderRadius: "0.5rem",
-                    fontSize: "0.875rem",
-                    fontWeight: 600,
-                    textAlign: "center",
-                    cursor: "pointer",
-                    border: "none",
-                    transition: "all 150ms",
-                    ...(isActive
-                      ? { backgroundColor: "var(--primary)", color: "var(--primary-foreground)" }
-                      : { backgroundColor: "var(--muted)", color: "var(--muted-foreground)" }),
-                  }}
-                >
-                  {pos}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Right side: roster selector */}
-        <div className="flex items-center gap-4">
-          <span className="text-xs uppercase tracking-wider text-muted-foreground font-medium shrink-0">
-            Roster
-          </span>
-          <div style={{ position: "relative", display: "inline-block" }}>
-            <select
-              id="roster-filter"
-              value={rosterFilter}
-              onChange={(e) => setRosterFilter(e.target.value)}
-              style={{
-                WebkitAppearance: "none",
-                MozAppearance: "none",
-                appearance: "none",
-                borderRadius: "0.5rem",
-                backgroundColor: "var(--border)",
-                paddingLeft: "1rem",
-                paddingRight: "2.5rem",
-                paddingTop: "0.5rem",
-                paddingBottom: "0.5rem",
-                fontSize: "0.875rem",
-                fontWeight: 600,
-                color: "var(--foreground)",
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
-              <option value="FA">Free Agents</option>
-              <option value="ALL">All Players</option>
-              <optgroup label="Teams">
-                {franchises.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
-            <svg
-              style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", width: "1rem", height: "1rem", color: "var(--muted-foreground)", pointerEvents: "none" }}
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative sm:w-72">
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-tertiary"
               aria-hidden="true"
+            />
+            <label htmlFor="player-filter" className="sr-only">
+              Search players
+            </label>
+            <Input
+              id="player-filter"
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search players, NFL teams, or HMLML teams..."
+              autoComplete="off"
+              className="h-8 rounded-full pl-9"
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <label htmlFor="roster-filter" className="sr-only">
+              Roster
+            </label>
+            <Select
+              value={rosterFilter}
+              onValueChange={(value) => setRosterFilter(value as RosterFilter)}
             >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
+              <SelectTrigger id="roster-filter" className="rounded-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="FA">Free Agents</SelectItem>
+                <SelectItem value="ALL">All Players</SelectItem>
+                <SelectGroup>
+                  <SelectLabel>Teams</SelectLabel>
+                  {franchises.map((f) => (
+                    <SelectItem key={f.id} value={f.id}>
+                      {f.name}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </div>
 
       {/* Result count */}
-      <p className="text-sm text-muted-foreground tabular-nums">
-        <span className="font-semibold text-foreground">{filtered.length}</span>
-        {" "}of {players.length} players
+      <p className="text-body-sm text-text-tertiary">
+        <span className="text-stat text-text-primary">{filtered.length}</span>{" "}
+        of <span className="text-stat text-text-primary">{players.length}</span>{" "}
+        players
       </p>
 
       {/* Desktop table */}
       <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-left">
           <thead>
-            <tr className="border-b border-border">
+            <tr className="border-b border-divider">
               <SortHeader
                 label="Player"
                 sortKey="name"
-                activeKey={sortKey}
-                activeDir={sortDir}
-                onSort={handleSort}
-              />
-              <SortHeader
-                label="Pos"
-                sortKey="position"
-                activeKey={sortKey}
-                activeDir={sortDir}
-                onSort={handleSort}
-              />
-              <SortHeader
-                label="NFL Team"
-                sortKey="nflTeam"
                 activeKey={sortKey}
                 activeDir={sortDir}
                 onSort={handleSort}
@@ -421,6 +339,7 @@ export function PlayerTable({ players, franchises, statsSeason }: PlayerTablePro
                 activeKey={sortKey}
                 activeDir={sortDir}
                 onSort={handleSort}
+                align="right"
               />
               <SortHeader
                 label="Exp"
@@ -428,6 +347,7 @@ export function PlayerTable({ players, franchises, statsSeason }: PlayerTablePro
                 activeKey={sortKey}
                 activeDir={sortDir}
                 onSort={handleSort}
+                align="right"
               />
               <SortHeader
                 label="HMLML Team"
@@ -449,53 +369,58 @@ export function PlayerTable({ players, franchises, statsSeason }: PlayerTablePro
             {filtered.map((player) => (
               <tr
                 key={player.id}
-                className="border-b border-border/50 last:border-0"
+                className="border-b border-divider last:border-0 hover:bg-surface transition-colors"
               >
-                <td className="py-4 pr-4">
-                  <span className="text-sm font-medium">
-                    {player.fullName ?? "Unknown"}
-                  </span>
+                <td className="py-3 pr-4">
+                  <div className="flex items-center gap-3">
+                    <PlayerHeadshot
+                      playerId={player.id}
+                      name={player.fullName ?? "Unknown"}
+                      size={28}
+                      nflTeam={player.nflTeam}
+                    />
+                    <div className="min-w-0">
+                      <p className="text-body font-medium text-text-primary truncate">
+                        {player.fullName ?? "Unknown"}
+                      </p>
+                      <p className="text-body-sm text-text-tertiary">
+                        {player.nflTeam ?? "FA"} &middot; {player.position ?? "-"}
+                      </p>
+                    </div>
+                  </div>
                 </td>
-                <td className="py-4 pr-4">
-                  <PositionBadge position={player.position} />
-                </td>
-                <td className="py-4 pr-4">
-                  <span className="text-sm text-muted-foreground">
-                    {player.nflTeam ?? "FA"}
-                  </span>
-                </td>
-                <td className="py-4 pr-4 text-right">
-                  <span className="text-sm tabular-nums text-muted-foreground">
+                <td className="py-3 pr-4 text-right">
+                  <span className="text-stat text-text-primary">
                     {player.pointsPpr != null
                       ? player.pointsPpr.toFixed(1)
                       : "-"}
                   </span>
                 </td>
-                <td className="py-4 pr-4">
-                  <span className="text-sm text-muted-foreground">
+                <td className="py-3 pr-4 text-right">
+                  <span className="text-stat text-text-secondary">
                     {player.age ?? "-"}
                   </span>
                 </td>
-                <td className="py-4 pr-4">
-                  <span className="text-sm text-muted-foreground">
+                <td className="py-3 pr-4 text-right">
+                  <span className="text-stat text-text-secondary">
                     {player.yearsExp != null ? player.yearsExp : "-"}
                   </span>
                 </td>
-                <td className="py-4 pr-4">
+                <td className="py-3 pr-4">
                   {player.ownerFranchiseSlug && player.ownerFranchiseName ? (
                     <Link
                       href={`/teams/${player.ownerFranchiseSlug}`}
-                      className="text-sm font-semibold text-primary hover:underline"
+                      className="text-body-sm font-medium text-accent-gold hover:brightness-110"
                     >
                       {player.ownerFranchiseName}
                     </Link>
                   ) : (
-                    <span className="text-sm text-muted-foreground italic">
+                    <span className="text-body-sm text-text-tertiary italic">
                       Free Agent
                     </span>
                   )}
                 </td>
-                <td className="py-4">
+                <td className="py-3">
                   <StatusIndicator
                     status={player.status}
                     injuryStatus={player.injuryStatus}
@@ -512,52 +437,46 @@ export function PlayerTable({ players, franchises, statsSeason }: PlayerTablePro
         {filtered.map((player) => (
           <div
             key={player.id}
-            className="rounded-xl border border-border bg-card p-4 space-y-2"
+            className="rounded-2xl border border-border bg-surface p-4 space-y-3"
           >
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <p className="text-sm font-medium truncate">
-                  {player.fullName ?? "Unknown"}
-                </p>
-                <div className="flex items-center gap-2 mt-1">
-                  <PositionBadge position={player.position} />
-                  <span className="text-xs text-muted-foreground">
-                    {player.nflTeam ?? "FA"}
-                  </span>
-                  {player.age != null && (
-                    <span className="text-xs text-muted-foreground">
-                      Age {player.age}
-                    </span>
-                  )}
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <PlayerHeadshot
+                  playerId={player.id}
+                  name={player.fullName ?? "Unknown"}
+                  size={32}
+                  nflTeam={player.nflTeam}
+                />
+                <div className="min-w-0">
+                  <p className="text-body font-medium text-text-primary truncate">
+                    {player.fullName ?? "Unknown"}
+                  </p>
+                  <p className="text-body-sm text-text-tertiary">
+                    {player.nflTeam ?? "FA"} &middot; {player.position ?? "-"}
+                  </p>
                 </div>
               </div>
-              <div className="text-right shrink-0">
-                {player.pointsPpr != null ? (
-                  <p className="text-sm font-semibold tabular-nums">
-                    {player.pointsPpr.toFixed(1)}
-                  </p>
-                ) : (
-                  <p className="text-sm text-muted-foreground">-</p>
-                )}
+              <div className="shrink-0 text-right">
+                <p className="text-stat text-text-primary">
+                  {player.pointsPpr != null ? player.pointsPpr.toFixed(1) : "-"}
+                </p>
                 <StatusIndicator
                   status={player.status}
                   injuryStatus={player.injuryStatus}
                 />
               </div>
             </div>
-            <div className="pt-1 border-t border-border/50">
-              <span className="text-xs text-muted-foreground">HMLML Team: </span>
+            <div className="flex items-center justify-between border-t border-divider pt-2 text-body-sm">
+              <span className="text-text-tertiary">HMLML Team</span>
               {player.ownerFranchiseSlug && player.ownerFranchiseName ? (
                 <Link
                   href={`/teams/${player.ownerFranchiseSlug}`}
-                  className="text-xs font-semibold text-primary hover:underline"
+                  className="font-medium text-accent-gold hover:brightness-110"
                 >
                   {player.ownerFranchiseName}
                 </Link>
               ) : (
-                <span className="text-xs text-muted-foreground italic">
-                  Free Agent
-                </span>
+                <span className="text-text-tertiary italic">Free Agent</span>
               )}
             </div>
           </div>

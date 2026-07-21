@@ -8,7 +8,7 @@ import { getAllFranchises } from "@/lib/queries/franchises";
 export const metadata = {
   title: "Franchises | Harambe Memorial League Memorial League",
   description:
-    "Every franchise in the Harambe Memorial League Memorial League — rosters, records, and dynasty histories.",
+    "Every franchise in the Harambe Memorial League Memorial League: rosters, records, and dynasty histories.",
 };
 
 export default async function TeamsPage() {
@@ -22,7 +22,7 @@ export default async function TeamsPage() {
 
   if (!franchises || franchises.length === 0) {
     return (
-      <PageSection label="Franchises" title="Teams">
+      <PageSection label="Franchises" title="Teams.">
         <EmptyState
           icon="users"
           title="Loading Franchises"
@@ -33,9 +33,9 @@ export default async function TeamsPage() {
   }
 
   return (
-    <PageSection label="Franchises" title="Teams">
+    <PageSection label="Franchises" title="Teams.">
       <p className="text-body-lg text-muted-foreground max-w-prose">
-        Every franchise in the Harambe Memorial League Memorial League — rosters, records, and
+        Every franchise in the Harambe Memorial League Memorial League: rosters, records, and
         dynasty histories.
       </p>
 
@@ -44,8 +44,7 @@ export default async function TeamsPage() {
           <ScrollReveal key={franchise.id} delay={index * 60}>
             <Link
               href={`/teams/${franchise.slug}`}
-              className="group block rounded-xl border border-border bg-card p-5 transition-colors hover:border-primary/40 hover:bg-card/80"
-              style={{ borderTopWidth: "3px", borderTopColor: franchise.brandingColor ?? "var(--border)" }}
+              className="group block card-surface p-5 sm:p-6 transition-colors duration-150 hover:border-border-strong"
             >
               <FranchiseIdentity
                 franchise={{
@@ -59,17 +58,17 @@ export default async function TeamsPage() {
                 coOwnerName={franchise.coOwnerName}
                 variant="standard"
               />
-              <div className="mt-3 flex items-center justify-between text-sm text-muted-foreground">
-                <span className="tabular-nums">
-                  <span className="font-bold text-foreground">
+              <div className="mt-4 flex items-center justify-between border-t border-divider pt-3 text-sm">
+                <span className="font-mono tabular-nums">
+                  <span className="font-bold text-text-primary">
                     {franchise.totalWins}
                   </span>
-                  <span className="ml-0.5">W</span>
-                  <span className="mx-1">-</span>
-                  <span>{franchise.totalLosses}</span>
-                  <span className="ml-0.5">L</span>
+                  <span className="ml-0.5 text-text-tertiary">W</span>
+                  <span className="mx-1 text-text-tertiary">-</span>
+                  <span className="text-text-secondary">{franchise.totalLosses}</span>
+                  <span className="ml-0.5 text-text-tertiary">L</span>
                 </span>
-                <span className="tabular-nums">
+                <span className="font-mono tabular-nums text-text-tertiary">
                   {franchise.totalPointsScored.toFixed(1)} pts
                 </span>
               </div>

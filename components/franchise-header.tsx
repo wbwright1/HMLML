@@ -38,16 +38,25 @@ export function FranchiseHeader({
   return (
     <div className="space-y-6">
       <div className="flex flex-col items-center gap-4 text-center">
-        <FranchiseLogo
-          slug={franchiseSlug}
-          name={franchiseName}
-          abbreviation={abbreviation}
-          brandingColor={brandingColor}
-          size="xl"
-          decorative
-        />
+        <div
+          className="shrink-0"
+          style={
+            brandingColor
+              ? { boxShadow: `0 0 0 2px ${brandingColor}`, borderRadius: "27px" }
+              : undefined
+          }
+        >
+          <FranchiseLogo
+            slug={franchiseSlug}
+            name={franchiseName}
+            abbreviation={abbreviation}
+            brandingColor={brandingColor}
+            size="xl"
+            decorative
+          />
+        </div>
         <div className="space-y-2">
-          <h1 className="text-h1 font-bold">{franchiseName}</h1>
+          <h1 className="text-h1">{franchiseName}</h1>
           <ChampionshipStars count={championships} variant="hero" />
           {ownerLabel && (
             <p className="text-body-sm text-muted-foreground">{ownerLabel}</p>
@@ -59,10 +68,10 @@ export function FranchiseHeader({
       <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-12 pt-2">
         {/* All-time record */}
         <div className="flex flex-col items-center text-center">
-          <p className="text-caption uppercase tracking-widest text-muted-foreground mb-1">
+          <p className="text-caption text-muted-foreground mb-1">
             All-Time Record
           </p>
-          <p className="text-[32px] leading-none font-bold tabular-nums">
+          <p className="text-[32px] leading-none font-mono font-bold tabular-nums text-text-primary">
             {allTimeRecord.wins}-{allTimeRecord.losses}
           </p>
           <p className="text-caption text-muted-foreground mt-0.5">
@@ -72,18 +81,18 @@ export function FranchiseHeader({
 
         {/* Championships */}
         <div className="flex flex-col items-center text-center">
-          <p className="text-caption uppercase tracking-widest text-muted-foreground mb-1">
+          <p className="text-caption text-muted-foreground mb-1">
             Championships
           </p>
           <p
-            className={`text-[32px] leading-none font-bold tabular-nums ${
-              championships > 0 ? "text-gold" : ""
+            className={`text-[32px] leading-none font-mono font-bold tabular-nums ${
+              championships > 0 ? "text-accent-gold" : "text-text-primary"
             }`}
           >
             {championships}
           </p>
           {championships > 0 && (
-            <p className="text-caption text-gold mt-0.5">
+            <p className="text-caption text-accent-gold mt-0.5">
               {championships === 1 ? "Title" : "Titles"}
             </p>
           )}
@@ -92,10 +101,10 @@ export function FranchiseHeader({
         {/* Current season */}
         {currentSeason && (
           <div className="flex flex-col items-center text-center">
-            <p className="text-caption uppercase tracking-widest text-muted-foreground mb-1">
+            <p className="text-caption text-muted-foreground mb-1">
               Current Season
             </p>
-            <p className="text-[32px] leading-none font-bold tabular-nums">
+            <p className="text-[32px] leading-none font-mono font-bold tabular-nums text-text-primary">
               {currentSeason.record}
             </p>
             <p className="text-caption text-muted-foreground mt-0.5">

@@ -1,10 +1,12 @@
 import Link from "next/link";
+import { FranchiseLogo } from "@/components/franchise-logo";
 import { LiveIndicator } from "@/components/live-indicator";
 
 interface MatchupTeamProps {
   name: string;
   slug: string;
   score: number;
+  abbreviation?: string | null;
   brandingColor?: string | null;
 }
 
@@ -14,7 +16,8 @@ interface LiveMatchupCardProps {
   awayTeam: MatchupTeamProps;
   status: "live" | "final" | "upcoming";
   week: number;
-  topScorer?: string; // "Josh Allen 32.4 pts"
+  /** Optional editorial aside shown in the footer (e.g. "mercy rule material"). */
+  aside?: string;
   kickoffTime?: string; // "SUN 1PM" for upcoming
   seasonYear: number;
 }
@@ -25,13 +28,15 @@ export function LiveMatchupCard({
   awayTeam,
   status,
   week,
-  topScorer,
+  aside,
   kickoffTime,
   seasonYear,
 }: LiveMatchupCardProps) {
-  const homeWins = status === "final" && homeTeam.score > awayTeam.score;
-  const awayWins = status === "final" && awayTeam.score > homeTeam.score;
   const isUpcoming = status === "upcoming";
+  // During live play the leader is emphasized; on final the winner. Both reduce
+  // to "the higher score reads in ink, the other in tertiary".
+  const homeLeads = !isUpcoming && homeTeam.score >= awayTeam.score;
+  const awayLeads = !isUpcoming && awayTeam.score > homeTeam.score;
 
   const ariaLabel = isUpcoming
     ? `${homeTeam.name} versus ${awayTeam.name}, ${kickoffTime ?? "upcoming"}`
@@ -39,104 +44,81 @@ export function LiveMatchupCard({
 
   return (
     <Link
-      href={`/seasons/${seasonYear}/week/${week}`}
-      className="block rounded-xl border border-border bg-surface p-6 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+      href={`/matchups/${seasonYear}/${week}/${matchupId}`}
+      className="card-surface block p-5 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
       aria-label={ariaLabel}
     >
-      {/* Status badge row */}
-      <div className="flex items-center justify-between mb-4">
-        <span className="text-caption uppercase text-text-tertiary">
-          Week {week}
-        </span>
+      {/* Status row */}
+      <div className="flex items-center justify-between mb-4 min-h-5">
         {status === "live" && <LiveIndicator />}
         {status === "final" && (
-          <span className="text-caption uppercase font-medium text-text-tertiary">
-            Final
-          </span>
+          <span className="text-kicker">Final</span>
         )}
-        {isUpcoming && kickoffTime && (
-          <span className="text-caption uppercase text-text-tertiary">
-            {kickoffTime}
+        {isUpcoming && (
+          <span className="text-kicker">
+            {kickoffTime ?? `Week ${week}`}
           </span>
         )}
       </div>
 
-      {/* Matchup scores */}
+      {/* Team rows */}
       <div
         className="space-y-3"
         {...(status === "live" ? { "aria-live": "polite" } : {})}
       >
-        {/* Home team */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <span
-              className="inline-block w-[3px] h-5 rounded-full shrink-0"
-              style={{ backgroundColor: homeTeam.brandingColor ?? "var(--border)" }}
-              aria-hidden="true"
-            />
-            <span
-              className={`text-body truncate ${
-                homeWins ? "font-bold text-text-primary" : "font-medium text-text-secondary"
-              }`}
-            >
-              {homeTeam.name}
-            </span>
-            {homeWins && (
-              <span className="text-caption font-medium text-text-tertiary">W</span>
-            )}
-          </div>
-          <span
-            className={`text-stat text-lg tabular-nums shrink-0 ${
-              homeWins
-                ? "font-bold text-text-primary"
-                : isUpcoming
-                  ? "text-text-muted"
-                  : "text-text-secondary"
-            }`}
-          >
-            {isUpcoming ? "--" : homeTeam.score.toFixed(1)}
-          </span>
-        </div>
-
-        {/* Away team */}
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0 flex-1">
-            <span
-              className="inline-block w-[3px] h-5 rounded-full shrink-0"
-              style={{ backgroundColor: awayTeam.brandingColor ?? "var(--border)" }}
-              aria-hidden="true"
-            />
-            <span
-              className={`text-body truncate ${
-                awayWins ? "font-bold text-text-primary" : "font-medium text-text-secondary"
-              }`}
-            >
-              {awayTeam.name}
-            </span>
-            {awayWins && (
-              <span className="text-caption font-medium text-text-tertiary">W</span>
-            )}
-          </div>
-          <span
-            className={`text-stat text-lg tabular-nums shrink-0 ${
-              awayWins
-                ? "font-bold text-text-primary"
-                : isUpcoming
-                  ? "text-text-muted"
-                  : "text-text-secondary"
-            }`}
-          >
-            {isUpcoming ? "--" : awayTeam.score.toFixed(1)}
-          </span>
-        </div>
+        <TeamRow team={homeTeam} leads={homeLeads} isUpcoming={isUpcoming} />
+        <TeamRow team={awayTeam} leads={awayLeads} isUpcoming={isUpcoming} />
       </div>
 
-      {/* Top scorer callout (live only) */}
-      {status === "live" && topScorer && (
-        <p className="mt-3 pt-3 border-t border-border text-body-sm text-text-tertiary">
-          Top scorer: {topScorer}
+      {/* Editorial aside (optional) */}
+      {aside && (
+        <p className="mt-4 pt-3 border-t border-divider text-body-sm italic text-accent-warm">
+          {aside}
         </p>
       )}
     </Link>
+  );
+}
+
+function TeamRow({
+  team,
+  leads,
+  isUpcoming,
+}: {
+  team: MatchupTeamProps;
+  leads: boolean;
+  isUpcoming: boolean;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <FranchiseLogo
+          slug={team.slug}
+          name={team.name}
+          abbreviation={team.abbreviation ?? undefined}
+          brandingColor={team.brandingColor ?? undefined}
+          size="sm"
+          decorative
+        />
+        <span
+          className={`text-body truncate ${
+            leads ? "font-bold text-text-primary" : "font-medium text-text-secondary"
+          }`}
+        >
+          {team.name}
+        </span>
+      </div>
+      <span
+        className={`text-stat text-2xl shrink-0 ${
+          leads
+            ? "text-text-primary"
+            : isUpcoming
+              ? "text-text-muted"
+              : "text-text-tertiary"
+        }`}
+      >
+        {isUpcoming ? "--" : team.score.toFixed(1)}
+      </span>
+    </div>
   );
 }

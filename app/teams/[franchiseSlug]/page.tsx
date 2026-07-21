@@ -67,15 +67,9 @@ export default async function FranchiseDetailPage({
 
   return (
     <>
-      {/* Hero Section */}
-      <section
-        className="py-8 md:py-12 space-y-6"
-        style={{
-          background: franchise.brandingColor
-            ? `linear-gradient(to bottom, ${franchise.brandingColor}0F, transparent 60%)`
-            : undefined,
-        }}
-      >
+      {/* Hero Section — dark canvas frame; brandingColor survives only as a
+          subtle ring on the crest (see FranchiseIdentity's BrandedCrest). */}
+      <section className="py-8 md:py-12 space-y-6">
         <Link
           href="/teams"
           className="text-sm text-muted-foreground hover:text-foreground transition-colors"
@@ -127,13 +121,13 @@ export default async function FranchiseDetailPage({
             <div className="flex justify-center gap-6 pt-2">
               <Link
                 href={`/teams/${franchise.slug}/roster`}
-                className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-body-sm font-medium text-primary-foreground transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 View Current Roster
               </Link>
               <Link
                 href={`/teams/${franchise.slug}/drafts`}
-                className="inline-flex items-center justify-center rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex items-center justify-center rounded-lg border border-border bg-surface px-4 py-2 text-body-sm font-medium text-text-primary transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Draft History
               </Link>
@@ -154,7 +148,7 @@ export default async function FranchiseDetailPage({
           <div className="space-y-3">
             {franchise.seasonHistory.map((season, index) => (
               <ScrollReveal key={season.id} delay={index * 40}>
-                <div className="rounded-xl border border-border bg-card p-5 transition-colors">
+                <div className="rounded-xl border border-border bg-surface p-5 transition-colors hover:border-border-strong">
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-3">
@@ -165,7 +159,7 @@ export default async function FranchiseDetailPage({
                           {season.seasonYear}
                         </Link>
                         {season.isLegacyEra && (
-                          <span className="text-xs uppercase tracking-wider text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                          <span className="text-caption text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                             Legacy Era
                           </span>
                         )}
@@ -177,15 +171,15 @@ export default async function FranchiseDetailPage({
                       )}
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-4 text-sm">
+                    <div className="flex flex-wrap items-center gap-4 text-sm font-mono">
                       {/* Record */}
                       <span className="tabular-nums whitespace-nowrap">
-                        <span className="font-bold">{season.wins ?? 0}</span>
+                        <span className="font-bold text-text-primary">{season.wins ?? 0}</span>
                         <span className="text-xs text-muted-foreground ml-0.5">
                           W
                         </span>
                         <span className="text-muted-foreground mx-1">-</span>
-                        <span>{season.losses ?? 0}</span>
+                        <span className="text-text-secondary">{season.losses ?? 0}</span>
                         <span className="text-xs text-muted-foreground ml-0.5">
                           L
                         </span>
@@ -194,7 +188,7 @@ export default async function FranchiseDetailPage({
                             <span className="text-muted-foreground mx-1">
                               -
                             </span>
-                            <span>{season.ties}</span>
+                            <span className="text-text-secondary">{season.ties}</span>
                             <span className="text-xs text-muted-foreground ml-0.5">
                               T
                             </span>

@@ -6,6 +6,13 @@ import {
 } from "./helpers/seed-matchups";
 
 // All tests in this file share seeded data and run serially to avoid races.
+//
+// components/matchup-row.tsx is a frozen shared primitive. It kept its team
+// brandingColor accent treatment: a 3px absolute-positioned bar on each edge of
+// the row (left = home color, right = away color, decorative / aria-hidden,
+// falling back to var(--border) when a franchise has no branding color). These
+// assertions verify that treatment as it actually renders now, plus behavior
+// (winner emphasis, Final label, color-independent identification).
 test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
   test.describe.configure({ mode: "serial" });
 
@@ -254,5 +261,42 @@ test.describe("Story 4.1: MatchupRow Team Color Accents", () => {
       await expect(leftBar).toHaveAttribute("aria-hidden", "true");
       await expect(rightBar).toHaveAttribute("aria-hidden", "true");
     }
+  });
+
+  // -------------------------------------------------------------------------
+  // AC-4: Behavior — winner emphasis + Final label (typography, not color)
+  // -------------------------------------------------------------------------
+
+  test("AC-4: final matchup emphasizes the winner and labels the result", async ({
+    page,
+  }) => {
+    await page.goto(
+      `/seasons/${TEST_DATA.seasonYear}/week/${TEST_DATA.week}`
+    );
+
+    const matchupRows = page.locator('[role="group"]');
+    const count = await matchupRows.count();
+
+    // Locate the Alpha (120.5, winner) vs Bravo (98.3) matchup.
+    let alphaRow = null;
+    for (let i = 0; i < count; i++) {
+      const text = await matchupRows.nth(i).innerText();
+      if (text.includes("Team Alpha") || text.includes("ALP")) {
+        alphaRow = matchupRows.nth(i);
+        break;
+      }
+    }
+    expect(alphaRow).not.toBeNull();
+
+    // The winning score renders with a bold weight (typographic emphasis, not color).
+    const winnerScore = alphaRow!
+      .locator("span.font-bold")
+      .filter({ hasText: "120.5" });
+    await expect(winnerScore).toBeVisible();
+
+    // A completed matchup carries a "Final" label.
+    await expect(
+      alphaRow!.getByText("Final", { exact: false })
+    ).toBeVisible();
   });
 });

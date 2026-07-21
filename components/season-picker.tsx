@@ -27,7 +27,7 @@ export function SeasonPicker({
     <select
       value={activeSeason}
       onChange={handleChange}
-      className="rounded-lg border border-border bg-surface px-3 py-2 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent-green focus:border-accent-green"
+      className="rounded-lg border border-border bg-surface px-3 py-2 text-body-sm font-mono font-medium tabular-nums text-text-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus:border-accent-gold"
       aria-label="Select season"
     >
       {seasons.map((year) => (

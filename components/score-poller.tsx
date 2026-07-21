@@ -1,5 +1,7 @@
 "use client";
 
+/** @deprecated Not currently imported anywhere. Retained as the candidate base for Phase B per-player live polling. */
+
 import { useEffect, useRef, useState, useCallback } from "react";
 import { LiveMatchupCard } from "@/components/live-matchup-card";
 
@@ -176,7 +178,6 @@ export function ScorePoller({
             status={m.status}
             week={week}
             seasonYear={seasonYear}
-            topScorer={m.topScorer}
           />
         ))}
       </div>
