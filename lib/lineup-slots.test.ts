@@ -94,6 +94,16 @@ describe("alignStarterSlots", () => {
     expect(alignStarterSlots(ROSTER_POSITIONS, null)).toEqual([]);
     expect(alignStarterSlots(ROSTER_POSITIONS, [])).toEqual([]);
   });
+
+  it("maps each starter to its positional slot when starters run shorter than the slot list", () => {
+    // ["QB","RB","WR"] starting slots, but only two starters provided: each
+    // aligns to its index slot and the trailing slot is simply left unfilled.
+    const starters = ["qb1", "rb1"];
+    expect(alignStarterSlots(["QB", "RB", "WR", "BN"], starters)).toEqual([
+      { playerId: "qb1", slot: "QB" },
+      { playerId: "rb1", slot: "RB" },
+    ]);
+  });
 });
 
 describe("computeProjectedPoints", () => {

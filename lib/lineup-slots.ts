@@ -39,6 +39,15 @@ export function deriveStartingSlots(
  *   slot position so later starters stay aligned.
  * - If `starters` is longer than the derived starting slots (defensive against
  *   malformed data), the overflow entries fall back to slot "FLEX".
+ *
+ * Known caveats:
+ * - Positional alignment assumes Sleeper emits "0" placeholders so the
+ *   `starters` array stays positionally dense against the slot list; a
+ *   non-dense array would mislabel slots.
+ * - The slot labels come from seasons.settings_json.roster_positions, a
+ *   season-level snapshot refreshed by the daily sync. A mid-season change to
+ *   roster_positions can mislabel earlier weeks when they are resynced or
+ *   backfilled against the newer snapshot.
  */
 export function alignStarterSlots(
   rosterPositions: string[] | null | undefined,

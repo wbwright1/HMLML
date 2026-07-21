@@ -8,6 +8,8 @@ interface MatchupLineupsProps {
   homeTeam: MatchupTeam;
   awayTeam: MatchupTeam;
   lineups: MatchupLineupsData;
+  homeWins: boolean;
+  awayWins: boolean;
 }
 
 const DEFENSE_POSITIONS = new Set(["DEF", "DST"]);
@@ -33,7 +35,7 @@ function formatProjected(value: number | null): string {
  * page. Server component; the only client leaves are the headshot/logo
  * fallback components it composes.
  */
-export function MatchupLineups({ homeTeam, awayTeam, lineups }: MatchupLineupsProps) {
+export function MatchupLineups({ homeTeam, awayTeam, lineups, homeWins, awayWins }: MatchupLineupsProps) {
   const homeSide = lineups.sides.find((side) => side.rosterId === homeTeam.rosterId);
   const awaySide = lineups.sides.find((side) => side.rosterId === awayTeam.rosterId);
 
@@ -47,11 +49,6 @@ export function MatchupLineups({ homeTeam, awayTeam, lineups }: MatchupLineupsPr
       </p>
     );
   }
-
-  const homePoints = sumPoints(homeSide!.starters);
-  const awayPoints = sumPoints(awaySide!.starters);
-  const homeWins = homePoints > awayPoints;
-  const awayWins = awayPoints > homePoints;
 
   return (
     <div className="mt-8 grid gap-8 lg:grid-cols-2">

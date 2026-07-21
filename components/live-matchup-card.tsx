@@ -59,7 +59,7 @@ export function LiveMatchupCard({
 
   const ariaLabel = isUpcoming
     ? `${homeTeam.name} versus ${awayTeam.name}, ${kickoffTime ?? "upcoming"}`
-    : `${homeTeam.name} ${homeTeam.score.toFixed(1)} versus ${awayTeam.name} ${awayTeam.score.toFixed(1)}, ${status}${showWinProb ? `, ${homeTeam.name} win probability ${homePct} percent` : ""}`;
+    : `${homeTeam.name} ${homeTeam.score.toFixed(1)} versus ${awayTeam.name} ${awayTeam.score.toFixed(1)}, ${status}${showWinProb ? `, ${homeTeam.name} win probability ${homePct} percent` : ""}${showPlayersLeft ? `, ${playersLeft.home} versus ${playersLeft.away} players left to play` : ""}`;
 
   return (
     <Link

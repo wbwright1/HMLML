@@ -29,7 +29,7 @@ Harambe Memorial League Memorial League (HMLML) Website: a public-facing Next.js
 - No authentication in Phase 1; fully public; Phase 2 adds commish admin login (likely Auth.js)
 - 3-tier Sleeper sync: daily cron (players, settings), hourly cron (transactions, rosters), client-side 30s poller (live matchup scores during game windows)
 - Cron endpoint security via Vercel native `CRON_SECRET` header verification
-- All data served from local Postgres cache; no page load triggers a live Sleeper API call
+- All data served from local Postgres cache; no page load triggers a live Sleeper API call (one deliberate exception: the players-page trending-adds rail calls Sleeper's trending endpoint through `lib/sleeper.ts` with a 1-hour fetch cache)
 - Single Sleeper API client module (`lib/sleeper.ts`) with one typed function per endpoint, Zod validated
 - Sync writes are atomic per data type; a failed transaction sync does not corrupt roster data
 - Each data type tracks its own "last successful sync" timestamp

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runPlayerPointsBackfill } from "@/lib/sync/backfill-player-points";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");

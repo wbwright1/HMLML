@@ -125,7 +125,13 @@ export default async function MatchupDetailPage({
         </div>
       </section>
 
-      <MatchupLineups homeTeam={homeTeam} awayTeam={awayTeam} lineups={lineups} />
+      <MatchupLineups
+        homeTeam={homeTeam}
+        awayTeam={awayTeam}
+        lineups={lineups}
+        homeWins={homeWins}
+        awayWins={awayWins}
+      />
     </div>
   );
 }

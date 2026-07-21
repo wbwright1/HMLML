@@ -2,8 +2,7 @@ import { db } from "@/lib/db";
 import { franchises, franchiseSeasons, matchups, seasons } from "@/lib/db/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
 import {
-  getPlayersLeftCounts,
-  getProjectedRemainingByRoster,
+  getStarterLiveStats,
   type PlayersLeft,
 } from "@/lib/queries/player-points";
 
@@ -27,14 +26,15 @@ export async function getHubLiveData(
   seasonId: number,
   week: number
 ): Promise<HubLiveData> {
-  const [playersLeft, projRemaining] = await Promise.all([
-    getPlayersLeftCounts(seasonId, week),
-    getProjectedRemainingByRoster(seasonId, week),
-  ]);
+  const stats = await getStarterLiveStats(seasonId, week);
 
+  const playersLeft = new Map<string, PlayersLeft>();
+  const projRemaining = new Map<string, number>();
   let totalLeft = 0;
   let totalStarters = 0;
-  for (const { left, total } of playersLeft.values()) {
+  for (const [rosterId, { left, total, projRemaining: proj }] of stats) {
+    playersLeft.set(rosterId, { left, total });
+    if (proj > 0) projRemaining.set(rosterId, proj);
     totalLeft += left;
     totalStarters += total;
   }

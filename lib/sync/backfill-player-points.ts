@@ -1,10 +1,11 @@
 import { db } from "@/lib/db";
-import { seasons, franchiseSeasons } from "@/lib/db/schema";
+import { seasons } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getLeagueMatchups, getWeekProjections } from "@/lib/sleeper";
 import type { SleeperProjections } from "@/lib/sleeper-schemas";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { upsertPlayerWeekPoints } from "@/lib/sync/hourly";
+import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
 
 // Shape of the per-season settings blob stored in seasons.settings_json.
 interface SeasonSettingsJson {
@@ -56,18 +57,7 @@ export async function runPlayerPointsBackfill(
     const rosterPositions = settings?.roster_positions ?? null;
 
     // roster_id -> franchise_id mapping for this season (stable across weeks)
-    const fsRows = await db
-      .select({
-        rosterId: franchiseSeasons.rosterId,
-        franchiseId: franchiseSeasons.franchiseId,
-      })
-      .from(franchiseSeasons)
-      .where(eq(franchiseSeasons.seasonId, season.id));
-
-    const rosterToFranchise = new Map<string, string>();
-    for (const fs of fsRows) {
-      rosterToFranchise.set(fs.rosterId, fs.franchiseId);
-    }
+    const rosterToFranchise = await getRosterToFranchiseMap(season.id);
 
     // NFL regular season grew to 18 weeks in 2021; Sleeper fantasy playoff
     // weeks fall within this range too, so iterate the full span.
@@ -77,7 +67,11 @@ export async function runPlayerPointsBackfill(
     let weeksProcessed = 0;
 
     for (let week = 1; week <= maxWeek; week++) {
-      const matchupsResult = await getLeagueMatchups(season.leagueId, week);
+      // Matchups and projections for a week are independent; fetch in parallel.
+      const [matchupsResult, projResult] = await Promise.all([
+        getLeagueMatchups(season.leagueId, week),
+        getWeekProjections(seasonYear, week),
+      ]);
       if ("error" in matchupsResult) {
         // Skip weeks that error (e.g. beyond the season); keep going.
         continue;
@@ -87,7 +81,6 @@ export async function runPlayerPointsBackfill(
 
       // Attempt historical projections for this season/week; non-fatal.
       let projections: SleeperProjections | null = null;
-      const projResult = await getWeekProjections(seasonYear, week);
       if (!("error" in projResult)) {
         projections = projResult.data;
       }

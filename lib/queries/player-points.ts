@@ -39,6 +39,12 @@ export interface PlayersLeft {
   total: number;
 }
 
+export interface StarterLiveStats {
+  left: number;
+  total: number;
+  projRemaining: number;
+}
+
 export interface TrendingAddPlayer {
   playerId: string;
   name: string | null;
@@ -193,15 +199,19 @@ export async function getMatchupLineups(
 }
 
 /**
- * Returns, per roster, how many starters have yet to score. Heuristic: a
- * starter counts as "left" when its points are 0 and its projection is > 0
- * (we have no per-game clock status). Keyed by rosterId.
+ * Single-scan live stats per roster for a season/week. Runs one SELECT over
+ * started player_week_points rows and computes, per rosterId, the starter
+ * count (total), how many have yet to score (left), and their summed projected
+ * points still to come (projRemaining). Heuristic: a starter counts as "left"
+ * when its points are 0 and its projection is > 0 (we have no per-game clock
+ * status). Every roster with starters appears; projRemaining is 0 when all
+ * starters have scored.
  */
-export async function getPlayersLeftCounts(
+export async function getStarterLiveStats(
   seasonId: number,
   week: number
-): Promise<Map<string, PlayersLeft>> {
-  const result = new Map<string, PlayersLeft>();
+): Promise<Map<string, StarterLiveStats>> {
+  const result = new Map<string, StarterLiveStats>();
 
   try {
     const rows = await db
@@ -220,64 +230,61 @@ export async function getPlayersLeftCounts(
       );
 
     for (const row of rows) {
-      const entry = result.get(row.rosterId) ?? { left: 0, total: 0 };
+      const entry =
+        result.get(row.rosterId) ?? { left: 0, total: 0, projRemaining: 0 };
       entry.total += 1;
-      if (row.points === 0 && (row.projectedPoints ?? 0) > 0) {
+      const projected = row.projectedPoints ?? 0;
+      if (row.points === 0 && projected > 0) {
         entry.left += 1;
+        entry.projRemaining += projected;
       }
       result.set(row.rosterId, entry);
     }
+
+    for (const entry of result.values()) {
+      entry.projRemaining = Math.round(entry.projRemaining * 100) / 100;
+    }
   } catch (e) {
-    console.error("[player-points] getPlayersLeftCounts error:", e);
+    console.error("[player-points] getStarterLiveStats error:", e);
   }
 
   return result;
 }
 
 /**
- * Returns, per roster, the projected points still to be scored this week:
- * the sum of projected_points across starters that have yet to score (points
- * === 0 and projection > 0), matching the getPlayersLeftCounts heuristic.
- * Keyed by rosterId. Only rosters with remaining projection appear; a roster
- * whose starters have all scored is absent (treat a miss as 0). Feeds the live
- * win-probability model.
+ * Returns, per roster, how many starters have yet to score. Thin derivation of
+ * getStarterLiveStats. Keyed by rosterId.
+ */
+export async function getPlayersLeftCounts(
+  seasonId: number,
+  week: number
+): Promise<Map<string, PlayersLeft>> {
+  const stats = await getStarterLiveStats(seasonId, week);
+  const result = new Map<string, PlayersLeft>();
+  for (const [rosterId, { left, total }] of stats) {
+    result.set(rosterId, { left, total });
+  }
+  return result;
+}
+
+/**
+ * Returns, per roster, the projected points still to be scored this week: the
+ * sum of projected_points across starters that have yet to score. Thin
+ * derivation of getStarterLiveStats. Keyed by rosterId; only rosters with
+ * remaining projection appear (a roster whose starters have all scored is
+ * absent). Feeds the live win-probability model.
  */
 export async function getProjectedRemainingByRoster(
   seasonId: number,
   week: number
 ): Promise<Map<string, number>> {
+  const stats = await getStarterLiveStats(seasonId, week);
   const result = new Map<string, number>();
-
-  try {
-    const rows = await db
-      .select({
-        rosterId: playerWeekPoints.rosterId,
-        points: playerWeekPoints.points,
-        projectedPoints: playerWeekPoints.projectedPoints,
-      })
-      .from(playerWeekPoints)
-      .where(
-        and(
-          eq(playerWeekPoints.seasonId, seasonId),
-          eq(playerWeekPoints.week, week),
-          eq(playerWeekPoints.started, true)
-        )
-      );
-
-    for (const row of rows) {
-      const projected = row.projectedPoints ?? 0;
-      if (row.points === 0 && projected > 0) {
-        result.set(row.rosterId, (result.get(row.rosterId) ?? 0) + projected);
-      }
+  for (const [rosterId, { projRemaining }] of stats) {
+    if (projRemaining > 0) {
+      result.set(rosterId, projRemaining);
     }
-
-    for (const [rosterId, sum] of result) {
-      result.set(rosterId, Math.round(sum * 100) / 100);
-    }
-  } catch (e) {
-    console.error("[player-points] getProjectedRemainingByRoster error:", e);
   }
-
   return result;
 }
 

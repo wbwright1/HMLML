@@ -197,31 +197,16 @@ export default async function RosterPage({ params }: RosterPageProps) {
   // Use the most recent season to fetch the roster
   const latestSeason = franchise.seasonHistory[0];
 
-  let roster: Awaited<ReturnType<typeof getFranchiseRoster>> = null;
-
-  if (latestSeason) {
-    try {
-      roster = await getFranchiseRoster(franchise.id, latestSeason.seasonId);
-    } catch {
-      // Roster data may not be available
-    }
-  }
-
-  let allFranchises: Awaited<ReturnType<typeof getAllFranchises>> = null;
-  try {
-    allFranchises = await getAllFranchises();
-  } catch {
-    // DB may not be connected in dev
-  }
-
-  // PROJ column only applies to the current season's roster view, once the
-  // hourly sync has actually populated a projection for that week.
-  let nflState: Awaited<ReturnType<typeof getNflState>> = null;
-  try {
-    nflState = await getNflState();
-  } catch {
-    // NFL state may not be available
-  }
+  // These three are independent; fetch in parallel. Each degrades to null on
+  // failure (roster data missing, DB down in dev, NFL state unavailable) so one
+  // failure doesn't sink the others.
+  const [roster, allFranchises, nflState] = await Promise.all([
+    latestSeason
+      ? getFranchiseRoster(franchise.id, latestSeason.seasonId).catch(() => null)
+      : Promise.resolve(null),
+    getAllFranchises().catch(() => null),
+    getNflState().catch(() => null),
+  ]);
 
   const isCurrentSeason =
     !!latestSeason && !!nflState && Number(nflState.season) === latestSeason.seasonYear;

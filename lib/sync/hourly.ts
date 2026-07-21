@@ -20,6 +20,7 @@ import {
 import type { SleeperMatchup, SleeperProjections } from "@/lib/sleeper-schemas";
 import { alignStarterSlots, computeProjectedPoints } from "@/lib/lineup-slots";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
+import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
 
 // Shape of the per-season settings blob stored in seasons.settings_json.
 interface SeasonSettingsJson {
@@ -150,19 +151,7 @@ async function syncRostersAndPicks(
     const rosters = rostersResult.data;
     let rowCount = 0;
 
-    // Build roster_id -> franchise_id mapping from franchise_seasons
-    const fsRows = await db
-      .select({
-        rosterId: franchiseSeasons.rosterId,
-        franchiseId: franchiseSeasons.franchiseId,
-      })
-      .from(franchiseSeasons)
-      .where(eq(franchiseSeasons.seasonId, seasonId));
-
-    const rosterToFranchise = new Map<string, string>();
-    for (const fs of fsRows) {
-      rosterToFranchise.set(fs.rosterId, fs.franchiseId);
-    }
+    const rosterToFranchise = await getRosterToFranchiseMap(seasonId);
 
     // Update standings from roster settings
     for (const roster of rosters) {
@@ -289,19 +278,7 @@ async function syncMatchupScores(
 
     const sleeperMatchups = result.data;
 
-    // Build roster_id -> franchise_id mapping
-    const fsRows = await db
-      .select({
-        rosterId: franchiseSeasons.rosterId,
-        franchiseId: franchiseSeasons.franchiseId,
-      })
-      .from(franchiseSeasons)
-      .where(eq(franchiseSeasons.seasonId, seasonId));
-
-    const rosterToFranchise = new Map<string, string>();
-    for (const fs of fsRows) {
-      rosterToFranchise.set(fs.rosterId, fs.franchiseId);
-    }
+    const rosterToFranchise = await getRosterToFranchiseMap(seasonId);
 
     // Get season info for playoff detection
     const [seasonRow] = await db
@@ -606,18 +583,7 @@ async function syncPlayerWeekPoints(
     }
 
     // roster_id -> franchise_id mapping for this season
-    const fsRows = await db
-      .select({
-        rosterId: franchiseSeasons.rosterId,
-        franchiseId: franchiseSeasons.franchiseId,
-      })
-      .from(franchiseSeasons)
-      .where(eq(franchiseSeasons.seasonId, seasonId));
-
-    const rosterToFranchise = new Map<string, string>();
-    for (const fs of fsRows) {
-      rosterToFranchise.set(fs.rosterId, fs.franchiseId);
-    }
+    const rosterToFranchise = await getRosterToFranchiseMap(seasonId);
 
     const { scoringSettings, rosterPositions } =
       await getSeasonScoringConfig(seasonId);

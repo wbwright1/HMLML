@@ -1,7 +1,7 @@
 import { SyncTimestamp } from "@/components/sync-timestamp";
 import { TrendingRail } from "@/components/trending-rail";
 import { getAllPlayersWithStats, getAllFranchiseNames } from "@/lib/queries/players";
-import { getAllSeasons } from "@/lib/queries/seasons";
+import { getLatestSeason } from "@/lib/queries/matchups";
 import { getNflState } from "@/lib/queries/nfl-state";
 import {
   getCurrentWeekProjectionsByPlayer,
@@ -24,10 +24,10 @@ interface PlayersPageProps {
 export default async function PlayersPage({ searchParams }: PlayersPageProps) {
   const { q } = await searchParams;
 
-  const [players, franchises, seasons, nflState, trendingPlayers] = await Promise.all([
+  const [players, franchises, latestSeason, nflState, trendingPlayers] = await Promise.all([
     getAllPlayersWithStats(),
     getAllFranchiseNames(),
-    getAllSeasons(),
+    getLatestSeason(),
     getNflState(),
     getTrendingAddPlayers(10),
   ]);
@@ -38,7 +38,6 @@ export default async function PlayersPage({ searchParams }: PlayersPageProps) {
   // PROJ only applies once the current season's hourly sync has populated a
   // projection for the current week; otherwise the column is omitted rather
   // than showing an all-dashes column (no sync yet / offseason).
-  const latestSeason = seasons[0] ?? null;
   const isCurrentSeason =
     !!latestSeason && !!nflState && Number(nflState.season) === latestSeason.seasonYear;
 
