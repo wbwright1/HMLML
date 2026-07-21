@@ -120,6 +120,23 @@ describe("assembleSchedule", () => {
     expect(wk1.kind).toBe("mixed");
   });
 
+  it("never schedules the same matchup in consecutive weeks", () => {
+    const weeksByPair = new Map<string, number[]>();
+    for (const w of weeks) {
+      for (const g of w.games) {
+        const key = [g.a, g.b].sort().join("|");
+        if (!weeksByPair.has(key)) weeksByPair.set(key, []);
+        weeksByPair.get(key)!.push(w.week);
+      }
+    }
+    for (const nums of weeksByPair.values()) {
+      nums.sort((a, b) => a - b);
+      for (let i = 1; i < nums.length; i++) {
+        expect(nums[i] - nums[i - 1]).toBeGreaterThanOrEqual(2);
+      }
+    }
+  });
+
   it("marks the configured divisional weeks (all intra-division) and one primetime", () => {
     const divisionalWeeks = weeks.filter((w) => w.kind === "divisional");
     expect(divisionalWeeks.map((w) => w.week).sort((x, y) => x - y)).toEqual([6, 10, 14]);

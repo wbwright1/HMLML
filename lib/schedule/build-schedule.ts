@@ -46,7 +46,15 @@ export type AssembleInput = {
   divisionalWeeks: number[];
   /** Which of the divisional weeks is the primetime showcase. */
   primetimeWeek: number;
+  /**
+   * Minimum number of weeks between a pair's two meetings. Default 2, which
+   * forbids the same matchup in consecutive weeks. Only within-division pairs
+   * meet twice, so only they are affected.
+   */
+  minSpacing?: number;
 };
+
+export const DEFAULT_MIN_SPACING = 2;
 
 export const TEAMS_PER_DIVISION = 4;
 export const DIVISION_COUNT = 3;
@@ -145,8 +153,13 @@ function roundHasPair(round: Round, finalists: Pair): boolean {
   return round.some(([a, b]) => pairKey(a, b) === target);
 }
 
+function pairSet(round: Round): Set<string> {
+  return new Set(round.map(([a, b]) => pairKey(a, b)));
+}
+
 export function assembleSchedule(input: AssembleInput): Week[] {
   const { divisions, finalists, divisionalWeeks, primetimeWeek } = input;
+  const minSpacing = input.minSpacing ?? DEFAULT_MIN_SPACING;
 
   const teamIds = divisions.flat();
   validateConfig(input, teamIds);
@@ -169,31 +182,78 @@ export function assembleSchedule(input: AssembleInput): Week[] {
     );
   }
   const week1Round = rrRounds[week1Idx];
-  const remainingRr = rrRounds.filter((_, i) => i !== week1Idx);
+  const mixedPool = rrRounds.filter((_, i) => i !== week1Idx); // 10 rounds
+  const mixedPairSets = mixedPool.map(pairSet);
+  const divPairSets = divRounds.map(pairSet);
 
   const divisionalSet = new Set(divisionalWeeks);
-  const weeks: Week[] = [];
-  let rrCursor = 0;
 
-  for (let w = 1; w <= TOTAL_WEEKS; w++) {
-    let round: Round;
-    let kind: Week["kind"];
-    let label: string | null = null;
+  // Arrange the remaining rounds into weeks 2..14 so that no pair repeats
+  // within `minSpacing` weeks. Only within-division pairs repeat at all (once
+  // in the round-robin, once in a divisional week); two distinct round-robin
+  // rounds never share a pair, so the only real constraints sit where a
+  // round-robin week neighbours a divisional week. A backtracking search over
+  // the placement (which divisional factor goes where, and the order of the
+  // mixed rounds) finds a conflict-free arrangement deterministically.
+  const slot: Round[] = new Array(TOTAL_WEEKS + 1); // 1-indexed
+  slot[1] = week1Round;
+  const slotPairs: Set<string>[] = new Array(TOTAL_WEEKS + 1);
+  slotPairs[1] = pairSet(week1Round);
+  const usedMixed = new Set<number>();
+  const usedDiv = new Set<number>();
 
-    if (w === 1) {
-      round = week1Round;
-      kind = "mixed";
-      label = "Finals rematch";
-    } else if (divisionalSet.has(w)) {
-      // Divisional weeks consume divRounds in order.
-      round = divRounds[divisionalWeeks.indexOf(w)];
-      kind = "divisional";
-      label = w === primetimeWeek ? "Divisional — Primetime" : "Divisional";
-    } else {
-      round = remainingRr[rrCursor++];
-      kind = "mixed";
+  const conflicts = (week: number, pairs: Set<string>): boolean => {
+    for (let w = Math.max(1, week - (minSpacing - 1)); w < week; w++) {
+      const prev = slotPairs[w];
+      if (!prev) continue;
+      for (const p of pairs) if (prev.has(p)) return true;
     }
+    return false;
+  };
 
+  const place = (week: number): boolean => {
+    if (week > TOTAL_WEEKS) return true;
+    if (divisionalSet.has(week)) {
+      for (let i = 0; i < divRounds.length; i++) {
+        if (usedDiv.has(i) || conflicts(week, divPairSets[i])) continue;
+        slot[week] = divRounds[i];
+        slotPairs[week] = divPairSets[i];
+        usedDiv.add(i);
+        if (place(week + 1)) return true;
+        usedDiv.delete(i);
+      }
+    } else {
+      for (let i = 0; i < mixedPool.length; i++) {
+        if (usedMixed.has(i) || conflicts(week, mixedPairSets[i])) continue;
+        slot[week] = mixedPool[i];
+        slotPairs[week] = mixedPairSets[i];
+        usedMixed.add(i);
+        if (place(week + 1)) return true;
+        usedMixed.delete(i);
+      }
+    }
+    slotPairs[week] = undefined as unknown as Set<string>;
+    return false;
+  };
+
+  if (!place(2)) {
+    throw new Error(
+      `could not arrange weeks with rematches >= ${minSpacing} weeks apart; try different DIVISIONAL_WEEKS or a smaller minSpacing`,
+    );
+  }
+
+  const weeks: Week[] = [];
+  for (let w = 1; w <= TOTAL_WEEKS; w++) {
+    const round = slot[w];
+    const kind: Week["kind"] = divisionalSet.has(w) ? "divisional" : "mixed";
+    const label =
+      w === 1
+        ? "Finals rematch"
+        : kind === "divisional"
+          ? w === primetimeWeek
+            ? "Divisional — Primetime"
+            : "Divisional"
+          : null;
     weeks.push({
       week: w,
       kind,
@@ -258,6 +318,7 @@ export function validateSchedule(
   weeks: Week[],
   divisions: string[][],
   finalists: Pair,
+  minSpacing: number = DEFAULT_MIN_SPACING,
 ): void {
   const teamIds = divisions.flat();
   const divisionOf = new Map<string, number>();
@@ -315,5 +376,26 @@ export function validateSchedule(
   const week1HasFinals = weeks[0].games.some((g) => pairKey(g.a, g.b) === target);
   if (!week1HasFinals) {
     throw new Error("week 1 does not contain the finals rematch");
+  }
+
+  // Rematches are spaced: a pair's two meetings are >= minSpacing weeks apart.
+  const weeksByPair = new Map<string, number[]>();
+  for (const week of weeks) {
+    for (const g of week.games) {
+      const key = pairKey(g.a, g.b);
+      if (!weeksByPair.has(key)) weeksByPair.set(key, []);
+      weeksByPair.get(key)!.push(week.week);
+    }
+  }
+  for (const [key, weekNums] of weeksByPair) {
+    weekNums.sort((a, b) => a - b);
+    for (let i = 1; i < weekNums.length; i++) {
+      const gap = weekNums[i] - weekNums[i - 1];
+      if (gap < minSpacing) {
+        throw new Error(
+          `${key} meets in weeks ${weekNums[i - 1]} and ${weekNums[i]} (gap ${gap} < ${minSpacing})`,
+        );
+      }
+    }
   }
 }
