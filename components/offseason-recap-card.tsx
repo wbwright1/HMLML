@@ -17,7 +17,7 @@ export function OffseasonRecapCard({
 }: OffseasonRecapCardProps) {
   return (
     <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-      <p className="text-caption uppercase tracking-widest text-muted-foreground">
+      <p className="text-kicker">
         {seasonYear} Season Recap
       </p>
 
