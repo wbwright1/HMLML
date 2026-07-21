@@ -10,6 +10,11 @@ import {
 // Verifies the full-season schedule page groups matchups by week heading,
 // links each row to matchup detail, and distinguishes completed weeks
 // (score + Final) from in-progress (Live) and upcoming (vs, no score) weeks.
+//
+// These tests use HARD assertions, not skip-guards: seedMatchupData() in
+// beforeAll guarantees the schedule content exists, so a page that renders
+// empty (feature regressed, e.g. getSeasonSchedule returning an empty Map)
+// MUST fail this suite, never skip to green.
 // ============================================================================
 
 test.describe("League Schedule View", () => {
@@ -25,19 +30,23 @@ test.describe("League Schedule View", () => {
     await cleanupMatchupData(seasonId);
   });
 
-  test("shows multiple week headings for the season", async ({ page }) => {
+  test("shows a week heading for each seeded week (1, 2, 3)", async ({
+    page,
+  }) => {
     await page.goto(`/schedule?season=${TEST_DATA.seasonYear}`);
 
+    // Seed data spans weeks 1, 2, and 3 — all three headings must render.
     const weekHeadings = page.locator("h3").filter({ hasText: /^Week/ });
-    const count = await weekHeadings.count();
-
-    if (count === 0) {
-      test.skip();
-      return;
-    }
-
-    // Seed data spans weeks 1, 2, and 3.
-    expect(count).toBeGreaterThanOrEqual(3);
+    await expect(weekHeadings).toHaveCount(3);
+    await expect(
+      page.locator("h3").filter({ hasText: `${TEST_DATA.week}` })
+    ).toBeVisible();
+    await expect(
+      page.locator("h3").filter({ hasText: `${TEST_DATA.weekInProgress}` })
+    ).toBeVisible();
+    await expect(
+      page.locator("h3").filter({ hasText: `${TEST_DATA.weekScheduled}` })
+    ).toBeVisible();
   });
 
   test("a completed week (week 1) shows a Final result with scores", async ({
@@ -45,17 +54,8 @@ test.describe("League Schedule View", () => {
   }) => {
     await page.goto(`/schedule?season=${TEST_DATA.seasonYear}`);
 
-    const week1Heading = page.locator("h3", { hasText: "Week" }).filter({
-      has: page.locator(`text=${TEST_DATA.week}`),
-    });
-    const count = await week1Heading.count();
-    if (count === 0) {
-      test.skip();
-      return;
-    }
-
-    // Team Alpha's completed week-1 matchup should show its final score and
-    // the "Final" label (matches components/matchup-row.tsx's final variant).
+    // Team Alpha's completed week-1 matchup shows its final score and the
+    // "Final" label (matches components/matchup-row.tsx's final variant).
     const alphaRow = page
       .locator('[role="group"]')
       .filter({ hasText: "Team Alpha" })
@@ -65,27 +65,38 @@ test.describe("League Schedule View", () => {
     await expect(alphaRow.getByText("120.5")).toBeVisible();
   });
 
+  test("an in-progress week (week 2) shows the Live indicator with scores", async ({
+    page,
+  }) => {
+    await page.goto(`/schedule?season=${TEST_DATA.seasonYear}`);
+
+    // Week 2 pairs Team Alpha (42.1) vs Team Charlie (38.6), in progress.
+    const liveRow = page
+      .locator('[role="group"]')
+      .filter({ hasText: "Team Charlie" })
+      .filter({ hasText: "Team Alpha" })
+      .first();
+    await expect(liveRow).toBeVisible();
+    await expect(liveRow.getByText("Live", { exact: true })).toBeVisible();
+    await expect(liveRow.getByText("42.1")).toBeVisible();
+  });
+
   test("an upcoming week (week 3) shows 'vs' with no score", async ({
     page,
   }) => {
     await page.goto(`/schedule?season=${TEST_DATA.seasonYear}`);
 
-    const bravoRow = page
+    // Week 3 pairs Team Bravo vs Team Delta, scheduled (points 0, not played).
+    const upcomingRow = page
       .locator('[role="group"]')
       .filter({ hasText: "Team Bravo" })
       .filter({ hasText: "Team Delta" })
       .first();
-    const count = await bravoRow.count();
-    if (count === 0) {
-      test.skip();
-      return;
-    }
-
-    await expect(bravoRow).toBeVisible();
+    await expect(upcomingRow).toBeVisible();
     // Preview variant renders "vs" instead of scores.
-    await expect(bravoRow.getByText("vs", { exact: true })).toBeVisible();
+    await expect(upcomingRow.getByText("vs", { exact: true })).toBeVisible();
     // No score text should appear for this scheduled matchup.
-    await expect(bravoRow.getByText("0.0")).toHaveCount(0);
+    await expect(upcomingRow.getByText("0.0")).toHaveCount(0);
   });
 
   test("clicking a matchup row navigates to matchup detail", async ({
@@ -97,11 +108,7 @@ test.describe("League Schedule View", () => {
       .locator("a")
       .filter({ hasText: "Team Alpha" })
       .first();
-    const count = await alphaLink.count();
-    if (count === 0) {
-      test.skip();
-      return;
-    }
+    await expect(alphaLink).toBeVisible();
 
     const href = await alphaLink.getAttribute("href");
     expect(href).toMatch(
@@ -109,17 +116,17 @@ test.describe("League Schedule View", () => {
     );
   });
 
-  test("empty state renders for a season with no matchups", async ({
-    page,
-  }) => {
-    // A season year that almost certainly has no data.
+  test("empty state renders for a data-less season", async ({ page }) => {
+    // A season year that has no seeded matchups. The page must render the
+    // "No Schedule Available" empty state and NO week headings — not crash,
+    // not 404.
     await page.goto("/schedule?season=1900");
 
-    const emptyState = page.getByText("No Schedule Available");
-    // Either the season isn't found (falls back to latest) or renders the
-    // empty state; both are acceptable, but if the page 404s that's a bug.
-    const status = await page.evaluate(() => document.title);
-    expect(status).toBeTruthy();
-    void emptyState; // best-effort assertion, page must not crash
+    await expect(
+      page.getByText("No Schedule Available").first()
+    ).toBeVisible();
+    await expect(
+      page.locator("h3").filter({ hasText: /^Week/ })
+    ).toHaveCount(0);
   });
 });
