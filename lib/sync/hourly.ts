@@ -5,6 +5,8 @@ import {
   transactions,
   franchiseSeasons,
   rosterPlayers,
+  playerWeekPoints,
+  type NewPlayerWeekPoints,
 } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import {
@@ -13,8 +15,17 @@ import {
   getLeagueMatchups,
   getLeagueTransactions,
   getLeagueRosters,
+  getWeekProjections,
 } from "@/lib/sleeper";
+import type { SleeperMatchup, SleeperProjections } from "@/lib/sleeper-schemas";
+import { alignStarterSlots, computeProjectedPoints } from "@/lib/lineup-slots";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
+
+// Shape of the per-season settings blob stored in seasons.settings_json.
+interface SeasonSettingsJson {
+  scoring_settings?: Record<string, number>;
+  roster_positions?: string[];
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -415,6 +426,243 @@ async function syncMatchupScores(
 }
 
 // ---------------------------------------------------------------------------
+// Step D: Sync Per-Player Weekly Points
+// ---------------------------------------------------------------------------
+
+/** Split an array into chunks of the given size. */
+function chunk<T>(arr: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
+}
+
+export interface PlayerPointsWriteInput {
+  seasonId: number;
+  week: number;
+  matchups: SleeperMatchup[];
+  rosterToFranchise: Map<string, string>;
+  scoringSettings: Record<string, number> | null;
+  rosterPositions: string[] | null;
+  projections: SleeperProjections | null;
+}
+
+/**
+ * Core write logic for player_week_points, shared by the hourly sync and the
+ * historical backfill. Builds starter + bench rows for every matchup roster and
+ * batch-upserts them. Returns the number of rows written.
+ *
+ * - Starter slots come from alignStarterSlots; bench players get slot 'BN'.
+ * - Points come from players_points (keyed by player id), falling back to
+ *   starters_points by index for starters, then 0.
+ * - projected_points is computed from the season's scoring settings joined with
+ *   the week's projections; null when no projection is available.
+ */
+export async function upsertPlayerWeekPoints(
+  input: PlayerPointsWriteInput
+): Promise<number> {
+  const {
+    seasonId,
+    week,
+    matchups: sleeperMatchups,
+    rosterToFranchise,
+    scoringSettings,
+    rosterPositions,
+    projections,
+  } = input;
+
+  // Dedupe by (rosterId, playerId) so a duplicated player id can't trigger an
+  // "ON CONFLICT cannot affect row a second time" error in a batch insert.
+  const rowMap = new Map<string, NewPlayerWeekPoints>();
+  const now = new Date();
+
+  const projectedFor = (playerId: string): number | null =>
+    computeProjectedPoints(scoringSettings, projections?.[playerId] ?? null);
+
+  for (const m of sleeperMatchups) {
+    const rosterIdStr = String(m.roster_id);
+    const franchiseId = rosterToFranchise.get(rosterIdStr);
+    if (!franchiseId) continue;
+
+    const matchupId = m.matchup_id ?? null;
+    const starters = m.starters ?? [];
+    const startersPoints = m.starters_points ?? [];
+    const playersPoints = m.players_points ?? {};
+    const allPlayers = m.players ?? [];
+
+    // First (non-empty) index of each starter, for the starters_points fallback.
+    const starterIndex = new Map<string, number>();
+    starters.forEach((pid, i) => {
+      if (pid && pid !== "0" && !starterIndex.has(pid)) {
+        starterIndex.set(pid, i);
+      }
+    });
+
+    const aligned = alignStarterSlots(rosterPositions, starters);
+    const starterIds = new Set(aligned.map((s) => s.playerId));
+
+    for (const { playerId, slot } of aligned) {
+      const idx = starterIndex.get(playerId);
+      const points =
+        playersPoints[playerId] ??
+        (idx != null ? startersPoints[idx] : undefined) ??
+        0;
+      rowMap.set(`${rosterIdStr}|${playerId}`, {
+        seasonId,
+        week,
+        rosterId: rosterIdStr,
+        franchiseId,
+        matchupId,
+        playerId,
+        points,
+        projectedPoints: projectedFor(playerId),
+        slot,
+        started: true,
+        updatedAt: now,
+      });
+    }
+
+    for (const playerId of allPlayers) {
+      if (!playerId || playerId === "0" || starterIds.has(playerId)) continue;
+      rowMap.set(`${rosterIdStr}|${playerId}`, {
+        seasonId,
+        week,
+        rosterId: rosterIdStr,
+        franchiseId,
+        matchupId,
+        playerId,
+        points: playersPoints[playerId] ?? 0,
+        projectedPoints: projectedFor(playerId),
+        slot: "BN",
+        started: false,
+        updatedAt: now,
+      });
+    }
+  }
+
+  const rows = [...rowMap.values()];
+  if (rows.length === 0) return 0;
+
+  for (const batch of chunk(rows, 100)) {
+    await db
+      .insert(playerWeekPoints)
+      .values(batch)
+      .onConflictDoUpdate({
+        target: [
+          playerWeekPoints.seasonId,
+          playerWeekPoints.week,
+          playerWeekPoints.rosterId,
+          playerWeekPoints.playerId,
+        ],
+        set: {
+          franchiseId: sql`excluded.franchise_id`,
+          matchupId: sql`excluded.matchup_id`,
+          points: sql`excluded.points`,
+          projectedPoints: sql`excluded.projected_points`,
+          slot: sql`excluded.slot`,
+          started: sql`excluded.started`,
+          updatedAt: sql`excluded.updated_at`,
+        },
+      });
+  }
+
+  return rows.length;
+}
+
+/**
+ * Loads a season's scoring settings and roster positions from
+ * seasons.settings_json.
+ */
+async function getSeasonScoringConfig(seasonId: number): Promise<{
+  scoringSettings: Record<string, number> | null;
+  rosterPositions: string[] | null;
+}> {
+  const [seasonRow] = await db
+    .select({ settingsJson: seasons.settingsJson })
+    .from(seasons)
+    .where(eq(seasons.id, seasonId));
+
+  const settings = (seasonRow?.settingsJson ?? null) as SeasonSettingsJson | null;
+  return {
+    scoringSettings: settings?.scoring_settings ?? null,
+    rosterPositions: settings?.roster_positions ?? null,
+  };
+}
+
+async function syncPlayerWeekPoints(
+  leagueId: string,
+  seasonId: number,
+  seasonYear: number,
+  week: number
+): Promise<SyncStepResult> {
+  const startTime = Date.now();
+  const logId = await logSyncStart("hourly", "player_week_points");
+
+  try {
+    const result = await getLeagueMatchups(leagueId, week);
+    if ("error" in result) {
+      throw new Error(`Sleeper matchups API error: ${result.error.message}`);
+    }
+
+    // roster_id -> franchise_id mapping for this season
+    const fsRows = await db
+      .select({
+        rosterId: franchiseSeasons.rosterId,
+        franchiseId: franchiseSeasons.franchiseId,
+      })
+      .from(franchiseSeasons)
+      .where(eq(franchiseSeasons.seasonId, seasonId));
+
+    const rosterToFranchise = new Map<string, string>();
+    for (const fs of fsRows) {
+      rosterToFranchise.set(fs.rosterId, fs.franchiseId);
+    }
+
+    const { scoringSettings, rosterPositions } =
+      await getSeasonScoringConfig(seasonId);
+
+    // Fetch projections once for the whole week. A failure here is non-fatal:
+    // player points still persist, just without projected_points.
+    let projections: SleeperProjections | null = null;
+    const projResult = await getWeekProjections(seasonYear, week);
+    if (!("error" in projResult)) {
+      projections = projResult.data;
+    }
+
+    const rowCount = await upsertPlayerWeekPoints({
+      seasonId,
+      week,
+      matchups: result.data,
+      rosterToFranchise,
+      scoringSettings,
+      rosterPositions,
+      projections,
+    });
+
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "success", rowCount);
+    return {
+      dataType: "player_week_points",
+      status: "success",
+      rowCount,
+      durationMs,
+    };
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "failure", 0, errorMessage);
+    return {
+      dataType: "player_week_points",
+      status: "failure",
+      rowCount: 0,
+      durationMs,
+      error: errorMessage,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main: Run Hourly Sync
 // ---------------------------------------------------------------------------
 
@@ -473,18 +721,26 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
   const leagueId = getLeagueId();
   const seasonId = seasonRow.id;
 
-  // Run all three syncs independently — a failure in one doesn't block others
+  // Run all syncs independently — a failure in one doesn't block others.
+  // Per-player points are a separate step so a failure there does not corrupt
+  // the team-level matchup sync (atomic-per-data-type rule).
   const results = await Promise.allSettled([
     syncTransactions(leagueId, seasonId, currentWeek),
     syncRostersAndPicks(leagueId, seasonId),
     syncMatchupScores(leagueId, seasonId, currentWeek),
+    syncPlayerWeekPoints(leagueId, seasonId, seasonYear, currentWeek),
   ]);
 
   const stepResults: SyncStepResult[] = results.map((r, i) => {
     if (r.status === "fulfilled") {
       return r.value;
     }
-    const dataTypes = ["transactions", "rosters", "matchups"];
+    const dataTypes = [
+      "transactions",
+      "rosters",
+      "matchups",
+      "player_week_points",
+    ];
     return {
       dataType: dataTypes[i],
       status: "failure" as const,

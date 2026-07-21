@@ -76,6 +76,7 @@ export const SleeperMatchupSchema = z
     players: z.array(z.string()).nullable(),
     starters: z.array(z.string()).nullable(),
     starters_points: z.array(z.number()).nullable(),
+    players_points: z.record(z.string(), z.number()).nullable().optional(),
   })
   .passthrough();
 
@@ -224,3 +225,22 @@ export const SleeperPlayerStatsSchema = z.record(
   }).passthrough()
 );
 export type SleeperPlayerStats = z.infer<typeof SleeperPlayerStatsSchema>;
+
+// ─── Projections ──────────────────────────────────────────────────────────────
+// Keyed by player_id; each value is a stat map (pass_yd, rush_td, pts_ppr, etc.).
+// Some stat values can be null, so inner values are nullable.
+export const SleeperProjectionsSchema = z.record(
+  z.string(), // player_id
+  z.record(z.string(), z.number().nullable())
+);
+export type SleeperProjections = z.infer<typeof SleeperProjectionsSchema>;
+
+// ─── Trending Add ─────────────────────────────────────────────────────────────
+
+export const SleeperTrendingAddSchema = z.array(
+  z.object({
+    player_id: z.string(),
+    count: z.number(),
+  }).passthrough()
+);
+export type SleeperTrendingAdd = z.infer<typeof SleeperTrendingAddSchema>[number];
