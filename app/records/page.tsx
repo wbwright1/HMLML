@@ -3,12 +3,17 @@ import { PageSection } from "@/components/page-section";
 import { SectionHeader } from "@/components/section-header";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { ScrollReveal } from "@/components/scroll-reveal";
+import { TeamAwardCard } from "@/components/team-award-card";
+import { StingCard } from "@/components/sting-card";
 import {
   getLeaderboard,
   getSeasonYears,
   getAllSeasonLeaderboards,
   getPowerRankings,
 } from "@/lib/queries/records";
+import { getLatestSeason } from "@/lib/queries/matchups";
+import { getSeasonSuperlatives, type SeasonSuperlative } from "@/lib/queries/superlatives";
+import { getSeasonLineupAwards, type LineupAward } from "@/lib/queries/lineup-efficiency";
 import { LeaderboardTable } from "@/app/records/leaderboard-table";
 import type { LeaderboardEntry, PowerRankingEntry } from "@/lib/queries/records";
 
@@ -131,6 +136,9 @@ export default async function RecordsPage() {
   let seasonYears: number[] = [];
   let powerRankings: PowerRankingEntry[] = [];
   const seasonDataRecord: Record<string, LeaderboardEntry[]> = {};
+  let seasonSuperlatives: SeasonSuperlative[] = [];
+  let coachingMalpractice: LineupAward | null = null;
+  let whatCouldveBeen: LineupAward | null = null;
 
   try {
     [allTimeData, seasonYears, powerRankings] = await Promise.all([
@@ -144,11 +152,27 @@ export default async function RecordsPage() {
     for (const [year, data] of Object.entries(allSeasonData)) {
       seasonDataRecord[year] = data;
     }
+
+    // The Superlatives: season awards + optimal-lineup awards for the latest
+    // season. Lineup awards return null for legacy (pre-Sleeper) seasons that
+    // never got player_week_points, which the render below hides gracefully.
+    const latestSeason = await getLatestSeason();
+    if (latestSeason) {
+      const [superlatives, lineupAwards] = await Promise.all([
+        getSeasonSuperlatives(latestSeason.id),
+        getSeasonLineupAwards(latestSeason.id),
+      ]);
+      seasonSuperlatives = superlatives;
+      coachingMalpractice = lineupAwards?.coachingMalpractice ?? null;
+      whatCouldveBeen = lineupAwards?.whatCouldveBeen ?? null;
+    }
   } catch {
     // DB may not be connected
   }
 
   const recordBook = buildRecordBook(allTimeData);
+  const hasSuperlatives =
+    seasonSuperlatives.length > 0 || coachingMalpractice || whatCouldveBeen;
 
   return (
     <>
@@ -255,6 +279,56 @@ export default async function RecordsPage() {
           </div>
         </div>
       </section>
+
+      {hasSuperlatives && (
+        <ScrollReveal>
+          <PageSection label="Season Awards" title="The Superlatives">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+              {seasonSuperlatives.map((s) =>
+                s.tone === "sting" ? (
+                  <StingCard
+                    key={s.labelKey}
+                    label={s.displayText}
+                    franchiseName={s.franchiseName}
+                    franchiseSlug={s.franchiseSlug}
+                    context={s.context}
+                    stat={s.stat}
+                  />
+                ) : (
+                  <TeamAwardCard
+                    key={s.labelKey}
+                    label={s.displayText}
+                    stat={s.stat}
+                    context={s.context}
+                    franchiseName={s.franchiseName}
+                    franchiseSlug={s.franchiseSlug}
+                    tone={s.tone}
+                  />
+                )
+              )}
+              {coachingMalpractice && (
+                <StingCard
+                  label={coachingMalpractice.displayText}
+                  franchiseName={coachingMalpractice.franchiseName}
+                  franchiseSlug={coachingMalpractice.franchiseSlug}
+                  context={coachingMalpractice.context}
+                  stat={coachingMalpractice.stat}
+                />
+              )}
+              {whatCouldveBeen && (
+                <TeamAwardCard
+                  label={whatCouldveBeen.displayText}
+                  stat={whatCouldveBeen.stat}
+                  context={whatCouldveBeen.context}
+                  franchiseName={whatCouldveBeen.franchiseName}
+                  franchiseSlug={whatCouldveBeen.franchiseSlug}
+                  tone={whatCouldveBeen.tone}
+                />
+              )}
+            </div>
+          </PageSection>
+        </ScrollReveal>
+      )}
     </>
   );
 }

@@ -1,0 +1,179 @@
+import { test, expect } from "@playwright/test";
+
+// ============================================================================
+// Issue #14: More superlatives
+// Covers the new records-page "The Superlatives" section (season awards +
+// optimal-lineup awards) and the hub's weekly Coaching Malpractice card.
+// Follows story-3.2-superlatives.spec.ts conventions: chromium-only,
+// test.skip() when the section is absent (no synthetic data seeding), assert
+// rendered label text and tabular-nums on stat values, no mocks.
+// ============================================================================
+
+test.describe("Records: The Superlatives section", () => {
+  test("R01: section renders with a heading when season data exists", async ({ page }) => {
+    await page.goto("/records");
+
+    const heading = page.getByRole("heading", { name: "The Superlatives", level: 2 });
+    const count = await heading.count();
+    if (count === 0) {
+      // No franchise_seasons rows for the latest season yet; the section is
+      // conditionally hidden. Acceptable graceful-absence behavior.
+      test.skip();
+      return;
+    }
+
+    await expect(heading).toBeVisible();
+  });
+
+  test("R02: award cards render with text labels and tabular-nums stats", async ({ page }) => {
+    await page.goto("/records");
+
+    const heading = page.getByRole("heading", { name: "The Superlatives", level: 2 });
+    if ((await heading.count()) === 0) {
+      test.skip();
+      return;
+    }
+
+    const section = page.locator("section", { has: heading });
+    const grid = section.locator("div.grid").first();
+    await expect(grid).toBeVisible();
+
+    // Every award card (TeamAwardCard or StingCard) links to a franchise page
+    // and carries a franchise name; assert at least one is present.
+    const cards = grid.locator("a[href^='/teams/']");
+    const cardCount = await cards.count();
+    expect(cardCount).toBeGreaterThanOrEqual(1);
+
+    // Every award card must carry a MEANINGFUL, non-zero stat. A card whose
+    // stat parses to 0 (e.g. "0.0 PF") is the pre-data bug these superlatives
+    // are gated against; it must never render, so assert > 0 here.
+    for (let i = 0; i < cardCount; i++) {
+      const card = cards.nth(i);
+      const statText = await card.innerText();
+      expect(statText.trim().length).toBeGreaterThan(0);
+
+      const match = statText.match(/(\d+(?:\.\d+)?)/);
+      expect(match, `card ${i} should contain a numeric stat: ${statText}`).not.toBeNull();
+      const value = parseFloat(match![1]);
+      expect(value, `card ${i} stat must be non-zero: ${statText}`).toBeGreaterThan(0);
+    }
+  });
+
+  // R03-R06: the four new labels, each independently optional (depends on
+  // what the latest season's data actually produces: e.g. Rock Bottom needs
+  // a losing streak to exist; the lineup awards need player_week_points).
+  for (const label of [
+    "Rock Bottom",
+    "Paper Tiger",
+    "Coaching Malpractice",
+    "What Could've Been",
+  ]) {
+    test(`R: "${label}" card renders with label text and tabular-nums stat, when present`, async ({
+      page,
+    }) => {
+      await page.goto("/records");
+
+      const heading = page.getByRole("heading", { name: "The Superlatives", level: 2 });
+      if ((await heading.count()) === 0) {
+        test.skip();
+        return;
+      }
+
+      const section = page.locator("section", { has: heading });
+      const labelNode = section.getByText(label, { exact: true });
+      const labelCount = await labelNode.count();
+      if (labelCount === 0) {
+        // This particular superlative did not compute for the latest season
+        // (e.g. no losing streak, or a legacy season with no lineup data).
+        test.skip();
+        return;
+      }
+
+      await expect(labelNode.first()).toBeVisible();
+
+      // Walk up to the card anchor and confirm a tabular-nums stat renders.
+      const card = labelNode.first().locator("xpath=ancestor::a[1]");
+      await expect(card).toHaveAttribute("href", /^\/teams\//);
+
+      const statNode = card.locator("p").filter({ hasText: /[0-9]/ }).first();
+      await expect(statNode).toBeVisible();
+
+      const fontVariantNumeric = await statNode.evaluate(
+        (el) => window.getComputedStyle(el).fontVariantNumeric
+      );
+      expect(fontVariantNumeric).toContain("tabular-nums");
+
+      // The stat must be a MEANINGFUL non-zero value. "0.0" here would mean the
+      // award rendered against a season with no real data (the shipped bug).
+      const statText = await statNode.innerText();
+      const match = statText.match(/(\d+(?:\.\d+)?)/);
+      expect(match, `"${label}" stat should be numeric: ${statText}`).not.toBeNull();
+      expect(
+        parseFloat(match![1]),
+        `"${label}" stat must be non-zero: ${statText}`
+      ).toBeGreaterThan(0);
+    });
+  }
+
+  test("R07: no em-dashes in the superlatives section text", async ({ page }) => {
+    await page.goto("/records");
+
+    const heading = page.getByRole("heading", { name: "The Superlatives", level: 2 });
+    if ((await heading.count()) === 0) {
+      test.skip();
+      return;
+    }
+
+    const section = page.locator("section", { has: heading });
+    const text = await section.innerText();
+    expect(text).not.toContain("—");
+    expect(text).not.toContain("–");
+  });
+});
+
+test.describe("Hub: weekly Coaching Malpractice card", () => {
+  test("H01: renders in This Week's Damage section when a bench gap exists", async ({ page }) => {
+    await page.goto("/");
+
+    const heading = page.getByRole("heading", { name: "Superlatives", level: 2 });
+    const headingCount = await heading.count();
+    if (headingCount === 0) {
+      // Preseason/playoffs/offseason hub variant, or no weekly data yet.
+      test.skip();
+      return;
+    }
+
+    const malpracticeLabel = page.getByText("Coaching Malpractice", { exact: true });
+    if ((await malpracticeLabel.count()) === 0) {
+      // No weekly bench-gap award computed for the completed week (e.g. no
+      // player_week_points rows backfilled yet, or every roster started
+      // their optimal lineup). Acceptable graceful absence.
+      test.skip();
+      return;
+    }
+
+    await expect(malpracticeLabel.first()).toBeVisible();
+
+    // The card's stat line ("N.N pts left on bench") renders via .text-stat,
+    // which carries font-mono + tabular-nums.
+    const card = malpracticeLabel.first().locator("xpath=ancestor::a[1]");
+    const statNode = card.locator("p.text-stat");
+    await expect(statNode).toBeVisible();
+
+    const fontVariantNumeric = await statNode.evaluate(
+      (el) => window.getComputedStyle(el).fontVariantNumeric
+    );
+    expect(fontVariantNumeric).toContain("tabular-nums");
+
+    // The weekly award only surfaces when a real bench gap exists, so the
+    // "N.N pts left on bench" value must parse to a non-zero number.
+    const statText = await statNode.innerText();
+    expect(statText).not.toContain("—");
+    const match = statText.match(/(\d+(?:\.\d+)?)/);
+    expect(match, `weekly malpractice stat should be numeric: ${statText}`).not.toBeNull();
+    expect(
+      parseFloat(match![1]),
+      `weekly malpractice stat must be non-zero: ${statText}`
+    ).toBeGreaterThan(0);
+  });
+});

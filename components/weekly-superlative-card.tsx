@@ -1,7 +1,12 @@
 import Link from "next/link";
 
 interface WeeklySuperlativeCardProps {
-  type: "closest-win" | "biggest-blowout" | "highest-scorer" | "lowest-scorer";
+  type:
+    | "closest-win"
+    | "biggest-blowout"
+    | "highest-scorer"
+    | "lowest-scorer"
+    | "coaching-malpractice";
   label: string;
   stat: string;
   context: string;
