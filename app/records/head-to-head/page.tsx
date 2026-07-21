@@ -11,6 +11,8 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { FranchisePairSelector } from "@/app/records/head-to-head/franchise-selector";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Head-to-Head Records | Harambe Memorial League Memorial League",
   description:

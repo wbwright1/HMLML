@@ -10,6 +10,8 @@ import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getFranchiseDraftHistory } from "@/lib/queries/drafts";
 import { EmptyState } from "@/components/empty-state";
 
+export const dynamic = "force-dynamic";
+
 interface FranchiseDraftsPageProps {
   params: Promise<{ franchiseSlug: string }>;
 }

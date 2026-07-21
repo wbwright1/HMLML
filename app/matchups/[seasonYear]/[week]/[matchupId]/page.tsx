@@ -11,6 +11,8 @@ import { getMatchupLineups } from "@/lib/queries/player-points";
 import type { MatchupTeam, PairedMatchup } from "@/lib/queries/matchups";
 import type { MatchupLineups as MatchupLineupsData } from "@/lib/queries/player-points";
 
+export const dynamic = "force-dynamic";
+
 interface MatchupDetailPageProps {
   params: Promise<{ seasonYear: string; week: string; matchupId: string }>;
 }

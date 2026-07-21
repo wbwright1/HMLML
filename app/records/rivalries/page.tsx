@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/empty-state";
 import { getRivalries } from "@/lib/queries/records";
 import type { RivalrySummary } from "@/lib/queries/records";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Rivalries | Harambe Memorial League Memorial League",
   description:

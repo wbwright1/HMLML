@@ -12,6 +12,8 @@ import {
 import { LeaderboardTable } from "@/app/records/leaderboard-table";
 import type { LeaderboardEntry, PowerRankingEntry } from "@/lib/queries/records";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Records & Rankings | Harambe Memorial League Memorial League",
   description:

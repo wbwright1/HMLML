@@ -5,6 +5,8 @@ import { EmptyState } from "@/components/empty-state";
 import { getAllSeasons } from "@/lib/queries/seasons";
 import { getSeasonTimelineData } from "@/lib/queries/history";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "League History | Harambe Memorial League Memorial League",
   description:

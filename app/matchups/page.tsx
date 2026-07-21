@@ -7,6 +7,8 @@ import { ScrollReveal } from "@/components/scroll-reveal";
 import { ScorePoller } from "./score-poller";
 import { getCurrentWeekMatchups } from "@/lib/queries/matchups";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Matchups | Harambe Memorial League Memorial League",
   description:

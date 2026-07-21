@@ -5,6 +5,8 @@ import { FranchiseIdentity } from "@/components/franchise-identity";
 import { EmptyState } from "@/components/empty-state";
 import { getAllFranchises } from "@/lib/queries/franchises";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Franchises | Harambe Memorial League Memorial League",
   description:

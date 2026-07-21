@@ -15,6 +15,8 @@ import { getPlayoffLabel, getPlayoffBadgeVariant } from "@/lib/playoff-labels";
 import { getMaxWeekForSeason } from "@/lib/queries/matchups";
 import { SeasonDetailNav } from "./season-detail-nav";
 
+export const dynamic = "force-dynamic";
+
 interface SeasonDetailPageProps {
   params: Promise<{ seasonYear: string }>;
 }

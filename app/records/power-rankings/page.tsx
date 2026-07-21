@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/empty-state";
 import { getPowerRankings } from "@/lib/queries/records";
 import type { PowerRankingEntry } from "@/lib/queries/records";
 
+export const dynamic = "force-dynamic";
+
 export const metadata = {
   title: "Power Rankings | Harambe Memorial League Memorial League",
   description:
