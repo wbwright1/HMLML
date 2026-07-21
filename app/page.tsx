@@ -22,9 +22,12 @@ import { getCurrentWeekMatchups, getLatestSeason } from "@/lib/queries/matchups"
 import { getSeasonStandings, getLastCompletedSeason } from "@/lib/queries/seasons";
 import {
   getHomepageSuperlatives,
+  getHubLiveData,
   getLastWeekResults,
   getLeagueAtAGlance,
+  type HubLiveData,
 } from "@/lib/queries/homepage";
+import { computeWinProbability } from "@/lib/win-probability";
 import { getNflState } from "@/lib/queries/nfl-state";
 import { getPreseasonAwards } from "@/lib/queries/preseason";
 import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
@@ -165,11 +168,36 @@ function GameCard({
   matchup,
   week,
   seasonYear,
+  hubLive,
 }: {
   matchup: PairedMatchup;
   week: number;
   seasonYear: number;
+  hubLive?: HubLiveData;
 }) {
+  const status = cardStatus(matchup.status);
+  const homeRoster = matchup.homeTeam.rosterId;
+  const awayRoster = matchup.awayTeam.rosterId;
+
+  // We have per-week lineup data only when getPlayersLeftCounts saw starters
+  // for both sides. That gate keeps win-prob and players-left off when the
+  // backfill has not run for this week (empty maps → cards render as before).
+  const homeLeft = hubLive?.playersLeft.get(homeRoster);
+  const awayLeft = hubLive?.playersLeft.get(awayRoster);
+  const hasPlayerData = homeLeft != null && awayLeft != null;
+
+  let winProbHome: number | undefined;
+  let playersLeft: { home: number; away: number } | undefined;
+  if (status === "live" && hasPlayerData) {
+    winProbHome = computeWinProbability({
+      scoreA: matchup.homeTeam.points,
+      scoreB: matchup.awayTeam.points,
+      projRemainingA: hubLive?.projRemaining.get(homeRoster) ?? 0,
+      projRemainingB: hubLive?.projRemaining.get(awayRoster) ?? 0,
+    });
+    playersLeft = { home: homeLeft.left, away: awayLeft.left };
+  }
+
   return (
     <LiveMatchupCard
       matchupId={matchup.matchupId}
@@ -187,9 +215,11 @@ function GameCard({
         abbreviation: matchup.awayTeam.franchiseAbbreviation,
         brandingColor: matchup.awayTeam.franchiseBrandingColor,
       }}
-      status={cardStatus(matchup.status)}
+      status={status}
       week={week}
       seasonYear={seasonYear}
+      winProbHome={winProbHome}
+      playersLeft={playersLeft}
     />
   );
 }
@@ -378,12 +408,16 @@ async function RegularSeasonHub({
   let superlatives: Awaited<ReturnType<typeof getHomepageSuperlatives>> | null = null;
   let weeklySuperlatives: Awaited<ReturnType<typeof getWeeklySuperlatives>> | null = null;
   let lastWeekResults: Awaited<ReturnType<typeof getLastWeekResults>> | null = null;
+  // Per-roster live inputs (players left, projected remaining) for win-prob
+  // bars and the Players Left hero stat. Empty when the backfill has not run.
+  let hubLive: HubLiveData | undefined;
 
   if (latestSeason) {
     try {
-      [superlatives, lastWeekResults] = await Promise.all([
+      [superlatives, lastWeekResults, hubLive] = await Promise.all([
         getHomepageSuperlatives(latestSeason.id),
         week > 1 ? getLastWeekResults(latestSeason.id, week) : null,
+        getHubLiveData(latestSeason.id, week),
       ]);
 
       // Get weekly superlatives for the latest completed week
@@ -393,6 +427,8 @@ async function RegularSeasonHub({
       // Data may not be available
     }
   }
+
+  const hasPlayersLeftStat = (hubLive?.totalStarters ?? 0) > 0;
 
   const completedWeek = week > 1 ? week - 1 : week;
   const gamesInProgress = matchupData?.matchups.filter((m) => m.status === "in_progress").length ?? 0;
@@ -433,20 +469,27 @@ async function RegularSeasonHub({
           <h1 className="text-display">Week {week}.</h1>
         </div>
 
-        {highScore && highScore.points > 0 && (
+        {((highScore && highScore.points > 0) || hasPlayersLeftStat) && (
           <div className="mt-6 lg:mt-0 flex flex-wrap gap-3">
-            {highScore && (
+            {highScore && highScore.points > 0 && (
               <StatChip
                 label="High Score"
                 value={highScore.points.toFixed(1)}
                 context={highScore.name}
               />
             )}
-            {closestGame && (
+            {highScore && highScore.points > 0 && closestGame && (
               <StatChip
                 label="Closest Game"
                 value={`+${closestGame.margin.toFixed(1)}`}
                 context={`${closestGame.a} · ${closestGame.b}`}
+              />
+            )}
+            {hasPlayersLeftStat && hubLive && (
+              <StatChip
+                label="Players Left"
+                value={`${hubLive.totalLeft}`}
+                context={`of ${hubLive.totalStarters}`}
               />
             )}
           </div>
@@ -474,6 +517,7 @@ async function RegularSeasonHub({
                   matchup={matchup}
                   week={week}
                   seasonYear={seasonYear}
+                  hubLive={hubLive}
                 />
               ))}
             </div>

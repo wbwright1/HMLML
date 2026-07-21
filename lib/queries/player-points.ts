@@ -235,6 +235,53 @@ export async function getPlayersLeftCounts(
 }
 
 /**
+ * Returns, per roster, the projected points still to be scored this week:
+ * the sum of projected_points across starters that have yet to score (points
+ * === 0 and projection > 0), matching the getPlayersLeftCounts heuristic.
+ * Keyed by rosterId. Only rosters with remaining projection appear; a roster
+ * whose starters have all scored is absent (treat a miss as 0). Feeds the live
+ * win-probability model.
+ */
+export async function getProjectedRemainingByRoster(
+  seasonId: number,
+  week: number
+): Promise<Map<string, number>> {
+  const result = new Map<string, number>();
+
+  try {
+    const rows = await db
+      .select({
+        rosterId: playerWeekPoints.rosterId,
+        points: playerWeekPoints.points,
+        projectedPoints: playerWeekPoints.projectedPoints,
+      })
+      .from(playerWeekPoints)
+      .where(
+        and(
+          eq(playerWeekPoints.seasonId, seasonId),
+          eq(playerWeekPoints.week, week),
+          eq(playerWeekPoints.started, true)
+        )
+      );
+
+    for (const row of rows) {
+      const projected = row.projectedPoints ?? 0;
+      if (row.points === 0 && projected > 0) {
+        result.set(row.rosterId, (result.get(row.rosterId) ?? 0) + projected);
+      }
+    }
+
+    for (const [rosterId, sum] of result) {
+      result.set(rosterId, Math.round(sum * 100) / 100);
+    }
+  } catch (e) {
+    console.error("[player-points] getProjectedRemainingByRoster error:", e);
+  }
+
+  return result;
+}
+
+/**
  * Returns a map of playerId -> projected_points for every rostered player in
  * the given season/week. Used for roster and players-page PROJ columns.
  */

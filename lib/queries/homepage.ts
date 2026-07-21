@@ -1,6 +1,46 @@
 import { db } from "@/lib/db";
 import { franchises, franchiseSeasons, matchups, seasons } from "@/lib/db/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
+import {
+  getPlayersLeftCounts,
+  getProjectedRemainingByRoster,
+  type PlayersLeft,
+} from "@/lib/queries/player-points";
+
+/**
+ * Per-roster live inputs for the regular-season hub: how many starters each
+ * roster has yet to score, and their projected remaining points (for win
+ * probability), plus a league-wide "players left" total for the hero stat.
+ *
+ * Degrades gracefully: when player_week_points has no rows for the week yet
+ * (backfill not run, early week), the maps are empty and totalStarters is 0,
+ * which the hub reads as "hide the win-prob bars and the Players Left stat".
+ */
+export interface HubLiveData {
+  playersLeft: Map<string, PlayersLeft>;
+  projRemaining: Map<string, number>;
+  totalLeft: number;
+  totalStarters: number;
+}
+
+export async function getHubLiveData(
+  seasonId: number,
+  week: number
+): Promise<HubLiveData> {
+  const [playersLeft, projRemaining] = await Promise.all([
+    getPlayersLeftCounts(seasonId, week),
+    getProjectedRemainingByRoster(seasonId, week),
+  ]);
+
+  let totalLeft = 0;
+  let totalStarters = 0;
+  for (const { left, total } of playersLeft.values()) {
+    totalLeft += left;
+    totalStarters += total;
+  }
+
+  return { playersLeft, projRemaining, totalLeft, totalStarters };
+}
 
 /**
  * Derives homepage superlative stats from existing data.

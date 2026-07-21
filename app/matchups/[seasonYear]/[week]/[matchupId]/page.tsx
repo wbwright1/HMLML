@@ -2,11 +2,14 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { LiveIndicator } from "@/components/live-indicator";
+import { MatchupLineups } from "@/components/matchup-lineups";
 import {
   getMatchupsByWeek,
   getSeasonByYearSimple,
 } from "@/lib/queries/matchups";
+import { getMatchupLineups } from "@/lib/queries/player-points";
 import type { MatchupTeam, PairedMatchup } from "@/lib/queries/matchups";
+import type { MatchupLineups as MatchupLineupsData } from "@/lib/queries/player-points";
 
 interface MatchupDetailPageProps {
   params: Promise<{ seasonYear: string; week: string; matchupId: string }>;
@@ -67,6 +70,18 @@ export default async function MatchupDetailPage({
     ? awayTeam.isWinner === true
     : !isUpcoming && awayTeam.points > homeTeam.points;
 
+  let lineups: MatchupLineupsData = {
+    seasonId: season.id,
+    week,
+    matchupId,
+    sides: [],
+  };
+  try {
+    lineups = await getMatchupLineups(season.id, week, matchupId);
+  } catch {
+    // Per-player lineup data may not be available
+  }
+
   return (
     <div className="py-4 md:py-6">
       {/* Back link */}
@@ -110,10 +125,7 @@ export default async function MatchupDetailPage({
         </div>
       </section>
 
-      {/* Lineups placeholder (Phase B) */}
-      <p className="mt-8 text-body-sm text-text-tertiary text-center">
-        Lineups land here soon.
-      </p>
+      <MatchupLineups homeTeam={homeTeam} awayTeam={awayTeam} lineups={lineups} />
     </div>
   );
 }
