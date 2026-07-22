@@ -426,7 +426,7 @@ export function PlayerTable({
                     <PlayerHeadshot
                       playerId={player.id}
                       name={player.fullName ?? "Unknown"}
-                      size={28}
+                      size={36}
                       nflTeam={player.nflTeam}
                     />
                     <div className="min-w-0">
@@ -508,7 +508,7 @@ export function PlayerTable({
                 <PlayerHeadshot
                   playerId={player.id}
                   name={player.fullName ?? "Unknown"}
-                  size={32}
+                  size={40}
                   nflTeam={player.nflTeam}
                 />
                 <div className="min-w-0">

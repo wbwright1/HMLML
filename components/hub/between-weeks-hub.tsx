@@ -543,7 +543,7 @@ function StandoutRow({
       <PlayerHeadshot
         playerId={standout.playerId}
         name={standout.name}
-        size={40}
+        size={48}
         nflTeam={standout.team}
       />
       <div className="min-w-0 flex-1">
@@ -602,7 +602,7 @@ function TrendingCard({
               <PlayerHeadshot
                 playerId={p.playerId}
                 name={p.name ?? "Unknown"}
-                size={40}
+                size={48}
                 nflTeam={p.nflTeam}
               />
               <div className="min-w-0 flex-1">

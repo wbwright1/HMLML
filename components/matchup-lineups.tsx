@@ -182,9 +182,9 @@ function LineupPlayerCell({
   return (
     <div className={`flex items-center gap-2.5 ${className}`}>
       {isDefenseRow(row) ? (
-        <NflTeamLogo teamAbbrev={row.nflTeam} size={28} />
+        <NflTeamLogo teamAbbrev={row.nflTeam} size={36} />
       ) : (
-        <PlayerHeadshot playerId={row.playerId} name={name} size={28} nflTeam={row.nflTeam} />
+        <PlayerHeadshot playerId={row.playerId} name={name} size={36} nflTeam={row.nflTeam} />
       )}
       <span
         className={`truncate text-body-sm ${
