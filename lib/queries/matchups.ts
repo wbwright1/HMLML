@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { db } from "@/lib/db";
 import {
   matchups,
@@ -184,8 +185,10 @@ export async function getMatchupsByWeek(
  * Returns the current week's matchups by finding the latest season
  * and determining the current week.
  * Returns null if no active season is found.
+ *
+ * Wrapped in React `cache()` so the nav and the page share one call per request.
  */
-export async function getCurrentWeekMatchups(): Promise<{
+export const getCurrentWeekMatchups = cache(async function getCurrentWeekMatchups(): Promise<{
   matchups: PairedMatchup[];
   seasonYear: number;
   week: number;
@@ -237,7 +240,7 @@ export async function getCurrentWeekMatchups(): Promise<{
     console.error("[matchups] getCurrentWeekMatchups error:", e);
     return null;
   }
-}
+});
 
 /**
  * Returns playoff matchups for a season, grouped by week.
@@ -335,8 +338,10 @@ export async function getMaxWeekForSeason(seasonId: number): Promise<number> {
 
 /**
  * Returns the latest season's ID and year.
+ *
+ * Wrapped in React `cache()` so the nav and the page share one call per request.
  */
-export async function getLatestSeason() {
+export const getLatestSeason = cache(async function getLatestSeason() {
   try {
     const [latest] = await db
       .select({
@@ -353,7 +358,7 @@ export async function getLatestSeason() {
   } catch {
     return null;
   }
-}
+});
 
 /**
  * Returns the season record for a given year.

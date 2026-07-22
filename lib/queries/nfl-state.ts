@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { getNFLState } from "@/lib/sleeper";
 
 export type NflSeasonType = "pre" | "regular" | "post" | "off";
@@ -11,8 +12,11 @@ export interface NflState {
 /**
  * Fetches the current NFL state from the Sleeper API.
  * Returns null if the API call fails or validation fails.
+ *
+ * Wrapped in React `cache()` so the nav and the page dedupe to a single call
+ * per request (both resolve the same seasonal state).
  */
-export async function getNflState(): Promise<NflState | null> {
+export const getNflState = cache(async function getNflState(): Promise<NflState | null> {
   try {
     const result = await getNFLState();
 
@@ -38,4 +42,4 @@ export async function getNflState(): Promise<NflState | null> {
     console.error("[nfl-state] Unexpected error fetching NFL state");
     return null;
   }
-}
+});

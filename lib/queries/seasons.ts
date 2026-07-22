@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { db } from "@/lib/db";
 import { seasons, franchises, franchiseSeasons } from "@/lib/db/schema";
 import { eq, desc, asc, sql } from "drizzle-orm";
@@ -88,8 +89,11 @@ export async function getSeasonByYear(year: number) {
 /**
  * Returns franchise_seasons for a given season ID, ordered by standings_finish,
  * with franchise info (name, abbreviation, branding color) joined.
+ *
+ * Wrapped in React `cache()` so the nav and the page dedupe the standings read
+ * for the same season within a request.
  */
-export async function getSeasonStandings(seasonId: number) {
+export const getSeasonStandings = cache(async function getSeasonStandings(seasonId: number) {
   const standings = await db
     .select({
       id: franchiseSeasons.id,
@@ -120,4 +124,4 @@ export async function getSeasonStandings(seasonId: number) {
     .orderBy(asc(franchiseSeasons.standingsFinish));
 
   return standings;
-}
+});
