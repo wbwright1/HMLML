@@ -40,12 +40,12 @@ export function PlayerAwardCard({
           <PlayerHeadshot
             playerId={playerId}
             name={playerName}
-            size={64}
+            size={80}
             nflTeam={nflTeam}
           />
         ) : (
           <div
-            className="flex items-center justify-center rounded-full w-16 h-16 text-body font-bold"
+            className="flex items-center justify-center rounded-full w-20 h-20 text-body-lg font-bold"
             style={{ backgroundColor: color.cell.bg, color: color.cell.text }}
           >
             {position ?? "?"}
