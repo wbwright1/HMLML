@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;900&family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#E5E1DA;font-family:'Geist',system-ui,sans-serif}
+a{color:#E2B858}a:hover{color:#f0cf82}
+.badge{font:700 12px 'JetBrains Mono',monospace;color:#1A1613;background:#E2B858;border-radius:6px;padding:4px 9px;flex:none}
+.fr{background:#1A1613;color:#F2EADC;font-family:'Geist',sans-serif;border:1px solid #2A2620;position:relative;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.30);flex:none}
+.card{background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:inset 0 1px 0 rgba(255,255,255,.06)}
+.k{font-size:11px;font-weight:600;letter-spacing:.18em;color:#98917F;text-transform:uppercase}
+.m{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+.serif{font-family:'Instrument Serif',serif;font-style:italic}
+.logo{border-radius:8px;background:linear-gradient(140deg,#E2B858,#8E6E2A);color:#1A1613;display:flex;align-items:center;justify-content:center;font-weight:800;flex:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.10);position:relative;overflow:hidden}
+.logo2{border-radius:8px;background:rgba(255,255,255,.07);color:#F2EADC;display:flex;align-items:center;justify-content:center;font-weight:800;flex:none;box-shadow:inset 0 0 0 1px rgba(255,255,255,.10)}
+.gA{position:absolute;top:-180px;left:-120px;width:640px;height:480px;border-radius:50%;background:radial-gradient(closest-side,rgba(226,184,88,.09),transparent);pointer-events:none}
+.gB{position:absolute;top:-140px;right:-80px;width:520px;height:420px;border-radius:50%;background:radial-gradient(closest-side,rgba(120,150,110,.06),transparent);pointer-events:none}
+.pill{display:inline-flex;align-items:center;gap:7px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:999px;padding:6px 13px;font-size:11px;font-weight:600;letter-spacing:.05em;color:#C9C2B4}
+.nav{display:flex;gap:4px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:999px;padding:4px}
+.nav span{font-size:12.5px;font-weight:500;padding:6px 16px;border-radius:999px;color:#98917F}
+.nav .on{font-weight:600;background:rgba(226,184,88,.13);color:#E2B858}
+.srch{display:flex;align-items:center;gap:9px;background:rgba(255,255,255,.045);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:8px 13px;width:220px;font-size:12.5px;color:#98917F}
+.up{color:#8FBF7F}.dn{color:#C97C6A}
+.opt-h{display:flex;align-items:center;gap:12px;margin-bottom:18px;flex-wrap:wrap}
+.opt-t{font:700 16px 'Geist';color:#1a1a1a}
+.opt-d{font:500 13px 'Geist';color:rgba(0,0,0,.5)}
+.state-h{font-family:'Instrument Serif',serif;font-style:italic;font-size:30px;color:#1a1a1a;margin:14px 0 4px}
+.state-s{font:500 13px/1.6 'Geist';color:rgba(0,0,0,.5);max-width:760px;margin-bottom:30px}
+</style>
+</helmet>
+
+<div style="padding:52px 52px 10px">
+<div class="serif" style="font-size:34px;color:#1a1a1a">HMLML — New Hub States</div>
+<div style="font:500 13.5px/1.6 'Geist';color:rgba(0,0,0,.55);max-width:860px;margin-top:10px">Two seasonally-aware hub layouts to add to the existing set, in the <b>Warm Charcoal &amp; Gold</b> theme. Two options for each, desktop + mobile. <b>Preseason</b> = season technically started but Week 1 is a month out (everyone 0-0, no standings). <b>Between weeks</b> = the Tue/Wed lull after Monday night, before Thursday kickoff (this replaces the old newsletter). Reference options by id (e.g. <a href="#1a">1a</a>). Placeholder league data.</div>
+</div>
+
+<div style="padding:20px 52px 60px">
+
+<div class="state-h">Preseason — Week 1 is 34 days out</div>
+<div class="state-s">No rankings (all 0-0). Leans on the calendar, the field grouped by division, rivalry history, offseason receipts and preseason smack.</div>
+
+<div id="1a" style="margin-bottom:52px">
+  <div class="opt-h"><span class="badge">1a</span><span class="opt-t">Preseason · "The Field"</span><span class="opt-d">Division-forward. Countdown hero → the field grouped into the 3 divisions with rivalry lore → burning questions + a member smack feed → offseason moves.</span></div>
+  <div style="display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start">
+
+  <div class="fr" style="width:1280px;border-radius:16px">
+    <div class="gA"></div><div class="gB"></div>
+    <div style="position:relative;display:flex;align-items:center;gap:8px;height:64px;padding:0 28px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div class="serif" style="font-size:22px;color:#E2B858;margin-right:20px">HMLML</div>
+      <div class="nav"><span class="on">Hub</span><span>Teams</span><span>Records</span><span>Drafts</span><span>Players</span></div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+        <div class="srch"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#98917F" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-3.6-3.6"/></svg><span>Search league…</span><span style="margin-left:auto;font-size:9.5px;font-weight:700;border:1px solid rgba(255,255,255,.08);border-radius:5px;padding:2px 5px">⌘K</span></div>
+        <div class="pill"><span style="width:6px;height:6px;border-radius:99px;background:#E2B858;flex:none"></span>PRESEASON · WK 1 IN 34D</div>
+        <span class="logo" style="width:34px;height:34px;border-radius:10px;font-size:12px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>HS</span>
+      </div>
+    </div>
+
+    <div style="position:relative;padding:36px 28px 26px;display:flex;align-items:flex-end;justify-content:space-between;gap:28px">
+      <div>
+        <div class="k">Harambe Memorial League · 2026 · Title Defense Loading</div>
+        <div class="serif" style="font-size:56px;line-height:1;margin-top:12px">The season's on the clock<span style="color:#E2B858">.</span></div>
+        <div style="font-size:13.5px;line-height:1.6;color:#B8B0A0;margin-top:11px;max-width:520px">Draft's in the books, rosters are locked, and every single one of you is undefeated for exactly 34 more days. Screenshot the 0-0 while you've got it.</div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <div class="card" style="padding:13px 6px;text-align:center;width:76px"><div class="m" style="font-size:32px;font-weight:700;line-height:1">34</div><div class="k" style="font-size:9px;margin-top:5px">Days</div></div>
+        <div class="card" style="padding:13px 6px;text-align:center;width:76px"><div class="m" style="font-size:32px;font-weight:700;line-height:1">11</div><div class="k" style="font-size:9px;margin-top:5px">Hrs</div></div>
+        <div class="card" style="padding:13px 6px;text-align:center;width:76px"><div class="m" style="font-size:32px;font-weight:700;line-height:1">42</div><div class="k" style="font-size:9px;margin-top:5px">Min</div></div>
+      </div>
+    </div>
+
+    <div style="position:relative;padding:0 28px 30px;display:grid;grid-template-columns:1fr 340px;gap:16px;align-items:start">
+      <div>
+        <div class="k" style="margin-bottom:12px">The Field · Grouped by Division</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px">
+
+          <div class="card" style="padding:15px 16px 14px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px"><span style="font-size:12px;font-weight:700;color:#F2EADC">Silverback</span><span class="serif" style="font-size:12px;color:#E2B858">two-horse race</span></div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:center;gap:9px"><span class="logo" style="width:24px;height:24px;font-size:8.5px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>GW</span><span style="font-size:12.5px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Gorilla Warfare</span><span class="m" style="font-size:10px;color:#E2B858;font-weight:700">CHAMP</span></div>
+              <div style="display:flex;align-items:center;gap:9px"><span class="logo2" style="width:24px;height:24px;font-size:8.5px">HS</span><span style="font-size:12.5px;font-weight:500;color:#B8B0A0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Hurts So Good</span><span class="m" style="font-size:11px;color:#98917F">8-6</span></div>
+              <div style="display:flex;align-items:center;gap:9px"><span class="logo2" style="width:24px;height:24px;font-size:8.5px">CT</span><span style="font-size:12.5px;font-weight:500;color:#B8B0A0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Chubb Thumpers</span><span class="m" style="font-size:11px;color:#98917F">6-8</span></div>
+              <div style="display:flex;align-items:center;gap:9px"><span class="logo2" style="width:24px;height:24px;font-size:8.5px">WW</span><span style="font-size:12.5px;font-weight:500;color:#B8B0A0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Waiver Wire Warriors</span><span class="m" style="font-size:11px;color:#98917F">4-10</span></div>
+            </div>
+            <div class="serif" style="font-size:12.5px;line-height:1.45;color:#98917F;margin-top:13px;border-top:1px solid rgba(255,255,255,.06);padding-top:11px">GW vs HS is 14-9 all-time. HS has dropped the last four meetings.</div>
+          </div>
+
+          <div class="card" style="padding:15px 16px 14px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px"><span style="font-size:12px;font-weight:700;color:#F2EADC">Mustard</span><span class="serif" style="font-size:12px;color:#E2B858">Bijan &amp; the rest</span></div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:center;gap:9px"><span class="logo" style="width:24px;height:24px;font-size:8.5px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>BM</span><span style="font-size:12.5px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Bijan Mustard</span><span class="m" style="font-size:11px;color:#98917F">9-5</span></div>
+              <div style="display:flex;align-items:center;gap:9px"><span class="logo2" style="width:24px;height:24px;font-size:8.5px">KJ</span><span style="font-size:12.5px;font-weight:500;color:#B8B0A0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Küpp of Joe</span><span class="m" style="font-size:11px;color:#98917F">7-7</span></div>
+              <div style="display:flex;align-items:center;gap:9px"><span class="logo2" style="width:24px;height:24px;font-size:8.5px">GB</span><span style="font-size:12.5px;font-weight:500;color:#B8B0A0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Goff Balls</span><span class="m" style="font-size:11px;color:#98917F">5-9</span></div>
+              <div style="display:flex;align-items:center;gap:9px"><span class="logo2" style="width:24px;height:24px;font-size:8.5px">SD</span><span style="font-size:12.5px;font-weight:500;color:#B8B0A0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Saquon Deez</span><span class="m" style="font-size:10px;color:#C97C6A;font-weight:700">DOORMAT</span></div>
+            </div>
+            <div class="serif" style="font-size:12.5px;line-height:1.45;color:#98917F;margin-top:13px;border-top:1px solid rgba(255,255,255,.06);padding-top:11px">Saquon Deez has never beaten Bijan Mustard. 0-6. In this life.</div>
+          </div>
+
+          <div class="card" style="padding:15px 16px 14px">
+            <div style="display:flex;align-items:baseline;justify-content:space-between;gap:8px;margin-bottom:12px"><span style="font-size:12px;font-weight:700;color:#F2EADC">Dynasty</span><span class="serif" style="font-size:12px;color:#E2B858">knife fight</span></div>
+            <div style="display:flex;flex-direction:column;gap:9px">
+              <div style="display:flex;align-items:center;gap:9px"><span class="logo" style="width:24px;height:24px;font-size:8.5px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>TP</span><span style="font-size:12.5px;font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Tush Push Dynasty</span><span class="m" style="font-size:10px;color:#98917F;font-weight:600">R-UP</span></div>
+              <div style="display:flex;align-items:center;gap:9px"><span class="logo2" style="width:24px;height:24px;font-size:8.5px">BR</span><span style="font-size:12.5px;font-weight:500;color:#B8B0A0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Breece Mode</span><span class="m" style="font-size:11px;color:#98917F">8-6</span></div>
+              <div style="display:flex;align-items:center;gap:9px"><span class="logo2" style="width:24px;height:24px;font-size:8.5px">LM</span><span style="font-size:12.5px;font-weight:500;color:#B8B0A0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Lamarvelous</span><span class="m" style="font-size:11px;color:#98917F">7-7</span></div>
+              <div style="display:flex;align-items:center;gap:9px"><span class="logo2" style="width:24px;height:24px;font-size:8.5px">FD</span><span style="font-size:12.5px;font-weight:500;color:#B8B0A0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Fields of Dreams</span><span class="m" style="font-size:11px;color:#98917F">6-8</span></div>
+            </div>
+            <div class="serif" style="font-size:12.5px;line-height:1.45;color:#98917F;margin-top:13px;border-top:1px solid rgba(255,255,255,.06);padding-top:11px">TP and Breece have split the season series every year since 2021.</div>
+          </div>
+        </div>
+
+        <div class="k" style="margin:22px 0 12px">Bold Predictions · Site Desk</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="card" style="padding:15px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="k" style="font-size:9.5px;color:#E2B858">Title Repeat</span><span class="m" style="font-size:10px;color:#C97C6A;font-weight:700">NO</span></div><div style="font-size:14px;line-height:1.45;color:#F2EADC"><b>Gorilla Warfare misses the final.</b> Champions' hangovers are real, and that WR room is one hamstring from ordinary.</div></div>
+          <div class="card" style="padding:15px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="k" style="font-size:9.5px;color:#E2B858">Mustard Division</span><span class="m" style="font-size:10px;color:#8FBF7F;font-weight:700">LOCK</span></div><div style="font-size:14px;line-height:1.45;color:#F2EADC"><b>Bijan Mustard, wire to wire.</b> The rest of that division is auditioning for second and they know it.</div></div>
+          <div class="card" style="padding:15px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="k" style="font-size:9.5px;color:#E2B858">Biggest Riser</span><span class="m" style="font-size:10px;color:#8FBF7F;font-weight:700">▲</span></div><div style="font-size:14px;line-height:1.45;color:#F2EADC"><b>Breece Mode.</b> Two firsts for a WR1 is either genius or a rebuild in disguise. We say genius.</div></div>
+          <div class="card" style="padding:15px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="k" style="font-size:9.5px;color:#C97C6A">League Doormat</span><span class="m" style="font-size:10px;color:#C97C6A;font-weight:700">▼</span></div><div style="font-size:14px;line-height:1.45;color:#F2EADC"><b>Saquon Deez. Again.</b> Six straight losses to Bijan and a draft that added exactly zero help.</div></div>
+        </div>
+
+        <div class="k" style="margin:24px 0 12px">Offseason Receipts</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><span class="k" style="font-size:9.5px;color:#E2B858">Draft</span><span class="logo2" style="width:20px;height:20px;font-size:7.5px">KJ</span></div><div style="font-size:13px;line-height:1.45;color:#F2EADC">Küpp of Joe traded up to snag the <b>1.01</b> and took a rookie RB nobody had ranked top-10. The reach heard round the league.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><span class="k" style="font-size:9.5px;color:#E2B858">Blockbuster Trade</span><span class="logo2" style="width:20px;height:20px;font-size:7.5px">BR</span></div><div style="font-size:13px;line-height:1.45;color:#F2EADC">Breece Mode shipped <b>two firsts and a starter</b> for a bona-fide WR1. All-in, or all-gone.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><span class="k" style="font-size:9.5px;color:#E2B858">Waivers</span><span class="logo2" style="width:20px;height:20px;font-size:7.5px">WW</span></div><div style="font-size:13px;line-height:1.45;color:#F2EADC">Waiver Wire Warriors, true to name, already <b>burned all their FAAB</b> before Labor Day.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><span class="k" style="font-size:9.5px;color:#C97C6A">The Fire Sale</span><span class="logo2" style="width:20px;height:20px;font-size:7.5px">SD</span></div><div style="font-size:13px;line-height:1.45;color:#F2EADC">Saquon Deez sold the aging core for picks, then re-signed the same QB. A rebuild nobody can explain.</div></div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div>
+          <div class="k" style="margin-bottom:12px">Burning Questions</div>
+          <div class="card" style="padding:6px 4px">
+            <div style="display:flex;gap:11px;padding:11px 14px"><span class="serif" style="font-size:20px;color:#E2B858;line-height:1">1</span><span style="font-size:12.5px;line-height:1.45;color:#D8D0C0">Was Gorilla Warfare's title a fluke, or the start of something?</span></div>
+            <div style="display:flex;gap:11px;padding:11px 14px;border-top:1px solid rgba(255,255,255,.05)"><span class="serif" style="font-size:20px;color:#E2B858;line-height:1">2</span><span style="font-size:12.5px;line-height:1.45;color:#D8D0C0">Can anyone in the Mustard Division slow Bijan's aerial circus?</span></div>
+            <div style="display:flex;gap:11px;padding:11px 14px;border-top:1px solid rgba(255,255,255,.05)"><span class="serif" style="font-size:20px;color:#E2B858;line-height:1">3</span><span style="font-size:12.5px;line-height:1.45;color:#D8D0C0">Is this finally the year Saquon Deez wins more than four?</span></div>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px"><span class="k">The Smack Feed</span><span style="font-size:11px;color:#98917F">member-posted</span></div>
+          <div style="display:flex;flex-direction:column;gap:9px">
+            <div class="card" style="padding:11px 13px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="logo" style="width:20px;height:20px;font-size:7.5px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>GW</span><span style="font-size:11px;font-weight:600;color:#F2EADC">Gorilla Warfare</span><span style="font-size:10px;color:#6E6759;margin-left:auto">2d</span></div><div style="font-size:12.5px;line-height:1.4;color:#D8D0C0">Ring's still on my finger. Y'all can come take it.</div></div>
+            <div class="card" style="padding:11px 13px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="logo2" style="width:20px;height:20px;font-size:7.5px">SD</span><span style="font-size:11px;font-weight:600;color:#F2EADC">Saquon Deez</span><span style="font-size:10px;color:#6E6759;margin-left:auto">1d</span></div><div style="font-size:12.5px;line-height:1.4;color:#D8D0C0">New year, new me. The 0-6 vs Mustard ends this season.</div></div>
+            <div class="card" style="padding:11px 13px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="logo" style="width:20px;height:20px;font-size:7.5px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>BM</span><span style="font-size:11px;font-weight:600;color:#F2EADC">Bijan Mustard</span><span style="font-size:10px;color:#6E6759;margin-left:auto">22h</span></div><div style="font-size:12.5px;line-height:1.4;color:#D8D0C0">He said that last year. And the year before. See you Week 3.</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fr" style="width:390px;border-radius:26px">
+    <div class="gA" style="top:-140px;left:-80px;width:420px;height:340px"></div>
+    <div style="position:relative;display:flex;align-items:center;justify-content:space-between;height:56px;padding:0 18px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div class="serif" style="font-size:21px;color:#E2B858">HMLML</div>
+      <div class="pill"><span style="width:6px;height:6px;border-radius:99px;background:#E2B858;flex:none"></span>WK 1 IN 34D</div>
+    </div>
+    <div style="position:relative;padding:24px 18px 18px">
+      <div class="k" style="font-size:10.5px">HMLML · 2026</div>
+      <div class="serif" style="font-size:40px;line-height:1.02;margin-top:8px">On the clock<span style="color:#E2B858">.</span></div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <div class="card" style="padding:11px 4px;text-align:center;flex:1"><div class="m" style="font-size:26px;font-weight:700;line-height:1">34</div><div class="k" style="font-size:8.5px;margin-top:4px">Days</div></div>
+        <div class="card" style="padding:11px 4px;text-align:center;flex:1"><div class="m" style="font-size:26px;font-weight:700;line-height:1">11</div><div class="k" style="font-size:8.5px;margin-top:4px">Hrs</div></div>
+        <div class="card" style="padding:11px 4px;text-align:center;flex:1"><div class="m" style="font-size:26px;font-weight:700;line-height:1">42</div><div class="k" style="font-size:8.5px;margin-top:4px">Min</div></div>
+      </div>
+    </div>
+    <div style="position:relative;padding:0 16px 20px">
+      <div class="k" style="margin-bottom:11px">The Field · Silverback</div>
+      <div class="card" style="padding:6px 4px;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 12px"><span class="logo" style="width:24px;height:24px;font-size:8.5px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>GW</span><span style="font-size:13px;font-weight:600;flex:1">Gorilla Warfare</span><span class="m" style="font-size:10px;color:#E2B858;font-weight:700">CHAMP</span></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-top:1px solid rgba(255,255,255,.05)"><span class="logo2" style="width:24px;height:24px;font-size:8.5px">HS</span><span style="font-size:13px;font-weight:500;color:#B8B0A0;flex:1">Hurts So Good</span><span class="m" style="font-size:11px;color:#98917F">8-6</span></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-top:1px solid rgba(255,255,255,.05)"><span class="logo2" style="width:24px;height:24px;font-size:8.5px">CT</span><span style="font-size:13px;font-weight:500;color:#B8B0A0;flex:1">Chubb Thumpers</span><span class="m" style="font-size:11px;color:#98917F">6-8</span></div>
+        <div style="display:flex;align-items:center;gap:9px;padding:9px 12px;border-top:1px solid rgba(255,255,255,.05)"><span class="logo2" style="width:24px;height:24px;font-size:8.5px">WW</span><span style="font-size:13px;font-weight:500;color:#B8B0A0;flex:1">Waiver Wire Warriors</span><span class="m" style="font-size:11px;color:#98917F">4-10</span></div>
+        <div class="serif" style="font-size:12.5px;line-height:1.45;color:#98917F;margin:2px 12px 8px;border-top:1px solid rgba(255,255,255,.06);padding-top:9px">GW vs HS is 14-9 all-time. HS has dropped the last four.</div>
+      </div>
+      <div class="k" style="margin-bottom:11px">The Smack Feed</div>
+      <div class="card" style="padding:11px 13px;margin-bottom:9px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="logo" style="width:20px;height:20px;font-size:7.5px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>GW</span><span style="font-size:11px;font-weight:600">Gorilla Warfare</span><span style="font-size:10px;color:#6E6759;margin-left:auto">2d</span></div><div style="font-size:12.5px;line-height:1.4;color:#D8D0C0">Ring's still on my finger. Come take it.</div></div>
+      <div class="card" style="padding:11px 13px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="logo2" style="width:20px;height:20px;font-size:7.5px">SD</span><span style="font-size:11px;font-weight:600">Saquon Deez</span><span style="font-size:10px;color:#6E6759;margin-left:auto">1d</span></div><div style="font-size:12.5px;line-height:1.4;color:#D8D0C0">New year, new me. 0-6 vs Mustard ends now.</div></div>
+    </div>
+    <div style="position:relative;display:flex;gap:2px;padding:8px 10px;border-top:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02)">
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:600;color:#E2B858">Hub</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Teams</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Records</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Drafts</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Players</div></div>
+    </div>
+  </div>
+
+  </div>
+</div>
+<div id="1b" style="margin-bottom:52px">
+  <div class="opt-h"><span class="badge">1b</span><span class="opt-t">Preseason · "The Cover"</span><span class="opt-d">Editorial-forward. A magazine-cover headline + bold predictions and storylines → offseason receipts → a compact division table (last year's finish) → smack strip.</span></div>
+  <div style="display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start">
+
+  <div class="fr" style="width:1280px;border-radius:16px">
+    <div class="gA"></div><div class="gB"></div>
+    <div style="position:relative;display:flex;align-items:center;gap:8px;height:64px;padding:0 28px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div class="serif" style="font-size:22px;color:#E2B858;margin-right:20px">HMLML</div>
+      <div class="nav"><span class="on">Hub</span><span>Teams</span><span>Records</span><span>Drafts</span><span>Players</span></div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+        <div class="srch"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#98917F" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-3.6-3.6"/></svg><span>Search league…</span><span style="margin-left:auto;font-size:9.5px;font-weight:700;border:1px solid rgba(255,255,255,.08);border-radius:5px;padding:2px 5px">⌘K</span></div>
+        <div class="pill"><span style="width:6px;height:6px;border-radius:99px;background:#E2B858;flex:none"></span>PRESEASON · WK 1 IN 34D</div>
+        <span class="logo" style="width:34px;height:34px;border-radius:10px;font-size:12px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>HS</span>
+      </div>
+    </div>
+
+    <div style="position:relative;padding:44px 28px 34px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div class="k">The HMLML Preseason Issue · 2026</div>
+      <div class="serif" style="font-size:66px;line-height:1.0;margin-top:14px;max-width:940px">Everybody's 0-0. Only one of you deserves it<span style="color:#E2B858">.</span></div>
+      <div style="font-size:15px;line-height:1.6;color:#B8B0A0;margin-top:16px;max-width:680px">Thirty-four days until Gorilla Warfare proves the ring wasn't a clerical error, until someone in the Mustard Division scares Bijan, and until Saquon Deez rediscovers that hope is not a roster-construction strategy.</div>
+      <div style="display:flex;align-items:center;gap:18px;margin-top:26px">
+        <div class="pill" style="padding:9px 16px;font-size:12px"><span style="width:6px;height:6px;border-radius:99px;background:#E2B858;flex:none"></span>WEEK 1 KICKOFF</div>
+        <div class="m" style="font-size:22px;font-weight:700;letter-spacing:.02em">34<span style="font-size:12px;color:#98917F;font-weight:600">d</span> &nbsp;11<span style="font-size:12px;color:#98917F;font-weight:600">h</span> &nbsp;42<span style="font-size:12px;color:#98917F;font-weight:600">m</span></div>
+        <div style="flex:1;max-width:360px;height:5px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden"><span style="display:block;height:100%;width:81%;background:linear-gradient(90deg,#E2B858,#C99B3F)"></span></div>
+        <span style="font-size:11.5px;color:#98917F">offseason 81% done</span>
+      </div>
+    </div>
+
+    <div style="position:relative;padding:26px 28px 30px;display:grid;grid-template-columns:1fr 356px;gap:20px;align-items:start">
+      <div>
+        <div class="k" style="margin-bottom:12px">Bold Predictions · Site Desk</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="card" style="padding:15px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="k" style="font-size:9.5px;color:#E2B858">Title Repeat</span><span class="m" style="font-size:10px;color:#C97C6A;font-weight:700">NO</span></div><div style="font-size:14px;line-height:1.45;color:#F2EADC"><b>Gorilla Warfare misses the final.</b> Champions' hangovers are real and that WR room is one hamstring from ordinary.</div></div>
+          <div class="card" style="padding:15px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="k" style="font-size:9.5px;color:#E2B858">Mustard Division</span><span class="m" style="font-size:10px;color:#8FBF7F;font-weight:700">LOCK</span></div><div style="font-size:14px;line-height:1.45;color:#F2EADC"><b>Bijan Mustard, wire to wire.</b> The rest of that division is auditioning for second place and they know it.</div></div>
+          <div class="card" style="padding:15px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="k" style="font-size:9.5px;color:#E2B858">Biggest Riser</span><span class="m" style="font-size:10px;color:#8FBF7F;font-weight:700">▲</span></div><div style="font-size:14px;line-height:1.45;color:#F2EADC"><b>Breece Mode.</b> Two firsts for a WR1 is either genius or a rebuild in disguise. We say genius.</div></div>
+          <div class="card" style="padding:15px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span class="k" style="font-size:9.5px;color:#C97C6A">League Doormat</span><span class="m" style="font-size:10px;color:#C97C6A;font-weight:700">▼</span></div><div style="font-size:14px;line-height:1.45;color:#F2EADC"><b>Saquon Deez. Again.</b> Six straight losses to Bijan and a draft that added exactly zero help.</div></div>
+        </div>
+
+        <div class="k" style="margin:24px 0 12px">The Division Table · Last Year's Finish</div>
+        <div class="card" style="padding:16px 18px;display:grid;grid-template-columns:1fr 1fr 1fr;gap:22px">
+          <div>
+            <div class="serif" style="font-size:14px;color:#E2B858;margin-bottom:9px">Silverback</div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;color:#F2EADC"><span>Gorilla Warfare</span><span class="m" style="color:#8FBF7F">10-4</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;color:#B8B0A0"><span>Hurts So Good</span><span class="m">8-6</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;color:#B8B0A0"><span>Chubb Thumpers</span><span class="m">6-8</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;color:#B8B0A0"><span>Waiver Wire W.</span><span class="m" style="color:#C97C6A">4-10</span></div>
+          </div>
+          <div style="border-left:1px solid rgba(255,255,255,.07);padding-left:22px">
+            <div class="serif" style="font-size:14px;color:#E2B858;margin-bottom:9px">Mustard</div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;color:#F2EADC"><span>Bijan Mustard</span><span class="m" style="color:#8FBF7F">9-5</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;color:#B8B0A0"><span>Küpp of Joe</span><span class="m">7-7</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;color:#B8B0A0"><span>Goff Balls</span><span class="m">5-9</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;color:#B8B0A0"><span>Saquon Deez</span><span class="m" style="color:#C97C6A">3-11</span></div>
+          </div>
+          <div style="border-left:1px solid rgba(255,255,255,.07);padding-left:22px">
+            <div class="serif" style="font-size:14px;color:#E2B858;margin-bottom:9px">Dynasty</div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;color:#F2EADC"><span>Tush Push Dyn.</span><span class="m" style="color:#8FBF7F">9-5</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;color:#B8B0A0"><span>Breece Mode</span><span class="m">8-6</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;color:#B8B0A0"><span>Lamarvelous</span><span class="m">7-7</span></div>
+            <div style="display:flex;justify-content:space-between;font-size:12.5px;padding:5px 0;color:#B8B0A0"><span>Fields of Dreams</span><span class="m">6-8</span></div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div>
+          <div class="k" style="margin-bottom:12px">Storylines to Watch</div>
+          <div class="card" style="padding:4px 4px">
+            <div style="padding:12px 15px"><div style="font-size:13px;font-weight:600;color:#F2EADC;margin-bottom:3px">The Title Defense</div><div style="font-size:12px;line-height:1.45;color:#98917F">Nobody defends in this league. GW wants to be the first since 2020.</div></div>
+            <div style="padding:12px 15px;border-top:1px solid rgba(255,255,255,.05)"><div style="font-size:13px;font-weight:600;color:#F2EADC;margin-bottom:3px">The 0-6 Streak</div><div style="font-size:12px;line-height:1.45;color:#98917F">Saquon Deez vs Bijan Mustard, Week 3. History says pain.</div></div>
+            <div style="padding:12px 15px;border-top:1px solid rgba(255,255,255,.05)"><div style="font-size:13px;font-weight:600;color:#F2EADC;margin-bottom:3px">All-In or All-Gone</div><div style="font-size:12px;line-height:1.45;color:#98917F">Breece Mode mortgaged two firsts. The clock starts now.</div></div>
+          </div>
+        </div>
+        <div>
+          <div class="k" style="margin-bottom:12px">The Smack Feed</div>
+          <div class="card" style="padding:11px 13px;margin-bottom:9px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="logo" style="width:20px;height:20px;font-size:7.5px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>TP</span><span style="font-size:11px;font-weight:600;color:#F2EADC">Tush Push Dynasty</span><span style="font-size:10px;color:#6E6759;margin-left:auto">3h</span></div><div style="font-size:12.5px;line-height:1.4;color:#D8D0C0">Runner-up is just first loser with extra steps. Not again.</div></div>
+          <div class="card" style="padding:11px 13px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="logo" style="width:20px;height:20px;font-size:7.5px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>BM</span><span style="font-size:11px;font-weight:600;color:#F2EADC">Bijan Mustard</span><span style="font-size:10px;color:#6E6759;margin-left:auto">22h</span></div><div style="font-size:12.5px;line-height:1.4;color:#D8D0C0">Predictions desk finally got one right. Wire to wire it is.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fr" style="width:390px;border-radius:26px">
+    <div class="gA" style="top:-140px;left:-80px;width:420px;height:340px"></div>
+    <div style="position:relative;display:flex;align-items:center;justify-content:space-between;height:56px;padding:0 18px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div class="serif" style="font-size:21px;color:#E2B858">HMLML</div>
+      <div class="pill"><span style="width:6px;height:6px;border-radius:99px;background:#E2B858;flex:none"></span>WK 1 IN 34D</div>
+    </div>
+    <div style="position:relative;padding:24px 18px 20px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div class="k" style="font-size:10.5px">Preseason Issue · 2026</div>
+      <div class="serif" style="font-size:38px;line-height:1.04;margin-top:10px">Everybody's 0-0. Only one of you deserves it<span style="color:#E2B858">.</span></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:16px"><div class="m" style="font-size:18px;font-weight:700">34<span style="font-size:11px;color:#98917F">d</span> 11<span style="font-size:11px;color:#98917F">h</span></div><div style="flex:1;height:5px;border-radius:99px;background:rgba(255,255,255,.07);overflow:hidden"><span style="display:block;height:100%;width:81%;background:linear-gradient(90deg,#E2B858,#C99B3F)"></span></div></div>
+    </div>
+    <div style="position:relative;padding:20px 16px 18px">
+      <div class="k" style="margin-bottom:11px">Bold Predictions</div>
+      <div class="card" style="padding:14px 15px;margin-bottom:9px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><span class="k" style="font-size:9.5px;color:#E2B858">Title Repeat</span><span class="m" style="font-size:10px;color:#C97C6A;font-weight:700">NO</span></div><div style="font-size:13.5px;line-height:1.45;color:#F2EADC"><b>Gorilla Warfare misses the final.</b> Champions' hangovers are real.</div></div>
+      <div class="card" style="padding:14px 15px;margin-bottom:16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><span class="k" style="font-size:9.5px;color:#C97C6A">Doormat</span><span class="m" style="font-size:10px;color:#C97C6A;font-weight:700">▼</span></div><div style="font-size:13.5px;line-height:1.45;color:#F2EADC"><b>Saquon Deez. Again.</b> Six straight vs Bijan and no draft help.</div></div>
+      <div class="k" style="margin-bottom:11px">The Smack Feed</div>
+      <div class="card" style="padding:11px 13px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:6px"><span class="logo" style="width:20px;height:20px;font-size:7.5px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>TP</span><span style="font-size:11px;font-weight:600">Tush Push Dynasty</span><span style="font-size:10px;color:#6E6759;margin-left:auto">3h</span></div><div style="font-size:12.5px;line-height:1.4;color:#D8D0C0">Runner-up is first loser with extra steps. Not again.</div></div>
+    </div>
+    <div style="position:relative;display:flex;gap:2px;padding:8px 10px;border-top:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02)">
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:600;color:#E2B858">Hub</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Teams</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Records</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Drafts</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Players</div></div>
+    </div>
+  </div>
+
+  </div>
+</div>
+
+<div class="state-h">Between weeks — the Tuesday/Wednesday lull</div>
+<div class="state-s">Monday night's done, Thursday's kickoff is 2 days out. This is the newsletter replacement: last week's damage, weekly awards, the optimal-lineup callout, players trending, and a trash-laced look at the week ahead.</div>
+<div id="1c" style="margin-bottom:52px">
+  <div class="opt-h"><span class="badge">1c</span><span class="opt-t">Between weeks · "The Receipts"</span><span class="opt-d">Recap-forward, the full newsletter in one screen. Cover story → last week's damage → weekly awards + player of/dud of the week → optimal-lineup callout + trending → the week ahead with H2H and trash.</span></div>
+  <div style="display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start">
+
+  <div class="fr" style="width:1280px;border-radius:16px">
+    <div class="gA"></div><div class="gB"></div>
+    <div style="position:relative;display:flex;align-items:center;gap:8px;height:64px;padding:0 28px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div class="serif" style="font-size:22px;color:#E2B858;margin-right:20px">HMLML</div>
+      <div class="nav"><span class="on">Hub</span><span>Teams</span><span>Records</span><span>Drafts</span><span>Players</span></div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+        <div class="srch"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#98917F" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-3.6-3.6"/></svg><span>Search league…</span><span style="margin-left:auto;font-size:9.5px;font-weight:700;border:1px solid rgba(255,255,255,.08);border-radius:5px;padding:2px 5px">⌘K</span></div>
+        <div class="pill"><span style="width:6px;height:6px;border-radius:99px;background:#E2B858;flex:none"></span>WK 10 · KICKOFF THU 8:15</div>
+        <span class="logo" style="width:34px;height:34px;border-radius:10px;font-size:12px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>HS</span>
+      </div>
+    </div>
+
+    <div style="position:relative;padding:40px 28px 30px;border-bottom:1px solid rgba(255,255,255,.06);display:flex;align-items:flex-end;justify-content:space-between;gap:28px">
+      <div>
+        <div class="k">The Week 9 Wrap · Issue No. 9</div>
+        <div class="serif" style="font-size:60px;line-height:1.0;margin-top:12px;max-width:820px">The throne is wobbling<span style="color:#E2B858">.</span></div>
+        <div style="font-size:14.5px;line-height:1.6;color:#B8B0A0;margin-top:14px;max-width:640px">Gorilla Warfare dropped 158.9 and still nearly lost. Saquon Deez scored 74 and definitely lost, again. Two days until Thursday reshuffles everything.</div>
+      </div>
+      <div class="card" style="padding:14px 18px;text-align:center;flex:none"><div class="k" style="font-size:9px">Next kickoff</div><div class="serif" style="font-size:26px;margin-top:4px;line-height:1">Thursday</div><div class="m" style="font-size:12px;color:#E2B858;margin-top:2px">2d 4h 12m</div></div>
+    </div>
+
+    <div style="position:relative;padding:26px 28px 6px">
+      <div class="k" style="margin-bottom:12px">Last Week's Damage · Week 9</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px">
+        <div class="card" style="padding:14px 16px;background:linear-gradient(180deg,rgba(226,184,88,.1),rgba(226,184,88,.03));border-color:rgba(226,184,88,.22)"><div class="k" style="font-size:9.5px;color:#E2B858;margin-bottom:6px">High Score</div><div class="m" style="font-size:28px;font-weight:700">158.9</div><div style="font-size:11.5px;color:#98917F;margin-top:3px">Gorilla Warfare</div></div>
+        <div class="card" style="padding:14px 16px;background:linear-gradient(180deg,rgba(199,124,106,.1),rgba(199,124,106,.03));border-color:rgba(199,124,106,.25)"><div class="k" style="font-size:9.5px;color:#C97C6A;margin-bottom:6px">Mercy Rule</div><div class="m" style="font-size:28px;font-weight:700">61.2</div><div style="font-size:11.5px;color:#98917F;margin-top:3px">GW def. Saquon Deez</div></div>
+        <div class="card" style="padding:14px 16px"><div class="k" style="font-size:9.5px;margin-bottom:6px">Nail-biter</div><div class="m" style="font-size:28px;font-weight:700;color:#F2EADC">+1.3</div><div style="font-size:11.5px;color:#98917F;margin-top:3px">Küpp of Joe over Chubb</div></div>
+        <div class="card" style="padding:14px 16px"><div class="k" style="font-size:9.5px;color:#C97C6A;margin-bottom:6px">The Stinker</div><div class="m" style="font-size:28px;font-weight:700">74.1</div><div style="font-size:11.5px;color:#98917F;margin-top:3px">Saquon Deez</div></div>
+      </div>
+    </div>
+
+    <div style="position:relative;padding:22px 28px 30px;display:grid;grid-template-columns:1fr 356px;gap:20px;align-items:start">
+      <div>
+        <div class="k" style="margin-bottom:12px">The Week 9 Awards</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="card" style="padding:15px 16px"><div class="k" style="font-size:9.5px;color:#E2B858;margin-bottom:10px">Team of the Week</div><div style="display:flex;align-items:center;gap:11px"><span class="logo" style="width:34px;height:34px;font-size:11px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>GW</span><div style="flex:1"><div style="font-size:13.5px;font-weight:600">Gorilla Warfare</div><div style="font-size:11px;color:#98917F">wire-to-wire beatdown</div></div><span class="m" style="font-size:20px;font-weight:700">158.9</span></div></div>
+          <div class="card" style="padding:15px 16px"><div class="k" style="font-size:9.5px;color:#C97C6A;margin-bottom:10px">Bust of the Week</div><div style="display:flex;align-items:center;gap:11px"><span class="logo2" style="width:34px;height:34px;font-size:11px">WW</span><div style="flex:1"><div style="font-size:13.5px;font-weight:600">Waiver Wire Warriors</div><div style="font-size:11px;color:#98917F">benched a 31-burger</div></div><span class="m" style="font-size:20px;font-weight:700;color:#C97C6A">61.7</span></div></div>
+          <div class="card" style="padding:15px 16px"><div class="k" style="font-size:9.5px;color:#E2B858;margin-bottom:10px">Player of the Week</div><div style="display:flex;align-items:center;gap:11px"><span style="position:relative;width:38px;height:38px;flex:none"><span style="display:flex;align-items:flex-end;justify-content:center;width:38px;height:38px;border-radius:99px;background:radial-gradient(circle at 50% 34%,rgba(255,255,255,.16),rgba(255,255,255,.04));overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#98917F" stroke-width="1.5"><circle cx="12" cy="9" r="3.3"/><path d="M5.6 20.5a6.4 6.4 0 0 1 12.8 0"/></svg></span><span style="position:absolute;right:-2px;bottom:-2px;width:18px;height:18px;border-radius:99px;background:#1A1613;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 1.5px #1A1613"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#E2B858" stroke-width="1.8"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"/></svg></span></span><div style="flex:1"><div style="font-size:13.5px;font-weight:600">Ja'Marr Chase</div><div class="m" style="font-size:11px;color:#98917F">CIN · WR</div></div><span class="m" style="font-size:20px;font-weight:700">41.2</span></div></div>
+          <div class="card" style="padding:15px 16px"><div class="k" style="font-size:9.5px;color:#C97C6A;margin-bottom:10px">Dud Starter of the Week</div><div style="display:flex;align-items:center;gap:11px"><span style="position:relative;width:38px;height:38px;flex:none"><span style="display:flex;align-items:flex-end;justify-content:center;width:38px;height:38px;border-radius:99px;background:radial-gradient(circle at 50% 34%,rgba(255,255,255,.16),rgba(255,255,255,.04));overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#98917F" stroke-width="1.5"><circle cx="12" cy="9" r="3.3"/><path d="M5.6 20.5a6.4 6.4 0 0 1 12.8 0"/></svg></span><span style="position:absolute;right:-2px;bottom:-2px;width:18px;height:18px;border-radius:99px;background:#1A1613;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 1.5px #1A1613"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#E2B858" stroke-width="1.8"><path d="M12 3l7 3v5c0 4-3 7-7 8-4-1-7-4-7-8V6z"/></svg></span></span><div style="flex:1"><div style="font-size:13.5px;font-weight:600">Bo Nix</div><div class="m" style="font-size:11px;color:#98917F">DEN · QB · started</div></div><span class="m" style="font-size:20px;font-weight:700;color:#C97C6A">4.1</span></div></div>
+        </div>
+
+        <div class="k" style="margin:24px 0 12px">The Week Ahead · Trash Included</div>
+        <div class="card" style="padding:18px 20px;background:linear-gradient(135deg,rgba(226,184,88,.09),rgba(255,255,255,.02));margin-bottom:12px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px"><span class="k" style="font-size:9.5px;color:#E2B858">Game of the Week · Silverback Rematch</span><span class="m" style="font-size:10.5px;color:#98917F">All-time GW leads 14-9</span></div>
+          <div style="display:flex;align-items:center;gap:16px">
+            <div style="display:flex;align-items:center;gap:10px;flex:1"><span class="logo" style="width:38px;height:38px;font-size:12px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>GW</span><div><div style="font-size:15px;font-weight:600">Gorilla Warfare</div><div style="font-size:11px;color:#98917F">8-2 · champ, rattled</div></div></div>
+            <span class="serif" style="font-size:20px;color:#6E6759">vs</span>
+            <div style="display:flex;align-items:center;gap:10px;flex:1;justify-content:flex-end;text-align:right"><div><div style="font-size:15px;font-weight:600">Hurts So Good</div><div style="font-size:11px;color:#98917F">7-3 · lost last 4 to GW</div></div><span class="logo2" style="width:38px;height:38px;font-size:12px">HS</span></div>
+          </div>
+          <div class="serif" style="font-size:14px;color:#D8D0C0;margin-top:13px;border-top:1px solid rgba(255,255,255,.06);padding-top:12px">HS has talked all week. HS has also lost four straight to this exact team. One of those two facts is about to give.</div>
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="card" style="padding:13px 15px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><span style="font-size:12.5px;font-weight:600">Bijan Mustard <span style="color:#6E6759;font-weight:400">vs</span> Saquon Deez</span><span class="m" style="font-size:10px;color:#E2B858;font-weight:700">6-0</span></div><div class="serif" style="font-size:12.5px;color:#98917F;line-height:1.4">The annual sacrifice. SD swears this is the year. SD says that every year.</div></div>
+          <div class="card" style="padding:13px 15px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px"><span style="font-size:12.5px;font-weight:600">Tush Push <span style="color:#6E6759;font-weight:400">vs</span> Breece Mode</span><span class="m" style="font-size:10px;color:#98917F;font-weight:700">5-5</span></div><div class="serif" style="font-size:12.5px;color:#98917F;line-height:1.4">The knife fight resumes. Dead even all-time. Winner takes the Dynasty lead.</div></div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div>
+          <div class="k" style="margin-bottom:12px">Left On The Bench</div>
+          <div class="card card-glows" style="padding:16px 18px;position:relative;overflow:hidden"><div style="position:absolute;top:-60px;right:-40px;width:180px;height:140px;border-radius:50%;background:radial-gradient(closest-side,rgba(226,184,88,.12),transparent);pointer-events:none"></div><div class="k" style="font-size:9.5px;color:#E2B858;margin-bottom:8px;position:relative">Highest Possible · Optimal Lineup</div><div class="m" style="font-size:34px;font-weight:700;position:relative">38.6</div><div style="font-size:12.5px;line-height:1.5;color:#B8B0A0;margin-top:6px;position:relative">points <b style="color:#F2EADC">Breece Mode</b> left on his bench. Optimal was <span class="m" style="color:#E2B858">149.7</span>, he started <span class="m">111.1</span>. And still won. Barely.</div></div>
+        </div>
+        <div>
+          <div class="k" style="margin-bottom:12px">Players to Watch</div>
+          <div class="card" style="padding:6px 4px">
+            <div style="display:flex;align-items:center;gap:11px;padding:10px 14px"><span class="up" style="font-size:13px;font-weight:700">▲</span><div style="flex:1"><div style="font-size:12.5px;font-weight:600">Jaylen Warren</div><div class="m" style="font-size:10.5px;color:#98917F">PIT · RB · lead back now</div></div><span class="m up" style="font-size:11.5px;font-weight:700">+14%</span></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:10px 14px;border-top:1px solid rgba(255,255,255,.05)"><span class="up" style="font-size:13px;font-weight:700">▲</span><div style="flex:1"><div style="font-size:12.5px;font-weight:600">Tucker Kraft</div><div class="m" style="font-size:10.5px;color:#98917F">GB · TE · target share up</div></div><span class="m up" style="font-size:11.5px;font-weight:700">+9%</span></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:10px 14px;border-top:1px solid rgba(255,255,255,.05)"><span class="dn" style="font-size:13px;font-weight:700">▼</span><div style="flex:1"><div style="font-size:12.5px;font-weight:600">Zamir White</div><div class="m" style="font-size:10.5px;color:#98917F">LV · RB · committee mush</div></div><span class="m dn" style="font-size:11.5px;font-weight:700">-12%</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fr" style="width:390px;border-radius:26px">
+    <div class="gA" style="top:-140px;left:-80px;width:420px;height:340px"></div>
+    <div style="position:relative;display:flex;align-items:center;justify-content:space-between;height:56px;padding:0 18px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div class="serif" style="font-size:21px;color:#E2B858">HMLML</div>
+      <div class="pill"><span style="width:6px;height:6px;border-radius:99px;background:#E2B858;flex:none"></span>WK 10 · THU 8:15</div>
+    </div>
+    <div style="position:relative;padding:22px 18px 18px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div class="k" style="font-size:10.5px">The Week 9 Wrap</div>
+      <div class="serif" style="font-size:40px;line-height:1.02;margin-top:8px">The throne is wobbling<span style="color:#E2B858">.</span></div>
+      <div style="font-size:13px;line-height:1.55;color:#B8B0A0;margin-top:10px">GW dropped 158.9 and still nearly lost. Thursday's 2 days out.</div>
+    </div>
+    <div style="position:relative;padding:20px 16px 18px">
+      <div class="k" style="margin-bottom:11px">Last Week's Damage</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:16px">
+        <div class="card" style="padding:13px 14px;background:linear-gradient(180deg,rgba(226,184,88,.1),rgba(226,184,88,.03));border-color:rgba(226,184,88,.22)"><div class="k" style="font-size:9px;color:#E2B858;margin-bottom:5px">High Score</div><div class="m" style="font-size:24px;font-weight:700">158.9</div><div style="font-size:11px;color:#98917F;margin-top:2px">Gorilla Warfare</div></div>
+        <div class="card" style="padding:13px 14px;background:linear-gradient(180deg,rgba(199,124,106,.1),rgba(199,124,106,.03));border-color:rgba(199,124,106,.25)"><div class="k" style="font-size:9px;color:#C97C6A;margin-bottom:5px">Mercy Rule</div><div class="m" style="font-size:24px;font-weight:700">61.2</div><div style="font-size:11px;color:#98917F;margin-top:2px">GW def. Saquon</div></div>
+      </div>
+      <div class="k" style="margin-bottom:11px">Week 9 Awards</div>
+      <div class="card" style="padding:13px 15px;margin-bottom:9px"><div class="k" style="font-size:9px;color:#E2B858;margin-bottom:8px">Player of the Week</div><div style="display:flex;align-items:center;gap:10px"><span style="position:relative;width:34px;height:34px;flex:none"><span style="display:flex;align-items:flex-end;justify-content:center;width:34px;height:34px;border-radius:99px;background:radial-gradient(circle at 50% 34%,rgba(255,255,255,.16),rgba(255,255,255,.04));overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)"><svg width="27" height="27" viewBox="0 0 24 24" fill="none" stroke="#98917F" stroke-width="1.5"><circle cx="12" cy="9" r="3.3"/><path d="M5.6 20.5a6.4 6.4 0 0 1 12.8 0"/></svg></span></span><div style="flex:1"><div style="font-size:13px;font-weight:600">Ja'Marr Chase</div><div class="m" style="font-size:10.5px;color:#98917F">CIN · WR</div></div><span class="m" style="font-size:18px;font-weight:700">41.2</span></div></div>
+      <div class="card card-glows" style="padding:14px 15px;margin-bottom:16px"><div class="k" style="font-size:9px;color:#E2B858;margin-bottom:6px">Left on the Bench</div><div class="m" style="font-size:26px;font-weight:700">38.6</div><div style="font-size:12px;line-height:1.45;color:#B8B0A0;margin-top:4px">Breece Mode's optimal was 149.7. He won anyway. Barely.</div></div>
+      <div class="k" style="margin-bottom:11px">Game of the Week</div>
+      <div class="card" style="padding:14px 15px;background:linear-gradient(135deg,rgba(226,184,88,.09),rgba(255,255,255,.02))"><div style="display:flex;align-items:center;justify-content:space-between"><span style="font-size:13px;font-weight:600">GW <span style="color:#6E6759;font-weight:400">vs</span> HS</span><span class="m" style="font-size:10px;color:#98917F">14-9 all-time</span></div><div class="serif" style="font-size:12.5px;color:#98917F;margin-top:7px;line-height:1.4">HS has talked all week. HS has also lost the last four to GW.</div></div>
+    </div>
+    <div style="position:relative;display:flex;gap:2px;padding:8px 10px;border-top:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02)">
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:600;color:#E2B858">Hub</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Teams</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Records</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Drafts</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Players</div></div>
+    </div>
+  </div>
+
+  </div>
+</div>
+<div id="1d" style="margin-bottom:20px">
+  <div class="opt-h"><span class="badge">1d</span><span class="opt-t">Between weeks · "The Week Ahead"</span><span class="opt-d">Anticipation-forward. Countdown-to-Thursday hero → a big Game of the Week feature → the full slate as trash-laced previews with H2H → last week's receipts + awards + trending compressed into the rail.</span></div>
+  <div style="display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start">
+
+  <div class="fr" style="width:1280px;border-radius:16px">
+    <div class="gA"></div><div class="gB"></div>
+    <div style="position:relative;display:flex;align-items:center;gap:8px;height:64px;padding:0 28px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div class="serif" style="font-size:22px;color:#E2B858;margin-right:20px">HMLML</div>
+      <div class="nav"><span class="on">Hub</span><span>Teams</span><span>Records</span><span>Drafts</span><span>Players</span></div>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px">
+        <div class="srch"><svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#98917F" stroke-width="1.7" stroke-linecap="round"><circle cx="11" cy="11" r="6"/><path d="M20 20l-3.6-3.6"/></svg><span>Search league…</span><span style="margin-left:auto;font-size:9.5px;font-weight:700;border:1px solid rgba(255,255,255,.08);border-radius:5px;padding:2px 5px">⌘K</span></div>
+        <div class="pill"><span style="width:6px;height:6px;border-radius:99px;background:#E2B858;flex:none"></span>WK 10 · KICKOFF THU 8:15</div>
+        <span class="logo" style="width:34px;height:34px;border-radius:10px;font-size:12px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>HS</span>
+      </div>
+    </div>
+
+    <div style="position:relative;padding:36px 28px 26px;display:flex;align-items:flex-end;justify-content:space-between;gap:28px">
+      <div>
+        <div class="k">Harambe Memorial League · Week 10 · The slate is set</div>
+        <div class="serif" style="font-size:56px;line-height:1;margin-top:12px">Two days until it matters again<span style="color:#E2B858">.</span></div>
+        <div style="font-size:13.5px;line-height:1.6;color:#B8B0A0;margin-top:11px;max-width:540px">Six games. One grudge match at the top, one annual sacrifice at the bottom, and a whole lot of talk to back up by Thursday night.</div>
+      </div>
+      <div style="display:flex;gap:10px">
+        <div class="card" style="padding:13px 6px;text-align:center;width:74px"><div class="m" style="font-size:32px;font-weight:700;line-height:1">2</div><div class="k" style="font-size:9px;margin-top:5px">Days</div></div>
+        <div class="card" style="padding:13px 6px;text-align:center;width:74px"><div class="m" style="font-size:32px;font-weight:700;line-height:1">04</div><div class="k" style="font-size:9px;margin-top:5px">Hrs</div></div>
+        <div class="card" style="padding:13px 6px;text-align:center;width:74px"><div class="m" style="font-size:32px;font-weight:700;line-height:1">12</div><div class="k" style="font-size:9px;margin-top:5px">Min</div></div>
+      </div>
+    </div>
+
+    <div style="position:relative;padding:0 28px 30px;display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start">
+      <div>
+        <div class="k" style="margin-bottom:12px">Game of the Week</div>
+        <div class="card" style="padding:22px 24px;background:linear-gradient(135deg,rgba(226,184,88,.1),rgba(255,255,255,.02));margin-bottom:20px;position:relative;overflow:hidden">
+          <div style="position:absolute;top:-70px;right:-40px;width:220px;height:180px;border-radius:50%;background:radial-gradient(closest-side,rgba(226,184,88,.13),transparent);pointer-events:none"></div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;position:relative"><span class="k" style="font-size:10px;color:#E2B858">Silverback Rematch · First Place on the Line</span><span class="m" style="font-size:11px;color:#98917F">All-time GW leads 14-9</span></div>
+          <div style="display:flex;align-items:center;gap:20px;position:relative">
+            <div style="display:flex;align-items:center;gap:13px;flex:1"><span class="logo" style="width:46px;height:46px;font-size:14px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>GW</span><div><div style="font-size:18px;font-weight:600">Gorilla Warfare</div><div style="font-size:12px;color:#98917F">8-2 · defending champ</div></div></div>
+            <span class="serif" style="font-size:24px;color:#6E6759">vs</span>
+            <div style="display:flex;align-items:center;gap:13px;flex:1;justify-content:flex-end;text-align:right"><div><div style="font-size:18px;font-weight:600">Hurts So Good</div><div style="font-size:12px;color:#98917F">7-3 · lost last 4 to GW</div></div><span class="logo2" style="width:46px;height:46px;font-size:14px">HS</span></div>
+          </div>
+          <div class="serif" style="font-size:15px;color:#D8D0C0;margin-top:16px;border-top:1px solid rgba(255,255,255,.07);padding-top:14px;position:relative;line-height:1.45">Hurts So Good has talked all week. Hurts So Good has also lost four straight to this exact team. Thursday, one of those two things finally gives.</div>
+        </div>
+
+        <div class="k" style="margin-bottom:12px">The Rest of the Slate</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span style="font-size:13px;font-weight:600">Bijan Mustard <span style="color:#6E6759;font-weight:400">vs</span> Saquon Deez</span><span class="m" style="font-size:10px;color:#E2B858;font-weight:700">6-0</span></div><div class="serif" style="font-size:13px;color:#98917F;line-height:1.45">The annual sacrifice. SD swears this is the year. SD says that every year.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span style="font-size:13px;font-weight:600">Tush Push <span style="color:#6E6759;font-weight:400">vs</span> Breece Mode</span><span class="m" style="font-size:10px;color:#98917F;font-weight:700">5-5</span></div><div class="serif" style="font-size:13px;color:#98917F;line-height:1.45">Dead even, all-time. Winner walks out with the Dynasty Division lead.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span style="font-size:13px;font-weight:600">Küpp of Joe <span style="color:#6E6759;font-weight:400">vs</span> Chubb Thumpers</span><span class="m" style="font-size:10px;color:#98917F;font-weight:700">3-4</span></div><div class="serif" style="font-size:13px;color:#98917F;line-height:1.45">Loser's playoff math officially turns into a group project.</div></div>
+          <div class="card" style="padding:14px 16px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><span style="font-size:13px;font-weight:600">Goff Balls <span style="color:#6E6759;font-weight:400">vs</span> Waiver Wire W.</span><span class="m" style="font-size:10px;color:#98917F;font-weight:700">2-5</span></div><div class="serif" style="font-size:13px;color:#98917F;line-height:1.45">The battle for the basement. Somebody, tragically, has to win this.</div></div>
+        </div>
+
+        <div style="display:flex;align-items:baseline;justify-content:space-between;margin:24px 0 12px"><span class="k">The Smack Feed · Week 10</span><span style="font-size:11px;color:#98917F">member-posted &middot; 14 new</span></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="card" style="padding:13px 15px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><span class="logo2" style="width:22px;height:22px;font-size:8px">HS</span><span style="font-size:11.5px;font-weight:600;color:#F2EADC">Hurts So Good</span><span style="font-size:10px;color:#6E6759;margin-left:auto">5h</span></div><div style="font-size:13px;line-height:1.45;color:#D8D0C0">Four in a row means nothing. This is the year the gorilla gets put back in the zoo.</div></div>
+          <div class="card" style="padding:13px 15px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><span class="logo2" style="width:22px;height:22px;font-size:8px">SD</span><span style="font-size:11.5px;font-weight:600;color:#F2EADC">Saquon Deez</span><span style="font-size:10px;color:#6E6759;margin-left:auto">3h</span></div><div style="font-size:13px;line-height:1.45;color:#D8D0C0">0-6 vs Bijan is just a large sample size of bad luck. Thursday the variance pays me back.</div></div>
+          <div class="card" style="padding:13px 15px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><span class="logo" style="width:22px;height:22px;font-size:8px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>GW</span><span style="font-size:11.5px;font-weight:600;color:#F2EADC">Gorilla Warfare</span><span style="font-size:10px;color:#6E6759;margin-left:auto">1h</span></div><div style="font-size:13px;line-height:1.45;color:#D8D0C0">Cute previews. I've dropped 150 twice this month. Bring a jacket, it's cold at the top.</div></div>
+          <div class="card" style="padding:13px 15px"><div style="display:flex;align-items:center;gap:8px;margin-bottom:7px"><span class="logo2" style="width:22px;height:22px;font-size:8px">BR</span><span style="font-size:11.5px;font-weight:600;color:#F2EADC">Breece Mode</span><span style="font-size:10px;color:#6E6759;margin-left:auto">40m</span></div><div style="font-size:13px;line-height:1.45;color:#D8D0C0">Split the series with TP five years running. This is the year I stop being polite about it.</div></div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div>
+          <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:12px"><span class="k">Week 9, In the Books</span><span style="font-size:11px;color:#E2B858;font-weight:600">Full recap →</span></div>
+          <div class="card" style="padding:6px 4px">
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 14px"><span class="k" style="font-size:9px;color:#E2B858;width:66px">High</span><span style="font-size:12px;color:#F2EADC;flex:1">Gorilla Warfare</span><span class="m" style="font-size:12px;font-weight:700">158.9</span></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid rgba(255,255,255,.05)"><span class="k" style="font-size:9px;color:#C97C6A;width:66px">Mercy</span><span style="font-size:12px;color:#B8B0A0;flex:1">GW def. Saquon</span><span class="m" style="font-size:12px;font-weight:700;color:#C97C6A">61.2</span></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid rgba(255,255,255,.05)"><span class="k" style="font-size:9px;width:66px">Close</span><span style="font-size:12px;color:#B8B0A0;flex:1">Küpp over Chubb</span><span class="m" style="font-size:12px;font-weight:700">+1.3</span></div>
+            <div style="display:flex;align-items:center;gap:10px;padding:9px 14px;border-top:1px solid rgba(255,255,255,.05)"><span class="k" style="font-size:9px;color:#C97C6A;width:66px">Stinker</span><span style="font-size:12px;color:#B8B0A0;flex:1">Saquon Deez</span><span class="m" style="font-size:12px;font-weight:700;color:#C97C6A">74.1</span></div>
+          </div>
+        </div>
+        <div>
+          <div class="k" style="margin-bottom:12px">Left On The Bench</div>
+          <div class="card" style="padding:16px 18px;position:relative;overflow:hidden"><div style="position:absolute;top:-60px;right:-40px;width:180px;height:140px;border-radius:50%;background:radial-gradient(closest-side,rgba(226,184,88,.12),transparent);pointer-events:none"></div><div class="k" style="font-size:9.5px;color:#E2B858;margin-bottom:8px;position:relative">Highest Possible · Optimal Lineup</div><div class="m" style="font-size:32px;font-weight:700;position:relative">38.6</div><div style="font-size:12.5px;line-height:1.5;color:#B8B0A0;margin-top:6px;position:relative">points <b style="color:#F2EADC">Breece Mode</b> left on the bench. Optimal was <span class="m" style="color:#E2B858">149.7</span>, he started <span class="m">111.1</span>. And still won. Barely.</div></div>
+        </div>
+        <div>
+          <div class="k" style="margin-bottom:12px">Week 9 Standouts</div>
+          <div class="card" style="padding:13px 15px;margin-bottom:9px"><div class="k" style="font-size:9px;color:#E2B858;margin-bottom:8px">Player of the Week</div><div style="display:flex;align-items:center;gap:10px"><span style="position:relative;width:32px;height:32px;flex:none"><span style="display:flex;align-items:flex-end;justify-content:center;width:32px;height:32px;border-radius:99px;background:radial-gradient(circle at 50% 34%,rgba(255,255,255,.16),rgba(255,255,255,.04));overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#98917F" stroke-width="1.5"><circle cx="12" cy="9" r="3.3"/><path d="M5.6 20.5a6.4 6.4 0 0 1 12.8 0"/></svg></span></span><div style="flex:1"><div style="font-size:12.5px;font-weight:600">Ja'Marr Chase</div><div class="m" style="font-size:10px;color:#98917F">CIN · WR</div></div><span class="m" style="font-size:17px;font-weight:700">41.2</span></div></div>
+          <div class="card" style="padding:13px 15px"><div class="k" style="font-size:9px;color:#C97C6A;margin-bottom:8px">Dud Starter</div><div style="display:flex;align-items:center;gap:10px"><span style="position:relative;width:32px;height:32px;flex:none"><span style="display:flex;align-items:flex-end;justify-content:center;width:32px;height:32px;border-radius:99px;background:radial-gradient(circle at 50% 34%,rgba(255,255,255,.16),rgba(255,255,255,.04));overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#98917F" stroke-width="1.5"><circle cx="12" cy="9" r="3.3"/><path d="M5.6 20.5a6.4 6.4 0 0 1 12.8 0"/></svg></span></span><div style="flex:1"><div style="font-size:12.5px;font-weight:600">Bo Nix</div><div class="m" style="font-size:10px;color:#98917F">DEN · QB</div></div><span class="m" style="font-size:17px;font-weight:700;color:#C97C6A">4.1</span></div></div>
+        </div>
+        <div>
+          <div class="k" style="margin-bottom:12px">Trending</div>
+          <div class="card" style="padding:6px 4px">
+            <div style="display:flex;align-items:center;gap:11px;padding:11px 14px"><span style="position:relative;width:32px;height:32px;flex:none"><span style="display:flex;align-items:flex-end;justify-content:center;width:32px;height:32px;border-radius:99px;background:radial-gradient(circle at 50% 34%,rgba(255,255,255,.16),rgba(255,255,255,.04));overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#98917F" stroke-width="1.5"><circle cx="12" cy="9" r="3.3"/><path d="M5.6 20.5a6.4 6.4 0 0 1 12.8 0"/></svg></span></span><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600">Jaylen Warren <span class="m" style="font-weight:400;color:#98917F">PIT · RB</span></div><div style="font-size:10.5px;color:#98917F;line-height:1.35">Backfield is his now that Harris is banged up.</div></div><span class="up" style="font-size:15px;font-weight:700">▲</span></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:11px 14px;border-top:1px solid rgba(255,255,255,.05)"><span style="position:relative;width:32px;height:32px;flex:none"><span style="display:flex;align-items:flex-end;justify-content:center;width:32px;height:32px;border-radius:99px;background:radial-gradient(circle at 50% 34%,rgba(255,255,255,.16),rgba(255,255,255,.04));overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#98917F" stroke-width="1.5"><circle cx="12" cy="9" r="3.3"/><path d="M5.6 20.5a6.4 6.4 0 0 1 12.8 0"/></svg></span></span><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600">Tucker Kraft <span class="m" style="font-weight:400;color:#98917F">GB · TE</span></div><div style="font-size:10.5px;color:#98917F;line-height:1.35">Target share climbing three weeks running.</div></div><span class="up" style="font-size:15px;font-weight:700">▲</span></div>
+            <div style="display:flex;align-items:center;gap:11px;padding:11px 14px;border-top:1px solid rgba(255,255,255,.05)"><span style="position:relative;width:32px;height:32px;flex:none"><span style="display:flex;align-items:flex-end;justify-content:center;width:32px;height:32px;border-radius:99px;background:radial-gradient(circle at 50% 34%,rgba(255,255,255,.16),rgba(255,255,255,.04));overflow:hidden;box-shadow:inset 0 0 0 1px rgba(255,255,255,.09)"><svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="#98917F" stroke-width="1.5"><circle cx="12" cy="9" r="3.3"/><path d="M5.6 20.5a6.4 6.4 0 0 1 12.8 0"/></svg></span></span><div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:600">Zamir White <span class="m" style="font-weight:400;color:#98917F">LV · RB</span></div><div style="font-size:10.5px;color:#98917F;line-height:1.35">Back in a committee, ceiling gone.</div></div><span class="dn" style="font-size:15px;font-weight:700">▼</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="fr" style="width:390px;border-radius:26px">
+    <div class="gA" style="top:-140px;left:-80px;width:420px;height:340px"></div>
+    <div style="position:relative;display:flex;align-items:center;justify-content:space-between;height:56px;padding:0 18px;border-bottom:1px solid rgba(255,255,255,.06)">
+      <div class="serif" style="font-size:21px;color:#E2B858">HMLML</div>
+      <div class="pill"><span style="width:6px;height:6px;border-radius:99px;background:#E2B858;flex:none"></span>WK 10 · THU 8:15</div>
+    </div>
+    <div style="position:relative;padding:22px 18px 18px">
+      <div class="k" style="font-size:10.5px">Week 10 · The slate is set</div>
+      <div class="serif" style="font-size:38px;line-height:1.04;margin-top:8px">Two days until it matters again<span style="color:#E2B858">.</span></div>
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <div class="card" style="padding:11px 4px;text-align:center;flex:1"><div class="m" style="font-size:26px;font-weight:700;line-height:1">2</div><div class="k" style="font-size:8.5px;margin-top:4px">Days</div></div>
+        <div class="card" style="padding:11px 4px;text-align:center;flex:1"><div class="m" style="font-size:26px;font-weight:700;line-height:1">04</div><div class="k" style="font-size:8.5px;margin-top:4px">Hrs</div></div>
+        <div class="card" style="padding:11px 4px;text-align:center;flex:1"><div class="m" style="font-size:26px;font-weight:700;line-height:1">12</div><div class="k" style="font-size:8.5px;margin-top:4px">Min</div></div>
+      </div>
+    </div>
+    <div style="position:relative;padding:4px 16px 18px">
+      <div class="k" style="margin:8px 0 11px">Game of the Week</div>
+      <div class="card" style="padding:16px 16px;background:linear-gradient(135deg,rgba(226,184,88,.1),rgba(255,255,255,.02));margin-bottom:16px">
+        <div class="k" style="font-size:9px;color:#E2B858;margin-bottom:12px">First Place on the Line</div>
+        <div style="display:flex;align-items:center;gap:10px"><span class="logo" style="width:34px;height:34px;font-size:11px"><span style="position:absolute;inset:0;background:linear-gradient(135deg,rgba(255,255,255,.14),transparent 55%)"></span>GW</span><span style="font-size:14px;font-weight:600;flex:1">Gorilla Warfare</span><span class="m" style="font-size:11px;color:#98917F">8-2</span></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:8px"><span class="logo2" style="width:34px;height:34px;font-size:11px">HS</span><span style="font-size:14px;font-weight:600;flex:1;color:#B8B0A0">Hurts So Good</span><span class="m" style="font-size:11px;color:#98917F">7-3</span></div>
+        <div class="serif" style="font-size:12.5px;color:#98917F;margin-top:12px;border-top:1px solid rgba(255,255,255,.07);padding-top:11px;line-height:1.45">HS has talked all week. HS has also lost the last four to GW.</div>
+      </div>
+      <div class="k" style="margin-bottom:11px">The Rest of the Slate</div>
+      <div class="card" style="padding:12px 14px;margin-bottom:9px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-size:12.5px;font-weight:600">Bijan <span style="color:#6E6759;font-weight:400">vs</span> Saquon Deez</span><span class="m" style="font-size:10px;color:#E2B858;font-weight:700">6-0</span></div><div class="serif" style="font-size:12px;color:#98917F;line-height:1.4">The annual sacrifice. SD swears this is the year.</div></div>
+      <div class="card" style="padding:12px 14px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px"><span style="font-size:12.5px;font-weight:600">Tush Push <span style="color:#6E6759;font-weight:400">vs</span> Breece</span><span class="m" style="font-size:10px;color:#98917F;font-weight:700">5-5</span></div><div class="serif" style="font-size:12px;color:#98917F;line-height:1.4">Dead even. Winner takes the Dynasty lead.</div></div>
+    </div>
+    <div style="position:relative;display:flex;gap:2px;padding:8px 10px;border-top:1px solid rgba(255,255,255,.06);background:rgba(255,255,255,.02)">
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:600;color:#E2B858">Hub</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Teams</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Records</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Drafts</div></div>
+      <div style="flex:1;text-align:center;padding:6px 0"><div style="font-size:9px;font-weight:500;color:#6E6759">Players</div></div>
+    </div>
+  </div>
+
+  </div>
+</div>
+
+</div>
+</x-dc>
+</body>
+</html>

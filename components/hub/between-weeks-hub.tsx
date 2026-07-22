@@ -1,0 +1,587 @@
+import Link from "next/link";
+import { KickoffCountdown } from "@/components/kickoff-countdown";
+import { SmackFeed } from "@/components/smack-feed";
+import { PlayerHeadshot } from "@/components/player-headshot";
+import { GameOfTheWeekCard } from "@/components/hub/game-of-the-week-card";
+import { SlateCard } from "@/components/hub/slate-card";
+import type { PairedMatchup } from "@/lib/queries/matchups";
+import type { getSeasonStandings } from "@/lib/queries/seasons";
+import { getHeadToHead } from "@/lib/queries/records";
+import { getDivisionStandings } from "@/lib/queries/divisions";
+import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
+import { getWeekBenchLeader } from "@/lib/queries/lineup-efficiency";
+import { getWeekStandouts, type WeekStandout } from "@/lib/queries/week-standouts";
+import { getTrendingAddPlayers } from "@/lib/queries/player-points";
+import { getHubEditorial, matchupPairKey } from "@/lib/content";
+import {
+  selectGameOfTheWeek,
+  betweenWeeksHeadline,
+  formatH2HLine,
+  formatSlateH2H,
+  stakesClause,
+  genericSlateAngle,
+  type GotwCandidate,
+} from "@/lib/hub/between-weeks";
+
+type Standing = Awaited<ReturnType<typeof getSeasonStandings>>[number];
+
+interface BetweenWeeksHubProps {
+  matchups: PairedMatchup[];
+  standings: Standing[];
+  seasonId: number | null | undefined;
+  seasonYear: number;
+  week: number;
+  nextKickoff: Date | null;
+}
+
+/**
+ * State 1d: the Tue/Wed between-weeks hub. Anticipation-forward — the week
+ * ahead leads (Game of the Week + the rest of the slate + the member smack
+ * feed), with last week's receipts compressed into the right rail. Async RSC;
+ * does its own data fetching so page.tsx stays lean.
+ */
+export async function BetweenWeeksHub({
+  matchups,
+  standings,
+  seasonId,
+  seasonYear,
+  week,
+  nextKickoff,
+}: BetweenWeeksHubProps) {
+  const priorWeek = week > 1 ? week - 1 : week;
+  const editorial = getHubEditorial();
+  const headline = betweenWeeksHeadline(nextKickoff);
+
+  // Standings lookup for records, points-for, and division identity.
+  const standingBy = new Map(standings.map((s) => [s.franchiseId, s]));
+  const record = (id: string): string => {
+    const s = standingBy.get(id);
+    return s ? `${s.wins ?? 0}-${s.losses ?? 0}` : "0-0";
+  };
+
+  // Rail + division data (degrades to empty when the DB or week has nothing).
+  let divisionLeaderStatus = new Map<string, string>();
+  let leadsDivision = new Set<string>();
+  let weeklySuperlatives: Awaited<ReturnType<typeof getWeeklySuperlatives>> | null =
+    null;
+  let benchLeader: Awaited<ReturnType<typeof getWeekBenchLeader>> = null;
+  let standouts: Awaited<ReturnType<typeof getWeekStandouts>> = {
+    playerOfWeek: null,
+    dudStarter: null,
+  };
+  let trending: Awaited<ReturnType<typeof getTrendingAddPlayers>> = [];
+  const h2hByMatchup = new Map<
+    number,
+    { wins: number; losses: number; ties: number }
+  >();
+
+  if (seasonId != null) {
+    try {
+      const [divisions, superlatives, bench, weekStandouts, trend, ...h2hResults] =
+        await Promise.all([
+          getDivisionStandings(seasonId),
+          getWeeklySuperlatives(seasonId, priorWeek),
+          getWeekBenchLeader(seasonId, priorWeek),
+          getWeekStandouts(seasonId, priorWeek),
+          getTrendingAddPlayers(3),
+          ...matchups.map((m) =>
+            getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
+          ),
+        ]);
+
+      weeklySuperlatives = superlatives;
+      benchLeader = bench;
+      standouts = weekStandouts;
+      trending = trend;
+
+      for (const group of divisions) {
+        group.teams.forEach((t, i) => {
+          if (i === 0) {
+            leadsDivision.add(t.franchiseId);
+            divisionLeaderStatus.set(
+              t.franchiseId,
+              `1st in ${group.divisionName}`
+            );
+          }
+        });
+      }
+
+      matchups.forEach((m, i) => {
+        h2hByMatchup.set(m.matchupId, h2hResults[i]);
+      });
+    } catch {
+      // DB may be unavailable; the hero + countdown still render.
+    }
+  }
+
+  // Game of the Week selection from the current slate.
+  const candidates: GotwCandidate[] = matchups.map((m) => {
+    const a = standingBy.get(m.homeTeam.franchiseId);
+    const b = standingBy.get(m.awayTeam.franchiseId);
+    return {
+      matchupId: m.matchupId,
+      teamA: {
+        wins: a?.wins ?? 0,
+        losses: a?.losses ?? 0,
+        ties: a?.ties ?? 0,
+        pointsFor: Number(a?.pointsScored ?? 0),
+        division: a?.division ?? null,
+      },
+      teamB: {
+        wins: b?.wins ?? 0,
+        losses: b?.losses ?? 0,
+        ties: b?.ties ?? 0,
+        pointsFor: Number(b?.pointsScored ?? 0),
+        division: b?.division ?? null,
+      },
+    };
+  });
+
+  const gotwId = selectGameOfTheWeek(candidates);
+  const gameOfWeek = matchups.find((m) => m.matchupId === gotwId) ?? null;
+  const restOfSlate = matchups.filter((m) => m.matchupId !== gotwId);
+
+  return (
+    <>
+      {/* Hero + countdown */}
+      <section className="pt-2 pb-6 lg:flex lg:items-start lg:justify-between lg:gap-8">
+        <div className="max-w-2xl">
+          <p className="text-kicker mb-3">
+            Harambe Memorial League &middot; Week {week} &middot; The Slate Is Set
+          </p>
+          <h1 className="text-display">{headline}</h1>
+          <p className="mt-3 text-body-lg text-text-secondary">
+            One grudge match at the top, one annual sacrifice at the bottom, and a
+            week of receipts to settle by Thursday night.
+          </p>
+        </div>
+
+        {nextKickoff && (
+          <div className="mt-6 lg:mt-1 shrink-0">
+            <KickoffCountdown target={nextKickoff.toISOString()} />
+          </div>
+        )}
+      </section>
+
+      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+        {/* Left column: the week ahead */}
+        <div className="space-y-8">
+          {/* Game of the Week */}
+          {gameOfWeek && (
+            <GameOfWeekSection
+              matchup={gameOfWeek}
+              h2h={h2hByMatchup.get(gameOfWeek.matchupId) ?? null}
+              record={record}
+              divisionOf={(id) => standingBy.get(id)?.division ?? null}
+              divisionNameOf={(id) => standingBy.get(id)?.divisionName ?? null}
+              divisionLeaderStatus={divisionLeaderStatus}
+              leadsDivision={leadsDivision}
+              editorial={editorial}
+            />
+          )}
+
+          {/* The Rest of the Slate */}
+          {restOfSlate.length > 0 && (
+            <section className="space-y-4">
+              <p className="text-kicker">The Rest of the Slate</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {restOfSlate.map((m) => {
+                  const h2h = h2hByMatchup.get(m.matchupId);
+                  const angle =
+                    editorial.matchupAngles.byPair[
+                      matchupPairKey(m.homeTeam.franchiseSlug, m.awayTeam.franchiseSlug)
+                    ] ??
+                    genericSlateAngle(
+                      record(m.homeTeam.franchiseId),
+                      record(m.awayTeam.franchiseId)
+                    );
+                  return (
+                    <SlateCard
+                      key={m.matchupId}
+                      teamAName={m.homeTeam.franchiseName}
+                      teamBName={m.awayTeam.franchiseName}
+                      h2hRecord={
+                        h2h ? formatSlateH2H(h2h) : record(m.homeTeam.franchiseId)
+                      }
+                      angle={angle}
+                    />
+                  );
+                })}
+              </div>
+            </section>
+          )}
+
+          {/* The Smack Feed (desktop only; mobile keeps the top of the funnel) */}
+          {editorial.smackPosts.length > 0 && (
+            <section className="hidden lg:block space-y-4">
+              <div className="flex items-baseline justify-between">
+                <p className="text-kicker">The Smack Feed &middot; Week {week}</p>
+                <p className="text-caption text-text-tertiary">
+                  site desk &middot; {editorial.smackPosts.length} new
+                </p>
+              </div>
+              <SmackFeed
+                posts={editorial.smackPosts}
+                className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+              />
+            </section>
+          )}
+        </div>
+
+        {/* Right rail: last week's receipts (desktop only) */}
+        <aside className="hidden lg:flex lg:flex-col gap-8">
+          {weeklySuperlatives && (
+            <WeekInBooksCard week={priorWeek} superlatives={weeklySuperlatives} />
+          )}
+          {benchLeader && <BenchCallout leader={benchLeader} />}
+          {(standouts.playerOfWeek || standouts.dudStarter) && (
+            <StandoutsCard week={priorWeek} standouts={standouts} />
+          )}
+          {trending.length > 0 && <TrendingCard players={trending} />}
+        </aside>
+      </div>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Game of the Week section (resolves kicker + status from data)
+// ---------------------------------------------------------------------------
+
+function GameOfWeekSection({
+  matchup,
+  h2h,
+  record,
+  divisionOf,
+  divisionNameOf,
+  divisionLeaderStatus,
+  leadsDivision,
+  editorial,
+}: {
+  matchup: PairedMatchup;
+  h2h: { wins: number; losses: number; ties: number } | null;
+  record: (id: string) => string;
+  divisionOf: (id: string) => number | null;
+  divisionNameOf: (id: string) => string | null;
+  divisionLeaderStatus: Map<string, string>;
+  leadsDivision: Set<string>;
+  editorial: ReturnType<typeof getHubEditorial>;
+}) {
+  const home = matchup.homeTeam;
+  const away = matchup.awayTeam;
+
+  const homeAbbr =
+    home.franchiseAbbreviation ?? home.franchiseName.slice(0, 3).toUpperCase();
+  const awayAbbr =
+    away.franchiseAbbreviation ?? away.franchiseName.slice(0, 3).toUpperCase();
+
+  // Division rematch framing, derived honestly from the two teams' divisions.
+  const homeDiv = divisionOf(home.franchiseId);
+  const awayDiv = divisionOf(away.franchiseId);
+  const isDivisionRematch = homeDiv != null && homeDiv === awayDiv;
+  const divisionName = isDivisionRematch
+    ? divisionNameOf(home.franchiseId)
+    : null;
+  const kickerLead = divisionName ? `${divisionName} Rematch` : "Cross-Division";
+  const stakes = stakesClause(
+    leadsDivision.has(home.franchiseId),
+    leadsDivision.has(away.franchiseId)
+  );
+  const kicker = `${kickerLead} · ${stakes}`;
+
+  const h2hLine = h2h
+    ? formatH2HLine(h2h, homeAbbr, awayAbbr)
+    : "First-ever meeting";
+
+  const blurb =
+    editorial.matchupAngles.byPair[
+      matchupPairKey(home.franchiseSlug, away.franchiseSlug)
+    ] ?? editorial.matchupAngles.gameOfWeekBlurb;
+
+  return (
+    <section className="space-y-4">
+      <p className="text-kicker">Game of the Week</p>
+      <GameOfTheWeekCard
+        kicker={kicker.toUpperCase()}
+        h2hLine={h2hLine}
+        teamA={{
+          name: home.franchiseName,
+          slug: home.franchiseSlug,
+          abbreviation: home.franchiseAbbreviation,
+          brandingColor: home.franchiseBrandingColor,
+          record: record(home.franchiseId),
+          status: divisionLeaderStatus.get(home.franchiseId) ?? null,
+        }}
+        teamB={{
+          name: away.franchiseName,
+          slug: away.franchiseSlug,
+          abbreviation: away.franchiseAbbreviation,
+          brandingColor: away.franchiseBrandingColor,
+          record: record(away.franchiseId),
+          status: divisionLeaderStatus.get(away.franchiseId) ?? null,
+        }}
+        blurb={blurb}
+      />
+    </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Right-rail cards
+// ---------------------------------------------------------------------------
+
+function RailCard({
+  children,
+  tinted = false,
+}: {
+  children: React.ReactNode;
+  tinted?: boolean;
+}) {
+  return (
+    <div className="card-surface relative overflow-hidden p-5">
+      {tinted && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(226,184,88,0.10), rgba(226,184,88,0.02))",
+          }}
+        />
+      )}
+      <div className="relative">{children}</div>
+    </div>
+  );
+}
+
+function RecapRow({
+  label,
+  desc,
+  value,
+  tone,
+}: {
+  label: string;
+  desc: string;
+  value: string;
+  tone: "ink" | "gold" | "warm";
+}) {
+  const labelClass =
+    tone === "gold"
+      ? "text-accent-gold"
+      : tone === "warm"
+        ? "text-accent-warm"
+        : "text-text-tertiary";
+  const valueClass = tone === "warm" ? "text-accent-warm" : "text-text-primary";
+  return (
+    <div className="flex items-center justify-between gap-3 py-2">
+      <div className="min-w-0">
+        <p className={`text-kicker ${labelClass}`}>{label}</p>
+        <p className="text-body-sm text-text-secondary truncate">{desc}</p>
+      </div>
+      <span className={`text-stat tabular-nums text-body ${valueClass} shrink-0`}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function WeekInBooksCard({
+  week,
+  superlatives,
+}: {
+  week: number;
+  superlatives: NonNullable<Awaited<ReturnType<typeof getWeeklySuperlatives>>>;
+}) {
+  const { highestScorer, biggestBlowout, closestWin, lowestScorer } = superlatives;
+  if (!highestScorer && !biggestBlowout && !closestWin && !lowestScorer) {
+    return null;
+  }
+  return (
+    <section className="space-y-3">
+      <div className="flex items-baseline justify-between">
+        <p className="text-kicker">Week {week}, In The Books</p>
+        <Link
+          href="/matchups"
+          className="text-caption text-accent-gold hover:brightness-110 normal-case tracking-normal"
+        >
+          Full recap &rarr;
+        </Link>
+      </div>
+      <RailCard>
+        <div className="divide-y divide-divider">
+          {highestScorer && (
+            <RecapRow
+              label="High"
+              desc={highestScorer.franchiseName}
+              value={highestScorer.points.toFixed(1)}
+              tone="gold"
+            />
+          )}
+          {biggestBlowout && (
+            <RecapRow
+              label="Mercy"
+              desc={`${biggestBlowout.winner} def. ${biggestBlowout.loser}`}
+              value={biggestBlowout.margin.toFixed(1)}
+              tone="warm"
+            />
+          )}
+          {closestWin && (
+            <RecapRow
+              label="Close"
+              desc={`${closestWin.winner} over ${closestWin.loser}`}
+              value={`+${closestWin.margin.toFixed(1)}`}
+              tone="ink"
+            />
+          )}
+          {lowestScorer && (
+            <RecapRow
+              label="Stinker"
+              desc={lowestScorer.franchiseName}
+              value={lowestScorer.points.toFixed(1)}
+              tone="warm"
+            />
+          )}
+        </div>
+      </RailCard>
+    </section>
+  );
+}
+
+function BenchCallout({
+  leader,
+}: {
+  leader: NonNullable<Awaited<ReturnType<typeof getWeekBenchLeader>>>;
+}) {
+  const winTail =
+    leader.won === true
+      ? " And still won."
+      : leader.won === false
+        ? " And still lost."
+        : "";
+  return (
+    <section className="space-y-3">
+      <p className="text-kicker">Left On The Bench</p>
+      <RailCard tinted>
+        <p className="text-kicker text-accent-gold">Highest Possible &middot; Optimal Lineup</p>
+        <p className="mt-3 text-stat tabular-nums text-5xl text-text-primary leading-none">
+          {leader.pointsLeft.toFixed(1)}
+        </p>
+        <p className="mt-3 text-body-sm text-text-secondary">
+          points{" "}
+          <span className="font-semibold text-text-primary">
+            {leader.franchiseName}
+          </span>{" "}
+          left on the bench. Optimal was{" "}
+          <span className="text-stat tabular-nums text-accent-gold">
+            {leader.optimal.toFixed(1)}
+          </span>
+          , they started{" "}
+          <span className="text-stat tabular-nums">{leader.actual.toFixed(1)}</span>.
+          {winTail}
+        </p>
+      </RailCard>
+    </section>
+  );
+}
+
+function StandoutRow({
+  standout,
+  tone,
+}: {
+  standout: WeekStandout;
+  tone: "gold" | "warm";
+}) {
+  const valueClass = tone === "warm" ? "text-accent-warm" : "text-text-primary";
+  return (
+    <div className="flex items-center gap-3">
+      <PlayerHeadshot
+        playerId={standout.playerId}
+        name={standout.name}
+        size={40}
+        nflTeam={standout.team}
+      />
+      <div className="min-w-0 flex-1">
+        <p className="text-body-sm font-semibold text-text-primary truncate">
+          {standout.name}
+        </p>
+        <p className="text-caption text-text-tertiary">
+          {standout.team ?? "FA"} &middot; {standout.position ?? "?"}
+        </p>
+      </div>
+      <span className={`text-stat tabular-nums text-h3 ${valueClass} shrink-0`}>
+        {standout.points.toFixed(1)}
+      </span>
+    </div>
+  );
+}
+
+function StandoutsCard({
+  week,
+  standouts,
+}: {
+  week: number;
+  standouts: Awaited<ReturnType<typeof getWeekStandouts>>;
+}) {
+  return (
+    <section className="space-y-3">
+      <p className="text-kicker">Week {week} Standouts</p>
+      {standouts.playerOfWeek && (
+        <RailCard>
+          <p className="text-kicker text-accent-gold mb-3">Player of the Week</p>
+          <StandoutRow standout={standouts.playerOfWeek} tone="gold" />
+        </RailCard>
+      )}
+      {standouts.dudStarter && (
+        <RailCard>
+          <p className="text-kicker text-accent-warm mb-3">Dud Starter</p>
+          <StandoutRow standout={standouts.dudStarter} tone="warm" />
+        </RailCard>
+      )}
+    </section>
+  );
+}
+
+function TrendingCard({
+  players,
+}: {
+  players: Awaited<ReturnType<typeof getTrendingAddPlayers>>;
+}) {
+  return (
+    <section className="space-y-3">
+      <p className="text-kicker">Trending</p>
+      <RailCard>
+        <div className="space-y-4">
+          {players.map((p, i) => (
+            <div key={p.playerId} className="flex items-center gap-3">
+              <PlayerHeadshot
+                playerId={p.playerId}
+                name={p.name ?? "Unknown"}
+                size={40}
+                nflTeam={p.nflTeam}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-body-sm font-semibold text-text-primary truncate">
+                  {p.name ?? "Unknown"}{" "}
+                  <span className="font-normal text-text-tertiary">
+                    {p.nflTeam ?? "FA"} &middot; {p.position ?? "?"}
+                  </span>
+                </p>
+                <p className="text-body-sm text-text-tertiary truncate">
+                  {i === 0
+                    ? "Most-added player in the league right now."
+                    : "Adds climbing across the league this week."}
+                </p>
+              </div>
+              <span
+                className="text-accent-green shrink-0"
+                aria-label="trending up"
+              >
+                &#9650;
+              </span>
+            </div>
+          ))}
+        </div>
+      </RailCard>
+    </section>
+  );
+}
