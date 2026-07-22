@@ -1,5 +1,11 @@
 import { db } from "@/lib/db";
-import { playerWeekPoints, players, franchises, seasons } from "@/lib/db/schema";
+import {
+  playerWeekPoints,
+  players,
+  franchises,
+  seasons,
+  matchups,
+} from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { deriveStartingSlots } from "@/lib/lineup-slots";
 import { SNARKY_LABELS, type LabelTone } from "@/lib/content";
@@ -32,6 +38,17 @@ export interface LineupAward {
 export interface SeasonLineupAwards {
   coachingMalpractice: LineupAward | null;
   whatCouldveBeen: LineupAward | null;
+}
+
+export interface WeekBenchLeader {
+  franchiseName: string;
+  franchiseSlug: string;
+  /** optimal - actual: points the franchise left on the bench this week. */
+  pointsLeft: number;
+  optimal: number;
+  actual: number;
+  /** Whether the franchise still won despite the wasted points, if known. */
+  won: boolean | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -337,6 +354,106 @@ export async function getWeeklyLineupAwards(
     };
   } catch (e) {
     console.error("[lineup-efficiency] getWeeklyLineupAwards error:", e);
+    return null;
+  }
+}
+
+/**
+ * The franchise that left the most points on the bench in a single week,
+ * returning the full detail the hub's "Left On The Bench" callout needs:
+ * points left, optimal total, actual started total, and whether they won
+ * anyway. Sibling to getWeeklyLineupAwards (which surfaces only the snarky
+ * label). Returns null when the week has no player_week_points rows or nobody
+ * left points on the bench.
+ */
+export async function getWeekBenchLeader(
+  seasonId: number,
+  week: number
+): Promise<WeekBenchLeader | null> {
+  try {
+    const rosterPositions = await loadSeasonRosterPositions(seasonId);
+
+    const rows = await db
+      .select({
+        franchiseId: playerWeekPoints.franchiseId,
+        playerId: playerWeekPoints.playerId,
+        points: playerWeekPoints.points,
+        started: playerWeekPoints.started,
+        position: players.position,
+      })
+      .from(playerWeekPoints)
+      .leftJoin(players, eq(playerWeekPoints.playerId, players.id))
+      .where(
+        and(
+          eq(playerWeekPoints.seasonId, seasonId),
+          eq(playerWeekPoints.week, week)
+        )
+      );
+
+    if (rows.length === 0) return null;
+
+    const byFranchise = new Map<string, WeekRosterAccumulator>();
+    for (const row of rows) {
+      const bucket =
+        byFranchise.get(row.franchiseId) ??
+        { franchiseId: row.franchiseId, players: [], actual: 0 };
+      bucket.players.push({
+        playerId: row.playerId,
+        position: row.position,
+        points: row.points,
+      });
+      if (row.started) bucket.actual += row.points;
+      byFranchise.set(row.franchiseId, bucket);
+    }
+
+    let best: { franchiseId: string; optimal: number; actual: number } | null =
+      null;
+    for (const bucket of byFranchise.values()) {
+      const optimal = bestPossibleLineup(rosterPositions, bucket.players);
+      const gap = optimal - bucket.actual;
+      if (!best || gap > best.optimal - best.actual) {
+        best = { franchiseId: bucket.franchiseId, optimal, actual: bucket.actual };
+      }
+    }
+
+    if (!best || best.optimal - best.actual <= 0) return null;
+
+    const [franchise] = await db
+      .select({ name: franchises.name, slug: franchises.slug })
+      .from(franchises)
+      .where(eq(franchises.id, best.franchiseId));
+
+    if (!franchise) return null;
+
+    // Did they win that week anyway? Optional context; null when unknown.
+    let won: boolean | null = null;
+    try {
+      const [result] = await db
+        .select({ isWinner: matchups.isWinner })
+        .from(matchups)
+        .where(
+          and(
+            eq(matchups.seasonId, seasonId),
+            eq(matchups.week, week),
+            eq(matchups.franchiseId, best.franchiseId)
+          )
+        );
+      won = result?.isWinner ?? null;
+    } catch {
+      won = null;
+    }
+
+    const round1 = (n: number) => Math.round(n * 10) / 10;
+    return {
+      franchiseName: franchise.name,
+      franchiseSlug: franchise.slug,
+      pointsLeft: round1(best.optimal - best.actual),
+      optimal: round1(best.optimal),
+      actual: round1(best.actual),
+      won,
+    };
+  } catch (e) {
+    console.error("[lineup-efficiency] getWeekBenchLeader error:", e);
     return null;
   }
 }

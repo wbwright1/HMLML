@@ -1,5 +1,12 @@
 import { getNflState } from "@/lib/queries/nfl-state";
 import { getLatestSeason, getCurrentWeekMatchups } from "@/lib/queries/matchups";
+import { getSeasonStandings } from "@/lib/queries/seasons";
+import { computeIsBetweenWeeks, getNextKickoff } from "@/lib/queries/kickoff";
+import { resolveHubSeasonType, isPreWeekOne } from "@/lib/hub/season-state";
+import {
+  formatPreseasonKickoffLabel,
+  formatBetweenWeeksKickoffLabel,
+} from "@/lib/hub/live-pill-label";
 import type { LivePillProps } from "@/components/live-pill";
 import { Topbar } from "@/components/nav/topbar";
 import { MobileHeader } from "@/components/nav/mobile-header";
@@ -7,53 +14,87 @@ import { MobileDock } from "@/components/nav/mobile-dock";
 
 /**
  * Resolves the seasonal / live LivePill state server-side (no client polling in
- * the nav). Reuses the season detection from the retired SeasonalPillBadge and
- * layers a live-game count on top. Any failure degrades to a benign "offseason"
- * pill so the chrome always renders (E2E asserts nav renders on an empty DB).
+ * the nav). Mirrors app/page.tsx's hub-state routing (lib/hub/season-state.ts)
+ * so the topbar pill never disagrees with which hub layout is showing,
+ * including the pre-Week-1 "everyone's 0-0" -> preseason override. Any failure
+ * degrades to a benign "offseason" pill so the chrome always renders (E2E
+ * asserts nav renders on an empty DB).
  */
 async function resolveLivePill(): Promise<LivePillProps> {
   try {
-    const [nflState, latestSeason] = await Promise.all([
+    const [nflState, latestSeason, current] = await Promise.all([
       getNflState(),
       getLatestSeason(),
+      getCurrentWeekMatchups(),
     ]);
 
-    const seasonType = nflState?.seasonType ?? null;
+    const nflSeasonType = nflState?.seasonType ?? null;
     const dbStatus = latestSeason?.status ?? null;
-    const inSeason = seasonType === "regular" || seasonType === "post";
 
-    // Count live games only during the regular/post season game windows.
-    let liveCount = 0;
-    let week = nflState?.week ?? undefined;
-    if (inSeason) {
-      const current = await getCurrentWeekMatchups();
-      if (current) {
-        week = current.week;
-        liveCount = current.matchups.filter(
-          (m) => m.status === "in_progress"
-        ).length;
-      }
-    }
+    const matchupStatuses = current?.matchups.map((m) => m.status) ?? [];
+    const hasLiveMatchups = matchupStatuses.some((s) => s === "in_progress");
+    const liveCount = matchupStatuses.filter((s) => s === "in_progress").length;
+    const week = current?.week ?? nflState?.week;
 
-    if (liveCount > 0) {
+    // Standings power only the pre-Week-1 "nothing played yet" override. Read
+    // whenever a season exists (matching app/page.tsx), since the override also
+    // fires via the dbSeasonStatus fallback path (NFL state unavailable, DB says
+    // in_season). getSeasonStandings is React-cache()'d, so this shares the
+    // page's read; it stays a dependent await because it needs latestSeason.id.
+    const standings = latestSeason
+      ? await getSeasonStandings(latestSeason.id).catch(() => [])
+      : [];
+    const nothingPlayedYet = isPreWeekOne(standings);
+
+    const seasonType = resolveHubSeasonType({
+      nflSeasonType,
+      dbSeasonStatus: dbStatus,
+      hasLiveMatchups,
+      nothingPlayedYet,
+    });
+
+    // Live state only during the games window of the regular season or playoffs;
+    // never let a stray in-progress row flip a pre/off pill to "live".
+    if (liveCount > 0 && (seasonType === "regular" || seasonType === "post")) {
       return { state: "live", liveCount, week };
     }
 
+    if (seasonType === "pre") {
+      const seasonYear = latestSeason?.seasonYear ?? new Date().getFullYear();
+      const kickoffTarget = latestSeason ? await getNextKickoff(seasonYear, 1) : null;
+      if (kickoffTarget) {
+        return {
+          state: "preseason",
+          label: formatPreseasonKickoffLabel(kickoffTarget, new Date()),
+          staticDot: true,
+        };
+      }
+      return { state: "preseason" };
+    }
+
     if (seasonType === "regular") {
+      const isBetweenWeeks = computeIsBetweenWeeks({
+        seasonType,
+        matchupStatuses,
+      });
+      const seasonYear = current?.seasonYear ?? latestSeason?.seasonYear;
+      if (isBetweenWeeks && week && seasonYear) {
+        const kickoffTarget = await getNextKickoff(seasonYear, week);
+        if (kickoffTarget) {
+          return {
+            state: "week",
+            label: formatBetweenWeeksKickoffLabel(week, kickoffTarget),
+            staticDot: true,
+          };
+        }
+      }
       return { state: "week", label: `Week ${week ?? 1}` };
     }
+
     if (seasonType === "post") {
       return { state: "playoffs" };
     }
-    if (seasonType === "pre") {
-      return { state: "preseason" };
-    }
-    if (dbStatus === "in_season") {
-      return { state: "week", label: "In Season" };
-    }
-    if (dbStatus === "pre_draft" || dbStatus === "complete") {
-      return { state: "preseason" };
-    }
+
     return { state: "offseason" };
   } catch {
     return { state: "offseason" };
