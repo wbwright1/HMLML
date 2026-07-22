@@ -11,6 +11,8 @@ import type { LivePillProps } from "@/components/live-pill";
 import { Topbar } from "@/components/nav/topbar";
 import { MobileHeader } from "@/components/nav/mobile-header";
 import { MobileDock } from "@/components/nav/mobile-dock";
+import { getSessionMember } from "@/lib/auth";
+import type { NavCrestMember } from "@/components/nav/nav-crest";
 
 /**
  * Resolves the seasonal / live LivePill state server-side (no client polling in
@@ -101,16 +103,39 @@ async function resolveLivePill(): Promise<LivePillProps> {
   }
 }
 
+/**
+ * Resolves the current session to the minimal crest shape, degrading to null on
+ * any failure (e.g. the members table not existing yet before migration 0008)
+ * so the nav always renders.
+ */
+async function resolveNavMember(): Promise<NavCrestMember | null> {
+  try {
+    const member = await getSessionMember();
+    if (!member) return null;
+    return {
+      franchiseSlug: member.franchiseSlug,
+      franchiseName: member.franchiseName,
+      franchiseAvatarUrl: member.franchiseAvatarUrl,
+      displayName: member.displayName,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export async function SiteNav() {
-  const livePill = await resolveLivePill();
+  const [livePill, member] = await Promise.all([
+    resolveLivePill(),
+    resolveNavMember(),
+  ]);
 
   return (
     <>
       {/* display:contents — landmark without a box, so the sticky bars resolve
           their sticky context against <body>, not a height-limited wrapper. */}
       <header className="contents">
-        <Topbar livePill={livePill} />
-        <MobileHeader livePill={livePill} />
+        <Topbar livePill={livePill} member={member} />
+        <MobileHeader livePill={livePill} member={member} />
       </header>
       <MobileDock />
     </>

@@ -57,6 +57,13 @@
       "when": 1784744629155,
       "tag": "0007_smart_tigra",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1784754455823,
+      "tag": "0008_member_identity",
+      "breakpoints": true
     }
   ]
 }

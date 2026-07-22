@@ -65,6 +65,7 @@ export function DivisionFieldCard({
               name={team.name}
               abbreviation={team.abbreviation ?? undefined}
               brandingColor={team.brandingColor ?? undefined}
+              avatarUrl={team.avatarUrl}
               size="sm"
               decorative
             />

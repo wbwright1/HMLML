@@ -1,6 +1,13 @@
 import { KickoffCountdown } from "@/components/kickoff-countdown";
 import { DraftCountdown } from "@/components/draft-countdown";
-import { SmackFeed } from "@/components/smack-feed";
+import {
+  SmackFeed,
+  SmackComposerSlot,
+  smackItemsFromPosts,
+  smackItemsFromSeeds,
+} from "@/components/smack-feed";
+import { getSessionMember } from "@/lib/auth";
+import { getRecentSmackPosts, anySmackPostsExist } from "@/lib/queries/smack";
 import { EmptyState } from "@/components/empty-state";
 import { DivisionFieldCard } from "@/components/hub/division-field-card";
 import { BoldPredictionCard } from "@/components/hub/bold-prediction-card";
@@ -99,7 +106,26 @@ export async function PreseasonHub({
       brandingColor: null,
     };
 
-  const smackPosts = editorial.smackPosts.slice(0, 3);
+  // Member smack feed: real posts win when present. Site Desk seeds only stand
+  // in when the board is genuinely empty (no posts at all); when posts exist
+  // but are all hidden, moderation must NOT resurrect the seeds. Member and
+  // smack are settled independently so one failing (e.g. the members/smack
+  // tables not existing yet on a pre-0008 DB) never blanks the other.
+  const [memberResult, smackResult] = await Promise.allSettled([
+    getSessionMember(),
+    Promise.all([getRecentSmackPosts(3), anySmackPostsExist()]),
+  ]);
+  const sessionMember =
+    memberResult.status === "fulfilled" ? memberResult.value : null;
+  const [realSmack, anySmack] =
+    smackResult.status === "fulfilled" ? smackResult.value : [[], false];
+
+  const smackFromDesk = realSmack.length === 0 && !anySmack;
+  const smackItems = smackFromDesk
+    ? smackItemsFromSeeds(editorial.smackPosts.slice(0, 3))
+    : smackItemsFromPosts(realSmack);
+  const canPost = Boolean(sessionMember?.franchiseId);
+
   const hasField = field.divisions.length > 0;
 
   // Nothing to show (empty DB): keep a calm, on-voice fallback.
@@ -208,12 +234,21 @@ export async function PreseasonHub({
           )}
 
           {/* The Smack Feed */}
-          {smackPosts.length > 0 && (
-            <section>
-              <ModuleLabel meta="site desk">The Smack Feed</ModuleLabel>
-              <SmackFeed posts={smackPosts} />
-            </section>
-          )}
+          <section>
+            <ModuleLabel meta={smackFromDesk ? "site desk" : "the league"}>
+              The Smack Feed
+            </ModuleLabel>
+            <div className="space-y-3">
+              <SmackComposerSlot canPost={canPost} />
+              {smackItems.length > 0 ? (
+                <SmackFeed items={smackItems} />
+              ) : (
+                <p className="card-surface block p-4 text-body-sm text-text-tertiary">
+                  Nothing on the board right now.
+                </p>
+              )}
+            </div>
+          </section>
         </aside>
       </div>
     </>
