@@ -7,7 +7,7 @@ import { NflTeamLogo } from "@/components/nfl-team-logo";
 export interface PlayerHeadshotProps {
   playerId: string;
   name: string;
-  /** Common sizes: 36/40px in table rows, 40-48px in rail/hub rows, 64px in detail cards, 80px in award cards. */
+  /** Common sizes: 44/48px in table rows, 48-56px in rail/hub rows, 72px in detail cards, 96px in award cards. */
   size: number;
   nflTeam?: string | null;
   /** Renders an NflTeamLogo badge bottom-right, ~50% of headshot size. Defaults to true when nflTeam is given. */
