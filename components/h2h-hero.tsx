@@ -7,6 +7,7 @@ interface FranchiseData {
   name: string;
   abbreviation?: string;
   brandingColor?: string;
+  avatarUrl?: string | null;
   championships?: number;
 }
 
@@ -45,6 +46,7 @@ export function H2HHero({ teamA, teamB, record, streak }: H2HHeroProps) {
               name: teamA.name,
               abbreviation: teamA.abbreviation,
               brandingColor: teamA.brandingColor,
+              avatarUrl: teamA.avatarUrl,
             }}
             championships={teamA.championships ?? 0}
             variant="standard"
@@ -76,6 +78,7 @@ export function H2HHero({ teamA, teamB, record, streak }: H2HHeroProps) {
               name: teamB.name,
               abbreviation: teamB.abbreviation,
               brandingColor: teamB.brandingColor,
+              avatarUrl: teamB.avatarUrl,
             }}
             championships={teamB.championships ?? 0}
             variant="standard"

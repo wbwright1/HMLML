@@ -123,6 +123,7 @@ export default async function SeasonDetailPage({
                   name={championEntry.franchiseName}
                   abbreviation={championEntry.franchiseAbbreviation ?? undefined}
                   brandingColor={championEntry.franchiseBrandingColor ?? undefined}
+                  avatarUrl={championEntry.avatarUrl}
                   size="lg"
                   decorative
                 />
@@ -194,6 +195,7 @@ export default async function SeasonDetailPage({
                               entry.franchiseAbbreviation ?? undefined,
                             brandingColor:
                               entry.franchiseBrandingColor ?? undefined,
+                            avatarUrl: entry.avatarUrl,
                           }}
                           variant="compact"
                         />
@@ -280,6 +282,7 @@ export default async function SeasonDetailPage({
                               entry.franchiseAbbreviation ?? undefined,
                             brandingColor:
                               entry.franchiseBrandingColor ?? undefined,
+                            avatarUrl: entry.avatarUrl,
                           }}
                           variant="compact"
                         />

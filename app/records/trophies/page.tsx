@@ -46,6 +46,7 @@ export default async function TrophyCasePage() {
         slug: entry?.championSlug,
         abbreviation: entry?.championAbbreviation,
         brandingColor: entry?.championBrandingColor,
+        avatarUrl: entry?.championAvatarUrl ?? null,
       };
     })
     .sort((a, b) => b.count - a.count);
@@ -82,6 +83,7 @@ export default async function TrophyCasePage() {
                         name: champ.name,
                         abbreviation: champ.abbreviation ?? undefined,
                         brandingColor: champ.brandingColor ?? undefined,
+                        avatarUrl: champ.avatarUrl,
                       }}
                       championships={champ.count}
                       variant="standard"
@@ -132,6 +134,7 @@ export default async function TrophyCasePage() {
                           name: trophies[0].championName,
                           abbreviation: trophies[0].championAbbreviation ?? undefined,
                           brandingColor: trophies[0].championBrandingColor ?? undefined,
+                          avatarUrl: trophies[0].championAvatarUrl,
                         }}
                         championships={champCounts.get(trophies[0].championName) ?? 1}
                         variant="hero"
@@ -181,6 +184,7 @@ export default async function TrophyCasePage() {
                                 name: trophy.championName,
                                 abbreviation: trophy.championAbbreviation ?? undefined,
                                 brandingColor: trophy.championBrandingColor ?? undefined,
+                                avatarUrl: trophy.championAvatarUrl,
                               }}
                               championships={champCounts.get(trophy.championName) ?? 1}
                               variant="compact"

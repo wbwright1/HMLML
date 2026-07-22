@@ -270,6 +270,7 @@ export default async function RosterPage({ params }: RosterPageProps) {
                   name={franchise.name}
                   abbreviation={franchise.abbreviation}
                   brandingColor={franchise.brandingColor}
+                  avatarUrl={franchise.avatarUrl}
                   size="md"
                   decorative
                 />

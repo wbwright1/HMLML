@@ -8,6 +8,7 @@ import {
   seasons,
 } from "@/lib/db/schema";
 import { eq, and, desc, inArray, sql, sum, count } from "drizzle-orm";
+import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -19,6 +20,7 @@ export interface LeaderboardEntry {
   name: string;
   abbreviation?: string;
   brandingColor?: string;
+  avatarUrl: string | null;
   wins: number;
   losses: number;
   ties: number;
@@ -38,6 +40,7 @@ export interface CareerStats {
   name: string;
   abbreviation?: string;
   brandingColor?: string;
+  avatarUrl: string | null;
   wins: number;
   losses: number;
   ties: number;
@@ -83,6 +86,7 @@ export interface RivalrySummary {
     name: string;
     abbreviation?: string;
     brandingColor?: string;
+    avatarUrl: string | null;
   };
   franchiseB: {
     id: string;
@@ -90,6 +94,7 @@ export interface RivalrySummary {
     name: string;
     abbreviation?: string;
     brandingColor?: string;
+    avatarUrl: string | null;
   };
   record: HeadToHeadRecord;
   totalGames: number;
@@ -102,6 +107,7 @@ export interface PowerRankingEntry {
   name: string;
   abbreviation?: string;
   brandingColor?: string;
+  avatarUrl: string | null;
   wins: number;
   losses: number;
   ties: number;
@@ -123,6 +129,7 @@ export interface TrophyEntry {
   championSlug: string | null;
   championAbbreviation: string | null;
   championBrandingColor: string | null;
+  championAvatarUrl: string | null;
   runnerUpName: string | null;
   runnerUpSlug: string | null;
 }
@@ -159,6 +166,8 @@ export async function getLeaderboard(
         .where(eq(seasons.seasonYear, seasonYear))
         .orderBy(desc(franchiseSeasons.wins));
 
+      const avatarUrls = await getLatestAvatarUrls(rows.map((r) => r.id));
+
       return rows.map((r) => {
         const w = r.wins ?? 0;
         const l = r.losses ?? 0;
@@ -170,6 +179,7 @@ export async function getLeaderboard(
           name: r.name,
           abbreviation: r.abbreviation ?? undefined,
           brandingColor: r.brandingColor ?? undefined,
+          avatarUrl: avatarUrls.get(r.id) ?? null,
           wins: w,
           losses: l,
           ties: t,
@@ -210,6 +220,8 @@ export async function getLeaderboard(
       .groupBy(franchises.id)
       .orderBy(sql`COALESCE(SUM(${franchiseSeasons.wins}), 0) DESC`);
 
+    const avatarUrls = await getLatestAvatarUrls(rows.map((r) => r.id));
+
     return rows.map((r) => {
       const w = Number(r.totalWins ?? 0);
       const l = Number(r.totalLosses ?? 0);
@@ -221,6 +233,7 @@ export async function getLeaderboard(
         name: r.name,
         abbreviation: r.abbreviation ?? undefined,
         brandingColor: r.brandingColor ?? undefined,
+        avatarUrl: avatarUrls.get(r.id) ?? null,
         wins: w,
         losses: l,
         ties: t,
@@ -270,6 +283,8 @@ export async function getAllSeasonLeaderboards(): Promise<
       .innerJoin(seasons, eq(franchiseSeasons.seasonId, seasons.id))
       .orderBy(seasons.seasonYear, desc(franchiseSeasons.wins));
 
+    const avatarUrls = await getLatestAvatarUrls(rows.map((r) => r.id));
+
     const result: Record<string, LeaderboardEntry[]> = {};
 
     for (const r of rows) {
@@ -287,6 +302,7 @@ export async function getAllSeasonLeaderboards(): Promise<
         name: r.name,
         abbreviation: r.abbreviation ?? undefined,
         brandingColor: r.brandingColor ?? undefined,
+        avatarUrl: avatarUrls.get(r.id) ?? null,
         wins: w,
         losses: l,
         ties: t,
@@ -383,12 +399,15 @@ export async function getCareerStats(
 
     const totalGames = totalWins + totalLosses + totalTies;
 
+    const avatarUrls = await getLatestAvatarUrls([franchiseId]);
+
     return {
       id: franchise.id,
       slug: franchise.slug,
       name: franchise.name,
       abbreviation: franchise.abbreviation ?? undefined,
       brandingColor: franchise.brandingColor ?? undefined,
+      avatarUrl: avatarUrls.get(franchiseId) ?? null,
       wins: totalWins,
       losses: totalLosses,
       ties: totalTies,
@@ -544,6 +563,8 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
 
     if (allFranchises.length < 2) return [];
 
+    const avatarUrls = await getLatestAvatarUrls(allFranchises.map((f) => f.id));
+
     // Get all matchup pairings in one query
     const pairings = await db
       .select({
@@ -650,6 +671,7 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
           name: fA.name,
           abbreviation: fA.abbreviation ?? undefined,
           brandingColor: fA.brandingColor ?? undefined,
+          avatarUrl: avatarUrls.get(fA.id) ?? null,
         },
         franchiseB: {
           id: fB.id,
@@ -657,6 +679,7 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
           name: fB.name,
           abbreviation: fB.abbreviation ?? undefined,
           brandingColor: fB.brandingColor ?? undefined,
+          avatarUrl: avatarUrls.get(fB.id) ?? null,
         },
         record: {
           wins: data.wins,
@@ -983,6 +1006,8 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
     const scores = computePowerScore(inputs);
     const scoreByFranchise = new Map(scores.map((s) => [s.franchiseId, s]));
 
+    const avatarUrls = await getLatestAvatarUrls(rows.map((r) => r.id));
+
     return rows
       .map((r) => {
         const score = scoreByFranchise.get(r.id);
@@ -993,6 +1018,7 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
           name: r.name,
           abbreviation: r.abbreviation ?? undefined,
           brandingColor: r.brandingColor ?? undefined,
+          avatarUrl: avatarUrls.get(r.id) ?? null,
           wins: r.wins ?? 0,
           losses: r.losses ?? 0,
           ties: r.ties ?? 0,
@@ -1045,6 +1071,11 @@ export async function getTrophyCase(): Promise<TrophyEntry[]> {
       )
       .orderBy(desc(seasons.seasonYear));
 
+    const championIds = rows
+      .map((row) => row.championFranchiseId)
+      .filter((id): id is string => id != null);
+    const avatarUrls = await getLatestAvatarUrls(championIds);
+
     return rows.map((row) => ({
       seasonYear: row.seasonYear,
       championFranchiseId: row.championFranchiseId,
@@ -1052,6 +1083,9 @@ export async function getTrophyCase(): Promise<TrophyEntry[]> {
       championSlug: row.championSlug,
       championAbbreviation: row.championAbbreviation,
       championBrandingColor: row.championBrandingColor,
+      championAvatarUrl: row.championFranchiseId
+        ? avatarUrls.get(row.championFranchiseId) ?? null
+        : null,
       runnerUpName: row.runnerUpName,
       runnerUpSlug: row.runnerUpSlug,
     }));
@@ -1071,6 +1105,7 @@ export async function getAllFranchiseOptions(): Promise<
     name: string;
     abbreviation?: string;
     brandingColor?: string;
+    avatarUrl: string | null;
   }[]
 > {
   try {
@@ -1085,10 +1120,13 @@ export async function getAllFranchiseOptions(): Promise<
       .from(franchises)
       .orderBy(franchises.name);
 
+    const avatarUrls = await getLatestAvatarUrls(rows.map((r) => r.id));
+
     return rows.map((r) => ({
       ...r,
       abbreviation: r.abbreviation ?? undefined,
       brandingColor: r.brandingColor ?? undefined,
+      avatarUrl: avatarUrls.get(r.id) ?? null,
     }));
   } catch {
     return [];

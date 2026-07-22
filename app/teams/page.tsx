@@ -54,6 +54,7 @@ export default async function TeamsPage() {
                   name: franchise.name,
                   abbreviation: franchise.abbreviation,
                   brandingColor: franchise.brandingColor,
+                  avatarUrl: franchise.avatarUrl,
                 }}
                 championships={franchise.championships}
                 ownerName={franchise.ownerName}

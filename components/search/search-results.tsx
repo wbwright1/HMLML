@@ -6,6 +6,7 @@ export interface SearchTeam {
   name: string;
   slug: string;
   abbreviation: string | null;
+  avatarUrl: string | null;
 }
 
 export interface SearchPlayer {
@@ -147,6 +148,7 @@ export function SearchResults({
                   slug={f.slug}
                   name={f.name}
                   abbreviation={f.abbreviation ?? undefined}
+                  avatarUrl={f.avatarUrl}
                   size="sm"
                   decorative
                 />

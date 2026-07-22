@@ -38,6 +38,7 @@ export function TradeCard({ trade }: TradeCardProps) {
                       name={side.franchise.name}
                       abbreviation={side.franchise.abbreviation}
                       brandingColor={side.franchise.brandingColor}
+                      avatarUrl={side.franchise.avatarUrl}
                       size="sm"
                     />
                     <div className="min-w-0">

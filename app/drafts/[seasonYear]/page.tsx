@@ -135,6 +135,7 @@ interface ColumnMeta {
   slug: string | null;
   abbreviation: string | null;
   brandingColor: string | null;
+  avatarUrl: string | null;
 }
 
 interface NormalizedPick {
@@ -148,6 +149,7 @@ interface NormalizedPick {
   currentSlug: string | null;
   currentAbbreviation: string | null;
   currentBrandingColor: string | null;
+  currentAvatarUrl: string | null;
   originalName: string | null;
 }
 
@@ -170,6 +172,7 @@ function normalizeCompletedPick(pick: DraftPickWithFranchise): NormalizedPick {
     currentSlug: pick.franchiseSlug,
     currentAbbreviation: pick.franchiseAbbreviation,
     currentBrandingColor: pick.franchiseBrandingColor,
+    currentAvatarUrl: pick.franchiseAvatarUrl,
     originalName: pick.originalFranchiseName,
   };
 }
@@ -186,6 +189,7 @@ function normalizeUpcomingPick(pick: UpcomingPick): NormalizedPick {
     currentSlug: pick.franchiseSlug,
     currentAbbreviation: null,
     currentBrandingColor: null,
+    currentAvatarUrl: pick.avatarUrl,
     originalName: pick.originalFranchiseName,
   };
 }
@@ -207,6 +211,7 @@ function buildDraftBoard(picks: NormalizedPick[]): DraftBoard {
       slug: p.currentSlug,
       abbreviation: p.currentAbbreviation,
       brandingColor: p.currentBrandingColor,
+      avatarUrl: p.currentAvatarUrl,
     };
     if (!infoByKey.has(p.currentId)) infoByKey.set(p.currentId, info);
     if (!infoByKey.has(`name:${p.currentName}`)) infoByKey.set(`name:${p.currentName}`, info);
@@ -222,6 +227,7 @@ function buildDraftBoard(picks: NormalizedPick[]): DraftBoard {
           slug: p.currentSlug,
           abbreviation: p.currentAbbreviation,
           brandingColor: p.currentBrandingColor,
+          avatarUrl: p.currentAvatarUrl,
         },
       };
     }
@@ -234,6 +240,7 @@ function buildDraftBoard(picks: NormalizedPick[]): DraftBoard {
         slug: null,
         abbreviation: null,
         brandingColor: null,
+        avatarUrl: null,
       },
     };
   }
@@ -337,12 +344,14 @@ function TeamCrest({
   name,
   abbreviation,
   brandingColor,
+  avatarUrl,
   size = "sm",
 }: {
   slug: string | null;
   name: string;
   abbreviation: string | null;
   brandingColor: string | null;
+  avatarUrl?: string | null;
   size?: "sm" | "md";
 }) {
   if (slug) {
@@ -352,6 +361,7 @@ function TeamCrest({
         name={name}
         abbreviation={abbreviation ?? undefined}
         brandingColor={brandingColor ?? undefined}
+        avatarUrl={avatarUrl}
         size={size}
       />
     );
@@ -378,6 +388,7 @@ function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
         name={pick.currentName}
         abbreviation={pick.currentAbbreviation}
         brandingColor={pick.currentBrandingColor}
+        avatarUrl={pick.currentAvatarUrl}
       />
       <div className="min-w-0 flex-1">
         {pick.playerName && (
@@ -439,6 +450,7 @@ function DesktopBoard({ board }: { board: DraftBoard }) {
               name={col.name}
               abbreviation={col.abbreviation}
               brandingColor={col.brandingColor}
+              avatarUrl={col.avatarUrl}
               size="sm"
             />
             <span className="max-w-full truncate text-[9px] font-bold text-text-tertiary">
@@ -569,6 +581,7 @@ interface UpcomingPick {
   franchiseId: string;
   franchiseName: string;
   franchiseSlug: string | null;
+  avatarUrl: string | null;
   roster: PositionCounts;
   originalFranchiseName: string | null;
 }
@@ -628,6 +641,7 @@ async function buildUpcomingDraftPicks(year: number): Promise<UpcomingPick[] | n
       userId: franchiseSeasons.userId,
       franchiseName: franchises.name,
       franchiseSlug: franchises.slug,
+      avatarUrl: franchiseSeasons.avatarUrl,
     })
     .from(franchiseSeasons)
     .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
@@ -651,6 +665,7 @@ async function buildUpcomingDraftPicks(year: number): Promise<UpcomingPick[] | n
           userId: franchiseSeasons.userId,
           franchiseName: franchises.name,
           franchiseSlug: franchises.slug,
+          avatarUrl: franchiseSeasons.avatarUrl,
         })
         .from(franchiseSeasons)
         .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
@@ -770,6 +785,7 @@ async function buildUpcomingDraftPicks(year: number): Promise<UpcomingPick[] | n
         franchiseId: displayTeam.franchiseId,
         franchiseName: displayTeam.franchiseName ?? "Unknown",
         franchiseSlug: displayTeam.franchiseSlug,
+        avatarUrl: displayTeam.avatarUrl,
         roster: rosterMap.get(displayTeam.franchiseId) ?? emptyRoster,
         originalFranchiseName,
       });

@@ -9,6 +9,8 @@ interface StandingsEntry {
   record: string;
   abbreviation?: string | null;
   brandingColor?: string | null;
+  /** Per-season Sleeper crest; null/absent falls back to the monogram. */
+  avatarUrl?: string | null;
   /** Division metadata; absent for legacy/pre-division seasons (RISK-B). */
   division?: number | null;
   divisionName?: string | null;
@@ -139,6 +141,7 @@ function LadderRow({
         name={entry.franchiseName}
         abbreviation={entry.abbreviation ?? undefined}
         brandingColor={entry.brandingColor ?? undefined}
+        avatarUrl={entry.avatarUrl}
         size="sm"
         decorative
       />

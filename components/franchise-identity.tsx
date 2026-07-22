@@ -7,6 +7,7 @@ interface FranchiseIdentityProps {
     name: string;
     abbreviation?: string;
     brandingColor?: string;
+    avatarUrl?: string | null;
   };
   championships?: number;
   ownerName?: string;
@@ -53,6 +54,7 @@ function BrandedCrest({
         name={franchise.name}
         abbreviation={franchise.abbreviation}
         brandingColor={franchise.brandingColor}
+        avatarUrl={franchise.avatarUrl}
         size={size}
         decorative
       />

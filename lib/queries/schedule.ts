@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { matchups, franchises } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { matchups, franchises, franchiseSeasons } from "@/lib/db/schema";
+import { eq, and } from "drizzle-orm";
 import { pairMatchupRows, type PairedMatchup } from "@/lib/queries/matchups";
 
 // ---------------------------------------------------------------------------
@@ -16,6 +16,7 @@ export interface FranchiseScheduleWeek {
     franchiseSlug: string;
     franchiseAbbreviation: string | null;
     franchiseBrandingColor: string | null;
+    avatarUrl: string | null;
   } | null;
   points: number;
   opponentPoints: number;
@@ -56,9 +57,17 @@ export async function getSeasonSchedule(
         franchiseSlug: franchises.slug,
         franchiseAbbreviation: franchises.abbreviation,
         franchiseBrandingColor: franchises.brandingColor,
+        avatarUrl: franchiseSeasons.avatarUrl,
       })
       .from(matchups)
       .innerJoin(franchises, eq(matchups.franchiseId, franchises.id))
+      .leftJoin(
+        franchiseSeasons,
+        and(
+          eq(franchiseSeasons.franchiseId, matchups.franchiseId),
+          eq(franchiseSeasons.seasonId, matchups.seasonId)
+        )
+      )
       .where(eq(matchups.seasonId, seasonId));
 
     const byWeek = new Map<number, typeof rows>();
@@ -105,9 +114,17 @@ export async function getFranchiseSchedule(
         franchiseSlug: franchises.slug,
         franchiseAbbreviation: franchises.abbreviation,
         franchiseBrandingColor: franchises.brandingColor,
+        avatarUrl: franchiseSeasons.avatarUrl,
       })
       .from(matchups)
       .innerJoin(franchises, eq(matchups.franchiseId, franchises.id))
+      .leftJoin(
+        franchiseSeasons,
+        and(
+          eq(franchiseSeasons.franchiseId, matchups.franchiseId),
+          eq(franchiseSeasons.seasonId, matchups.seasonId)
+        )
+      )
       .where(eq(matchups.seasonId, seasonId));
 
     // Group all rows (both sides of every matchup) by (week, matchupId) so we
@@ -152,6 +169,7 @@ export async function getFranchiseSchedule(
               franchiseSlug: opponentRow.franchiseSlug,
               franchiseAbbreviation: opponentRow.franchiseAbbreviation,
               franchiseBrandingColor: opponentRow.franchiseBrandingColor,
+              avatarUrl: opponentRow.avatarUrl,
             }
           : null,
         points,

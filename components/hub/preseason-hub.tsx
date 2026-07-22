@@ -95,6 +95,7 @@ export async function PreseasonHub({
         name: team.name,
         abbreviation: team.abbreviation,
         brandingColor: team.brandingColor,
+        avatarUrl: team.avatarUrl,
       });
     }
   }
@@ -104,6 +105,7 @@ export async function PreseasonHub({
       name: titleCaseSlug(slug),
       abbreviation: null,
       brandingColor: null,
+      avatarUrl: null,
     };
 
   // Member smack feed: real posts win when present. Site Desk seeds only stand

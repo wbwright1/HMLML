@@ -74,6 +74,7 @@ export default async function RivalriesPage() {
                           name: franchiseA.name,
                           abbreviation: franchiseA.abbreviation,
                           brandingColor: franchiseA.brandingColor,
+                          avatarUrl: franchiseA.avatarUrl,
                         }}
                         variant="compact"
                       />
@@ -109,6 +110,7 @@ export default async function RivalriesPage() {
                           name: franchiseB.name,
                           abbreviation: franchiseB.abbreviation,
                           brandingColor: franchiseB.brandingColor,
+                          avatarUrl: franchiseB.avatarUrl,
                         }}
                         variant="compact"
                       />

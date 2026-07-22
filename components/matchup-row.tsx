@@ -7,6 +7,7 @@ interface MatchupTeamInfo {
   franchiseSlug: string;
   franchiseAbbreviation: string | null;
   franchiseBrandingColor: string | null;
+  avatarUrl?: string | null;
   points: number;
   isWinner: boolean | null;
 }
@@ -59,6 +60,7 @@ export function MatchupRow({ matchup, variant = "final" }: MatchupRowProps) {
                 name: homeTeam.franchiseName,
                 abbreviation: homeTeam.franchiseAbbreviation ?? undefined,
                 brandingColor: homeTeam.franchiseBrandingColor ?? undefined,
+                avatarUrl: homeTeam.avatarUrl,
               }}
               variant="compact"
             />
@@ -105,6 +107,7 @@ export function MatchupRow({ matchup, variant = "final" }: MatchupRowProps) {
                 name: awayTeam.franchiseName,
                 abbreviation: awayTeam.franchiseAbbreviation ?? undefined,
                 brandingColor: awayTeam.franchiseBrandingColor ?? undefined,
+                avatarUrl: awayTeam.avatarUrl,
               }}
               variant="compact"
             />

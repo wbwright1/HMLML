@@ -49,6 +49,7 @@ export async function GET(request: Request) {
       name: f.name,
       slug: f.slug,
       abbreviation: f.abbreviation ?? null,
+      avatarUrl: f.avatarUrl ?? null,
     }));
 
   const players = playerRows.slice(0, MAX_RESULTS).map((p) => ({
