@@ -72,6 +72,9 @@ export default async function PlayersPage({ searchParams }: PlayersPageProps) {
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_300px] lg:items-start">
+        <aside className="lg:order-2">
+          <TrendingRail players={trendingPlayers} />
+        </aside>
         <PlayerTable
           players={playerRows}
           franchises={franchises}
@@ -80,9 +83,6 @@ export default async function PlayersPage({ searchParams }: PlayersPageProps) {
           showProjColumn={showProjColumn}
           showTrdColumn={showTrdColumn}
         />
-        <aside className="hidden lg:block">
-          <TrendingRail players={trendingPlayers} />
-        </aside>
       </div>
     </section>
   );
