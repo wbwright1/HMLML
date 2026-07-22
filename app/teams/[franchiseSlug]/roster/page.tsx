@@ -109,12 +109,12 @@ function RosterSection({
               <PositionBadge key="slot" position={player.position} />,
               <div key="player" className="flex items-center gap-2.5">
                 {player.position === "DEF" ? (
-                  <NflTeamLogo teamAbbrev={player.nflTeam} size={36} />
+                  <NflTeamLogo teamAbbrev={player.nflTeam} size={44} />
                 ) : (
                   <PlayerHeadshot
                     playerId={player.playerId}
                     name={name}
-                    size={36}
+                    size={44}
                     nflTeam={player.nflTeam}
                   />
                 )}

@@ -28,7 +28,7 @@ export function TrendingRail({ players }: TrendingRailProps) {
             <PlayerHeadshot
               playerId={player.playerId}
               name={player.name ?? "Unknown"}
-              size={40}
+              size={48}
               nflTeam={player.nflTeam}
             />
             <div className="min-w-0 flex-1">

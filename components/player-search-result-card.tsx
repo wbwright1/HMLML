@@ -32,7 +32,7 @@ export function PlayerSearchResultCard({
         <PlayerHeadshot
           playerId={playerId}
           name={playerName}
-          size={64}
+          size={72}
           nflTeam={nflTeam}
         />
 
