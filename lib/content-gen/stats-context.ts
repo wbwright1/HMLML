@@ -406,7 +406,11 @@ export async function buildStatsContext(
     console.error("[stats-context] franchise longevity unavailable:", e);
   }
   try {
-    const projections = await getRosterProjections(seasonId);
+    // seasonYear is the projection target: getRosterProjections only counts
+    // players whose stored proj_season matches it, so a stale prior-year
+    // projection (a player dropped from this year's feed) never leaks into
+    // this year's rankings. projectionSeason = seasonYear stays exact.
+    const projections = await getRosterProjections(seasonId, seasonYear);
     rosterProjections = projections.map((p) => ({
       slug: p.slug,
       name: p.name,

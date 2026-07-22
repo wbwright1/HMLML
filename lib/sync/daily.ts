@@ -543,11 +543,23 @@ async function syncPlayers(): Promise<SyncStepResult> {
       totalUpserted += batch.length;
     }
 
-    // --- Sync player stats (pts_ppr) ---
+    // One NFL-state fetch shared by the stats and projections blocks below.
+    // A null here means the state fetch failed; both blocks then skip quietly
+    // (neither ever fails the players step).
+    let sharedNflState: { season: string; season_type: string; week: number } | null = null;
     try {
       const nflStateResult = await getNFLState();
-      if (!("error" in nflStateResult)) {
-        const nflState = nflStateResult.data;
+      if (!("error" in nflStateResult)) sharedNflState = nflStateResult.data;
+    } catch (stateError) {
+      console.warn(
+        `[sync] NFL state fetch failed: ${stateError instanceof Error ? stateError.message : "Unknown error"}`
+      );
+    }
+
+    // --- Sync player stats (pts_ppr) ---
+    try {
+      if (sharedNflState) {
+        const nflState = sharedNflState;
         const currentSeason = parseInt(nflState.season, 10);
         // Use previous season stats if we're in pre_draft, pre-season, or off-season
         const seasonType = nflState.season_type;
@@ -612,19 +624,24 @@ async function syncPlayers(): Promise<SyncStepResult> {
     // --- Sync upcoming-season projections (proj_points_ppr) ---
     let projectionRowCount = 0;
     try {
-      const nflStateResult = await getNFLState();
-      if (!("error" in nflStateResult)) {
-        const nflState = nflStateResult.data;
+      if (sharedNflState) {
         // Use the state's season directly: in preseason/pre_draft the NFL
         // state's `season` already IS the upcoming season, unlike the stats
         // block above which deliberately looks back a year.
-        const projSeason = parseInt(nflState.season, 10);
+        const projSeason = parseInt(sharedNflState.season, 10);
 
         const projResult = await getSeasonProjections(projSeason);
         if (!("error" in projResult)) {
           const projRows = projResult.data
             .filter(
-              (row) => row.stats.pts_ppr != null && row.stats.pts_ppr > 0
+              (row) =>
+                row.stats.pts_ppr != null &&
+                row.stats.pts_ppr > 0 &&
+                // Only touch players that exist in the players snapshot just
+                // upserted above; the upsert's INSERT branch would otherwise
+                // create nameless player rows for ids Sleeper projects but
+                // does not list in /players/nfl.
+                playersData[row.player_id] != null
             )
             .map((row) => ({
               id: row.player_id,
