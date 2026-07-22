@@ -246,6 +246,26 @@ export const SleeperProjectionsSchema = z.record(
 );
 export type SleeperProjections = z.infer<typeof SleeperProjectionsSchema>;
 
+// ─── Season Projections ─────────────────────────────────────────────────────
+// From api.sleeper.com/projections/nfl/{season}?season_type=regular&... — a
+// flat array (NOT keyed by player_id like the weekly projections endpoint).
+// Each row carries a nested stats map; only pts_ppr is consumed, but the map
+// is passed through since Sleeper adds fields without notice.
+export const SleeperSeasonProjectionSchema = z
+  .object({
+    player_id: z.string(),
+    stats: z
+      .object({
+        pts_ppr: z.number().nullable().optional(),
+      })
+      .passthrough(),
+  })
+  .passthrough();
+
+export type SleeperSeasonProjection = z.infer<
+  typeof SleeperSeasonProjectionSchema
+>;
+
 // ─── Schedule Game ────────────────────────────────────────────────────────────
 // From api.sleeper.app/schedule/nfl/{seasonType}/{season} (NOT under /v1).
 // status is left permissive (plain string): observed "pre_game", "complete",

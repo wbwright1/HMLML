@@ -16,6 +16,7 @@ import {
   getDraftPicks,
   getAllPlayers,
   getPlayerStats,
+  getSeasonProjections,
   getNFLState,
   getWinnersBracket,
   getLosersBracket,
@@ -608,8 +609,73 @@ async function syncPlayers(): Promise<SyncStepResult> {
       );
     }
 
+    // --- Sync upcoming-season projections (proj_points_ppr) ---
+    let projectionRowCount = 0;
+    try {
+      const nflStateResult = await getNFLState();
+      if (!("error" in nflStateResult)) {
+        const nflState = nflStateResult.data;
+        // Use the state's season directly: in preseason/pre_draft the NFL
+        // state's `season` already IS the upcoming season, unlike the stats
+        // block above which deliberately looks back a year.
+        const projSeason = parseInt(nflState.season, 10);
+
+        const projResult = await getSeasonProjections(projSeason);
+        if (!("error" in projResult)) {
+          const projRows = projResult.data
+            .filter(
+              (row) => row.stats.pts_ppr != null && row.stats.pts_ppr > 0
+            )
+            .map((row) => ({
+              id: row.player_id,
+              projPointsPpr: row.stats.pts_ppr ?? null,
+              projSeason,
+            }));
+
+          // Batch update in chunks of 500
+          const projBatches = chunk(projRows, 500);
+          for (const batch of projBatches) {
+            await db
+              .insert(players)
+              .values(
+                batch.map((row) => ({
+                  id: row.id,
+                  projPointsPpr: row.projPointsPpr,
+                  projSeason: row.projSeason,
+                  updatedAt: new Date(),
+                }))
+              )
+              .onConflictDoUpdate({
+                target: players.id,
+                set: {
+                  projPointsPpr: sql`excluded.proj_points_ppr`,
+                  projSeason: sql`excluded.proj_season`,
+                  updatedAt: sql`excluded.updated_at`,
+                },
+              });
+          }
+
+          projectionRowCount = projRows.length;
+          console.log(
+            `[sync] Updated ${projectionRowCount} players with ${projSeason} season projections`
+          );
+        } else {
+          console.warn(
+            `[sync] Failed to fetch season projections: ${projResult.error.message}`
+          );
+        }
+      }
+    } catch (projError) {
+      // Don't fail the entire player sync if projections fail
+      console.warn(
+        `[sync] Player projections sync failed: ${projError instanceof Error ? projError.message : "Unknown error"}`
+      );
+    }
+
     const durationMs = Date.now() - startTime;
-    await logSyncComplete(logId, "success", totalUpserted);
+    await logSyncComplete(logId, "success", totalUpserted, undefined, {
+      projectionRowCount,
+    });
     return {
       dataType: "players",
       status: "success",

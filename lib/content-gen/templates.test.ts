@@ -70,6 +70,9 @@ function baseContext(overrides: Partial<StatsContext> = {}): StatsContext {
       dudStarter: null,
     },
     recentTransactions: [],
+    franchiseHistory: [],
+    rosterProjections: [],
+    projectionSeason: null,
     ...overrides,
   };
 }
@@ -205,5 +208,122 @@ describe("kindsForSeason (unsupported states)", () => {
   it("maps post and off to no kinds", () => {
     expect(kindsForSeason("post")).toEqual([]);
     expect(kindsForSeason("off")).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Longevity + roster projections (preseason depth)
+// ---------------------------------------------------------------------------
+
+describe("generateFromTemplates (preseason, no franchiseHistory/rosterProjections)", () => {
+  // The migration-not-yet-applied / sync-not-yet-run path: both arrays empty.
+  // This must still produce fully valid content (the graceful-degradation case).
+  const ctx = baseContext({ seasonType: "pre" });
+  const { rows } = generateFromTemplates(ctx);
+
+  it("produces valid content with no projection or longevity copy", () => {
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r.body.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it("never emits an em-dash", () => {
+    for (const r of rows) expect(hasEmDash(r.body)).toBe(false);
+  });
+
+  it("emits no projection-referencing copy", () => {
+    for (const r of rows) {
+      expect(r.body).not.toMatch(/starting-lineup points/);
+      expect((r.extras as { kicker?: string } | null)?.kicker).not.toBe("Projected Underperformer");
+      expect((r.extras as { kicker?: string } | null)?.kicker).not.toBe("Projected Riser");
+    }
+  });
+});
+
+describe("generateFromTemplates (preseason, with franchiseHistory + rosterProjections)", () => {
+  const ctx = baseContext({
+    seasonType: "pre",
+    franchiseHistory: [
+      {
+        slug: "better-call-hall",
+        allTimeWinPct: 0.31,
+        championships: 0,
+        playoffAppearances: 1,
+        seasonsPlayed: 5,
+        lastThreeFinishes: [12, 11, 12],
+        sustainedDoormat: true,
+        sustainedContender: false,
+      },
+      {
+        slug: "team-c",
+        allTimeWinPct: 0.68,
+        championships: 2,
+        playoffAppearances: 5,
+        seasonsPlayed: 5,
+        lastThreeFinishes: [1, 2, 1],
+        sustainedDoormat: false,
+        sustainedContender: true,
+      },
+    ],
+    rosterProjections: [
+      {
+        slug: "team-c",
+        name: "Team C",
+        projectedStartingPoints: 1420.3,
+        leagueRank: 1,
+        topProjectedPlayer: { name: "Star QB", position: "QB", points: 380.1 },
+      },
+      {
+        slug: "better-call-hall",
+        name: "Better Call Hall",
+        projectedStartingPoints: 980.5,
+        leagueRank: 5,
+        topProjectedPlayer: { name: "Depth WR", position: "WR", points: 150.2 },
+      },
+    ],
+    projectionSeason: 2026,
+  });
+  const { rows } = generateFromTemplates(ctx);
+
+  it("adds a projection underperformer and a projection riser to bold predictions", () => {
+    const kickers = rows
+      .filter((r) => r.kind === "bold_prediction")
+      .map((r) => (r.extras as { kicker: string }).kicker);
+    expect(kickers).toContain("Projected Underperformer");
+    expect(kickers).toContain("Projected Riser");
+  });
+
+  it("escalates the doormat bold prediction when last-season doormat is also a sustained doormat", () => {
+    const doormatRow = rows.find(
+      (r) => r.kind === "bold_prediction" && (r.extras as { kicker: string }).kicker === "League Doormat",
+    );
+    expect(doormatRow?.body).toMatch(/multiple seasons|identity/);
+  });
+
+  it("references projected rank/totals in offseason receipts", () => {
+    const receipts = rows.filter((r) => r.kind === "offseason_receipt");
+    const fireSale = receipts.find((r) => (r.extras as { category: string }).category === "FIRE_SALE");
+    const draft = receipts.find((r) => (r.extras as { category: string }).category === "DRAFT");
+    expect(fireSale?.refKey).toBe("better-call-hall");
+    expect(fireSale?.body).toContain("980.5");
+    expect(draft?.refKey).toBe("team-c");
+    expect(draft?.body).toContain("1420.3");
+  });
+
+  it("seeds a smack post and a burning question from longevity", () => {
+    const smack = rows.filter((r) => r.kind === "smack_post");
+    const questions = rows.filter((r) => r.kind === "burning_question");
+    expect(smack.some((r) => r.body.includes("Better Call Hall"))).toBe(true);
+    expect(questions.some((r) => r.body.includes("Better Call Hall"))).toBe(true);
+  });
+
+  it("seeds a smack post from the top roster projection", () => {
+    const smack = rows.filter((r) => r.kind === "smack_post");
+    expect(smack.some((r) => r.body.includes("Team C") && r.body.includes("No. 1"))).toBe(true);
+  });
+
+  it("never emits an em-dash", () => {
+    for (const r of rows) expect(hasEmDash(r.body)).toBe(false);
   });
 });

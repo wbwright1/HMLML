@@ -1,5 +1,6 @@
 import { getDivisionStandings } from "@/lib/queries/divisions";
 import { getSeasonStandings } from "@/lib/queries/seasons";
+import { getLeagueLongevity } from "@/lib/queries/franchise-longevity";
 import { formatRecord } from "@/lib/format-record";
 
 // Re-exported so existing consumers/tests that import formatRecord from this
@@ -52,12 +53,7 @@ interface LastSeasonRow {
 // Pure helpers (unit-tested in preseason-field.test.ts)
 // ---------------------------------------------------------------------------
 
-/**
- * The single worst finisher of a completed season, tagged DOORMAT. Prefers the
- * largest standings_finish (last place); falls back to the lowest win% when the
- * finish is unrecorded. Returns null for an empty season.
- */
-export function pickDoormatId(rows: LastSeasonRow[]): string | null {
+function worstBySingleSeason(rows: LastSeasonRow[]): string | null {
   if (rows.length === 0) return null;
 
   const withFinish = rows.filter((r) => r.standingsFinish != null);
@@ -75,6 +71,28 @@ export function pickDoormatId(rows: LastSeasonRow[]): string | null {
     return total > 0 ? (w + t * 0.5) / total : 0;
   };
   return rows.reduce((worst, r) => (winPct(r) < winPct(worst) ? r : worst)).franchiseId;
+}
+
+/**
+ * The team the preseason field tags DOORMAT. Prefers a franchise with a
+ * sustained (multi-year) bottom-tier trend, when one exists among last
+ * season's franchises: among those, the worst single-season finisher (via
+ * worstBySingleSeason) breaks the tie. Falls back to the single-season worst
+ * finisher when nobody in the field has a sustained trend, or when no
+ * sustained-doormat set is supplied at all. Returns null for an empty season.
+ */
+export function pickDoormatId(
+  rows: LastSeasonRow[],
+  sustainedDoormatIds: ReadonlySet<string> = new Set(),
+): string | null {
+  if (rows.length === 0) return null;
+
+  const sustained = rows.filter((r) => sustainedDoormatIds.has(r.franchiseId));
+  if (sustained.length > 0) {
+    return worstBySingleSeason(sustained);
+  }
+
+  return worstBySingleSeason(rows);
 }
 
 /**
@@ -155,7 +173,25 @@ export async function getPreseasonField(
   const lastByFranchise = new Map<string, LastSeasonRow>(
     lastStandings.map((r) => [r.franchiseId, r]),
   );
-  const doormatId = pickDoormatId(lastStandings);
+
+  // Sustained (multi-year) bottom-tier trend, when the DB has enough history.
+  // Degrades to an empty set (single-season fallback in pickDoormatId) on any
+  // failure, including a not-yet-applied proj/longevity migration gap.
+  let sustainedDoormatIds = new Set<string>();
+  if (currentSeasonId && lastStandings.length > 0) {
+    try {
+      const longevity = await getLeagueLongevity(
+        currentSeasonId,
+        lastStandings.map((r) => r.franchiseId),
+      );
+      sustainedDoormatIds = new Set(
+        longevity.filter((l) => l.sustainedDoormat).map((l) => l.franchiseId),
+      );
+    } catch {
+      // fall through with the empty set
+    }
+  }
+  const doormatId = pickDoormatId(lastStandings, sustainedDoormatIds);
 
   const divisions: FieldDivision[] = groups
     .filter((g) => g.teams.length > 0)

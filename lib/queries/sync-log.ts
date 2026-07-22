@@ -31,7 +31,8 @@ export async function logSyncComplete(
   id: number,
   status: "success" | "partial" | "failure",
   rowCount: number,
-  errorMessage?: string
+  errorMessage?: string,
+  detailsJson?: Record<string, unknown>
 ): Promise<void> {
   const now = new Date();
 
@@ -53,6 +54,7 @@ export async function logSyncComplete(
       durationMs: durationMs,
       errorMessage: errorMessage ?? null,
       completedAt: now,
+      ...(detailsJson !== undefined ? { detailsJson } : {}),
     })
     .where(eq(syncLog.id, id));
 }

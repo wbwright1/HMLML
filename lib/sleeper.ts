@@ -15,6 +15,7 @@ import {
   SleeperProjectionsSchema,
   SleeperTrendingAddSchema,
   SleeperScheduleGameSchema,
+  SleeperSeasonProjectionSchema,
   type SleeperLeague,
   type SleeperUser,
   type SleeperRoster,
@@ -30,6 +31,7 @@ import {
   type SleeperProjections,
   type SleeperTrendingAdd,
   type SleeperScheduleGame,
+  type SleeperSeasonProjection,
 } from "./sleeper-schemas";
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -37,6 +39,8 @@ import {
 const SLEEPER_BASE_URL = "https://api.sleeper.app/v1";
 // The schedule endpoint lives at the API root, NOT under /v1.
 const SLEEPER_ROOT_URL = "https://api.sleeper.app";
+// Season projections are served from a different host entirely.
+const SLEEPER_PROJECTIONS_HOST = "https://api.sleeper.com";
 
 // ─── Result Type ─────────────────────────────────────────────────────────────
 
@@ -247,6 +251,20 @@ export async function getNflSchedule(
   return fetchSleeper(
     `${SLEEPER_ROOT_URL}/schedule/nfl/${seasonType}/${season}`,
     z.array(SleeperScheduleGameSchema)
+  );
+}
+
+/**
+ * Fetch upcoming-season fantasy-point projections (PPR) for skill positions.
+ * Unlike the weekly projections endpoint, this is a flat array (not keyed by
+ * player_id) and lives on api.sleeper.com, not api.sleeper.app.
+ */
+export async function getSeasonProjections(
+  season: string | number
+): Promise<SleeperResult<SleeperSeasonProjection[]>> {
+  return fetchSleeper(
+    `${SLEEPER_PROJECTIONS_HOST}/projections/nfl/${season}?season_type=regular&position[]=QB&position[]=RB&position[]=WR&position[]=TE&order_by=pts_ppr`,
+    z.array(SleeperSeasonProjectionSchema)
   );
 }
 

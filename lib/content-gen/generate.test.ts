@@ -52,6 +52,9 @@ function preseasonContext(): StatsContext {
     gameOfWeekPairKey: null,
     weekInBooks: null,
     recentTransactions: [],
+    franchiseHistory: [],
+    rosterProjections: [],
+    projectionSeason: null,
   };
 }
 

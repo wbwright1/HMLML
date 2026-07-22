@@ -163,4 +163,20 @@ describe("bestPossibleLineup", () => {
     expect(optimal).toBeCloseTo(20 + 15 + 10 + 18 + 12 + 8 + 30, 5);
     expect(gap).toBeCloseTo(30 - 4, 5);
   });
+
+  it("works identically over a season-projection pool (roster-projections.ts reuses the same solver)", () => {
+    // Projected-points pool shaped exactly like getRosterProjections builds it:
+    // { playerId, position, points: projPointsPpr }.
+    const projectionPool = [
+      p("qb1", "QB", 361.5), // e.g. Josh Allen's 2026 season projection
+      p("rb1", "RB", 210.0),
+      p("rb2", "RB", 180.0),
+      p("wr1", "WR", 240.0),
+      p("wr2", "WR", 190.0),
+      p("te1", "TE", 120.0),
+      p("rb3", "RB", 150.0), // best remaining RB/WR/TE, should land in FLEX
+    ];
+    const optimal = bestPossibleLineup(STANDARD_POSITIONS, projectionPool);
+    expect(optimal).toBeCloseTo(361.5 + 210 + 180 + 240 + 190 + 120 + 150, 5);
+  });
 });

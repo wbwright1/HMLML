@@ -29,6 +29,38 @@ describe("pickDoormatId", () => {
     ]);
     expect(id).toBe("b");
   });
+
+  it("falls back to single-season worst finish when no sustained set is given", () => {
+    const id = pickDoormatId([
+      { franchiseId: "a", wins: 10, losses: 4, ties: 0, standingsFinish: 1, playoffResult: "champion" },
+      { franchiseId: "b", wins: 4, losses: 10, ties: 0, standingsFinish: 12, playoffResult: null },
+    ], new Set());
+    expect(id).toBe("b");
+  });
+
+  it("prefers a franchise with a sustained multi-year bottom-tier trend over the single-season worst", () => {
+    const id = pickDoormatId(
+      [
+        { franchiseId: "a", wins: 10, losses: 4, ties: 0, standingsFinish: 1, playoffResult: "champion" },
+        // "b" finished worse THIS season, but "c" is the sustained doormat.
+        { franchiseId: "b", wins: 3, losses: 11, ties: 0, standingsFinish: 12, playoffResult: null },
+        { franchiseId: "c", wins: 4, losses: 10, ties: 0, standingsFinish: 11, playoffResult: null },
+      ],
+      new Set(["c"]),
+    );
+    expect(id).toBe("c");
+  });
+
+  it("breaks ties among multiple sustained doormats by single-season worst finish", () => {
+    const id = pickDoormatId(
+      [
+        { franchiseId: "b", wins: 4, losses: 10, ties: 0, standingsFinish: 10, playoffResult: null },
+        { franchiseId: "c", wins: 3, losses: 11, ties: 0, standingsFinish: 12, playoffResult: null },
+      ],
+      new Set(["b", "c"]),
+    );
+    expect(id).toBe("c");
+  });
 });
 
 describe("fieldTagFor", () => {
