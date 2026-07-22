@@ -7,6 +7,7 @@ import {
   players,
 } from "@/lib/db/schema";
 import { eq, desc, and, count, sum, sql } from "drizzle-orm";
+import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 
 /**
  * Returns all franchises with aggregate career stats:
@@ -57,12 +58,15 @@ export async function getAllFranchises() {
       });
     }
 
+    const avatarUrls = await getLatestAvatarUrls(rows.map((r) => r.id));
+
     return rows.map((r) => ({
       id: r.id,
       slug: r.slug,
       name: r.name,
       abbreviation: r.abbreviation ?? undefined,
       brandingColor: r.brandingColor ?? undefined,
+      avatarUrl: avatarUrls.get(r.id) ?? null,
       ownerName: ownerMap.get(r.id)?.owner,
       coOwnerName: ownerMap.get(r.id)?.coOwner,
       totalWins: Number(r.totalWins ?? 0),
@@ -129,10 +133,13 @@ export async function getFranchiseBySlug(slug: string) {
       if (s.playoffResult === "champion") championships++;
     }
 
+    const avatarUrls = await getLatestAvatarUrls([franchise.id]);
+
     return {
       ...franchise,
       abbreviation: franchise.abbreviation ?? undefined,
       brandingColor: franchise.brandingColor ?? undefined,
+      avatarUrl: avatarUrls.get(franchise.id) ?? null,
       seasonHistory,
       totalWins,
       totalLosses,

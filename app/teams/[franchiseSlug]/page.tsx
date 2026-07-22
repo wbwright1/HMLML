@@ -86,6 +86,7 @@ export default async function FranchiseDetailPage({
               name: franchise.name,
               abbreviation: franchise.abbreviation,
               brandingColor: franchise.brandingColor,
+              avatarUrl: franchise.avatarUrl,
             }}
             championships={franchise.championships}
             ownerName={currentOwner ?? undefined}

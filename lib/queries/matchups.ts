@@ -19,6 +19,7 @@ export interface MatchupTeam {
   franchiseSlug: string;
   franchiseAbbreviation: string | null;
   franchiseBrandingColor: string | null;
+  avatarUrl: string | null;
   rosterId: string;
   points: number;
   isWinner: boolean | null;
@@ -58,6 +59,7 @@ export function pairMatchupRows(
     franchiseSlug: string;
     franchiseAbbreviation: string | null;
     franchiseBrandingColor: string | null;
+    avatarUrl: string | null;
   }[]
 ): PairedMatchup[] {
   const grouped = new Map<
@@ -86,6 +88,7 @@ export function pairMatchupRows(
       franchiseSlug: r.franchiseSlug,
       franchiseAbbreviation: r.franchiseAbbreviation,
       franchiseBrandingColor: r.franchiseBrandingColor,
+      avatarUrl: r.avatarUrl,
       rosterId: r.rosterId,
       points: r.points ?? 0,
       isWinner: r.isWinner,
@@ -169,9 +172,17 @@ export async function getMatchupsByWeek(
         franchiseSlug: franchises.slug,
         franchiseAbbreviation: franchises.abbreviation,
         franchiseBrandingColor: franchises.brandingColor,
+        avatarUrl: franchiseSeasons.avatarUrl,
       })
       .from(matchups)
       .innerJoin(franchises, eq(matchups.franchiseId, franchises.id))
+      .leftJoin(
+        franchiseSeasons,
+        and(
+          eq(franchiseSeasons.franchiseId, matchups.franchiseId),
+          eq(franchiseSeasons.seasonId, matchups.seasonId)
+        )
+      )
       .where(and(eq(matchups.seasonId, seasonId), eq(matchups.week, week)));
 
     return pairMatchupRows(rows);
@@ -271,7 +282,13 @@ export async function getPlayoffMatchups(
     franchiseSlug: franchises.slug,
     franchiseAbbreviation: franchises.abbreviation,
     franchiseBrandingColor: franchises.brandingColor,
+    avatarUrl: franchiseSeasons.avatarUrl,
   };
+
+  const franchiseSeasonJoin = and(
+    eq(franchiseSeasons.franchiseId, matchups.franchiseId),
+    eq(franchiseSeasons.seasonId, matchups.seasonId)
+  );
 
   try {
     // Primary: query by isPlayoff flag
@@ -279,6 +296,7 @@ export async function getPlayoffMatchups(
       .select(selectFields)
       .from(matchups)
       .innerJoin(franchises, eq(matchups.franchiseId, franchises.id))
+      .leftJoin(franchiseSeasons, franchiseSeasonJoin)
       .where(
         and(eq(matchups.seasonId, seasonId), eq(matchups.isPlayoff, true))
       );
@@ -289,6 +307,7 @@ export async function getPlayoffMatchups(
         .select(selectFields)
         .from(matchups)
         .innerJoin(franchises, eq(matchups.franchiseId, franchises.id))
+        .leftJoin(franchiseSeasons, franchiseSeasonJoin)
         .where(
           and(
             eq(matchups.seasonId, seasonId),

@@ -89,6 +89,7 @@ export default async function FranchiseDraftsPage({
             name: franchise.name,
             abbreviation: franchise.abbreviation,
             brandingColor: franchise.brandingColor,
+            avatarUrl: franchise.avatarUrl,
           }}
           championships={championships}
           variant="hero"

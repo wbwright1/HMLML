@@ -206,6 +206,7 @@ export async function BetweenWeeksHub({
               record={record}
               divisionOf={(id) => standingBy.get(id)?.division ?? null}
               divisionNameOf={(id) => standingBy.get(id)?.divisionName ?? null}
+              avatarOf={(id) => standingBy.get(id)?.avatarUrl ?? null}
               divisionLeaderStatus={divisionLeaderStatus}
               leadsDivision={leadsDivision}
               editorial={editorial}
@@ -295,6 +296,7 @@ function GameOfWeekSection({
   record,
   divisionOf,
   divisionNameOf,
+  avatarOf,
   divisionLeaderStatus,
   leadsDivision,
   editorial,
@@ -304,6 +306,7 @@ function GameOfWeekSection({
   record: (id: string) => string;
   divisionOf: (id: string) => number | null;
   divisionNameOf: (id: string) => string | null;
+  avatarOf: (id: string) => string | null;
   divisionLeaderStatus: Map<string, string>;
   leadsDivision: Set<string>;
   editorial: HubEditorial;
@@ -355,6 +358,7 @@ function GameOfWeekSection({
           slug: home.franchiseSlug,
           abbreviation: home.franchiseAbbreviation,
           brandingColor: home.franchiseBrandingColor,
+          avatarUrl: avatarOf(home.franchiseId),
           record: record(home.franchiseId),
           status: divisionLeaderStatus.get(home.franchiseId) ?? null,
         }}
@@ -363,6 +367,7 @@ function GameOfWeekSection({
           slug: away.franchiseSlug,
           abbreviation: away.franchiseAbbreviation,
           brandingColor: away.franchiseBrandingColor,
+          avatarUrl: avatarOf(away.franchiseId),
           record: record(away.franchiseId),
           status: divisionLeaderStatus.get(away.franchiseId) ?? null,
         }}

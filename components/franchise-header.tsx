@@ -6,6 +6,7 @@ interface FranchiseHeaderProps {
   franchiseSlug: string;
   abbreviation?: string;
   brandingColor?: string;
+  avatarUrl?: string | null;
   ownerName?: string;
   coOwnerName?: string;
   seasonRange?: { start: number; end?: number };
@@ -22,6 +23,7 @@ export function FranchiseHeader({
   franchiseSlug,
   abbreviation,
   brandingColor,
+  avatarUrl,
   ownerName,
   coOwnerName,
   seasonRange,
@@ -55,6 +57,7 @@ export function FranchiseHeader({
             name={franchiseName}
             abbreviation={abbreviation}
             brandingColor={brandingColor}
+            avatarUrl={avatarUrl}
             size="xl"
             decorative
           />

@@ -9,6 +9,7 @@ interface FranchiseOption {
   name: string;
   abbreviation?: string;
   brandingColor?: string;
+  avatarUrl?: string | null;
 }
 
 interface FranchiseSelectorProps {
@@ -57,6 +58,7 @@ export function FranchisePairSelector({
               name={selectedA.name}
               abbreviation={selectedA.abbreviation}
               brandingColor={selectedA.brandingColor}
+              avatarUrl={selectedA.avatarUrl}
               size="sm"
             />
           )}
@@ -131,6 +133,7 @@ export function FranchisePairSelector({
               name={selectedB.name}
               abbreviation={selectedB.abbreviation}
               brandingColor={selectedB.brandingColor}
+              avatarUrl={selectedB.avatarUrl}
               size="sm"
             />
           )}

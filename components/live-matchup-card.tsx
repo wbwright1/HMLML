@@ -8,6 +8,8 @@ interface MatchupTeamProps {
   score: number;
   abbreviation?: string | null;
   brandingColor?: string | null;
+  /** Per-season Sleeper crest; null/omitted falls back to the monogram. */
+  avatarUrl?: string | null;
 }
 
 interface LiveMatchupCardProps {
@@ -145,6 +147,7 @@ function TeamRow({
           name={team.name}
           abbreviation={team.abbreviation ?? undefined}
           brandingColor={team.brandingColor ?? undefined}
+          avatarUrl={team.avatarUrl}
           size="sm"
           decorative
         />

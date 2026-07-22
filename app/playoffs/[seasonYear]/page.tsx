@@ -39,6 +39,7 @@ interface FranchiseInfo {
   slug: string;
   abbreviation: string | null;
   brandingColor: string | null;
+  avatarUrl: string | null;
 }
 
 function teamToFranchiseInfo(team: MatchupTeam): FranchiseInfo {
@@ -48,6 +49,7 @@ function teamToFranchiseInfo(team: MatchupTeam): FranchiseInfo {
     slug: team.franchiseSlug,
     abbreviation: team.franchiseAbbreviation,
     brandingColor: team.franchiseBrandingColor,
+    avatarUrl: team.avatarUrl,
   };
 }
 
@@ -231,6 +233,7 @@ function TeamRow({
           name: team.franchiseName,
           abbreviation: team.franchiseAbbreviation ?? undefined,
           brandingColor: team.franchiseBrandingColor ?? undefined,
+          avatarUrl: team.avatarUrl,
         }}
         variant="compact"
       />
@@ -262,6 +265,7 @@ function PodiumEntry({
           name: franchise.name,
           abbreviation: franchise.abbreviation ?? undefined,
           brandingColor: franchise.brandingColor ?? undefined,
+          avatarUrl: franchise.avatarUrl,
         }}
         variant="compact"
       />
@@ -365,6 +369,7 @@ export default async function PlayoffBracketPage({
                   name={championInfo.name}
                   abbreviation={championInfo.abbreviation ?? undefined}
                   brandingColor={championInfo.brandingColor ?? undefined}
+                  avatarUrl={championInfo.avatarUrl}
                   size="xl"
                   decorative
                 />

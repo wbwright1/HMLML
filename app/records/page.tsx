@@ -15,6 +15,7 @@ import { getLatestSeason } from "@/lib/queries/matchups";
 import { getSeasonSuperlatives, type SeasonSuperlative } from "@/lib/queries/superlatives";
 import { getSeasonLineupAwards, type LineupAward } from "@/lib/queries/lineup-efficiency";
 import { getPlayoffProjection } from "@/lib/queries/divisions";
+import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 import { LeaderboardTable } from "@/app/records/leaderboard-table";
 import type { LeaderboardEntry, PowerRankingEntry } from "@/lib/queries/records";
 import type { PlayoffProjection } from "@/lib/queries/divisions";
@@ -180,6 +181,22 @@ export default async function RecordsPage() {
     // DB may not be connected
   }
 
+  // Crest avatars for the projected playoff field (division projection is
+  // owned by another query module, so resolve avatars here via the shared
+  // helper rather than threading them through PlayoffProjection).
+  let projectionAvatarUrls = new Map<string, string>();
+  if (projection?.hasDivisions) {
+    const projectionIds = [
+      ...projection.field.map((t) => t.franchiseId),
+      ...(projection.firstOut ? [projection.firstOut.franchiseId] : []),
+    ];
+    try {
+      projectionAvatarUrls = await getLatestAvatarUrls(projectionIds);
+    } catch {
+      // Avatars unavailable; monogram crests render.
+    }
+  }
+
   const recordBook = buildRecordBook(allTimeData);
   const hasSuperlatives =
     seasonSuperlatives.length > 0 || coachingMalpractice || whatCouldveBeen;
@@ -243,6 +260,7 @@ export default async function RecordsPage() {
                         name={team.name}
                         abbreviation={team.abbreviation ?? undefined}
                         brandingColor={team.brandingColor ?? undefined}
+                        avatarUrl={projectionAvatarUrls.get(team.franchiseId) ?? null}
                         size="sm"
                         decorative
                       />
@@ -270,6 +288,9 @@ export default async function RecordsPage() {
                         name={projection.firstOut.name}
                         abbreviation={projection.firstOut.abbreviation ?? undefined}
                         brandingColor={projection.firstOut.brandingColor ?? undefined}
+                        avatarUrl={
+                          projectionAvatarUrls.get(projection.firstOut.franchiseId) ?? null
+                        }
                         size="sm"
                         decorative
                       />
@@ -306,6 +327,7 @@ export default async function RecordsPage() {
                         name={entry.name}
                         abbreviation={entry.abbreviation}
                         brandingColor={entry.brandingColor}
+                        avatarUrl={entry.avatarUrl}
                         size="sm"
                         decorative
                       />

@@ -129,6 +129,13 @@ export async function RegularSeasonHub({
 
   const ladderEntries = toLadderEntries(standings, projection);
 
+  // Per-season crests keyed by franchise, sourced from the standings (which
+  // carry avatarUrl); GameCard falls back to monograms for any missing entry.
+  const avatarByFranchiseId = new Map<string, string>();
+  for (const s of standings) {
+    if (s.avatarUrl) avatarByFranchiseId.set(s.franchiseId, s.avatarUrl);
+  }
+
   return (
     <>
       {/* Hero */}
@@ -189,6 +196,7 @@ export async function RegularSeasonHub({
                   week={week}
                   seasonYear={seasonYear}
                   hubLive={hubLive}
+                  avatars={avatarByFranchiseId}
                 />
               ))}
             </div>

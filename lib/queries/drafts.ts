@@ -6,7 +6,7 @@ import {
   franchiseSeasons,
   players,
 } from "@/lib/db/schema";
-import { eq, desc, asc } from "drizzle-orm";
+import { eq, desc, asc, and } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 // ---------------------------------------------------------------------------
@@ -30,6 +30,7 @@ export interface DraftPickWithFranchise {
   franchiseSlug: string | null;
   franchiseAbbreviation: string | null;
   franchiseBrandingColor: string | null;
+  franchiseAvatarUrl: string | null;
   originalFranchiseId: string | null;
   originalFranchiseName: string | null;
 }
@@ -148,6 +149,7 @@ export async function getDraftBySeasonYear(
         franchiseSlug: franchises.slug,
         franchiseAbbreviation: franchises.abbreviation,
         franchiseBrandingColor: franchises.brandingColor,
+        franchiseAvatarUrl: franchiseSeasons.avatarUrl,
         originalFranchiseId: draftPicks.originalFranchiseId,
         originalFranchiseName: originalFranchises.name,
       })
@@ -155,6 +157,13 @@ export async function getDraftBySeasonYear(
       .leftJoin(franchises, eq(draftPicks.franchiseId, franchises.id))
       .leftJoin(originalFranchises, eq(draftPicks.originalFranchiseId, originalFranchises.id))
       .leftJoin(players, eq(draftPicks.playerId, players.id))
+      .leftJoin(
+        franchiseSeasons,
+        and(
+          eq(franchiseSeasons.franchiseId, draftPicks.franchiseId),
+          eq(franchiseSeasons.seasonId, draftPicks.seasonId)
+        )
+      )
       .where(eq(draftPicks.seasonId, season.id))
       .orderBy(asc(draftPicks.pickNumber));
 
@@ -233,6 +242,7 @@ export async function getFranchiseDraftHistory(
         franchiseSlug: franchises.slug,
         franchiseAbbreviation: franchises.abbreviation,
         franchiseBrandingColor: franchises.brandingColor,
+        franchiseAvatarUrl: franchiseSeasons.avatarUrl,
         originalFranchiseId: draftPicks.originalFranchiseId,
         originalFranchiseName: originalFranchises.name,
         seasonYear: seasons.seasonYear,
@@ -241,6 +251,13 @@ export async function getFranchiseDraftHistory(
       .leftJoin(franchises, eq(draftPicks.franchiseId, franchises.id))
       .leftJoin(originalFranchises, eq(draftPicks.originalFranchiseId, originalFranchises.id))
       .leftJoin(players, eq(draftPicks.playerId, players.id))
+      .leftJoin(
+        franchiseSeasons,
+        and(
+          eq(franchiseSeasons.franchiseId, draftPicks.franchiseId),
+          eq(franchiseSeasons.seasonId, draftPicks.seasonId)
+        )
+      )
       .innerJoin(seasons, eq(draftPicks.seasonId, seasons.id))
       .where(eq(draftPicks.franchiseId, franchiseId))
       .orderBy(desc(seasons.seasonYear), asc(draftPicks.pickNumber));

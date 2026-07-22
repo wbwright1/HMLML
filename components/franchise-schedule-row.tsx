@@ -55,6 +55,7 @@ export function FranchiseScheduleRow({
               name: opponent.franchiseName,
               abbreviation: opponent.franchiseAbbreviation ?? undefined,
               brandingColor: opponent.franchiseBrandingColor ?? undefined,
+              avatarUrl: opponent.avatarUrl,
             }}
             variant="compact"
           />

@@ -13,6 +13,8 @@ export interface ReceiptFranchise {
   name: string;
   abbreviation: string | null;
   brandingColor: string | null;
+  /** Per-season Sleeper crest; null falls back to the monogram. */
+  avatarUrl: string | null;
 }
 
 interface OffseasonReceiptCardProps {
@@ -38,6 +40,7 @@ export function OffseasonReceiptCard({ receipt, franchise }: OffseasonReceiptCar
           name={franchise.name}
           abbreviation={franchise.abbreviation ?? undefined}
           brandingColor={franchise.brandingColor ?? undefined}
+          avatarUrl={franchise.avatarUrl}
           size="sm"
           decorative
         />

@@ -409,6 +409,7 @@ function DesktopRow({
               name: entry.name,
               abbreviation: entry.abbreviation,
               brandingColor: entry.brandingColor,
+              avatarUrl: entry.avatarUrl,
             }}
             championships={entry.championships}
             variant="compact"
@@ -467,6 +468,7 @@ function MobileCard({
             name: entry.name,
             abbreviation: entry.abbreviation,
             brandingColor: entry.brandingColor,
+            avatarUrl: entry.avatarUrl,
           }}
           championships={entry.championships}
           variant="compact"

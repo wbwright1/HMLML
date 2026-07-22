@@ -43,11 +43,14 @@ export function GameCard({
   week,
   seasonYear,
   hubLive,
+  avatars,
 }: {
   matchup: PairedMatchup;
   week: number;
   seasonYear: number;
   hubLive?: HubLiveData;
+  /** franchiseId → per-season crest URL; absent entries fall back to monograms. */
+  avatars?: ReadonlyMap<string, string>;
 }) {
   const status = cardStatus(matchup.status);
   const homeRoster = matchup.homeTeam.rosterId;
@@ -81,6 +84,7 @@ export function GameCard({
         score: matchup.homeTeam.points,
         abbreviation: matchup.homeTeam.franchiseAbbreviation,
         brandingColor: matchup.homeTeam.franchiseBrandingColor,
+        avatarUrl: avatars?.get(matchup.homeTeam.franchiseId) ?? null,
       }}
       awayTeam={{
         name: matchup.awayTeam.franchiseName,
@@ -88,6 +92,7 @@ export function GameCard({
         score: matchup.awayTeam.points,
         abbreviation: matchup.awayTeam.franchiseAbbreviation,
         brandingColor: matchup.awayTeam.franchiseBrandingColor,
+        avatarUrl: avatars?.get(matchup.awayTeam.franchiseId) ?? null,
       }}
       status={status}
       week={week}
@@ -127,6 +132,7 @@ export function toLadderEntries(
       record: `${s.wins ?? 0}-${s.losses ?? 0}`,
       abbreviation: s.franchiseAbbreviation,
       brandingColor: s.franchiseBrandingColor,
+      avatarUrl: s.avatarUrl ?? null,
       division: s.division,
       divisionName: s.divisionName,
       seed: projected?.seed ?? null,

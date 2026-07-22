@@ -16,6 +16,7 @@ interface FranchiseInfo {
   slug: string;
   abbreviation?: string;
   brandingColor?: string;
+  avatarUrl?: string | null;
 }
 
 interface TradeSide {
@@ -58,6 +59,7 @@ async function getRosterToFranchiseMapForSeasons(
       slug: franchises.slug,
       abbreviation: franchises.abbreviation,
       brandingColor: franchises.brandingColor,
+      avatarUrl: franchiseSeasons.avatarUrl,
     })
     .from(franchiseSeasons)
     .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
@@ -73,6 +75,7 @@ async function getRosterToFranchiseMapForSeasons(
       slug: row.slug,
       abbreviation: row.abbreviation ?? undefined,
       brandingColor: row.brandingColor ?? undefined,
+      avatarUrl: row.avatarUrl,
     });
   }
 

@@ -5,6 +5,8 @@ export interface GameOfTheWeekTeam {
   slug: string;
   abbreviation: string | null;
   brandingColor: string | null;
+  /** Per-season Sleeper crest; null falls back to the monogram. */
+  avatarUrl: string | null;
   /** Season record, e.g. "8-2". */
   record: string;
   /** One-line status descriptor, e.g. "1st in Division 1"; null to omit. */
@@ -63,6 +65,7 @@ export function GameOfTheWeekCard({
               name={teamA.name}
               abbreviation={teamA.abbreviation ?? undefined}
               brandingColor={teamA.brandingColor ?? undefined}
+              avatarUrl={teamA.avatarUrl}
               size="lg"
               decorative
             />
@@ -86,6 +89,7 @@ export function GameOfTheWeekCard({
               name={teamB.name}
               abbreviation={teamB.abbreviation ?? undefined}
               brandingColor={teamB.brandingColor ?? undefined}
+              avatarUrl={teamB.avatarUrl}
               size="lg"
               decorative
             />

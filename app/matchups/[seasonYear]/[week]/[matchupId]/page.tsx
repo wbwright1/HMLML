@@ -159,6 +159,7 @@ function TeamBlock({
         name={team.franchiseName}
         abbreviation={team.franchiseAbbreviation ?? undefined}
         brandingColor={team.franchiseBrandingColor ?? undefined}
+        avatarUrl={team.avatarUrl}
         size="md"
         decorative
       />
