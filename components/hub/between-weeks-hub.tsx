@@ -243,8 +243,8 @@ export async function BetweenWeeksHub({
             </section>
           )}
 
-          {/* The Smack Feed (desktop only; mobile keeps the top of the funnel) */}
-          <section className="hidden lg:block space-y-4">
+          {/* The Smack Feed */}
+          <section className="space-y-4">
             <div className="flex items-baseline justify-between">
               <p className="text-kicker">The Smack Feed &middot; Week {week}</p>
               <p className="text-caption text-text-tertiary">
@@ -269,8 +269,8 @@ export async function BetweenWeeksHub({
           </section>
         </div>
 
-        {/* Right rail: last week's receipts (desktop only) */}
-        <aside className="hidden lg:flex lg:flex-col gap-8">
+        {/* Right rail: last week's receipts */}
+        <aside className="flex flex-col gap-8">
           {weeklySuperlatives && (
             <WeekInBooksCard week={priorWeek} superlatives={weeklySuperlatives} />
           )}

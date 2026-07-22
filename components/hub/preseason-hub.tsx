@@ -170,18 +170,26 @@ export async function PreseasonHub({
               <ModuleLabel>
                 {field.hasDivisions ? "The Field · Grouped by Division" : "The Field"}
               </ModuleLabel>
+              {field.hasDivisions && (
+                <p className="lg:hidden text-caption text-text-tertiary -mt-2 mb-4">
+                  Swipe for all {field.divisions.length} divisions →
+                </p>
+              )}
               <div
                 className={
                   field.hasDivisions
-                    ? "grid grid-cols-1 gap-4 lg:grid-cols-3"
+                    ? "-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 no-scrollbar md:-mx-6 md:px-6 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 lg:pb-0"
                     : "grid grid-cols-1 gap-4"
                 }
               >
-                {field.divisions.map((division, i) => {
+                {field.divisions.map((division) => {
                   const ed =
                     editorial.divisions[division.divisionName] ?? editorial.divisionFallback;
                   return (
-                    <div key={division.divisionName} className={i > 0 ? "hidden lg:block" : ""}>
+                    <div
+                      key={division.divisionName}
+                      className="snap-center shrink-0 basis-[85%] sm:basis-[60%] lg:basis-auto"
+                    >
                       <DivisionFieldCard
                         division={division}
                         characterization={ed.characterization}
@@ -194,9 +202,9 @@ export async function PreseasonHub({
             </section>
           )}
 
-          {/* Bold Predictions — desktop only (mobile keeps the funnel lean) */}
+          {/* Bold Predictions */}
           {editorial.boldPredictions.length > 0 && (
-            <section className="hidden lg:block">
+            <section>
               <ModuleLabel>Bold Predictions · Site Desk</ModuleLabel>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {editorial.boldPredictions.map((prediction) => (
@@ -206,9 +214,9 @@ export async function PreseasonHub({
             </section>
           )}
 
-          {/* Offseason Receipts — desktop only */}
+          {/* Offseason Receipts */}
           {editorial.offseasonReceipts.length > 0 && (
-            <section className="hidden lg:block">
+            <section>
               <ModuleLabel>Offseason Receipts</ModuleLabel>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {editorial.offseasonReceipts.map((receipt, i) => (
@@ -225,9 +233,9 @@ export async function PreseasonHub({
 
         {/* Right rail */}
         <aside className="space-y-12">
-          {/* Burning Questions — desktop only */}
+          {/* Burning Questions */}
           {editorial.burningQuestions.length > 0 && (
-            <section className="hidden lg:block">
+            <section>
               <ModuleLabel>Burning Questions</ModuleLabel>
               <BurningQuestionsCard questions={editorial.burningQuestions} />
             </section>
