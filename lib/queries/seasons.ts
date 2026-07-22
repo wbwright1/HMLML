@@ -103,6 +103,7 @@ export const getSeasonStandings = cache(async function getSeasonStandings(season
       userId: franchiseSeasons.userId,
       ownerDisplayName: franchiseSeasons.ownerDisplayName,
       coOwnerDisplayName: franchiseSeasons.coOwnerDisplayName,
+      avatarUrl: franchiseSeasons.avatarUrl,
       division: franchiseSeasons.division,
       divisionName: franchiseSeasons.divisionName,
       wins: franchiseSeasons.wins,

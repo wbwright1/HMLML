@@ -22,7 +22,7 @@ Harambe Memorial League Memorial League (HMLML) Website: a public-facing Next.js
 
 ## Key Architecture Decisions
 - Full-stack in one Next.js project; API routes handle sync endpoints, React Server Components handle all pages
-- **Server components by default, small enumerated set of client islands** -- pages/layouts stay RSC; `"use client"` is limited to this list: the live score poller, the search command (⌘K / mobile dock search), the nav pills active-state, the season/franchise pickers, the player table (filter/sort), the draft countdown, and the scroll-reveal wrapper. Everything else ships zero client JS.
+- **Server components by default, small enumerated set of client islands** -- pages/layouts stay RSC; `"use client"` is limited to this list: the live score poller, the search command (⌘K / mobile dock search), the nav pills active-state, the season/franchise pickers, the player table (filter/sort), the draft countdown, the kickoff countdown, the smack composer, the commish claim-code reveal, and the scroll-reveal wrapper. Everything else ships zero client JS.
 - **No caching in Phase 1** -- direct Postgres queries on every request; 12-user scale doesn't warrant caching; ISR available later
 - **Correctness over performance** -- at 12 users, correct data matters more than speed
 - **Forward-compatible schema, not overbuilt code** -- schema accommodates Phase 2+ without gymnastics; application code only builds Phase 1

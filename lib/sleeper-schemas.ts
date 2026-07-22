@@ -35,6 +35,9 @@ export const SleeperUserSchema = z
     metadata: z
       .object({
         team_name: z.string().nullable().optional(),
+        // Per-league team avatar. Sleeper stores this as a full URL (unlike the
+        // top-level `avatar`, which is a bare id resolved against the CDN).
+        avatar: z.string().nullable().optional(),
       })
       .passthrough()
       .nullable()

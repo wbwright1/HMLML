@@ -29,6 +29,7 @@ export interface SeededTeam {
   name: string;
   abbreviation?: string | null;
   brandingColor?: string | null;
+  avatarUrl?: string | null;
   wins: number;
   losses: number;
   ties: number;
@@ -304,6 +305,7 @@ function toSeededTeam(s: Awaited<ReturnType<typeof getSeasonStandings>>[number])
     name: s.franchiseName,
     abbreviation: s.franchiseAbbreviation,
     brandingColor: s.franchiseBrandingColor,
+    avatarUrl: s.avatarUrl ?? null,
     wins: s.wins ?? 0,
     losses: s.losses ?? 0,
     ties: s.ties ?? 0,

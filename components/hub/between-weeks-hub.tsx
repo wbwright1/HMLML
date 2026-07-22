@@ -1,6 +1,13 @@
 import Link from "next/link";
 import { KickoffCountdown } from "@/components/kickoff-countdown";
-import { SmackFeed } from "@/components/smack-feed";
+import {
+  SmackFeed,
+  SmackComposerSlot,
+  smackItemsFromPosts,
+  smackItemsFromSeeds,
+} from "@/components/smack-feed";
+import { getSessionMember } from "@/lib/auth";
+import { getRecentSmackPosts, anySmackPostsExist } from "@/lib/queries/smack";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { GameOfTheWeekCard } from "@/components/hub/game-of-the-week-card";
 import { SlateCard } from "@/components/hub/slate-card";
@@ -56,6 +63,26 @@ export async function BetweenWeeksHub({
     week,
   });
   const headline = betweenWeeksHeadline(nextKickoff);
+
+  // Member smack feed: real posts win when present. Site Desk seeds only stand
+  // in when the board is genuinely empty (no posts at all); when posts exist
+  // but are all hidden, moderation must NOT resurrect the seeds. Member and
+  // smack are settled independently so one failing (e.g. the members/smack
+  // tables not existing yet on a pre-0008 DB) never blanks the other.
+  const [memberResult, smackResult] = await Promise.allSettled([
+    getSessionMember(),
+    Promise.all([getRecentSmackPosts(4), anySmackPostsExist()]),
+  ]);
+  const sessionMember =
+    memberResult.status === "fulfilled" ? memberResult.value : null;
+  const [realSmack, anySmack] =
+    smackResult.status === "fulfilled" ? smackResult.value : [[], false];
+
+  const smackFromDesk = realSmack.length === 0 && !anySmack;
+  const smackItems = smackFromDesk
+    ? smackItemsFromSeeds(editorial.smackPosts)
+    : smackItemsFromPosts(realSmack);
+  const canPost = Boolean(sessionMember?.franchiseId);
 
   // Standings lookup for records, points-for, and division identity.
   const standingBy = new Map(standings.map((s) => [s.franchiseId, s]));
@@ -217,20 +244,29 @@ export async function BetweenWeeksHub({
           )}
 
           {/* The Smack Feed (desktop only; mobile keeps the top of the funnel) */}
-          {editorial.smackPosts.length > 0 && (
-            <section className="hidden lg:block space-y-4">
-              <div className="flex items-baseline justify-between">
-                <p className="text-kicker">The Smack Feed &middot; Week {week}</p>
-                <p className="text-caption text-text-tertiary">
-                  site desk &middot; {editorial.smackPosts.length} new
-                </p>
-              </div>
+          <section className="hidden lg:block space-y-4">
+            <div className="flex items-baseline justify-between">
+              <p className="text-kicker">The Smack Feed &middot; Week {week}</p>
+              <p className="text-caption text-text-tertiary">
+                {smackFromDesk
+                  ? `site desk · ${smackItems.length} new`
+                  : smackItems.length > 0
+                    ? `the league · ${smackItems.length} new`
+                    : "the league"}
+              </p>
+            </div>
+            <SmackComposerSlot canPost={canPost} />
+            {smackItems.length > 0 ? (
               <SmackFeed
-                posts={editorial.smackPosts}
+                items={smackItems}
                 className="grid grid-cols-1 sm:grid-cols-2 gap-3"
               />
-            </section>
-          )}
+            ) : (
+              <p className="card-surface block p-4 text-body-sm text-text-tertiary">
+                Nothing on the board right now.
+              </p>
+            )}
+          </section>
         </div>
 
         {/* Right rail: last week's receipts (desktop only) */}

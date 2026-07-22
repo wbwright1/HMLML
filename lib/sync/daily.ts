@@ -3,6 +3,7 @@ import {
   seasons,
   franchises,
   franchiseSeasons,
+  members,
   players,
   draftPicks,
 } from "@/lib/db/schema";
@@ -21,6 +22,7 @@ import {
 } from "@/lib/sleeper";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { derivePlayoffResults } from "@/lib/sync/derive-playoffs";
+import { buildMemberFranchiseMap } from "@/lib/sync/member-franchise";
 import { resolveDivisionName } from "@/lib/divisions";
 
 // ---------------------------------------------------------------------------
@@ -83,6 +85,21 @@ async function uniqueSlug(
 
   // Collision: append first 6 chars of user_id to disambiguate
   return `${base}-${franchiseId.slice(0, 6)}`;
+}
+
+/**
+ * Resolves a member's team avatar to a full URL. Prefers the per-league team
+ * avatar (metadata.avatar, already a full URL), falls back to the account-level
+ * avatar id resolved against the Sleeper CDN, else null.
+ */
+function resolveAvatarUrl(user: {
+  avatar: string | null;
+  metadata?: { avatar?: string | null } | null;
+}): string | null {
+  const teamAvatar = user.metadata?.avatar?.trim();
+  if (teamAvatar) return teamAvatar;
+  if (user.avatar) return `https://sleepercdn.com/avatars/thumbs/${user.avatar}`;
+  return null;
 }
 
 /** Split an array into chunks of the given size. */
@@ -218,16 +235,17 @@ async function syncUsersAndRosters(): Promise<SyncStepResult> {
     const users = usersResult.data;
     const rosters = rostersResult.data;
 
-    // Build user_id → { teamName, displayName } map
+    // Build user_id → { teamName, displayName, avatarUrl } map
     const userMap = new Map<
       string,
-      { teamName: string; displayName: string }
+      { teamName: string; displayName: string; avatarUrl: string | null }
     >();
     for (const u of users) {
       userMap.set(u.user_id, {
         teamName:
           u.metadata?.team_name?.trim() || u.display_name,
         displayName: u.display_name,
+        avatarUrl: resolveAvatarUrl(u),
       });
     }
 
@@ -269,6 +287,7 @@ async function syncUsersAndRosters(): Promise<SyncStepResult> {
       const userData = userMap.get(ownerId) ?? {
         teamName: "Unknown",
         displayName: "Unknown",
+        avatarUrl: null,
       };
       const franchiseId = ownerId; // Use Sleeper user_id as franchise ID
       const rosterIdStr = String(roster.roster_id);
@@ -319,6 +338,7 @@ async function syncUsersAndRosters(): Promise<SyncStepResult> {
           userId: ownerId,
           ownerDisplayName: userData.displayName,
           coOwnerDisplayName,
+          avatarUrl: userData.avatarUrl,
           division: divisionNumber,
           divisionName,
           wins: roster.settings.wins ?? 0,
@@ -335,6 +355,7 @@ async function syncUsersAndRosters(): Promise<SyncStepResult> {
             userId: ownerId,
             ownerDisplayName: userData.displayName,
             coOwnerDisplayName,
+            avatarUrl: userData.avatarUrl,
             division: divisionNumber,
             divisionName,
             wins: roster.settings.wins ?? 0,
@@ -363,6 +384,95 @@ async function syncUsersAndRosters(): Promise<SyncStepResult> {
     await logSyncComplete(logId, "failure", 0, errorMessage);
     return {
       dataType: "rosters",
+      status: "failure",
+      rowCount: 0,
+      durationMs,
+      error: errorMessage,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Step B2: Member Sync
+// ---------------------------------------------------------------------------
+// Upserts the members table from the current season's owners and co-owners.
+// Members are never deleted (departed owners keep their smack posts); only
+// display_name and franchise_id are refreshed. role, claim_code_hash, and
+// code_generated_at belong to the claim/commish flow and are never touched by
+// sync. Atomic per data type: logged separately as "members".
+
+async function syncMembers(): Promise<SyncStepResult> {
+  const startTime = Date.now();
+  const logId = await logSyncStart("daily", "members");
+
+  try {
+    const leagueId = getLeagueId();
+
+    const [usersResult, rostersResult] = await Promise.all([
+      getLeagueUsers(leagueId),
+      getLeagueRosters(leagueId),
+    ]);
+
+    if ("error" in usersResult) {
+      throw new Error(`Sleeper users API error: ${usersResult.error.message}`);
+    }
+    if ("error" in rostersResult) {
+      throw new Error(
+        `Sleeper rosters API error: ${rostersResult.error.message}`
+      );
+    }
+
+    // user_id → display name, for resolving co-owners whose only appearance is
+    // in a roster's co_owners array.
+    const displayNameByUserId = new Map<string, string>();
+    for (const u of usersResult.data) {
+      displayNameByUserId.set(u.user_id, u.display_name);
+    }
+
+    // Build the member set: primary owner + each co-owner, each mapped to the
+    // franchise they currently control (the roster's franchise id = owner id).
+    // Two-pass build so primary ownership wins over co-ownership regardless of
+    // roster order (see buildMemberFranchiseMap).
+    const memberFranchise = buildMemberFranchiseMap(rostersResult.data);
+
+    let rowCount = 0;
+    for (const [userId, franchiseId] of memberFranchise) {
+      const displayName = displayNameByUserId.get(userId) ?? userId;
+
+      await db
+        .insert(members)
+        .values({
+          sleeperUserId: userId,
+          displayName,
+          franchiseId,
+          updatedAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: members.sleeperUserId,
+          set: {
+            displayName,
+            franchiseId,
+            updatedAt: new Date(),
+          },
+        });
+
+      rowCount++;
+    }
+
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "success", rowCount);
+    return {
+      dataType: "members",
+      status: "success",
+      rowCount,
+      durationMs,
+    };
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "failure", 0, errorMessage);
+    return {
+      dataType: "members",
       status: "failure",
       rowCount: 0,
       durationMs,
@@ -840,7 +950,10 @@ async function syncPlayoffBracket(): Promise<SyncStepResult> {
 export async function runDailySync(): Promise<DailySyncSummary> {
   const startedAt = new Date().toISOString();
 
-  // Run all five syncs independently — a failure in one doesn't block others
+  // Run the five core syncs independently — a failure in one doesn't block
+  // others. Members runs afterward: its franchise_id FK requires the franchise
+  // rows that syncUsersAndRosters upserts, so it cannot run in the same
+  // parallel batch on a cold database.
   const results = await Promise.allSettled([
     syncLeagueSettings(),
     syncUsersAndRosters(),
@@ -849,12 +962,12 @@ export async function runDailySync(): Promise<DailySyncSummary> {
     syncPlayoffBracket(),
   ]);
 
+  const dataTypes = ["league", "rosters", "players", "drafts", "playoffs"];
   const stepResults: SyncStepResult[] = results.map((r, i) => {
     if (r.status === "fulfilled") {
       return r.value;
     }
     // Promise itself rejected (unexpected)
-    const dataTypes = ["league", "rosters", "players", "drafts", "playoffs"];
     return {
       dataType: dataTypes[i],
       status: "failure" as const,
@@ -863,6 +976,23 @@ export async function runDailySync(): Promise<DailySyncSummary> {
       error: r.reason instanceof Error ? r.reason.message : "Unknown error",
     };
   });
+
+  // Members depend on franchises existing; run after the roster upsert.
+  const membersResult = await Promise.allSettled([syncMembers()]);
+  stepResults.push(
+    membersResult[0].status === "fulfilled"
+      ? membersResult[0].value
+      : {
+          dataType: "members",
+          status: "failure" as const,
+          rowCount: 0,
+          durationMs: 0,
+          error:
+            membersResult[0].reason instanceof Error
+              ? membersResult[0].reason.message
+              : "Unknown error",
+        },
+  );
 
   return {
     startedAt,

@@ -7,6 +7,12 @@ interface FranchiseLogoProps {
   brandingColor?: string;
   size?: "sm" | "md" | "lg" | "xl";
   decorative?: boolean;
+  /**
+   * Remote per-season team avatar (e.g. Sleeper CDN). When set it renders over
+   * the monogram crest; if it fails to load the monogram shows through. Null or
+   * omitted keeps the existing local-logo behavior.
+   */
+  avatarUrl?: string | null;
 }
 
 const sizeMap = {
@@ -41,6 +47,7 @@ export function FranchiseLogo({
   brandingColor,
   size = "md",
   decorative = false,
+  avatarUrl,
 }: FranchiseLogoProps) {
   const px = sizeMap[size];
   const altText = decorative ? "" : name;
@@ -68,15 +75,32 @@ export function FranchiseLogo({
           {getInitials(name, abbreviation)}
         </span>
       </div>
-      {/* Image overlays fallback; if it fails to load the fallback shows through */}
-      <Image
-        src={logoSrc}
-        alt={altText}
-        width={px}
-        height={px}
-        className="relative z-10 object-cover"
-        style={{ borderRadius: radius }}
-      />
+      {/*
+        Image overlays fallback; if it fails to load the fallback shows through.
+        Remote avatars use a plain <img> (arbitrary CDN hosts aren't in the
+        next/image allowlist) with no-referrer; local logos keep next/image.
+      */}
+      {avatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={avatarUrl}
+          alt={altText}
+          width={px}
+          height={px}
+          referrerPolicy="no-referrer"
+          className="relative z-10 object-cover"
+          style={{ width: px, height: px, borderRadius: radius }}
+        />
+      ) : (
+        <Image
+          src={logoSrc}
+          alt={altText}
+          width={px}
+          height={px}
+          className="relative z-10 object-cover"
+          style={{ borderRadius: radius }}
+        />
+      )}
     </div>
   );
 }

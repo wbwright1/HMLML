@@ -18,6 +18,7 @@ export interface FieldTeamEntry {
   name: string;
   abbreviation: string | null;
   brandingColor: string | null;
+  avatarUrl: string | null;
   /** Last-season W-L(-T), shown when the team carries no tag. Null = no history. */
   recordLabel: string | null;
   /** CHAMP / R-UP / DOORMAT takes the slot instead of the record. */
@@ -104,6 +105,7 @@ export function buildFieldEntry(
     name: string;
     abbreviation?: string | null;
     brandingColor?: string | null;
+    avatarUrl?: string | null;
   },
   lastRow: LastSeasonRow | undefined,
   doormatId: string | null,
@@ -115,6 +117,7 @@ export function buildFieldEntry(
     name: team.name,
     abbreviation: team.abbreviation ?? null,
     brandingColor: team.brandingColor ?? null,
+    avatarUrl: team.avatarUrl ?? null,
     recordLabel:
       tag || !lastRow ? null : formatRecord(lastRow.wins, lastRow.losses, lastRow.ties),
     tag,
@@ -167,6 +170,7 @@ export async function getPreseasonField(
             name: t.name,
             abbreviation: t.abbreviation,
             brandingColor: t.brandingColor,
+            avatarUrl: t.avatarUrl,
           },
           lastByFranchise.get(t.franchiseId),
           doormatId,

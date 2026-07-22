@@ -72,6 +72,11 @@ export const franchiseSeasons = pgTable(
     userId: text("user_id").notNull(),
     ownerDisplayName: text("owner_display_name"),
     coOwnerDisplayName: text("co_owner_display_name"),
+    // Per-season team avatar (Sleeper team branding). Nullable: not every user
+    // sets one, and legacy seasons have none. Versioned here (not on
+    // franchises) so a franchise's crest can change year to year, matching the
+    // versioned-identity model.
+    avatarUrl: text("avatar_url"),
     // Division assignment for this franchise in this season. Nullable:
     // legacy/pre-division seasons and the predecessor league have none.
     division: integer("division"),
@@ -98,6 +103,82 @@ export const franchiseSeasons = pgTable(
       table.seasonId,
       table.division,
     ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// members
+// ---------------------------------------------------------------------------
+// A league member (person), keyed by their stable Sleeper user_id. Seeded and
+// kept fresh by the daily sync from the current-season owners and co-owners.
+// Members are never deleted: someone who leaves the league keeps their smack
+// posts attributed. franchiseId is the franchise they currently control (null
+// when unattached). claimCodeHash/codeGeneratedAt are set only when the commish
+// generates a claim code; role gates commish tooling. Neither role nor the
+// claim code is ever touched by sync.
+export const members = pgTable(
+  "members",
+  {
+    id: serial("id").primaryKey(),
+    sleeperUserId: text("sleeper_user_id").notNull().unique(),
+    displayName: text("display_name").notNull(),
+    franchiseId: text("franchise_id").references(() => franchises.id),
+    role: text("role").notNull().default("member"), // 'member' | 'commish'
+    claimCodeHash: text("claim_code_hash"),
+    codeGeneratedAt: timestamp("code_generated_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  },
+);
+
+// ---------------------------------------------------------------------------
+// member_sessions
+// ---------------------------------------------------------------------------
+// A logged-in session for a member. Only the SHA-256 hash of the opaque bearer
+// token is stored; the plaintext lives solely in the member's cookie. A session
+// is valid while now < expiresAt and revokedAt is null.
+export const memberSessions = pgTable(
+  "member_sessions",
+  {
+    id: serial("id").primaryKey(),
+    tokenHash: text("token_hash").notNull().unique(),
+    memberId: integer("member_id")
+      .notNull()
+      .references(() => members.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("idx_member_sessions_member_id").on(table.memberId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// smack_posts
+// ---------------------------------------------------------------------------
+// Member-authored trash talk, attributed to the franchise the member controlled
+// when they posted. Distinct from hub_content 'smack_post' rows, which are the
+// auto-generated Site Desk voice. hidden lets the commish moderate without
+// destroying attribution/history.
+export const smackPosts = pgTable(
+  "smack_posts",
+  {
+    id: serial("id").primaryKey(),
+    memberId: integer("member_id")
+      .notNull()
+      .references(() => members.id),
+    franchiseId: text("franchise_id")
+      .notNull()
+      .references(() => franchises.id),
+    body: text("body").notNull(),
+    hidden: boolean("hidden").notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("idx_smack_posts_hidden_created").on(table.hidden, table.createdAt),
   ],
 );
 
@@ -412,3 +493,12 @@ export type NewSyncLogEntry = typeof syncLog.$inferInsert;
 
 export type HubContent = typeof hubContent.$inferSelect;
 export type NewHubContent = typeof hubContent.$inferInsert;
+
+export type Member = typeof members.$inferSelect;
+export type NewMember = typeof members.$inferInsert;
+
+export type MemberSession = typeof memberSessions.$inferSelect;
+export type NewMemberSession = typeof memberSessions.$inferInsert;
+
+export type SmackPostRow = typeof smackPosts.$inferSelect;
+export type NewSmackPostRow = typeof smackPosts.$inferInsert;
