@@ -1,3 +1,8 @@
+import {
+  getPublishedHubContent,
+  type GroupedHubContent,
+} from "@/lib/queries/hub-content";
+
 export type LabelTone = 'positive' | 'sting' | 'neutral';
 
 export interface SnarkyLabel {
@@ -164,6 +169,13 @@ export interface HubEditorial {
   readonly offseasonReceipts: readonly OffseasonReceipt[];
   readonly matchupAngles: MatchupTrashAngles;
   readonly smackPosts: readonly SmackPost[];
+  /**
+   * Optional hero deck (the sub-headline under the hub title). Null when no DB
+   * content overrides it; consumers that compute their own dek can ignore it.
+   * Populated by the generate-content cron; forward-compatible, so adding it
+   * does not change what existing consumers render.
+   */
+  readonly heroDek: string | null;
 }
 
 /**
@@ -328,13 +340,8 @@ function buildSmackPosts(now: number): readonly SmackPost[] {
   }));
 }
 
-/**
- * Single accessor for all hub editorial content. Consumers NEVER import the
- * underlying constants; they read through this so Phase 2 can repoint the
- * source (LLM cron / DB table) transparently. Smack-post timestamps are stamped
- * relative to `now` on each call to keep the seed's relative labels fresh.
- */
-export function getHubEditorial(now: number = Date.now()): HubEditorial {
+/** The seeded editorial defaults, stamped for `now`. Always the fallback. */
+function seededEditorial(now: number): HubEditorial {
   return {
     divisions: DIVISION_EDITORIAL,
     divisionFallback: DIVISION_FALLBACK,
@@ -343,5 +350,166 @@ export function getHubEditorial(now: number = Date.now()): HubEditorial {
     offseasonReceipts: OFFSEASON_RECEIPTS,
     matchupAngles: MATCHUP_ANGLES,
     smackPosts: buildSmackPosts(now),
+    heroDek: null,
   };
+}
+
+const VALID_VERDICTS: readonly PredictionVerdict[] = ["LOCK", "NO", "UP", "DOWN"];
+const VALID_CATEGORIES: readonly ReceiptCategory[] = [
+  "DRAFT",
+  "TRADE",
+  "WAIVERS",
+  "FIRE_SALE",
+];
+
+function str(v: unknown): string | null {
+  return typeof v === "string" && v.trim().length > 0 ? v : null;
+}
+
+/**
+ * Overlays published hub_content (already grouped by kind) onto the seeded
+ * defaults, per field. For each kind: if the DB has rows, they win and replace
+ * that field; kinds with no rows keep the seed. Malformed rows (missing body,
+ * unknown verdict/category) are skipped rather than rendered. Pure and
+ * synchronous so the overlay contract can be unit-tested without a database.
+ */
+export function overlayHubEditorial(
+  seeds: HubEditorial,
+  grouped: GroupedHubContent,
+): HubEditorial {
+  const result: {
+    -readonly [K in keyof HubEditorial]: HubEditorial[K];
+  } = { ...seeds };
+
+  // division_note -> divisions (merged onto seed map by division name).
+  const divisionRows = grouped.division_note ?? [];
+  if (divisionRows.length > 0) {
+    const divisions: Record<string, DivisionEditorial> = { ...seeds.divisions };
+    for (const row of divisionRows) {
+      const name = str(row.refKey);
+      const rivalryNote = str(row.body);
+      if (!name || !rivalryNote) continue;
+      const characterization =
+        str(row.extras?.characterization) ??
+        seeds.divisions[name]?.characterization ??
+        seeds.divisionFallback.characterization;
+      divisions[name] = { divisionName: name, characterization, rivalryNote };
+    }
+    result.divisions = divisions;
+  }
+
+  // burning_question -> burningQuestions (full replace).
+  const questionRows = grouped.burning_question ?? [];
+  if (questionRows.length > 0) {
+    const questions = questionRows.map((r) => str(r.body)).filter((q): q is string => q != null);
+    if (questions.length > 0) result.burningQuestions = questions;
+  }
+
+  // bold_prediction -> boldPredictions (full replace).
+  const predictionRows = grouped.bold_prediction ?? [];
+  if (predictionRows.length > 0) {
+    const predictions: BoldPrediction[] = [];
+    for (const row of predictionRows) {
+      const body = str(row.body);
+      const kicker = str(row.extras?.kicker);
+      const verdictRaw = str(row.extras?.verdict);
+      const verdict = VALID_VERDICTS.includes(verdictRaw as PredictionVerdict)
+        ? (verdictRaw as PredictionVerdict)
+        : null;
+      if (body && kicker && verdict) predictions.push({ kicker, verdict, body });
+    }
+    if (predictions.length > 0) result.boldPredictions = predictions;
+  }
+
+  // offseason_receipt -> offseasonReceipts (full replace).
+  const receiptRows = grouped.offseason_receipt ?? [];
+  if (receiptRows.length > 0) {
+    const receipts: OffseasonReceipt[] = [];
+    for (const row of receiptRows) {
+      const body = str(row.body);
+      const franchiseSlug = str(row.refKey);
+      const categoryRaw = str(row.extras?.category);
+      const category = VALID_CATEGORIES.includes(categoryRaw as ReceiptCategory)
+        ? (categoryRaw as ReceiptCategory)
+        : null;
+      if (body && franchiseSlug && category)
+        receipts.push({ category, franchiseSlug, body });
+    }
+    if (receipts.length > 0) result.offseasonReceipts = receipts;
+  }
+
+  // matchup_angle / game_of_week_blurb -> matchupAngles (byPair merged, blurb replaced).
+  const angleRows = grouped.matchup_angle ?? [];
+  const gotwRows = grouped.game_of_week_blurb ?? [];
+  if (angleRows.length > 0 || gotwRows.length > 0) {
+    const byPair: Record<string, string> = { ...seeds.matchupAngles.byPair };
+    for (const row of angleRows) {
+      const key = str(row.refKey);
+      const angle = str(row.body);
+      if (key && angle) byPair[key] = angle;
+    }
+    const gotwBlurb = str(gotwRows[0]?.body) ?? seeds.matchupAngles.gameOfWeekBlurb;
+    result.matchupAngles = { byPair, gameOfWeekBlurb: gotwBlurb };
+  }
+
+  // smack_post -> smackPosts (full replace; Site Desk voice, timestamped from created_at).
+  const smackRows = grouped.smack_post ?? [];
+  if (smackRows.length > 0) {
+    const posts: SmackPost[] = [];
+    for (const row of smackRows) {
+      const body = str(row.body);
+      if (!body) continue;
+      posts.push({
+        ...SITE_DESK,
+        body,
+        postedAt: (row.createdAt ?? new Date()).toISOString(),
+      });
+    }
+    if (posts.length > 0) result.smackPosts = posts;
+  }
+
+  // hero_dek -> heroDek (first row).
+  const heroDek = str((grouped.hero_dek ?? [])[0]?.body);
+  if (heroDek) result.heroDek = heroDek;
+
+  return result;
+}
+
+export interface HubEditorialOptions {
+  /** When set, published hub_content for this season overlays the seeds. */
+  seasonId?: number;
+  /** Week scope: a number for regular-season content, null/undefined for season-scoped. */
+  week?: number | null;
+  /** Injectable clock for the relative smack-post timestamps. */
+  now?: number;
+}
+
+/**
+ * Single accessor for all hub editorial content. Consumers NEVER import the
+ * underlying constants; they read through this so the source can be repointed
+ * (LLM cron / DB table) transparently. When `seasonId` is given, published
+ * hub_content is overlaid onto the seeded defaults per kind (DB wins per kind;
+ * kinds with no rows fall back to seeds; any DB error returns pure seeds). When
+ * `seasonId` is omitted, the seeded defaults are returned unchanged, so a hub
+ * with no DB content renders exactly as before. Smack-post timestamps are
+ * stamped relative to `now`.
+ */
+export async function getHubEditorial(
+  opts: HubEditorialOptions = {},
+): Promise<HubEditorial> {
+  const now = opts.now ?? Date.now();
+  const seeds = seededEditorial(now);
+
+  if (opts.seasonId == null) return seeds;
+
+  try {
+    const grouped = await getPublishedHubContent(
+      opts.seasonId,
+      opts.week ?? null,
+    );
+    return overlayHubEditorial(seeds, grouped);
+  } catch (e) {
+    console.error("[content] getHubEditorial overlay failed; using seeds:", e);
+    return seeds;
+  }
 }

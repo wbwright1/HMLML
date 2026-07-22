@@ -12,7 +12,7 @@ import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
 import { getWeekBenchLeader } from "@/lib/queries/lineup-efficiency";
 import { getWeekStandouts, type WeekStandout } from "@/lib/queries/week-standouts";
 import { getTrendingAddPlayers } from "@/lib/queries/player-points";
-import { getHubEditorial, matchupPairKey } from "@/lib/content";
+import { getHubEditorial, matchupPairKey, type HubEditorial } from "@/lib/content";
 import {
   selectGameOfTheWeek,
   betweenWeeksHeadline,
@@ -49,7 +49,12 @@ export async function BetweenWeeksHub({
   nextKickoff,
 }: BetweenWeeksHubProps) {
   const priorWeek = week > 1 ? week - 1 : week;
-  const editorial = getHubEditorial();
+  // Between-weeks editorial is week-scoped (matchup angles, GOTW blurb, smack
+  // feed for this week); DB content overlays the seeds when present.
+  const editorial = await getHubEditorial({
+    seasonId: seasonId ?? undefined,
+    week,
+  });
   const headline = betweenWeeksHeadline(nextKickoff);
 
   // Standings lookup for records, points-for, and division identity.
@@ -151,8 +156,8 @@ export async function BetweenWeeksHub({
           </p>
           <h1 className="text-display">{headline}</h1>
           <p className="mt-3 text-body-lg text-text-secondary">
-            One grudge match at the top, one annual sacrifice at the bottom, and a
-            week of receipts to settle by Thursday night.
+            {editorial.heroDek ??
+              "One grudge match at the top, one annual sacrifice at the bottom, and a week of receipts to settle by Thursday night."}
           </p>
         </div>
 
@@ -265,7 +270,7 @@ function GameOfWeekSection({
   divisionNameOf: (id: string) => string | null;
   divisionLeaderStatus: Map<string, string>;
   leadsDivision: Set<string>;
-  editorial: ReturnType<typeof getHubEditorial>;
+  editorial: HubEditorial;
 }) {
   const home = matchup.homeTeam;
   const away = matchup.awayTeam;
@@ -293,10 +298,15 @@ function GameOfWeekSection({
     ? formatH2HLine(h2h, homeAbbr, awayAbbr)
     : "First-ever meeting";
 
+  // The featured card prefers the dedicated Game of the Week blurb (which the
+  // generator writes about this exact pair via ctx.gameOfWeekPairKey), falling
+  // back to a per-pair matchup angle if no GOTW blurb exists.
   const blurb =
+    editorial.matchupAngles.gameOfWeekBlurb ||
     editorial.matchupAngles.byPair[
       matchupPairKey(home.franchiseSlug, away.franchiseSlug)
-    ] ?? editorial.matchupAngles.gameOfWeekBlurb;
+    ] ||
+    "";
 
   return (
     <section className="space-y-4">
