@@ -50,6 +50,13 @@
       "when": 1784664618339,
       "tag": "0006_certain_wendigo",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1784744629155,
+      "tag": "0007_smart_tigra",
+      "breakpoints": true
     }
   ]
 }

@@ -6,6 +6,16 @@ import * as schema from "./schema";
 
 let _db: NeonHttpDatabase<typeof schema> | null = null;
 
+// Which driver getDb() constructed. The two drivers offer atomic multi-
+// statement writes through different APIs: node-postgres via db.transaction(),
+// neon-http via db.batch() (interactive transactions throw on neon-http). Code
+// that needs one row-set replaced atomically branches on this flag.
+export type DbDriver = "pg" | "neon-http";
+
+export function getDbDriver(): DbDriver {
+  return process.env.POSTGRES_DRIVER === "pg" ? "pg" : "neon-http";
+}
+
 // POSTGRES_DRIVER=pg opts into node-postgres over TCP 5432 instead of the
 // neon-http driver's HTTPS endpoint. Needed on machines where outbound 443 to
 // the Neon endpoint is blocked (local dev/E2E); Vercel keeps the default.

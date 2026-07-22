@@ -40,7 +40,9 @@ export async function PreseasonHub({
 }: {
   latestSeason: Awaited<ReturnType<typeof getLatestSeason>>;
 }) {
-  const editorial = getHubEditorial();
+  // Preseason editorial is season-scoped (week null); DB content overlays the
+  // seeded defaults when present, otherwise the seeds render unchanged.
+  const editorial = await getHubEditorial({ seasonId: latestSeason?.id });
   const seasonYear = latestSeason?.seasonYear ?? new Date().getFullYear();
 
   // Field grouping + last-season records/tags, plus the Week 1 kickoff target.
@@ -67,10 +69,13 @@ export async function PreseasonHub({
   // matches the countdown DAYS card and the topbar pill. Static server-rendered
   // prose; the countdown cards themselves tick client-side.
   const daysToKickoff = kickoffTarget ? daysUntil(kickoffTarget, new Date()) : null;
-  const dek =
+  // A generated hero dek (from the content cron) wins when present; otherwise we
+  // use the computed dek, which carries the live day count the LLM cannot know.
+  const computedDek =
     daysToKickoff != null
       ? `Draft's in the books, rosters are locked, and every single one of you is undefeated for ${daysToKickoff} more days. Screenshot the 0-0 while you've got it.`
       : "Draft's in the books, rosters are locked, and every single one of you is undefeated. Screenshot the 0-0 while you've got it.";
+  const dek = editorial.heroDek ?? computedDek;
 
   // Resolve a crest for each offseason receipt. Placeholder editorial slugs may
   // not map to a real franchise; fall back to a slug-derived name so the crest

@@ -318,6 +318,41 @@ export const nflGames = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// hub_content
+// ---------------------------------------------------------------------------
+// DB-backed editorial content for the seasonally-aware hub (division notes,
+// burning questions, bold predictions, offseason receipts, matchup angles,
+// game-of-week + hero deks, and Site Desk smack posts). Written by the weekly
+// generate-content cron (LLM or deterministic template fallback) and read by
+// getHubEditorial(), which overlays these rows onto the seeded defaults per
+// kind. week is null for season-scoped content (preseason/offseason); ref_key
+// carries a division name, matchupPairKey, or franchise slug depending on kind.
+export const hubContent = pgTable(
+  "hub_content",
+  {
+    id: serial("id").primaryKey(),
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id),
+    week: integer("week"), // null = season-scoped
+    kind: text("kind").notNull(), // 'division_note' | 'burning_question' | 'bold_prediction' | 'offseason_receipt' | 'matchup_angle' | 'game_of_week_blurb' | 'hero_dek' | 'smack_post'
+    refKey: text("ref_key"), // division name, matchupPairKey, or franchise slug
+    body: text("body").notNull(),
+    extras: jsonb("extras"), // kicker/verdict/category/position fields per kind
+    status: text("status").notNull().default("published"), // 'draft' | 'published'
+    generatedBy: text("generated_by").notNull(), // 'auto' | 'commish'
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_hub_content_season_week_kind").on(
+      table.seasonId,
+      table.week,
+      table.kind,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // sync_log
 // ---------------------------------------------------------------------------
 export const syncLog = pgTable(
@@ -374,3 +409,6 @@ export type NewNflGame = typeof nflGames.$inferInsert;
 
 export type SyncLogEntry = typeof syncLog.$inferSelect;
 export type NewSyncLogEntry = typeof syncLog.$inferInsert;
+
+export type HubContent = typeof hubContent.$inferSelect;
+export type NewHubContent = typeof hubContent.$inferInsert;
