@@ -43,9 +43,12 @@ function divisionNotes(divisions: StatsDivision[]): HubContentInsert[] {
   return divisions.slice(0, 3).map((d, i) => {
     const characterization = CHARACTERIZATIONS[i % CHARACTERIZATIONS.length];
     const leader = d.leader;
-    const body = leader
-      ? `${leader.name} sat at the top of ${d.name} at ${leader.record}. Everyone else in this bracket is auditioning to take it from them.`
-      : `${d.name} has no clear favorite yet. Someone claims it by Sunday, probably loudly.`;
+    // At 0-0 nobody has actually claimed anything; a standings-based line reads
+    // as nonsense before games are played.
+    const nothingPlayed = !leader || /^0-0(-0)?$/.test(leader.record);
+    const body = nothingPlayed
+      ? `${d.name} is a clean slate. Four teams, one flag, and a lot of confident group-chat energy about to meet reality.`
+      : `${leader.name} sat at the top of ${d.name} at ${leader.record}. Everyone else in this bracket is auditioning to take it from them.`;
     return {
       week: null,
       kind: "division_note" as const,
@@ -67,7 +70,7 @@ function burningQuestions(ctx: StatsContext): HubContentInsert[] {
       `Was ${champ.name}'s ${champ.record} last year the real thing, or the start of a very long hangover?`,
     );
   }
-  if (topDivLeader) {
+  if (topDivLeader && !/^0-0(-0)?$/.test(topDivLeader.record)) {
     qs.push(
       `Can anyone in the field slow down ${topDivLeader.name}, sitting at ${topDivLeader.record}?`,
     );
