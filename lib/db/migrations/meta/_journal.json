@@ -64,6 +64,13 @@
       "when": 1784754455823,
       "tag": "0008_member_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1784761663214,
+      "tag": "0009_preseason_projections",
+      "breakpoints": true
     }
   ]
 }

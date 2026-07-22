@@ -110,7 +110,9 @@ function preseasonSpec(ctx: StatsContext): string {
   "offseason_receipts": [ { "franchiseSlug": <one of ${JSON.stringify(slugs)}>, "category": "DRAFT|TRADE|WAIVERS|FIRE_SALE", "body": "teaser" } ]  // exactly 4
   "hero_dek": "one-sentence hero subhead for the preseason hub. Do NOT mention a specific number of days until kickoff; the live day count is added at render time.",
   "smack_posts": [ "site desk post", ... ]  // 3 to 5
-}`;
+}
+
+The STATS JSON also includes franchiseHistory (all-time record, championships, playoff appearances, seasons played, and sustainedDoormat/sustainedContender multi-year trend flags) and rosterProjections (each franchise's projected optimal starting-lineup total for the upcoming season, its league rank, and its top projected player), plus projectionSeason. You may cite these: all-time records and championship counts, multi-year trends (a franchise on a sustained bottom-third or sustained playoff-run streak reads very differently than one bad or good season), and projected ranks/point totals for bold predictions, offseason receipts, and burning questions. Weigh sustained multi-year futility more heavily than a single bad season when deciding who earns the doormat framing. When rosterProjections is empty, do not reference any projection, rank, or projected total; when franchiseHistory is empty, do not reference all-time records or multi-year trends.`;
 }
 
 function regularSpec(ctx: StatsContext): string {

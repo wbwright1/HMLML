@@ -12,6 +12,8 @@ import { getRecentTransactions } from "@/lib/queries/offseason";
 import { matchupPairKey } from "@/lib/content";
 import { selectGameOfTheWeek, type GotwCandidate } from "@/lib/hub/between-weeks";
 import type { NflSeasonType } from "@/lib/queries/nfl-state";
+import { getLeagueLongevity } from "@/lib/queries/franchise-longevity";
+import { getRosterProjections } from "@/lib/queries/roster-projections";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -87,6 +89,29 @@ export interface StatsTransaction {
   description: string;
 }
 
+export interface StatsFranchiseHistory {
+  slug: string;
+  allTimeWinPct: number;
+  championships: number;
+  playoffAppearances: number;
+  seasonsPlayed: number;
+  /** Standings finish for the last three completed seasons, most recent first. */
+  lastThreeFinishes: (number | null)[];
+  /** Bottom-third finish in ALL of the last N (N >= 2) completed seasons. */
+  sustainedDoormat: boolean;
+  /** Made the playoffs in ALL of the last N (N >= 2) completed seasons. */
+  sustainedContender: boolean;
+}
+
+export interface StatsRosterProjection {
+  slug: string;
+  name: string;
+  projectedStartingPoints: number;
+  /** 1 = highest projected starting-lineup total in the league. */
+  leagueRank: number;
+  topProjectedPlayer: { name: string; position: string | null; points: number } | null;
+}
+
 export interface StatsContext {
   seasonYear: number;
   week: number;
@@ -110,6 +135,16 @@ export interface StatsContext {
   gameOfWeekPairKey: string | null;
   weekInBooks: StatsWeekInBooks | null;
   recentTransactions: StatsTransaction[];
+  /** Multi-season history per franchise. Empty when the DB has too little history, or on query failure. */
+  franchiseHistory: StatsFranchiseHistory[];
+  /**
+   * Upcoming-season roster-strength projections, ranked. Empty when the
+   * proj_points_ppr column has not been populated yet (migration not applied,
+   * or the projection sync step hasn't run) — callers must degrade gracefully.
+   */
+  rosterProjections: StatsRosterProjection[];
+  /** The season the roster projections are for (matches players.proj_season). Null when rosterProjections is empty. */
+  projectionSeason: number | null;
 }
 
 export interface StatsContextInput {
@@ -347,6 +382,49 @@ export async function buildStatsContext(
     };
   }
 
+  // Multi-season franchise history + upcoming-season roster projections. Both
+  // degrade to an empty array on any failure (including "column does not
+  // exist" if this ships before the 0009 migration is applied), so callers
+  // never need to special-case a missing DB column.
+  const franchiseIds = divisionGroups.flatMap((g) => g.teams.map((t) => t.franchiseId));
+  let franchiseHistory: StatsFranchiseHistory[] = [];
+  let rosterProjections: StatsRosterProjection[] = [];
+  let projectionSeason: number | null = null;
+  try {
+    const longevity = await getLeagueLongevity(seasonId, franchiseIds);
+    franchiseHistory = longevity.map((l) => ({
+      slug: l.slug,
+      allTimeWinPct: Math.round(l.allTimeWinPct * 1000) / 1000,
+      championships: l.championships,
+      playoffAppearances: l.playoffAppearances,
+      seasonsPlayed: l.seasonsPlayed,
+      lastThreeFinishes: l.lastNFinishes,
+      sustainedDoormat: l.sustainedDoormat,
+      sustainedContender: l.sustainedContender,
+    }));
+  } catch (e) {
+    console.error("[stats-context] franchise longevity unavailable:", e);
+  }
+  try {
+    // seasonYear is the projection target: getRosterProjections only counts
+    // players whose stored proj_season matches it, so a stale prior-year
+    // projection (a player dropped from this year's feed) never leaks into
+    // this year's rankings. projectionSeason = seasonYear stays exact.
+    const projections = await getRosterProjections(seasonId, seasonYear);
+    rosterProjections = projections.map((p) => ({
+      slug: p.slug,
+      name: p.name,
+      projectedStartingPoints: Math.round(p.projectedStartingPoints * 10) / 10,
+      leagueRank: p.leagueRank,
+      topProjectedPlayer: p.topProjectedPlayer,
+    }));
+    if (rosterProjections.length > 0) {
+      projectionSeason = seasonYear;
+    }
+  } catch (e) {
+    console.error("[stats-context] roster projections unavailable:", e);
+  }
+
   return {
     seasonYear,
     week,
@@ -359,5 +437,8 @@ export async function buildStatsContext(
     gameOfWeekPairKey,
     weekInBooks,
     recentTransactions,
+    franchiseHistory,
+    rosterProjections,
+    projectionSeason,
   };
 }

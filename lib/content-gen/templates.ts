@@ -2,7 +2,9 @@ import type { HubContentInsert, HubContentKind } from "@/lib/queries/hub-content
 import type {
   StatsContext,
   StatsDivision,
+  StatsFranchiseHistory,
   StatsMatchup,
+  StatsRosterProjection,
   StatsTeam,
 } from "@/lib/content-gen/stats-context";
 
@@ -33,6 +35,41 @@ function ordinal(n: number): string {
   const s = ["th", "st", "nd", "rd"];
   const v = n % 100;
   return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
+
+// ---------------------------------------------------------------------------
+// Longevity / projection helpers
+// ---------------------------------------------------------------------------
+
+function historyBySlug(ctx: StatsContext, slug: string | undefined): StatsFranchiseHistory | undefined {
+  if (!slug) return undefined;
+  return ctx.franchiseHistory.find((h) => h.slug === slug);
+}
+
+/** The bottom-ranked (worst-projected) roster, when projection data exists. */
+function lowestProjected(ctx: StatsContext): StatsRosterProjection | null {
+  if (ctx.rosterProjections.length === 0) return null;
+  return [...ctx.rosterProjections].sort((a, b) => b.leagueRank - a.leagueRank)[0] ?? null;
+}
+
+/** The top-ranked (best-projected) roster, when projection data exists. */
+function topProjected(ctx: StatsContext): StatsRosterProjection | null {
+  if (ctx.rosterProjections.length === 0) return null;
+  return ctx.rosterProjections.find((p) => p.leagueRank === 1) ?? ctx.rosterProjections[0] ?? null;
+}
+
+/** A franchise with a sustained (multi-year) bottom-tier trend, if any. */
+function sustainedDoormatEntry(ctx: StatsContext): StatsFranchiseHistory | null {
+  return ctx.franchiseHistory.find((h) => h.sustainedDoormat) ?? null;
+}
+
+/** A franchise with a sustained (multi-year) playoff-contender trend, if any. */
+function sustainedContenderEntry(ctx: StatsContext): StatsFranchiseHistory | null {
+  return ctx.franchiseHistory.find((h) => h.sustainedContender) ?? null;
+}
+
+function slugToName(ctx: StatsContext, slug: string): string {
+  return ctx.leagueStandings.find((t) => t.slug === slug)?.name ?? slug;
 }
 
 // ---------------------------------------------------------------------------
@@ -80,12 +117,38 @@ function burningQuestions(ctx: StatsContext): HubContentInsert[] {
       `Is this finally the year ${doormat.name} wins more than they lose, after last year's ${doormat.record}?`,
     );
   }
+
+  // Longevity: pose the question about a franchise's sustained multi-year
+  // trend, when the DB has enough history to support one.
+  const sustainedDoormatFranchise = sustainedDoormatEntry(ctx);
+  if (sustainedDoormatFranchise) {
+    qs.push(
+      `${slugToName(ctx, sustainedDoormatFranchise.slug)} has finished in the league's bottom third for ${sustainedDoormatFranchise.seasonsPlayed >= 3 ? "three straight seasons" : "back-to-back seasons"}. Does the streak finally end this year?`,
+    );
+  } else {
+    const sustainedContenderFranchise = sustainedContenderEntry(ctx);
+    if (sustainedContenderFranchise) {
+      qs.push(
+        `${slugToName(ctx, sustainedContenderFranchise.slug)} has made the playoffs in every one of its last completed seasons. Is this the year that streak breaks?`,
+      );
+    }
+  }
+
+  // Projections: pose the question about the projected upcoming season, only
+  // when there is real projection data to ask it from.
+  const worstProjected = lowestProjected(ctx);
+  if (worstProjected) {
+    qs.push(
+      `${worstProjected.name} projects dead last in starting-lineup points. Is the roster really that thin, or is preseason math just wrong again?`,
+    );
+  }
+
   while (qs.length < 3) {
     qs.push(
       "Which team talks the biggest game in August and then quietly misses the playoffs?",
     );
   }
-  return qs.slice(0, 3).map((q) => ({
+  return qs.slice(0, 5).map((q) => ({
     week: null,
     kind: "burning_question" as const,
     refKey: null,
@@ -129,14 +192,44 @@ function boldPredictions(ctx: StatsContext): HubContentInsert[] {
     });
   }
   if (doormat) {
+    const doormatHistory = historyBySlug(ctx, doormat.slug);
+    const escalate = doormatHistory?.sustainedDoormat === true;
     rows.push({
       week: null,
       kind: "bold_prediction",
       refKey: null,
-      body: `Same team, same story. ${doormat.name} went ${doormat.record} and did nothing to change it. The floor is still the floor.`,
+      body: escalate
+        ? `${doormat.name} has now finished in the league's bottom third for multiple seasons running, most recently ${doormat.record}. This is not a slump anymore, it is an identity. Nothing changes.`
+        : `Same team, same story. ${doormat.name} went ${doormat.record} and did nothing to change it. The floor is still the floor.`,
       extras: { kicker: "League Doormat", verdict: "DOWN" },
     });
   }
+
+  // Projection-based predictions only fire when the DB actually holds roster
+  // projections; a season with an unpopulated proj_points_ppr column (before
+  // the migration is applied, or before the projection sync has run) simply
+  // omits these two rows.
+  const worstProjected = lowestProjected(ctx);
+  if (worstProjected) {
+    rows.push({
+      week: null,
+      kind: "bold_prediction",
+      refKey: null,
+      body: `${worstProjected.name} projects for the fewest starting-lineup points in the league at ${worstProjected.projectedStartingPoints.toFixed(1)}. On paper, this is the team to beat down to.`,
+      extras: { kicker: "Projected Underperformer", verdict: "DOWN" },
+    });
+  }
+  const bestProjected = topProjected(ctx);
+  if (bestProjected) {
+    rows.push({
+      week: null,
+      kind: "bold_prediction",
+      refKey: null,
+      body: `${bestProjected.name} projects for the most starting-lineup points in the league at ${bestProjected.projectedStartingPoints.toFixed(1)}${bestProjected.topProjectedPlayer ? `, led by ${bestProjected.topProjectedPlayer.name}` : ""}. The rest of the league is projecting to chase.`,
+      extras: { kicker: "Projected Riser", verdict: "UP" },
+    });
+  }
+
   while (rows.length < 4) {
     rows.push({
       week: null,
@@ -146,22 +239,37 @@ function boldPredictions(ctx: StatsContext): HubContentInsert[] {
       extras: { kicker: "Early Panic", verdict: "DOWN" },
     });
   }
-  return rows.slice(0, 4);
+  return rows.slice(0, 6);
 }
 
 function offseasonReceipts(ctx: StatsContext): HubContentInsert[] {
   // Real franchise slugs, generic category teasers (no fabricated specific
   // moves). Pick a spread of franchises across the standings.
   const teams = ctx.leagueStandings;
-  const picks: { team: StatsTeam; category: string; body: string }[] = [];
+  const picks: { slug: string; category: string; body: string }[] = [];
   const push = (team: StatsTeam | undefined, category: string, body: string) => {
-    if (team) picks.push({ team, category, body });
+    if (team) picks.push({ slug: team.slug, category, body });
   };
-  push(
-    teams[0],
-    "DRAFT",
-    `${teams[0]?.name} drafted like the mock never ended. September settles whether that was genius or a group-chat punchline.`,
-  );
+
+  const best = topProjected(ctx);
+  const worst = lowestProjected(ctx);
+
+  // When roster projections exist, the draft-win and fire-sale angles cite
+  // the actual projected rank/total instead of the generic mock-draft framing.
+  if (best) {
+    push(
+      teams.find((t) => t.slug === best.slug),
+      "DRAFT",
+      `${best.name} projects No. 1 in the league at ${best.projectedStartingPoints.toFixed(1)} starting-lineup points. September settles whether the draft board actually reads that well.`,
+    );
+  } else {
+    push(
+      teams[0],
+      "DRAFT",
+      `${teams[0]?.name} drafted like the mock never ended. September settles whether that was genius or a group-chat punchline.`,
+    );
+  }
+
   push(
     teams[Math.floor(teams.length / 3)],
     "TRADE",
@@ -172,15 +280,25 @@ function offseasonReceipts(ctx: StatsContext): HubContentInsert[] {
     "WAIVERS",
     "Torched the waiver budget early chasing upside. Bold strategy, assuming any of it actually hits.",
   );
-  push(
-    teams[teams.length - 1],
-    "FIRE_SALE",
-    "Sold off the veterans and called it a plan. The rebuild timeline remains a closely guarded secret.",
-  );
+
+  if (worst) {
+    push(
+      teams.find((t) => t.slug === worst.slug),
+      "FIRE_SALE",
+      `${worst.name} projects dead last in the league at ${worst.projectedStartingPoints.toFixed(1)} starting-lineup points. The rebuild timeline remains a closely guarded secret.`,
+    );
+  } else {
+    push(
+      teams[teams.length - 1],
+      "FIRE_SALE",
+      "Sold off the veterans and called it a plan. The rebuild timeline remains a closely guarded secret.",
+    );
+  }
+
   return picks.slice(0, 4).map((p) => ({
     week: null,
     kind: "offseason_receipt" as const,
-    refKey: p.team.slug,
+    refKey: p.slug,
     body: p.body,
     extras: { category: p.category },
   }));
@@ -214,8 +332,26 @@ function preseasonSmack(ctx: StatsContext): HubContentInsert[] {
       `${ctx.lastSeason.doormat.name} went ${ctx.lastSeason.doormat.record} last year and the group chat has not let it go.`,
     );
   }
+
+  // Longevity: one Site Desk post seeded from multi-year franchise history.
+  const sustainedDoormatFranchise = sustainedDoormatEntry(ctx);
+  if (sustainedDoormatFranchise) {
+    posts.push(
+      `${slugToName(ctx, sustainedDoormatFranchise.slug)} has finished bottom-third of the league in every one of its last ${sustainedDoormatFranchise.lastThreeFinishes.length} completed seasons. That is not bad luck, that is a resume.`,
+    );
+  }
+
+  // Projections: one Site Desk post seeded from the upcoming-season roster
+  // projections, when the DB actually has them.
+  const bestProjected = topProjected(ctx);
+  if (bestProjected) {
+    posts.push(
+      `${bestProjected.name} projects No. 1 in the league before a single snap. Enjoy the preseason crown while it is still just math.`,
+    );
+  }
+
   posts.push("Everybody is 0-0 today. For most of you this is as good as the record gets.");
-  return posts.slice(0, 5).map((body) => ({
+  return posts.slice(0, 7).map((body) => ({
     week: null,
     kind: "smack_post" as const,
     refKey: null,

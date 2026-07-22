@@ -132,7 +132,7 @@ interface WeekRosterAccumulator {
   actual: number;
 }
 
-async function loadSeasonRosterPositions(
+export async function loadSeasonRosterPositions(
   seasonId: number
 ): Promise<string[] | null> {
   const [row] = await db
