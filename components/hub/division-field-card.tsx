@@ -7,6 +7,8 @@ interface DivisionFieldCardProps {
   characterization: string;
   /** Serif rivalry note pinned to the bottom of the card. */
   rivalryNote: string;
+  /** Year the records/tags below belong to (the last completed season). Null hides the caption. */
+  recordsSeasonYear?: number | null;
 }
 
 function TagOrRecord({ team }: { team: FieldTeamEntry }) {
@@ -45,6 +47,7 @@ export function DivisionFieldCard({
   division,
   characterization,
   rivalryNote,
+  recordsSeasonYear,
 }: DivisionFieldCardProps) {
   return (
     <div className="card-surface flex h-full flex-col p-5">
@@ -56,6 +59,11 @@ export function DivisionFieldCard({
           {characterization}
         </span>
       </div>
+      {recordsSeasonYear && (
+        <p className="text-caption text-text-tertiary mt-1">
+          {recordsSeasonYear} finish
+        </p>
+      )}
 
       <ul className="mt-4 space-y-3">
         {division.teams.map((team) => (

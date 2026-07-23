@@ -95,6 +95,22 @@ export async function getLeague(
   return fetchSleeper(`/league/${leagueId}`, SleeperLeagueSchema);
 }
 
+/**
+ * Fetch the leagues a user belongs to for a given NFL season. Used to follow
+ * the league chain forward (Sleeper leagues have no forward pointer, only
+ * previous_league_id), so next season's league is found by matching its
+ * previous_league_id against the current league id.
+ */
+export async function getUserLeagues(
+  userId: string,
+  season: string
+): Promise<SleeperResult<SleeperLeague[]>> {
+  return fetchSleeper(
+    `/user/${userId}/leagues/nfl/${season}`,
+    z.array(SleeperLeagueSchema)
+  );
+}
+
 /** Fetch all users in a league. */
 export async function getLeagueUsers(
   leagueId: string

@@ -2,8 +2,11 @@ import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { SeasonTimelineCard } from "@/components/season-timeline-card";
 import { EmptyState } from "@/components/empty-state";
-import { getAllSeasons } from "@/lib/queries/seasons";
+import { getSeasonStandings } from "@/lib/queries/seasons";
 import { getSeasonTimelineData } from "@/lib/queries/history";
+import { getLatestSeason } from "@/lib/queries/matchups";
+import { getNflState } from "@/lib/queries/nfl-state";
+import { resolveHubSeasonType, isPreWeekOne, seasonTypeBadgeLabel } from "@/lib/hub/season-state";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +23,35 @@ export default async function HistoryPage() {
     timelineData = await getSeasonTimelineData();
   } catch {
     // DB may not be connected
+  }
+
+  // The newest row's badge can otherwise disagree with the hub banner (e.g.
+  // raw DB status "in_season" while Sleeper/the hub calendar says preseason).
+  // Recompute it via the same seasonal logic the hub uses, for that row only.
+  // getSeasonTimelineData's rows carry no `id`, so the season id comes from
+  // getLatestSeason() instead (it's the same latest row by seasonYear).
+  let latestSeasonBadge: string | null = null;
+  const latestSeasonRow = timelineData[0];
+  if (latestSeasonRow && latestSeasonRow.status !== "complete") {
+    try {
+      const [nflState, latestSeason] = await Promise.all([
+        getNflState(),
+        getLatestSeason(),
+      ]);
+      const standings =
+        latestSeason && latestSeason.seasonYear === latestSeasonRow.seasonYear
+          ? await getSeasonStandings(latestSeason.id)
+          : [];
+      const seasonType = resolveHubSeasonType({
+        nflSeasonType: nflState?.seasonType ?? null,
+        dbSeasonStatus: latestSeasonRow.status,
+        hasLiveMatchups: false,
+        nothingPlayedYet: isPreWeekOne(standings),
+      });
+      latestSeasonBadge = seasonTypeBadgeLabel(seasonType);
+    } catch {
+      // Fall back to the card's own status-derived label
+    }
   }
 
   return (
@@ -51,6 +83,7 @@ export default async function HistoryPage() {
                 mostPF={season.mostPF}
                 isLegacy={season.isLegacy}
                 status={season.status}
+                badgeLabel={index === 0 ? latestSeasonBadge : null}
               />
             </ScrollReveal>
           ))

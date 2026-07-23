@@ -11,16 +11,18 @@ import { eq, sql } from "drizzle-orm";
 import {
   getLeague,
   getLeagueUsers,
+  getUserLeagues,
   getLeagueRosters,
   getLeagueDrafts,
   getDraftPicks,
   getAllPlayers,
   getPlayerStats,
   getSeasonProjections,
-  getNFLState,
   getWinnersBracket,
   getLosersBracket,
 } from "@/lib/sleeper";
+import type { SleeperLeague } from "@/lib/sleeper-schemas";
+import { resolveNflState } from "@/lib/sync/nfl-state";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { loadSeasonScoringSettings } from "@/lib/queries/seasons";
 import { computeProjectedPoints } from "@/lib/lineup-slots";
@@ -38,6 +40,8 @@ interface SyncStepResult {
   rowCount: number;
   durationMs: number;
   error?: string;
+  // Non-fatal advisory (e.g. SLEEPER_LEAGUE_ID auto-advanced to a newer season).
+  note?: string;
 }
 
 export interface DailySyncSummary {
@@ -118,12 +122,11 @@ function chunk<T>(arr: T[], size: number): T[][] {
 // Step A: League Settings Sync
 // ---------------------------------------------------------------------------
 
-async function syncLeagueSettings(): Promise<SyncStepResult> {
+async function syncLeagueSettings(leagueId: string): Promise<SyncStepResult> {
   const startTime = Date.now();
   const logId = await logSyncStart("daily", "league");
 
   try {
-    const leagueId = getLeagueId();
     const result = await getLeague(leagueId);
 
     if ("error" in result) {
@@ -213,13 +216,11 @@ async function syncLeagueSettings(): Promise<SyncStepResult> {
 // Step B: User & Roster Mapping Sync
 // ---------------------------------------------------------------------------
 
-async function syncUsersAndRosters(): Promise<SyncStepResult> {
+async function syncUsersAndRosters(leagueId: string): Promise<SyncStepResult> {
   const startTime = Date.now();
   const logId = await logSyncStart("daily", "rosters");
 
   try {
-    const leagueId = getLeagueId();
-
     // Fetch users and rosters in parallel
     const [usersResult, rostersResult] = await Promise.all([
       getLeagueUsers(leagueId),
@@ -404,13 +405,11 @@ async function syncUsersAndRosters(): Promise<SyncStepResult> {
 // code_generated_at belong to the claim/commish flow and are never touched by
 // sync. Atomic per data type: logged separately as "members".
 
-async function syncMembers(): Promise<SyncStepResult> {
+async function syncMembers(leagueId: string): Promise<SyncStepResult> {
   const startTime = Date.now();
   const logId = await logSyncStart("daily", "members");
 
   try {
-    const leagueId = getLeagueId();
-
     const [usersResult, rostersResult] = await Promise.all([
       getLeagueUsers(leagueId),
       getLeagueRosters(leagueId),
@@ -550,8 +549,10 @@ async function syncPlayers(): Promise<SyncStepResult> {
     // (neither ever fails the players step).
     let sharedNflState: { season: string; season_type: string; week: number } | null = null;
     try {
-      const nflStateResult = await getNFLState();
-      if (!("error" in nflStateResult)) sharedNflState = nflStateResult.data;
+      // Degrade to the last-synced DB state when /state/nfl is unavailable, so
+      // stats/projections still run instead of being skipped entirely.
+      const resolved = await resolveNflState();
+      if (resolved) sharedNflState = resolved.state;
     } catch (stateError) {
       console.warn(
         `[sync] NFL state fetch failed: ${stateError instanceof Error ? stateError.message : "Unknown error"}`
@@ -727,13 +728,11 @@ async function syncPlayers(): Promise<SyncStepResult> {
 // Step D: Draft Sync
 // ---------------------------------------------------------------------------
 
-async function syncDrafts(): Promise<SyncStepResult> {
+async function syncDrafts(leagueId: string): Promise<SyncStepResult> {
   const startTime = Date.now();
   const logId = await logSyncStart("daily", "drafts");
 
   try {
-    const leagueId = getLeagueId();
-
     // Get all drafts for this league
     const draftsResult = await getLeagueDrafts(leagueId);
 
@@ -793,12 +792,25 @@ async function syncDrafts(): Promise<SyncStepResult> {
     for (let i = 0; i < sortedDrafts.length; i++) {
       const draft = sortedDrafts[i];
 
-      // Determine draft type by round count: startup drafts have many rounds
-      // (28+ for a full roster), while rookie drafts have 3-5 rounds.
+      // draftType is the roster-category label (startup vs rookie), a proxy
+      // still reasonably derived from round count: startup drafts have many
+      // rounds (28+ for a full roster), rookie drafts have 3-5.
       const rounds = typeof draft.settings?.rounds === "number"
         ? (draft.settings.rounds as number)
         : 0;
       const draftType = rounds > 10 ? "startup" : "rookie";
+
+      // Snake vs linear is a distinct property (the pick order mechanic) and
+      // drives pick-provenance below. Use Sleeper's real `type` field; only
+      // fall back to the round heuristic if it is missing/unexpected.
+      const sleeperDraftType =
+        typeof draft.type === "string" ? draft.type.toLowerCase() : "";
+      const isSnake =
+        sleeperDraftType === "snake"
+          ? true
+          : sleeperDraftType === "linear" || sleeperDraftType === "auction"
+            ? false
+            : draftType === "startup";
 
       // Fetch picks for this draft
       const picksResult = await getDraftPicks(draft.draft_id);
@@ -837,7 +849,6 @@ async function syncDrafts(): Promise<SyncStepResult> {
         // For linear drafts, pick position in round = ((pick_no - 1) % totalTeams) + 1
         // For snake drafts, odd rounds are forward, even rounds are reversed
         const pickInRound = ((pick.pick_no - 1) % totalTeamsInDraft) + 1;
-        const isSnake = draftType === "startup"; // rookie drafts are linear
         const isEvenRound = pick.round % 2 === 0;
         const originalSlot = isSnake && isEvenRound
           ? totalTeamsInDraft - pickInRound + 1
@@ -871,16 +882,20 @@ async function syncDrafts(): Promise<SyncStepResult> {
         };
       });
 
-      // Delete existing picks for this draft, then re-insert (same pattern as legacy-import)
-      // This avoids duplicates since draft_picks has no unique constraint on (draft_id, pick_number)
-      await db
-        .delete(draftPicks)
-        .where(eq(draftPicks.draftId, draft.draft_id));
-
+      // Delete existing picks for this draft, then re-insert (draft_picks has
+      // no unique constraint on (draft_id, pick_number), so upsert isn't an
+      // option). Wrapped in a transaction so a mid-loop insert failure can't
+      // leave the draft with its picks wiped and not replaced.
       const batches = chunk(pickRows, 50);
-      for (const batch of batches) {
-        await db.insert(draftPicks).values(batch);
-      }
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(draftPicks)
+          .where(eq(draftPicks.draftId, draft.draft_id));
+
+        for (const batch of batches) {
+          await tx.insert(draftPicks).values(batch);
+        }
+      });
 
       totalUpserted += pickRows.length;
     }
@@ -911,13 +926,11 @@ async function syncDrafts(): Promise<SyncStepResult> {
 // Step E: Playoff Bracket Sync
 // ---------------------------------------------------------------------------
 
-async function syncPlayoffBracket(): Promise<SyncStepResult> {
+async function syncPlayoffBracket(leagueId: string): Promise<SyncStepResult> {
   const startTime = Date.now();
   const logId = await logSyncStart("daily", "playoffs");
 
   try {
-    const leagueId = getLeagueId();
-
     // Fetch the league to check season status
     const leagueResult = await getLeague(leagueId);
     if ("error" in leagueResult) {
@@ -1037,41 +1050,144 @@ async function syncPlayoffBracket(): Promise<SyncStepResult> {
 }
 
 // ---------------------------------------------------------------------------
+// League chain auto-advance
+// ---------------------------------------------------------------------------
+
+/**
+ * Finds the league id for the season after `currentLeague`, if one exists that
+ * chains from `currentId` via previous_league_id. Sleeper leagues carry no
+ * forward pointer, so we look at the current league's members' leagues for the
+ * next season and match on previous_league_id. Returns null when no successor
+ * is found (normal in the offseason before next year's league is created).
+ */
+async function findNextLeagueId(
+  currentId: string,
+  currentLeague: SleeperLeague
+): Promise<string | null> {
+  const nextSeason = String(parseInt(currentLeague.season, 10) + 1);
+
+  const usersResult = await getLeagueUsers(currentId);
+  if ("error" in usersResult) return null;
+
+  for (const user of usersResult.data) {
+    const leaguesResult = await getUserLeagues(user.user_id, nextSeason);
+    if ("error" in leaguesResult) continue;
+    const match = leaguesResult.data.find(
+      (l) => l.previous_league_id === currentId
+    );
+    if (match) return match.league_id;
+  }
+
+  return null;
+}
+
+/**
+ * Resolves the league id the sync should actually target. The configured
+ * SLEEPER_LEAGUE_ID is treated as a chain anchor: when its season is complete
+ * and a successor league exists, we follow the chain forward so the sync tracks
+ * the current season without a manual env edit. Always safe: any lookup failure
+ * falls back to the configured id, and the result carries a non-fatal note when
+ * an advance (or a notable no-op) happened.
+ */
+async function resolveActiveLeagueId(
+  envLeagueId: string
+): Promise<{ leagueId: string; note?: string }> {
+  let currentId = envLeagueId;
+
+  // Hop cap guards against an unexpected cycle and bounds API usage.
+  for (let hop = 0; hop < 5; hop++) {
+    const leagueResult = await getLeague(currentId);
+    if ("error" in leagueResult) {
+      // Can't inspect this league; stay on the last good id.
+      return currentId === envLeagueId
+        ? { leagueId: currentId }
+        : {
+            leagueId: currentId,
+            note: `Auto-advanced SLEEPER_LEAGUE_ID from ${envLeagueId} to ${currentId}`,
+          };
+    }
+
+    const league = leagueResult.data;
+    if (league.status !== "complete") {
+      // Reached the active (non-complete) league in the chain.
+      return currentId === envLeagueId
+        ? { leagueId: currentId }
+        : {
+            leagueId: currentId,
+            note: `Auto-advanced SLEEPER_LEAGUE_ID from ${envLeagueId} to ${currentId}`,
+          };
+    }
+
+    const nextId = await findNextLeagueId(currentId, league);
+    if (!nextId) {
+      // Complete league with no successor yet (normal offseason state).
+      return currentId === envLeagueId
+        ? {
+            leagueId: currentId,
+            note: `Configured league ${currentId} is complete; no successor league found yet, staying on it`,
+          }
+        : {
+            leagueId: currentId,
+            note: `Auto-advanced SLEEPER_LEAGUE_ID from ${envLeagueId} to ${currentId}`,
+          };
+    }
+
+    currentId = nextId;
+  }
+
+  return {
+    leagueId: currentId,
+    note: `Auto-advanced SLEEPER_LEAGUE_ID from ${envLeagueId} to ${currentId} (hop cap reached)`,
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Main: Run Daily Sync
 // ---------------------------------------------------------------------------
 
 export async function runDailySync(): Promise<DailySyncSummary> {
   const startedAt = new Date().toISOString();
 
-  // Run the five core syncs independently — a failure in one doesn't block
-  // others. Members runs afterward: its franchise_id FK requires the franchise
-  // rows that syncUsersAndRosters upserts, so it cannot run in the same
-  // parallel batch on a cold database.
+  // Resolve the active league id first (auto-advancing past a completed season
+  // when a successor league exists); everything downstream targets this id.
+  const { leagueId, note: leagueNote } = await resolveActiveLeagueId(
+    getLeagueId()
+  );
+
+  // League settings MUST run first and complete before the dependent syncs:
+  // syncUsersAndRosters / syncDrafts / syncPlayoffBracket all require the
+  // season row that syncLeagueSettings creates, so on a cold database (a brand
+  // new league id) running them in parallel would fail. syncPlayers is
+  // independent of the season row and can run alongside the dependents.
+  const leagueResult = await syncLeagueSettings(leagueId);
+  if (leagueNote) leagueResult.note = leagueNote;
+
   const results = await Promise.allSettled([
-    syncLeagueSettings(),
-    syncUsersAndRosters(),
+    syncUsersAndRosters(leagueId),
     syncPlayers(),
-    syncDrafts(),
-    syncPlayoffBracket(),
+    syncDrafts(leagueId),
+    syncPlayoffBracket(leagueId),
   ]);
 
-  const dataTypes = ["league", "rosters", "players", "drafts", "playoffs"];
-  const stepResults: SyncStepResult[] = results.map((r, i) => {
+  const dataTypes = ["rosters", "players", "drafts", "playoffs"];
+  const stepResults: SyncStepResult[] = [leagueResult];
+  results.forEach((r, i) => {
     if (r.status === "fulfilled") {
-      return r.value;
+      stepResults.push(r.value);
+      return;
     }
     // Promise itself rejected (unexpected)
-    return {
+    stepResults.push({
       dataType: dataTypes[i],
       status: "failure" as const,
       rowCount: 0,
       durationMs: 0,
       error: r.reason instanceof Error ? r.reason.message : "Unknown error",
-    };
+    });
   });
 
   // Members depend on franchises existing; run after the roster upsert.
-  const membersResult = await Promise.allSettled([syncMembers()]);
+  const membersResult = await Promise.allSettled([syncMembers(leagueId)]);
   stepResults.push(
     membersResult[0].status === "fulfilled"
       ? membersResult[0].value

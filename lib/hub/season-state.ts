@@ -25,7 +25,11 @@ export function resolveHubSeasonType({
     seasonType = "pre";
   } else if (dbSeasonStatus === "in_season") {
     seasonType = "regular";
-  } else if (dbSeasonStatus === "pre_draft" || dbSeasonStatus === "complete") {
+  } else if (
+    dbSeasonStatus === "pre_draft" ||
+    dbSeasonStatus === "drafting" ||
+    dbSeasonStatus === "complete"
+  ) {
     seasonType = "pre";
   } else {
     seasonType = "off";
@@ -36,6 +40,24 @@ export function resolveHubSeasonType({
   }
 
   return seasonType;
+}
+
+const SEASON_TYPE_BADGE_LABEL: Record<NflSeasonType, string> = {
+  pre: "Preseason",
+  regular: "In Season",
+  post: "Playoffs",
+  off: "Offseason",
+};
+
+/**
+ * Maps a resolved hub season type to the label shown on the season badge
+ * (history timeline, /seasons list) for the current/latest season. Sharing
+ * this with resolveHubSeasonType's output is what keeps the badge and the
+ * hub banner from disagreeing (e.g. banner says PRESEASON while an older
+ * "In Season" badge, read straight off the raw DB status, said otherwise).
+ */
+export function seasonTypeBadgeLabel(seasonType: NflSeasonType): string {
+  return SEASON_TYPE_BADGE_LABEL[seasonType];
 }
 
 /**

@@ -12,7 +12,6 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import {
-  getNFLState,
   getLeague,
   getLeagueMatchups,
   getLeagueTransactions,
@@ -20,6 +19,7 @@ import {
   getWeekProjections,
   getNflSchedule,
 } from "@/lib/sleeper";
+import { resolveNflState } from "@/lib/sync/nfl-state";
 import type {
   SleeperMatchup,
   SleeperProjections,
@@ -46,6 +46,8 @@ interface SyncStepResult {
   rowCount: number;
   durationMs: number;
   error?: string;
+  // Non-fatal advisory (e.g. NFL state served from DB fallback).
+  note?: string;
 }
 
 export interface HourlySyncSummary {
@@ -59,12 +61,6 @@ export interface HourlySyncSummary {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function getLeagueId(): string {
-  const id = process.env.SLEEPER_LEAGUE_ID;
-  if (!id) throw new Error("SLEEPER_LEAGUE_ID is not set");
-  return id;
-}
 
 // ---------------------------------------------------------------------------
 // Step A: Sync Transactions for Current Week
@@ -220,20 +216,23 @@ async function syncRostersAndPicks(
       ];
 
       // Delete existing roster_players for this franchise+season so dropped
-      // players are cleaned up, then re-insert the current roster.
-      await db
-        .delete(rosterPlayers)
-        .where(
-          and(
-            eq(rosterPlayers.seasonId, seasonId),
-            eq(rosterPlayers.rosterId, rosterIdStr)
-          )
-        );
+      // players are cleaned up, then re-insert the current roster. Wrapped in a
+      // transaction so a mid-loop failure can't leave a partial wipe (the
+      // delete rolls back with the failed insert). Insert errors are NOT
+      // swallowed: an id missing from the players table (FK violation) rolls
+      // back this roster and propagates to the sync error handler / sync_log.
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(rosterPlayers)
+          .where(
+            and(
+              eq(rosterPlayers.seasonId, seasonId),
+              eq(rosterPlayers.rosterId, rosterIdStr)
+            )
+          );
 
-      // Insert fresh roster players
-      for (const p of allPlayers) {
-        try {
-          await db
+        for (const p of allPlayers) {
+          await tx
             .insert(rosterPlayers)
             .values({
               seasonId,
@@ -255,10 +254,8 @@ async function syncRostersAndPicks(
                 updatedAt: new Date(),
               },
             });
-        } catch {
-          // Player may not exist in players table — skip
         }
-      }
+      });
 
       rowCount++;
     }
@@ -284,9 +281,44 @@ async function syncRostersAndPicks(
 // Step C: Sync Matchup Scores for Current Week
 // ---------------------------------------------------------------------------
 
+/**
+ * Returns the set of weeks (for a given NFL season year) whose games are all
+ * complete, read from the nfl_games schedule. A week counts as final only when
+ * it has at least one game row AND every game for that week has status
+ * "complete". This is the game-status source of truth used to decide whether a
+ * matchup is over, replacing the old "both sides have points > 0" heuristic
+ * that stamped a winner minutes after Sunday kickoff.
+ *
+ * Safe to aggregate over (season_year, week) alone: syncNflSchedule never
+ * stores post-season rows whose playoff-round number collides with a
+ * regular-season week (see the note there), so every row counted here is a
+ * regular-season game and the week numbers are unambiguous.
+ */
+async function getCompleteNflWeeks(seasonYear: number): Promise<Set<number>> {
+  const rows = await db
+    .select({ week: nflGames.week, status: nflGames.status })
+    .from(nflGames)
+    .where(eq(nflGames.seasonYear, seasonYear));
+
+  const byWeek = new Map<number, { total: number; complete: number }>();
+  for (const r of rows) {
+    const agg = byWeek.get(r.week) ?? { total: 0, complete: 0 };
+    agg.total += 1;
+    if (r.status === "complete") agg.complete += 1;
+    byWeek.set(r.week, agg);
+  }
+
+  const completeWeeks = new Set<number>();
+  for (const [week, agg] of byWeek) {
+    if (agg.total > 0 && agg.complete === agg.total) completeWeeks.add(week);
+  }
+  return completeWeeks;
+}
+
 async function syncMatchupScores(
   leagueId: string,
   seasonId: number,
+  seasonYear: number,
   currentWeek: number
 ): Promise<SyncStepResult> {
   const startTime = Date.now();
@@ -294,6 +326,9 @@ async function syncMatchupScores(
 
   try {
     const rosterToFranchise = await getRosterToFranchiseMap(seasonId);
+
+    // Which weeks are truly final, by NFL game status (never by points).
+    const completeNflWeeks = await getCompleteNflWeeks(seasonYear);
 
     // Get season info for playoff detection
     const [seasonRow] = await db
@@ -330,6 +365,11 @@ async function syncMatchupScores(
       const sleeperMatchups = result.data;
       const isPlayoffWeek = week >= playoffWeekStart;
 
+      // A week is final only when all its NFL games are complete. This is what
+      // gates a matchup to "complete" and lets a winner be stamped; a points
+      // lead mid-game must never finalize the result.
+      const weekIsFinal = completeNflWeeks.has(week);
+
       // Group Sleeper matchups by matchup_id to determine winners
       const grouped = new Map<number, typeof sleeperMatchups>();
       for (const m of sleeperMatchups) {
@@ -341,17 +381,6 @@ async function syncMatchupScores(
       }
 
       for (const [sleeperMatchupId, pair] of grouped) {
-        // Check if every side in this matchup pairing has isWinner set (non-null),
-        // which indicates final scores are in and the matchup is complete.
-        const allHaveWinner =
-          pair.length === 2 &&
-          pair.every((p) => {
-            const opponent = pair.find((o) => o.roster_id !== p.roster_id);
-            const pts = p.points ?? 0;
-            const oppPts = opponent?.points ?? 0;
-            return pts > 0 && oppPts > 0;
-          });
-
         for (const m of pair) {
           const rosterIdStr = String(m.roster_id);
           const franchiseId = rosterToFranchise.get(rosterIdStr);
@@ -359,21 +388,23 @@ async function syncMatchupScores(
 
           const points = m.points ?? 0;
 
-          // Determine winner status if both sides have points
+          // Only decide a winner once the week's NFL games are final. A winner
+          // stamped from a mid-game points lead is the bug this replaces.
           let isWinner: boolean | null = null;
-          if (pair.length === 2) {
+          if (weekIsFinal && pair.length === 2) {
             const opponent = pair.find((p) => p.roster_id !== m.roster_id);
-            if (opponent && points > 0 && (opponent.points ?? 0) > 0) {
-              isWinner = points > (opponent.points ?? 0);
+            const oppPts = opponent?.points ?? 0;
+            if (opponent && points !== oppPts) {
+              isWinner = points > oppPts;
             }
           }
 
-          // Determine status:
-          // - "complete" when both sides have points and winners are determined
-          // - "in_progress" when points > 0 but not yet finalized
+          // Determine status from real game state, never from points:
+          // - "complete" once every NFL game of the week is final
+          // - "in_progress" when games are underway (points on the board)
           // - "scheduled" otherwise (future weeks Sleeper has paired but not played)
           let status = "scheduled";
-          if (allHaveWinner) {
+          if (weekIsFinal) {
             status = "complete";
           } else if (points > 0) {
             status = "in_progress";
@@ -410,22 +441,69 @@ async function syncMatchupScores(
       }
     }
 
-    // Mark all matchups from prior weeks as "complete" if they are still
-    // in_progress. This MUST key off the real currentWeek (the actual NFL
-    // week from /v1/state/nfl), never the loop variable above — otherwise
-    // future weeks synced ahead of schedule would get incorrectly marked
-    // complete before they've even been played.
+    // Backstop: any matchup from a prior week is definitely over, so mark it
+    // complete. This MUST key off the real currentWeek (the actual NFL week
+    // from /v1/state/nfl), never the loop variable above; otherwise future
+    // weeks synced ahead of schedule would get marked complete before being
+    // played. Unlike a blanket status flip, we also stamp is_winner here from
+    // the (now final) points, so a game that reached this path with a null
+    // winner does not stay winnerless. Ties (equal points) leave is_winner
+    // null, which reads correctly as "no winner" downstream.
     if (currentWeek > 1) {
-      await db
-        .update(matchups)
-        .set({ status: "complete", updatedAt: new Date() })
+      // Fetch the full prior-week pairing set (regardless of status) so each
+      // matchup has both sides available to compare, then update only rows
+      // that still need it.
+      const priorRows = await db
+        .select({
+          id: matchups.id,
+          week: matchups.week,
+          matchupId: matchups.matchupId,
+          rosterId: matchups.rosterId,
+          points: matchups.points,
+          status: matchups.status,
+          isWinner: matchups.isWinner,
+        })
+        .from(matchups)
         .where(
           and(
             eq(matchups.seasonId, seasonId),
-            sql`${matchups.week} < ${currentWeek}`,
-            sql`${matchups.status} != 'complete'`
+            sql`${matchups.week} < ${currentWeek}`
           )
         );
+
+      const priorGroups = new Map<string, typeof priorRows>();
+      for (const row of priorRows) {
+        const key = `${row.week}|${row.matchupId}`;
+        if (!priorGroups.has(key)) priorGroups.set(key, []);
+        priorGroups.get(key)!.push(row);
+      }
+
+      for (const rows of priorGroups.values()) {
+        for (const row of rows) {
+          let desiredWinner: boolean | null = null;
+          if (rows.length === 2) {
+            const opponent = rows.find((o) => o.rosterId !== row.rosterId);
+            const oppPts = opponent?.points ?? 0;
+            const pts = row.points ?? 0;
+            if (opponent && pts !== oppPts) {
+              desiredWinner = pts > oppPts;
+            }
+          }
+
+          const needsStatus = row.status !== "complete";
+          const needsWinner = row.isWinner == null && desiredWinner != null;
+          if (!needsStatus && !needsWinner) continue;
+
+          await db
+            .update(matchups)
+            .set({
+              status: "complete",
+              isWinner: desiredWinner,
+              updatedAt: new Date(),
+            })
+            .where(eq(matchups.id, row.id));
+        }
+      }
     }
 
     const durationMs = Date.now() - startTime;
@@ -731,6 +809,17 @@ export async function upsertNflGames(
  * regular-season schedule is required; the post-season schedule is fetched too
  * and upserted only when the endpoint serves games (it returns [] for a season
  * whose playoffs haven't been scheduled).
+ *
+ * Verified week numbering (curl schedule/nfl/post/{season}): Sleeper's
+ * post-season feed numbers the playoff ROUNDS 1..4 (wild card .. Super Bowl),
+ * which collide head-on with regular-season / fantasy weeks 1..4. nfl_games is
+ * keyed only by (season_year, week) with no season_type column, so storing a
+ * January playoff row at week 1 would sit alongside September's regular week 1
+ * and, since those playoff games are pre_game until played, would un-finalize
+ * fantasy week 1 in getCompleteNflWeeks (and pollute the week-1 game joins in
+ * kickoff.ts / player-points.ts). No fantasy feature consumes NFL post-season
+ * games, so the minimal, migration-free guard is to skip any post-season row
+ * whose week collides with a regular-season week (currently all of them).
  */
 async function syncNflSchedule(seasonYear: number): Promise<SyncStepResult> {
   const startTime = Date.now();
@@ -748,10 +837,18 @@ async function syncNflSchedule(seasonYear: number): Promise<SyncStepResult> {
 
     let rowCount = await upsertNflGames(seasonYear, regularResult.data);
 
+    const regularWeeks = new Set(regularResult.data.map((g) => g.week));
+
     // Post-season is optional: absent/empty for seasons not yet in the playoffs.
+    // Drop rows whose week collides with a regular-season week (see note above).
     const postResult = await getNflSchedule("post", seasonStr);
     if (!("error" in postResult) && postResult.data.length > 0) {
-      rowCount += await upsertNflGames(seasonYear, postResult.data);
+      const nonCollidingPost = postResult.data.filter(
+        (g) => !regularWeeks.has(g.week)
+      );
+      if (nonCollidingPost.length > 0) {
+        rowCount += await upsertNflGames(seasonYear, nonCollidingPost);
+      }
     }
 
     const durationMs = Date.now() - startTime;
@@ -778,10 +875,11 @@ async function syncNflSchedule(seasonYear: number): Promise<SyncStepResult> {
 export async function runHourlySync(): Promise<HourlySyncSummary> {
   const startedAt = new Date().toISOString();
 
-  // Get NFL state to determine current season/week
-  const nflStateResult = await getNFLState();
+  // Resolve NFL state, degrading to the last-synced DB state if /state/nfl is
+  // down or fails validation. Only abort when no fallback can be reconstructed.
+  const resolved = await resolveNflState();
 
-  if ("error" in nflStateResult) {
+  if (!resolved) {
     return {
       startedAt,
       completedAt: new Date().toISOString(),
@@ -793,65 +891,94 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
           status: "failure",
           rowCount: 0,
           durationMs: 0,
-          error: `Failed to get NFL state: ${nflStateResult.error.message}`,
+          error:
+            "Failed to get NFL state and no DB fallback available. Run daily sync first.",
         },
       ],
     };
   }
 
-  const nflState = nflStateResult.data;
+  const nflState = resolved.state;
   const seasonYear = parseInt(nflState.season, 10);
   const currentWeek = nflState.week;
+  const nflStateNote = resolved.fromFallback
+    ? "NFL state served from DB fallback (live /state/nfl unavailable)"
+    : undefined;
 
   // Look up the season in our database
   const [seasonRow] = await db
-    .select({ id: seasons.id })
+    .select({ id: seasons.id, leagueId: seasons.leagueId })
     .from(seasons)
     .where(eq(seasons.seasonYear, seasonYear));
 
   if (!seasonRow) {
+    // In the offseason/preseason Sleeper's /state/nfl already reports the
+    // upcoming year (e.g. season 2026, season_type "off") before that league
+    // has been created in Sleeper and synced into our DB. There is nothing to
+    // sync yet, so this is an expected wait, not a failure: return a SUCCESS
+    // summary with a no-op advisory. A missing season row during regular/post
+    // play IS a real problem (the daily sync should have created it), so keep
+    // that a failure.
+    const isPreOrOff =
+      nflState.season_type === "off" || nflState.season_type === "pre";
     return {
       startedAt,
       completedAt: new Date().toISOString(),
       season: nflState.season,
       week: currentWeek,
       results: [
-        {
-          dataType: "season_lookup",
-          status: "failure",
-          rowCount: 0,
-          durationMs: 0,
-          error: `Season ${seasonYear} not found in database. Run daily sync first.`,
-        },
+        isPreOrOff
+          ? {
+              dataType: "season_lookup",
+              status: "success",
+              rowCount: 0,
+              durationMs: 0,
+              note: `Season ${seasonYear} not in database yet (season_type "${nflState.season_type}"); nothing to sync until the new league is created. Waiting.`,
+            }
+          : {
+              dataType: "season_lookup",
+              status: "failure",
+              rowCount: 0,
+              durationMs: 0,
+              error: `Season ${seasonYear} not found in database. Run daily sync first.`,
+            },
       ],
     };
   }
 
-  const leagueId = getLeagueId();
+  // Use the league id recorded on the season row (written by the daily sync,
+  // which auto-advances the league chain). Reading the env id here instead
+  // could sync the previous season's league into the new season after an
+  // auto-advance.
+  const leagueId = seasonRow.leagueId;
   const seasonId = seasonRow.id;
 
-  // Run all syncs independently — a failure in one doesn't block others.
-  // Per-player points are a separate step so a failure there does not corrupt
-  // the team-level matchup sync (atomic-per-data-type rule).
+  // Sync the NFL schedule FIRST so matchup completeness (which now keys off
+  // real game statuses in nfl_games) reads this run's fresh statuses rather
+  // than last hour's. A schedule failure is non-fatal: matchups then fall back
+  // to the previously-synced game statuses.
+  const scheduleResult = await syncNflSchedule(seasonYear);
+
+  // Run the remaining syncs independently; a failure in one doesn't block
+  // others. Per-player points are a separate step so a failure there does not
+  // corrupt the team-level matchup sync (atomic-per-data-type rule).
   const results = await Promise.allSettled([
     syncTransactions(leagueId, seasonId, currentWeek),
     syncRostersAndPicks(leagueId, seasonId),
-    syncMatchupScores(leagueId, seasonId, currentWeek),
+    syncMatchupScores(leagueId, seasonId, seasonYear, currentWeek),
     syncPlayerWeekPoints(leagueId, seasonId, seasonYear, currentWeek),
-    syncNflSchedule(seasonYear),
   ]);
 
+  const dataTypes = [
+    "transactions",
+    "rosters",
+    "matchups",
+    "player_week_points",
+  ];
   const stepResults: SyncStepResult[] = results.map((r, i) => {
     if (r.status === "fulfilled") {
       return r.value;
     }
-    const dataTypes = [
-      "transactions",
-      "rosters",
-      "matchups",
-      "player_week_points",
-      "nfl_games",
-    ];
     return {
       dataType: dataTypes[i],
       status: "failure" as const,
@@ -860,6 +987,19 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
       error: r.reason instanceof Error ? r.reason.message : "Unknown error",
     };
   });
+
+  stepResults.push(scheduleResult);
+
+  // Surface the NFL-state fallback (if used) as a non-fatal advisory step.
+  if (nflStateNote) {
+    stepResults.unshift({
+      dataType: "nfl_state",
+      status: "success",
+      rowCount: 0,
+      durationMs: 0,
+      note: nflStateNote,
+    });
+  }
 
   return {
     startedAt,

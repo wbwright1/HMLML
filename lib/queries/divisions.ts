@@ -236,12 +236,20 @@ interface PairRow {
   idB: string;
   aWinner: boolean | null;
   bWinner: boolean | null;
+  status: string | null;
+  aPoints: number | null;
+  bPoints: number | null;
 }
 
 /**
  * Single query that returns every pairwise matchup result for a season, both
  * directions (a-vs-b and b-vs-a), so both the head-to-head lookup and the
  * per-division-game aggregation can be built from one pass.
+ *
+ * Includes status/points so a genuine tie (equal, non-null points on a
+ * completed matchup, written as is_winner null/null by both the sync layer
+ * and legacy import) can be told apart from an incomplete matchup (also
+ * null/null, but never "complete").
  */
 async function fetchPairRows(seasonId: number): Promise<PairRow[]> {
   const rows = await db
@@ -250,6 +258,9 @@ async function fetchPairRows(seasonId: number): Promise<PairRow[]> {
       idB: sql<string>`b.franchise_id`,
       aWinner: sql<boolean | null>`a.is_winner`,
       bWinner: sql<boolean | null>`b.is_winner`,
+      status: sql<string | null>`a.status`,
+      aPoints: sql<number | null>`a.points`,
+      bPoints: sql<number | null>`b.points`,
     })
     .from(
       sql`${matchups} a INNER JOIN ${matchups} b ON a.season_id = b.season_id AND a.week = b.week AND a.matchup_id = b.matchup_id AND a.franchise_id != b.franchise_id`,
@@ -257,6 +268,16 @@ async function fetchPairRows(seasonId: number): Promise<PairRow[]> {
     .where(sql`a.season_id = ${seasonId}`);
 
   return rows;
+}
+
+/** True when a pair of matchup rows represents a genuine, completed tie. */
+function isCompletedTie(row: PairRow): boolean {
+  return (
+    row.status === "complete" &&
+    row.aPoints != null &&
+    row.bPoints != null &&
+    row.aPoints === row.bPoints
+  );
 }
 
 /**
@@ -271,31 +292,45 @@ export async function buildSeasonLookups(
   h2hLookup: Map<H2HKey, H2HRecord>;
   divisionRecord: Map<string, DivisionRecord>;
 }> {
-  const rows = await fetchPairRows(seasonId);
+  try {
+    const rows = await fetchPairRows(seasonId);
 
-  const h2hLookup = new Map<H2HKey, H2HRecord>();
-  const divisionRecord = new Map<string, DivisionRecord>();
+    const h2hLookup = new Map<H2HKey, H2HRecord>();
+    const divisionRecord = new Map<string, DivisionRecord>();
 
-  for (const row of rows) {
-    const key = h2hKey(row.idA, row.idB);
-    const entry = h2hLookup.get(key) ?? { wins: 0, losses: 0, ties: 0 };
-    if (row.aWinner === true) entry.wins++;
-    else if (row.bWinner === true) entry.losses++;
-    else if (row.aWinner === false && row.bWinner === false) entry.ties++;
-    h2hLookup.set(key, entry);
+    for (const row of rows) {
+      // A row with is_winner null/null is either a genuine tie (both the
+      // sync layer and legacy import write null/null for a completed tie)
+      // or an incomplete matchup (also null/null while a game is scheduled
+      // or in progress). Only count it when it's a completed, equal-points
+      // tie; otherwise skip it entirely, same as any other incomplete
+      // matchup.
+      const tied = isCompletedTie(row);
+      if (!row.aWinner && !row.bWinner && !tied) continue;
 
-    const divA = divisionOf.get(row.idA);
-    const divB = divisionOf.get(row.idB);
-    if (divA != null && divA === divB) {
-      const dr = divisionRecord.get(row.idA) ?? { wins: 0, losses: 0, ties: 0 };
-      if (row.aWinner === true) dr.wins++;
-      else if (row.bWinner === true) dr.losses++;
-      else if (row.aWinner === false && row.bWinner === false) dr.ties++;
-      divisionRecord.set(row.idA, dr);
+      const key = h2hKey(row.idA, row.idB);
+      const entry = h2hLookup.get(key) ?? { wins: 0, losses: 0, ties: 0 };
+      if (row.aWinner === true) entry.wins++;
+      else if (row.bWinner === true) entry.losses++;
+      else if (tied) entry.ties++;
+      h2hLookup.set(key, entry);
+
+      const divA = divisionOf.get(row.idA);
+      const divB = divisionOf.get(row.idB);
+      if (divA != null && divA === divB) {
+        const dr = divisionRecord.get(row.idA) ?? { wins: 0, losses: 0, ties: 0 };
+        if (row.aWinner === true) dr.wins++;
+        else if (row.bWinner === true) dr.losses++;
+        else if (tied) dr.ties++;
+        divisionRecord.set(row.idA, dr);
+      }
     }
-  }
 
-  return { h2hLookup, divisionRecord };
+    return { h2hLookup, divisionRecord };
+  } catch (e) {
+    console.error("[divisions] buildSeasonLookups error:", e);
+    return { h2hLookup: new Map(), divisionRecord: new Map() };
+  }
 }
 
 function toSeededTeam(s: Awaited<ReturnType<typeof getSeasonStandings>>[number]): SeededTeam {
@@ -337,42 +372,47 @@ function byRecordDesc(a: SeededTeam, b: SeededTeam): number {
  * the season predates divisions (RISK-B: every row's division is null).
  */
 export async function getDivisionStandings(seasonId: number): Promise<DivisionGroup[]> {
-  const standings = await getSeasonStandings(seasonId);
-  const teams = standings.map(toSeededTeam);
+  try {
+    const standings = await getSeasonStandings(seasonId);
+    const teams = standings.map(toSeededTeam);
 
-  const hasDivisions = teams.some((t) => t.division != null);
+    const hasDivisions = teams.some((t) => t.division != null);
 
-  if (!hasDivisions) {
-    const sorted = [...teams].sort(byRecordDesc);
-    return [{ division: null, divisionName: "League", teams: sorted }];
+    if (!hasDivisions) {
+      const sorted = [...teams].sort(byRecordDesc);
+      return [{ division: null, divisionName: "League", teams: sorted }];
+    }
+
+    const byDivision = new Map<number, SeededTeam[]>();
+    for (const t of teams) {
+      if (t.division == null) continue;
+      if (!byDivision.has(t.division)) byDivision.set(t.division, []);
+      byDivision.get(t.division)!.push(t);
+    }
+
+    return [...byDivision.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([division, divTeams]) => {
+        const sorted = [...divTeams].sort(byRecordDesc);
+        const record = sorted.reduce(
+          (acc, t) => ({
+            wins: acc.wins + t.wins,
+            losses: acc.losses + t.losses,
+            ties: acc.ties + t.ties,
+          }),
+          { wins: 0, losses: 0, ties: 0 },
+        );
+        return {
+          division,
+          divisionName: sorted[0]?.divisionName ?? `Division ${division}`,
+          teams: sorted,
+          record,
+        };
+      });
+  } catch (e) {
+    console.error("[divisions] getDivisionStandings error:", e);
+    return [];
   }
-
-  const byDivision = new Map<number, SeededTeam[]>();
-  for (const t of teams) {
-    if (t.division == null) continue;
-    if (!byDivision.has(t.division)) byDivision.set(t.division, []);
-    byDivision.get(t.division)!.push(t);
-  }
-
-  return [...byDivision.entries()]
-    .sort((a, b) => a[0] - b[0])
-    .map(([division, divTeams]) => {
-      const sorted = [...divTeams].sort(byRecordDesc);
-      const record = sorted.reduce(
-        (acc, t) => ({
-          wins: acc.wins + t.wins,
-          losses: acc.losses + t.losses,
-          ties: acc.ties + t.ties,
-        }),
-        { wins: 0, losses: 0, ties: 0 },
-      );
-      return {
-        division,
-        divisionName: sorted[0]?.divisionName ?? `Division ${division}`,
-        teams: sorted,
-        record,
-      };
-    });
 }
 
 /**
@@ -384,46 +424,51 @@ export async function getDivisionStandings(seasonId: number): Promise<DivisionGr
  * winner" framing.
  */
 export async function getPlayoffProjection(seasonId: number): Promise<PlayoffProjection> {
-  const standings = await getSeasonStandings(seasonId);
-  const teams = standings.map(toSeededTeam);
+  try {
+    const standings = await getSeasonStandings(seasonId);
+    const teams = standings.map(toSeededTeam);
 
-  if (teams.length === 0) {
+    if (teams.length === 0) {
+      return { field: [], firstOut: null, hasDivisions: false };
+    }
+
+    const hasDivisions = teams.some((t) => t.division != null);
+
+    const divisionOf = new Map<string, number | null>(
+      teams.map((t) => [t.franchiseId, t.division]),
+    );
+    const { h2hLookup, divisionRecord } = await buildSeasonLookups(seasonId, divisionOf);
+
+    if (!hasDivisions || teams.length < DIVISION_COUNT) {
+      const ranked = seedTeams(teams, h2hLookup, divisionRecord);
+      const field: ProjectedTeam[] = ranked.slice(0, PLAYOFF_BERTHS).map((t, i) => ({
+        ...t,
+        seed: i + 1,
+        isDivisionWinner: false,
+        isWildcard: false,
+        isIn: true,
+      }));
+      const bubble = ranked[PLAYOFF_BERTHS];
+      const firstOut: ProjectedTeam | null = bubble
+        ? { ...bubble, seed: null, isDivisionWinner: false, isWildcard: false, isIn: false }
+        : null;
+      return { field, firstOut, hasDivisions: false };
+    }
+
+    const teamsByDivision = new Map<number, SeededTeam[]>();
+    for (const t of teams) {
+      if (t.division == null) continue;
+      if (!teamsByDivision.has(t.division)) teamsByDivision.set(t.division, []);
+      teamsByDivision.get(t.division)!.push(t);
+    }
+
+    const { field, firstOut } = buildDivisionalField(teamsByDivision, h2hLookup, divisionRecord);
+
+    return { field, firstOut, hasDivisions: true };
+  } catch (e) {
+    console.error("[divisions] getPlayoffProjection error:", e);
     return { field: [], firstOut: null, hasDivisions: false };
   }
-
-  const hasDivisions = teams.some((t) => t.division != null);
-
-  const divisionOf = new Map<string, number | null>(
-    teams.map((t) => [t.franchiseId, t.division]),
-  );
-  const { h2hLookup, divisionRecord } = await buildSeasonLookups(seasonId, divisionOf);
-
-  if (!hasDivisions || teams.length < DIVISION_COUNT) {
-    const ranked = seedTeams(teams, h2hLookup, divisionRecord);
-    const field: ProjectedTeam[] = ranked.slice(0, PLAYOFF_BERTHS).map((t, i) => ({
-      ...t,
-      seed: i + 1,
-      isDivisionWinner: false,
-      isWildcard: false,
-      isIn: true,
-    }));
-    const bubble = ranked[PLAYOFF_BERTHS];
-    const firstOut: ProjectedTeam | null = bubble
-      ? { ...bubble, seed: null, isDivisionWinner: false, isWildcard: false, isIn: false }
-      : null;
-    return { field, firstOut, hasDivisions: false };
-  }
-
-  const teamsByDivision = new Map<number, SeededTeam[]>();
-  for (const t of teams) {
-    if (t.division == null) continue;
-    if (!teamsByDivision.has(t.division)) teamsByDivision.set(t.division, []);
-    teamsByDivision.get(t.division)!.push(t);
-  }
-
-  const { field, firstOut } = buildDivisionalField(teamsByDivision, h2hLookup, divisionRecord);
-
-  return { field, firstOut, hasDivisions: true };
 }
 
 export { TEAMS_PER_DIVISION };

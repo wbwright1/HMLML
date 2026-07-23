@@ -174,8 +174,12 @@ export async function getFranchiseRoster(
         age: players.age,
         yearsExp: players.yearsExp,
       })
+      // leftJoin, not innerJoin: the hourly roster sync can add a player
+      // before the daily players sync has written their row, and an
+      // innerJoin would silently drop that roster spot instead of showing it
+      // with a placeholder name (mirrors the pattern in lib/queries/drafts.ts).
       .from(rosterPlayers)
-      .innerJoin(players, eq(rosterPlayers.playerId, players.id))
+      .leftJoin(players, eq(rosterPlayers.playerId, players.id))
       .where(
         and(
           eq(rosterPlayers.franchiseId, franchiseId),
@@ -184,7 +188,11 @@ export async function getFranchiseRoster(
       )
       .orderBy(players.position, players.lastName);
 
-    return roster;
+    return roster.map((r) => ({
+      ...r,
+      fullName: r.fullName ?? `Unknown Player (${r.playerId})`,
+      position: r.position ?? "N/A",
+    }));
   } catch {
     return null;
   }

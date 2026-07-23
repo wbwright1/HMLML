@@ -75,7 +75,7 @@ export default async function HomePage() {
         latestSeason={latestSeason}
         standings={standings}
         isGameWindow={isGameWindow}
-        nflWeek={nflState?.week ?? matchupData?.week ?? 1}
+        nflWeek={Math.max(1, nflState?.week ?? matchupData?.week ?? 1)}
         isBetweenWeeks={isBetweenWeeks}
         nextKickoff={nextKickoff}
       />
@@ -87,13 +87,13 @@ export default async function HomePage() {
       <PlayoffsHub
         matchupData={matchupData}
         latestSeason={latestSeason}
-        nflWeek={nflState?.week ?? matchupData?.week ?? 1}
+        nflWeek={Math.max(1, nflState?.week ?? matchupData?.week ?? 1)}
         hasLiveGames={hasLiveMatchups}
       />
     );
   }
 
-  // Offseason (default) — only if no season data exists
+  // Offseason (default): only if no season data exists
   return (
     <OffseasonHub
       latestSeason={latestSeason}

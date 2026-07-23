@@ -194,12 +194,12 @@ export default async function RecordsPage() {
   let projection: PlayoffProjection | null = null;
   let projectionSeasonYear: number | null = null;
   let superlativesSeasonYear: number | null = null;
+  let latestSeason: Awaited<ReturnType<typeof getLatestSeason>> = null;
 
   try {
     // These four are mutually independent; fetch them concurrently rather than
     // in series so the page waits on one round trip instead of three.
     let allSeasonData: Awaited<ReturnType<typeof getAllSeasonLeaderboards>>;
-    let latestSeason: Awaited<ReturnType<typeof getLatestSeason>>;
     [allTimeData, seasonYears, powerView, allSeasonData, latestSeason] =
       await Promise.all([
         getLeaderboard(),
@@ -258,6 +258,23 @@ export default async function RecordsPage() {
     }
   } catch {
     // DB may not be connected
+  }
+
+  // Hide the newest season's standings tab while it's nothing but 0-0 rows
+  // (the whole offseason/preseason window, once next year's season row
+  // exists but before Week 1 has been played). An all-zero tab is noise, not
+  // a real standings view; all-time and completed seasons are unaffected.
+  if (latestSeason) {
+    const latestSeasonRows = seasonDataRecord[String(latestSeason.seasonYear)];
+    const latestSeasonHasNoGames =
+      latestSeasonRows != null &&
+      latestSeasonRows.every(
+        (e) => e.wins === 0 && e.losses === 0 && e.ties === 0
+      );
+    if (latestSeasonHasNoGames) {
+      seasonYears = seasonYears.filter((y) => y !== latestSeason!.seasonYear);
+      delete seasonDataRecord[String(latestSeason.seasonYear)];
+    }
   }
 
   // Crest avatars for the projected playoff field (division projection is
