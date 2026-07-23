@@ -141,7 +141,8 @@ export interface StatsContext {
   /** Multi-season history per franchise. Empty when the DB has too little history, or on query failure. */
   franchiseHistory: StatsFranchiseHistory[];
   /**
-   * Upcoming-season roster-strength projections, ranked. Empty when the
+   * Upcoming-season roster-strength projections, ranked (league-scored, from
+   * the proj_points_ppr column whose name is a legacy misnomer). Empty when the
    * proj_points_ppr column has not been populated yet (migration not applied,
    * or the projection sync step hasn't run) — callers must degrade gracefully.
    */

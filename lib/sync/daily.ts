@@ -22,6 +22,8 @@ import {
   getLosersBracket,
 } from "@/lib/sleeper";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
+import { loadSeasonScoringSettings } from "@/lib/queries/seasons";
+import { computeProjectedPoints } from "@/lib/lineup-slots";
 import { derivePlayoffResults } from "@/lib/sync/derive-playoffs";
 import { buildMemberFranchiseMap } from "@/lib/sync/member-franchise";
 import { resolveDivisionName } from "@/lib/divisions";
@@ -630,24 +632,32 @@ async function syncPlayers(): Promise<SyncStepResult> {
         // block above which deliberately looks back a year.
         const projSeason = parseInt(sharedNflState.season, 10);
 
+        // Weight Sleeper's raw projection stat lines by the league's own
+        // scoring settings so the stored value matches how the players tab
+        // scores weekly projections, not Sleeper's full-PPR pts_ppr default.
+        // Falls back to the latest season's settings when projSeason has no
+        // row yet; computeProjectedPoints degrades to the appropriate point
+        // total if the settings are still null.
+        const scoringSettings = await loadSeasonScoringSettings(projSeason);
+
         const projResult = await getSeasonProjections(projSeason);
         if (!("error" in projResult)) {
           const projRows = projResult.data
+            .map((row) => ({
+              id: row.player_id,
+              projPointsPpr: computeProjectedPoints(scoringSettings, row.stats),
+              projSeason,
+            }))
             .filter(
               (row) =>
-                row.stats.pts_ppr != null &&
-                row.stats.pts_ppr > 0 &&
+                row.projPointsPpr != null &&
+                row.projPointsPpr > 0 &&
                 // Only touch players that exist in the players snapshot just
                 // upserted above; the upsert's INSERT branch would otherwise
                 // create nameless player rows for ids Sleeper projects but
                 // does not list in /players/nfl.
-                playersData[row.player_id] != null
-            )
-            .map((row) => ({
-              id: row.player_id,
-              projPointsPpr: row.stats.pts_ppr ?? null,
-              projSeason,
-            }));
+                playersData[row.id] != null
+            );
 
           // Batch update in chunks of 500
           const projBatches = chunk(projRows, 500);

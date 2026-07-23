@@ -236,8 +236,11 @@ export const players = pgTable(
     searchFullName: text("search_full_name"), // lowercase, for search
     pointsPpr: real("points_ppr"), // season fantasy points (PPR scoring)
     statsSeason: integer("stats_season"), // which season the points are from (e.g. 2025)
-    // Upcoming-season projected fantasy points (PPR), from Sleeper's season
-    // projections endpoint. Powers preseason roster-strength projections.
+    // Upcoming-season projected fantasy points, league-scored: the daily sync
+    // weights Sleeper's raw projection stat line by this league's own scoring
+    // settings (not Sleeper's full-PPR pts_ppr). Powers preseason
+    // roster-strength projections. The column name is a deliberate misnomer
+    // kept to avoid a rename migration; the value is no longer raw PPR.
     // Nullable: not fetched until the daily sync's projection step runs, and
     // some players (rookies pre-draft, etc.) never get a projection.
     projPointsPpr: real("proj_points_ppr"),
