@@ -1,4 +1,5 @@
 import { PageSection } from "@/components/page-section";
+import { BackLink } from "@/components/back-link";
 import { EmptyState } from "@/components/empty-state";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseIdentity } from "@/components/franchise-identity";
@@ -50,6 +51,13 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
 
   return (
     <PageSection label="The Receipts" title="Trade History.">
+      {selectedFranchise && (
+        <BackLink
+          href={`/teams/${selectedFranchise.slug}`}
+          label={selectedFranchise.name}
+        />
+      )}
+
       <p className="text-body-lg text-text-tertiary max-w-prose">
         Every completed trade in league history. FAAB and cash considerations
         aren&apos;t tracked here; if a deal looks lopsided in the player
@@ -64,6 +72,7 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
               name: selectedFranchise.name,
               abbreviation: selectedFranchise.abbreviation,
               brandingColor: selectedFranchise.brandingColor,
+              avatarUrl: selectedFranchise.avatarUrl,
             }}
             championships={selectedFranchise.championships}
             variant="hero"

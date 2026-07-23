@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { EmptyState } from "@/components/empty-state";
@@ -68,12 +68,7 @@ export default async function FranchiseSchedulePage({
     <section className="py-8 md:py-12 space-y-8">
       <ScrollReveal>
         <div className="space-y-6">
-          <Link
-            href={`/teams/${franchise.slug}`}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            &larr; {franchise.name}
-          </Link>
+          <BackLink href={`/teams/${franchise.slug}`} label={franchise.name} />
 
           <div className="flex items-center gap-4">
             <div
@@ -92,6 +87,7 @@ export default async function FranchiseSchedulePage({
                 name={franchise.name}
                 abbreviation={franchise.abbreviation}
                 brandingColor={franchise.brandingColor}
+                avatarUrl={franchise.avatarUrl}
                 size="md"
                 decorative
               />

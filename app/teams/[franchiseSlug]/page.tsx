@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseIdentity } from "@/components/franchise-identity";
@@ -72,12 +73,7 @@ export default async function FranchiseDetailPage({
       {/* Hero Section — dark canvas frame; brandingColor survives only as a
           subtle ring on the crest (see FranchiseIdentity's BrandedCrest). */}
       <section className="py-8 md:py-12 space-y-6">
-        <Link
-          href="/teams"
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          &larr; All Teams
-        </Link>
+        <BackLink href="/teams" label="All Teams" />
 
         <ScrollReveal>
           <FranchiseIdentity
@@ -122,28 +118,28 @@ export default async function FranchiseDetailPage({
 
         {franchise.seasonHistory.length > 0 && (
           <ScrollReveal delay={200}>
-            <div className="flex justify-center gap-6 pt-2">
+            <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:justify-center sm:gap-6 pt-2">
               <Link
                 href={`/teams/${franchise.slug}/roster`}
-                className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-body-sm font-medium text-primary-foreground transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2 text-body-sm font-medium text-primary-foreground transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
               >
                 View Current Roster
               </Link>
               <Link
                 href={`/teams/${franchise.slug}/drafts`}
-                className="inline-flex items-center justify-center rounded-lg border border-border bg-surface px-4 py-2 text-body-sm font-medium text-text-primary transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex w-full items-center justify-center rounded-lg border border-border bg-surface px-4 py-2 text-body-sm font-medium text-text-primary transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
               >
                 Draft History
               </Link>
               <Link
                 href={`/trades?team=${franchise.slug}`}
-                className="inline-flex items-center justify-center rounded-lg border border-border bg-surface px-4 py-2 text-body-sm font-medium text-text-primary transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex w-full items-center justify-center rounded-lg border border-border bg-surface px-4 py-2 text-body-sm font-medium text-text-primary transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
               >
                 Trade History
               </Link>
               <Link
                 href={`/teams/${franchise.slug}/schedule`}
-                className="inline-flex items-center justify-center rounded-lg border border-border bg-surface px-4 py-2 text-body-sm font-medium text-text-primary transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="inline-flex w-full items-center justify-center rounded-lg border border-border bg-surface px-4 py-2 text-body-sm font-medium text-text-primary transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
               >
                 Schedule
               </Link>

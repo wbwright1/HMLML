@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { SuperlativeBadge } from "@/components/superlative-badge";
@@ -27,12 +28,7 @@ export default async function RivalriesPage() {
   return (
     <>
       <PageSection label="Records" title="Rivalries.">
-        <Link
-          href="/records"
-          className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
-        >
-          &larr; All Records
-        </Link>
+        <BackLink href="/records" label="All Records" />
 
         <p className="text-body-lg text-text-secondary max-w-prose">
           Every head-to-head pairing in league history, ranked

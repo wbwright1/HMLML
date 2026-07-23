@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { db } from "@/lib/db";
 import { seasons, franchiseSeasons, franchises, rosterPlayers, players } from "@/lib/db/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
@@ -82,12 +83,7 @@ export default async function DraftDetailPage({
   return (
     <>
       <section className="pt-8 pb-6 md:pt-12 md:pb-8 space-y-4">
-        <Link
-          href="/drafts"
-          className="text-body-sm text-text-tertiary hover:text-text-secondary transition-colors"
-        >
-          &larr; All Drafts
-        </Link>
+        <BackLink href="/drafts" label="All Drafts" />
 
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-2">

@@ -21,12 +21,20 @@ export async function getSeasonTimelineData() {
         s.total_rosters,
         champ.name AS champion_name,
         champ.slug AS champion_slug,
+        champ_avatar.avatar_url AS champion_avatar_url,
         runner_up.name AS runner_up_name,
         top_scorer.name AS most_pf_name,
         top_scorer.points_scored AS most_pf_points,
         COALESCE(legacy.is_legacy, false) AS is_legacy
       FROM seasons s
       LEFT JOIN franchises champ ON champ.id = s.champion_franchise_id
+      LEFT JOIN LATERAL (
+        SELECT fs.avatar_url
+        FROM franchise_seasons fs
+        WHERE fs.season_id = s.id
+          AND fs.franchise_id = s.champion_franchise_id
+        LIMIT 1
+      ) champ_avatar ON true
       LEFT JOIN LATERAL (
         SELECT f.name
         FROM franchise_seasons fs
@@ -56,6 +64,7 @@ export async function getSeasonTimelineData() {
       teamCount: (row.total_rosters as number) ?? 12,
       championName: (row.champion_name as string) ?? null,
       championSlug: (row.champion_slug as string) ?? null,
+      championAvatarUrl: (row.champion_avatar_url as string) ?? null,
       runnerUpName: (row.runner_up_name as string) ?? null,
       mostPF: row.most_pf_name
         ? {

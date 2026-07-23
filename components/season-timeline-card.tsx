@@ -7,6 +7,7 @@ interface SeasonTimelineCardProps {
   teamCount: number;
   championName?: string | null;
   championSlug?: string | null;
+  championAvatarUrl?: string | null;
   runnerUpName?: string | null;
   mostPF?: { franchiseName: string; points: number } | null;
   isLegacy?: boolean;
@@ -18,6 +19,7 @@ export function SeasonTimelineCard({
   teamCount,
   championName,
   championSlug,
+  championAvatarUrl,
   runnerUpName,
   mostPF,
   isLegacy,
@@ -33,6 +35,7 @@ export function SeasonTimelineCard({
           <FranchiseLogo
             slug={championSlug}
             name={championName}
+            avatarUrl={championAvatarUrl}
             size="md"
             decorative
           />
