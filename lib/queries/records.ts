@@ -186,7 +186,7 @@ export async function getLeaderboard(
           pointsScored: Number(r.pointsScored ?? 0),
           pointsAgainst: Number(r.pointsAgainst ?? 0),
           championships: r.playoffResult === "champion" ? 1 : 0,
-          winPct: total > 0 ? w / total : 0,
+          winPct: total > 0 ? (w + t * 0.5) / total : 0,
           seasonsPlayed: 1,
           division: r.division,
           divisionName: r.divisionName,
@@ -240,7 +240,7 @@ export async function getLeaderboard(
         pointsScored: Number(r.totalPointsScored ?? 0),
         pointsAgainst: Number(r.totalPointsAgainst ?? 0),
         championships: r.championships,
-        winPct: total > 0 ? w / total : 0,
+        winPct: total > 0 ? (w + t * 0.5) / total : 0,
         seasonsPlayed: r.seasonsPlayed,
       };
     });
@@ -309,7 +309,7 @@ export async function getAllSeasonLeaderboards(): Promise<
         pointsScored: Number(r.pointsScored ?? 0),
         pointsAgainst: Number(r.pointsAgainst ?? 0),
         championships: r.playoffResult === "champion" ? 1 : 0,
-        winPct: total > 0 ? w / total : 0,
+        winPct: total > 0 ? (w + t * 0.5) / total : 0,
         seasonsPlayed: 1,
         division: r.division,
         divisionName: r.divisionName,
@@ -414,7 +414,7 @@ export async function getCareerStats(
       pointsScored: totalPointsScored,
       pointsAgainst: totalPointsAgainst,
       championships,
-      winPct: totalGames > 0 ? totalWins / totalGames : 0,
+      winPct: totalGames > 0 ? (totalWins + totalTies * 0.5) / totalGames : 0,
       seasonsPlayed: seasonRows.length,
       bestFinish,
       playoffAppearances,
@@ -439,10 +439,11 @@ export async function getHeadToHead(
       .select({
         seasonId: sql<number>`a.season_id`,
         week: sql<number>`a.week`,
-        pointsA: sql<number>`a.points`,
-        pointsB: sql<number>`b.points`,
-        isWinnerA: sql<boolean>`a.is_winner`,
-        isWinnerB: sql<boolean>`b.is_winner`,
+        pointsA: sql<number | null>`a.points`,
+        pointsB: sql<number | null>`b.points`,
+        isWinnerA: sql<boolean | null>`a.is_winner`,
+        isWinnerB: sql<boolean | null>`b.is_winner`,
+        status: sql<string | null>`a.status`,
         isPlayoff: sql<boolean>`a.is_playoff`,
       })
       .from(
@@ -467,6 +468,16 @@ export async function getHeadToHead(
     });
 
     for (const game of sorted) {
+      // A tie only exists on a COMPLETED matchup with equal, non-null
+      // points; is_winner null/null also happens on an in-progress or
+      // scheduled matchup, which is neither a win, a loss, nor a tie, so it
+      // must be skipped rather than counted.
+      const tied =
+        game.status === "complete" &&
+        game.pointsA != null &&
+        game.pointsB != null &&
+        game.pointsA === game.pointsB;
+
       if (game.isWinnerA) {
         wins++;
         if (currentStreakTeam === "A") {
@@ -483,16 +494,23 @@ export async function getHeadToHead(
           currentStreakTeam = "B";
           currentStreakCount = 1;
         }
-      } else {
+      } else if (tied) {
         ties++;
         currentStreakTeam = null;
         currentStreakCount = 0;
       }
+      // else: incomplete/unresolved matchup, skip without touching the streak
     }
 
+    // Label from franchiseIdA's perspective (the same perspective as the
+    // wins/losses fields above): a streak held by "A" is a win streak for A,
+    // a streak held by "B" is a losing streak for A.
     let streak: string | null = null;
     if (currentStreakCount > 1 && currentStreakTeam) {
-      streak = `${currentStreakCount}-game win streak`;
+      streak =
+        currentStreakTeam === "A"
+          ? `${currentStreakCount}-game win streak`
+          : `${currentStreakCount}-game losing streak`;
     }
 
     return { wins, losses, ties, streak };
@@ -570,8 +588,11 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
       .select({
         franchiseIdA: sql<string>`a.franchise_id`,
         franchiseIdB: sql<string>`b.franchise_id`,
-        isWinnerA: sql<boolean>`a.is_winner`,
-        isWinnerB: sql<boolean>`b.is_winner`,
+        isWinnerA: sql<boolean | null>`a.is_winner`,
+        isWinnerB: sql<boolean | null>`b.is_winner`,
+        pointsA: sql<number | null>`a.points`,
+        pointsB: sql<number | null>`b.points`,
+        status: sql<string | null>`a.status`,
         seasonId: sql<number>`a.season_id`,
         week: sql<number>`a.week`,
       })
@@ -591,6 +612,17 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
     >();
 
     for (const p of pairings) {
+      // A tie only exists on a COMPLETED matchup with equal, non-null
+      // points; is_winner null/null also happens on an in-progress or
+      // scheduled matchup, which is neither a win, a loss, nor a tie.
+      const tied =
+        p.status === "complete" &&
+        p.pointsA != null &&
+        p.pointsB != null &&
+        p.pointsA === p.pointsB;
+
+      if (!p.isWinnerA && !p.isWinnerB && !tied) continue;
+
       const key = `${p.franchiseIdA}|${p.franchiseIdB}`;
       if (!pairMap.has(key)) {
         pairMap.set(key, { wins: 0, losses: 0, ties: 0, games: [] });
@@ -611,7 +643,7 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
           seasonId: p.seasonId,
           week: p.week,
         });
-      } else {
+      } else if (tied) {
         entry.ties++;
         entry.games.push({
           winnerId: null,
@@ -659,9 +691,14 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
         }
       }
 
+      // Name the franchise holding the streak; currentStreakTeam is whichever
+      // side actually won the last N games, not necessarily franchiseA.
       let streak: string | null = null;
       if (currentStreakCount > 1 && currentStreakTeam) {
-        streak = `${currentStreakCount}-game win streak`;
+        const streakFranchise = franchiseLookup.get(currentStreakTeam);
+        if (streakFranchise) {
+          streak = `${streakFranchise.name}: ${currentStreakCount}-game win streak`;
+        }
       }
 
       rivalries.push({

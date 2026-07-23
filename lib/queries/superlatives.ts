@@ -89,13 +89,17 @@ export async function getWeeklySuperlatives(
       grouped.set(row.matchupId, group);
     }
 
-    // Build paired results
+    // Build paired results, excluding ties: a tied matchup has no side with
+    // isWinner === true, so without this guard both winner and loser would
+    // fall back to the same pair[0], producing a nonsensical "X beat X"
+    // margin-0 entry among the blowout/nailbiter candidates.
     const paired: MatchupResult[] = [];
     for (const [, pair] of grouped) {
       if (pair.length !== 2) continue;
 
-      const winner = pair.find((p) => p.isWinner === true) ?? pair[0];
-      const loser = pair.find((p) => p.isWinner !== true) ?? pair[1];
+      const winner = pair.find((p) => p.isWinner === true);
+      const loser = pair.find((p) => p.isWinner === false);
+      if (!winner || !loser) continue;
 
       paired.push({
         winner: winner.franchiseName,

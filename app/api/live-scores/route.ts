@@ -66,7 +66,7 @@ async function isRegularOrPostSeason(): Promise<boolean> {
   return cachedNflSeasonType === "regular" || cachedNflSeasonType === "post";
 }
 
-const STALE_THRESHOLD_MS = 25_000; // 25 seconds — sync if older
+const STALE_THRESHOLD_MS = 25_000; // 25 seconds: sync if older
 
 /** In-memory timestamp of the last refresh to rate-limit DB writes. */
 let lastRefreshTimestamp = 0;
@@ -85,7 +85,7 @@ async function refreshScoresIfStale(
   week: number
 ): Promise<void> {
   try {
-    // In-memory rate limit — skip expensive work if called too frequently
+    // In-memory rate limit: skip expensive work if called too frequently
     const now = Date.now();
     if (now - lastRefreshTimestamp < STALE_THRESHOLD_MS) return;
     lastRefreshTimestamp = now;
@@ -190,10 +190,16 @@ export async function GET() {
     const gameWindow =
       isCurrentlyGameWindow() && (await isRegularOrPostSeason());
 
-    // During game windows, refresh scores from Sleeper if stale
-    if (gameWindow && process.env.SLEEPER_LEAGUE_ID) {
+    // During game windows, refresh scores from Sleeper if stale. Use the
+    // league id stored on the latest season row, not the env var: the sync
+    // layer auto-advances the league chain across seasons, but the env var
+    // stays fixed, so once the chain advances it would point at the STALE
+    // previous league. Sleeper reuses roster_id 1-12 across seasons, so a
+    // refresh against the wrong league would still "match" rows here and
+    // silently overwrite the new season's matchups with old data.
+    if (gameWindow && latestSeason.leagueId) {
       await refreshScoresIfStale(
-        process.env.SLEEPER_LEAGUE_ID,
+        latestSeason.leagueId,
         latestSeason.id,
         currentWeek
       );
@@ -229,7 +235,9 @@ export async function GET() {
     const scores = [];
     for (const [matchupId, pair] of grouped) {
       if (pair.length < 2) continue;
-      const [home, away] = pair;
+      const [home, away] = [...pair].sort((a, b) =>
+        a.rosterId.localeCompare(b.rosterId)
+      );
       scores.push({
         matchupId,
         homeTeamId: home.franchiseId,

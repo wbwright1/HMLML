@@ -80,7 +80,17 @@ export function pairMatchupRows(
   for (const [matchupId, pair] of grouped) {
     if (pair.length < 2) continue; // Incomplete matchup, skip
 
-    const [a, b] = pair;
+    if (pair.length > 2) {
+      console.error(
+        `[matchups] pairMatchupRows: matchupId ${matchupId} has ${pair.length} rows (expected 2); using the first two by rosterId`
+      );
+    }
+
+    // Sort by rosterId so home/away assignment is deterministic regardless
+    // of arbitrary DB row order (and, if a data bug ever produces more than
+    // 2 rows for one matchup_id, the extras are dropped rather than
+    // silently changing which two get paired from one call to the next).
+    const [a, b] = [...pair].sort((x, y) => x.rosterId.localeCompare(y.rosterId));
 
     const toTeam = (r: (typeof rows)[number]): MatchupTeam => ({
       franchiseId: r.franchiseId,

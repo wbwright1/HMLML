@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
-import { getAllSeasons } from "@/lib/queries/seasons";
+import { getAllSeasons, getSeasonStandings } from "@/lib/queries/seasons";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { EmptyState } from "@/components/empty-state";
 import { SeasonNavigator } from "./season-navigator";
+import { getNflState } from "@/lib/queries/nfl-state";
+import { resolveHubSeasonType, isPreWeekOne, seasonTypeBadgeLabel } from "@/lib/hub/season-state";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +22,30 @@ export default async function SeasonsPage() {
   try {
     seasons = await getAllSeasons();
   } catch {
-    // DB may not be connected in dev — fall through to empty state
+    // DB may not be connected in dev, fall through to empty state
+  }
+
+  // Recompute the newest season's badge via the same seasonal-calendar logic
+  // the hub banner uses, so a stale-looking raw DB status ("in_season" during
+  // what the hub already calls preseason) can never disagree with the banner.
+  let latestSeasonBadge: string | null = null;
+  const latestSeason = seasons[0];
+  if (latestSeason && latestSeason.status !== "complete") {
+    try {
+      const [nflState, standings] = await Promise.all([
+        getNflState(),
+        getSeasonStandings(latestSeason.id),
+      ]);
+      const seasonType = resolveHubSeasonType({
+        nflSeasonType: nflState?.seasonType ?? null,
+        dbSeasonStatus: latestSeason.status,
+        hasLiveMatchups: false,
+        nothingPlayedYet: isPreWeekOne(standings),
+      });
+      latestSeasonBadge = seasonTypeBadgeLabel(seasonType);
+    } catch {
+      // Fall back to the raw status-derived badge below
+    }
   }
 
   if (seasons.length === 0) {
@@ -86,12 +111,14 @@ export default async function SeasonsPage() {
                       {season.status === "complete" && (
                         <SuperlativeBadge text="Complete" variant="green" />
                       )}
-                      {season.status === "in_season" && (
-                        <SuperlativeBadge text="In Season" variant="green" />
-                      )}
-                      {season.status === "pre_draft" && (
-                        <SuperlativeBadge text="Pre-Draft" variant="neutral" />
-                      )}
+                      {season.status !== "complete" &&
+                        (index === 0 && latestSeasonBadge ? (
+                          <SuperlativeBadge text={latestSeasonBadge} variant="green" />
+                        ) : season.status === "in_season" ? (
+                          <SuperlativeBadge text="In Season" variant="green" />
+                        ) : season.status === "pre_draft" ? (
+                          <SuperlativeBadge text="Pre-Draft" variant="neutral" />
+                        ) : null)}
                     </div>
 
                     {season.championName ? (

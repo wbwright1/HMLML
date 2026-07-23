@@ -12,6 +12,14 @@ interface SeasonTimelineCardProps {
   mostPF?: { franchiseName: string; points: number } | null;
   isLegacy?: boolean;
   status?: string | null;
+  /**
+   * Overrides the badge text derived from raw `status`. Passed by the caller
+   * for the latest season only, computed from the same seasonal-calendar
+   * logic (lib/hub/season-state.ts) that drives the hub banner, so this
+   * badge and the banner can never disagree. Other seasons keep the
+   * status-derived label.
+   */
+  badgeLabel?: string | null;
 }
 
 export function SeasonTimelineCard({
@@ -24,6 +32,7 @@ export function SeasonTimelineCard({
   mostPF,
   isLegacy,
   status,
+  badgeLabel,
 }: SeasonTimelineCardProps) {
   return (
     <Link
@@ -54,7 +63,7 @@ export function SeasonTimelineCard({
             )}
             {status && status !== "complete" && (
               <SuperlativeBadge
-                text={status === "in_season" ? "In Season" : "Pre-Draft"}
+                text={badgeLabel ?? (status === "in_season" ? "In Season" : "Pre-Draft")}
                 variant="green"
               />
             )}

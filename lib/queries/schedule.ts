@@ -152,11 +152,19 @@ export async function getFranchiseSchedule(
       const points = mine.points ?? 0;
       const opponentPoints = opponentRow?.points ?? 0;
 
+      // A tie is equal, non-null points on a completed matchup with a real
+      // opponent; check that first so a bye/incomplete opponent row (which
+      // defaults opponentPoints to 0 and can coincidentally equal a
+      // not-yet-started `mine.points` of 0) never gets labeled "T". Beyond
+      // that, W and L are each only assigned from an explicit is_winner
+      // value; a completed matchup with unequal points and a null is_winner
+      // (a sync backstop row, or a legacy row without a resolved winner) is
+      // left as null rather than defaulting to "L".
       let result: "W" | "L" | "T" | null = null;
-      if (status === "complete") {
-        if (mine.isWinner === true) result = "W";
+      if (status === "complete" && opponentRow) {
+        if (points === opponentPoints) result = "T";
+        else if (mine.isWinner === true) result = "W";
         else if (mine.isWinner === false) result = "L";
-        else if (points === opponentPoints) result = "T";
       }
 
       weeks.push({

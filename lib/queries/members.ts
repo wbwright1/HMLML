@@ -9,44 +9,54 @@ import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
  * Ordered by display name. franchise columns are null for an unattached member.
  */
 export async function getAllMembersWithFranchise() {
-  const rows = await db
-    .select({
-      id: members.id,
-      sleeperUserId: members.sleeperUserId,
-      displayName: members.displayName,
-      role: members.role,
-      franchiseId: members.franchiseId,
-      claimCodeHash: members.claimCodeHash,
-      codeGeneratedAt: members.codeGeneratedAt,
-      createdAt: members.createdAt,
-      updatedAt: members.updatedAt,
-      franchiseSlug: franchises.slug,
-      franchiseName: franchises.name,
-      franchiseAbbreviation: franchises.abbreviation,
-      franchiseBrandingColor: franchises.brandingColor,
-    })
-    .from(members)
-    .leftJoin(franchises, eq(members.franchiseId, franchises.id))
-    .orderBy(asc(members.displayName));
+  try {
+    const rows = await db
+      .select({
+        id: members.id,
+        sleeperUserId: members.sleeperUserId,
+        displayName: members.displayName,
+        role: members.role,
+        franchiseId: members.franchiseId,
+        claimCodeHash: members.claimCodeHash,
+        codeGeneratedAt: members.codeGeneratedAt,
+        createdAt: members.createdAt,
+        updatedAt: members.updatedAt,
+        franchiseSlug: franchises.slug,
+        franchiseName: franchises.name,
+        franchiseAbbreviation: franchises.abbreviation,
+        franchiseBrandingColor: franchises.brandingColor,
+      })
+      .from(members)
+      .leftJoin(franchises, eq(members.franchiseId, franchises.id))
+      .orderBy(asc(members.displayName));
 
-  const avatars = await getLatestAvatarUrls(
-    rows.map((r) => r.franchiseId).filter((id): id is string => Boolean(id)),
-  );
+    const avatars = await getLatestAvatarUrls(
+      rows.map((r) => r.franchiseId).filter((id): id is string => Boolean(id)),
+    );
 
-  return rows.map((r) => ({
-    ...r,
-    franchiseAvatarUrl: r.franchiseId
-      ? avatars.get(r.franchiseId) ?? null
-      : null,
-  }));
+    return rows.map((r) => ({
+      ...r,
+      franchiseAvatarUrl: r.franchiseId
+        ? avatars.get(r.franchiseId) ?? null
+        : null,
+    }));
+  } catch (e) {
+    console.error("[members] getAllMembersWithFranchise error:", e);
+    return [];
+  }
 }
 
 /** Looks up a member by their stable Sleeper user id, or null. */
 export async function getMemberBySleeperUserId(sleeperUserId: string) {
-  const [member] = await db
-    .select()
-    .from(members)
-    .where(eq(members.sleeperUserId, sleeperUserId))
-    .limit(1);
-  return member ?? null;
+  try {
+    const [member] = await db
+      .select()
+      .from(members)
+      .where(eq(members.sleeperUserId, sleeperUserId))
+      .limit(1);
+    return member ?? null;
+  } catch (e) {
+    console.error("[members] getMemberBySleeperUserId error:", e);
+    return null;
+  }
 }

@@ -51,6 +51,12 @@ export async function PreseasonHub({
   // seeded defaults when present, otherwise the seeds render unchanged.
   const editorial = await getHubEditorial({ seasonId: latestSeason?.id });
   const seasonYear = latestSeason?.seasonYear ?? new Date().getFullYear();
+  // When the latest synced season is already "complete", the upcoming season
+  // (the one this hub is counting down to) is the year after it, not the
+  // year that just finished, even though roster/record data still comes
+  // from the latest synced season until the new one syncs.
+  const displayYear =
+    latestSeason?.status === "complete" ? seasonYear + 1 : seasonYear;
 
   // Field grouping + last-season records/tags, plus the Week 1 kickoff target.
   let field: Awaited<ReturnType<typeof getPreseasonField>> = {
@@ -58,11 +64,13 @@ export async function PreseasonHub({
     hasDivisions: false,
   };
   let kickoffTarget: Date | null = null;
+  let lastCompletedSeasonYear: number | null = null;
   try {
     const completedSeason = await getLastCompletedSeason();
+    lastCompletedSeasonYear = completedSeason?.seasonYear ?? null;
     [field, kickoffTarget] = await Promise.all([
       getPreseasonField(latestSeason?.id, completedSeason?.id),
-      latestSeason ? getNextKickoff(seasonYear, 1) : Promise.resolve(null),
+      latestSeason ? getNextKickoff(displayYear, 1) : Promise.resolve(null),
     ]);
   } catch {
     // DB may be unavailable in dev; fall through to the empty state below.
@@ -147,7 +155,7 @@ export async function PreseasonHub({
       <section className="grid grid-cols-1 gap-6 pt-2 pb-8 lg:grid-cols-[1fr_auto] lg:items-center lg:gap-10">
         <div className="min-w-0">
           <p className="text-kicker">
-            {`Harambe Memorial League · ${seasonYear} · Title Defense Loading`}
+            {`Harambe Memorial League · ${displayYear} · Title Defense Loading`}
           </p>
           <h1 className="text-display mt-3">
             The season&rsquo;s on the clock<span className="text-accent-gold">.</span>
@@ -159,7 +167,17 @@ export async function PreseasonHub({
             <DraftCountdown draftDate={draftDate} />
           ) : kickoffTarget ? (
             <KickoffCountdown target={kickoffTarget.toISOString()} />
-          ) : null}
+          ) : (
+            // No draft date configured (NEXT_PUBLIC_DRAFT_DATE unset, since
+            // the league doesn't yet store a draft's start_time in the DB)
+            // and no Week 1 schedule synced yet: say so instead of nothing.
+            <div className="rounded-lg border border-border bg-surface p-6 text-center">
+              <p className="text-caption uppercase text-text-tertiary mb-2">
+                ROOKIE DRAFT
+              </p>
+              <p className="text-h2 text-text-primary">Draft date TBD</p>
+            </div>
+          )}
         </div>
       </section>
 
@@ -196,6 +214,7 @@ export async function PreseasonHub({
                         division={division}
                         characterization={ed.characterization}
                         rivalryNote={ed.rivalryNote}
+                        recordsSeasonYear={lastCompletedSeasonYear}
                       />
                     </div>
                   );

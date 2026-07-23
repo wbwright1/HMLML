@@ -6,9 +6,25 @@ on:
 jobs:
   call-api:
     runs-on: ubuntu-latest
+    permissions:
+      issues: write
     steps:
       - name: Trigger cron endpoint
         run: >
           curl -f --max-time 55
           -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
-          https://hmlml-jade.vercel.app/api/sync-hourly
+          https://hmlml.app/api/sync-hourly
+      - name: File issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TITLE="Hourly sync failing"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          NUMBER=$(gh issue list --search "$TITLE in:title" --state open --json number --jq '.[0].number')
+          if [ -n "$NUMBER" ]; then
+            gh issue comment "$NUMBER" --body "Hourly sync failed again: $RUN_URL"
+          else
+            gh issue create --title "$TITLE" --body "The hourly sync cron failed: $RUN_URL"
+          fi

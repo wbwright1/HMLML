@@ -57,9 +57,14 @@ export async function getAllRosteredPlayers(): Promise<RosteredPlayer[]> {
         ownerFranchiseSlug: franchises.slug,
         pointsPpr: players.pointsPpr,
         statsSeason: players.statsSeason,
+        rosterPlayerId: rosterPlayers.playerId,
       })
+      // leftJoin players, not innerJoin: the hourly roster sync can add a
+      // player before the daily players sync has written their row, and an
+      // innerJoin would silently drop that roster spot (mirrors the pattern
+      // in lib/queries/drafts.ts).
       .from(rosterPlayers)
-      .innerJoin(players, eq(rosterPlayers.playerId, players.id))
+      .leftJoin(players, eq(rosterPlayers.playerId, players.id))
       .innerJoin(franchises, eq(rosterPlayers.franchiseId, franchises.id))
       .where(eq(rosterPlayers.seasonId, latestSeason.id))
       .orderBy(
@@ -75,7 +80,12 @@ export async function getAllRosteredPlayers(): Promise<RosteredPlayer[]> {
         players.fullName
       );
 
-    return rows;
+    return rows.map((r) => ({
+      ...r,
+      id: r.id ?? r.rosterPlayerId,
+      fullName: r.fullName ?? `Unknown Player (${r.rosterPlayerId})`,
+      position: r.position ?? "N/A",
+    }));
   } catch {
     return [];
   }
