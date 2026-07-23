@@ -62,6 +62,7 @@ function preseasonContext(overrides: Partial<StatsContext> = {}): StatsContext {
     rosterProjections: [],
     projectionSeason: null,
     offseasonMoves: [],
+    recentTrades: [],
     ...overrides,
   };
 }
@@ -164,6 +165,52 @@ describe("applyDiversityLayer", () => {
     expect(result.rows.filter((r) => r.kind === "matchup_angle")).toHaveLength(2);
     expect(result.diversityStats.droppedCount).toBe(0);
     expect(result.diversityStats.relaxedKinds).toEqual([]);
+  });
+
+  it("caps offseason_receipt at one row per franchise, then topUpShortKinds backfills to 4 distinct franchises", () => {
+    const ctx = preseasonContext();
+    // LLM clustered on just 2 franchises, 2 receipts each; target is 4.
+    const llmRows: HubContentInsert[] = [
+      {
+        week: null,
+        kind: "offseason_receipt",
+        refKey: "foopus",
+        body: "Foopus reached for a punter in round 2, allegedly on purpose.",
+        extras: { category: "DRAFT" },
+      },
+      {
+        week: null,
+        kind: "offseason_receipt",
+        refKey: "foopus",
+        body: "Foopus then flipped two firsts for a kicker rumor, somehow.",
+        extras: { category: "TRADE" },
+      },
+      {
+        week: null,
+        kind: "offseason_receipt",
+        refKey: "olave-garden",
+        body: "Olave Garden torched the FAAB budget chasing upside on day one.",
+        extras: { category: "WAIVERS" },
+      },
+      {
+        week: null,
+        kind: "offseason_receipt",
+        refKey: "olave-garden",
+        body: "Olave Garden kept spending well past the point of sense.",
+        extras: { category: "WAIVERS" },
+      },
+    ];
+    const diversityResult = applyDiversityLayer(ctx, llmRows);
+    const clusteredReceipts = diversityResult.rows.filter((r) => r.kind === "offseason_receipt");
+    const clusteredRefKeys = clusteredReceipts.map((r) => r.refKey);
+    expect(new Set(clusteredRefKeys).size).toBe(clusteredRefKeys.length);
+
+    const kinds = kindsForSeason("pre");
+    const toppedUp = topUpShortKinds(kinds, { offseason_receipt: 4 }, diversityResult.rows, ctx);
+    const receipts = toppedUp.filter((r) => r.kind === "offseason_receipt");
+    const refKeys = receipts.map((r) => r.refKey);
+    expect(receipts).toHaveLength(4);
+    expect(new Set(refKeys).size).toBe(4);
   });
 
   it("drops invalid rows and counts them in droppedCount", () => {

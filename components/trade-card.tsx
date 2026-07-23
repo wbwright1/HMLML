@@ -7,9 +7,14 @@ import type { Trade } from "@/lib/queries/trades";
 
 interface TradeCardProps {
   trade: Trade;
+  /**
+   * Optional Site Desk "who won this trade" aside, keyed to this trade's
+   * transaction id upstream. Rendered as a serif italic editorial note.
+   */
+  verdict?: string | null;
 }
 
-export function TradeCard({ trade }: TradeCardProps) {
+export function TradeCard({ trade, verdict }: TradeCardProps) {
   return (
     <div className="card-surface p-5 space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -140,6 +145,15 @@ export function TradeCard({ trade }: TradeCardProps) {
           </div>
         ))}
       </div>
+
+      {verdict && (
+        <div className="border-t border-divider pt-3">
+          <p className="text-kicker text-accent-gold mb-1">Site Desk Verdict</p>
+          <p className="font-serif italic text-body text-text-secondary">
+            {verdict}
+          </p>
+        </div>
+      )}
     </div>
   );
 }

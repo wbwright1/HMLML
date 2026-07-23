@@ -31,10 +31,12 @@ const KINDS_BY_SEASON: Record<string, HubContentKind[]> = {
     "smack_post",
   ],
   regular: ["matchup_angle", "game_of_week_blurb", "hero_dek", "smack_post"],
-  // The generate-content route skips "post"/"off" entirely (kindsForSeason
-  // maps them to no kinds), so no row is ever valid in those states.
+  // Offseason is a lightweight, activity-gated pass (see kindsForSeason("off")):
+  // season-scoped receipts/dek/smack plus per-trade verdicts.
+  off: ["offseason_receipt", "hero_dek", "smack_post", "trade_verdict"],
+  // The generate-content route skips "post" (the playoffs) entirely
+  // (kindsForSeason maps it to no kinds), so no row is ever valid there.
   post: [],
-  off: [],
 };
 
 export interface ValidatableRow {
@@ -81,6 +83,12 @@ function knownNames(ctx: StatsContext): string[] {
     for (const tr of m.trades) {
       for (const n of tr.acquired.players) names.add(n);
       for (const n of tr.surrendered.players) names.add(n);
+    }
+  }
+  for (const t of ctx.recentTrades ?? []) {
+    for (const side of t.sides) {
+      if (side.franchiseName) names.add(side.franchiseName);
+      for (const p of side.players) names.add(p.name);
     }
   }
   if (ctx.lastSeason) {
@@ -259,6 +267,9 @@ function refKeyValid(row: ValidatableRow, ctx: StatsContext): boolean {
       return row.refKey != null && ctx.leagueStandings.some((t) => t.slug === row.refKey);
     case "matchup_angle":
       return row.refKey != null && ctx.currentMatchups.some((m) => m.pairKey === row.refKey);
+    case "trade_verdict":
+      // refKey is the trade's transaction id; it must resolve to a real recent trade.
+      return row.refKey != null && ctx.recentTrades.some((t) => String(t.id) === row.refKey);
     case "burning_question":
     case "bold_prediction":
     case "hero_dek":

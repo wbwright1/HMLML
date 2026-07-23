@@ -4,6 +4,7 @@ import {
   trigramSet,
   extractAnchors,
   selectDiverseSubset,
+  FRANCHISE_UNIQUE_KINDS,
   type CandidateRow,
 } from "./dedupe";
 import type { StatsContext } from "./stats-context";
@@ -37,6 +38,7 @@ function ctx(overrides: Partial<StatsContext> = {}): StatsContext {
     ],
     projectionSeason: 2026,
     offseasonMoves: [],
+    recentTrades: [],
     ...overrides,
   };
 }
@@ -250,6 +252,90 @@ describe("selectDiverseSubset", () => {
     expect(result.kept).toHaveLength(2);
     expect(result.dropped).toEqual([]);
     expect(result.relaxedKinds).toEqual([]);
+  });
+
+  it("franchiseUniqueKinds: caps a kind at one row per franchise even under relaxation, when candidates cluster on fewer franchises than the target", () => {
+    // 4 offseason_receipt candidates but only 2 distinct franchises (foopus,
+    // olave-garden); target is 4. Without franchiseUniqueKinds the coverage
+    // relaxation would re-add a 2nd row per franchise to hit 4; with it,
+    // relaxation must skip those and the kind stays under target rather than
+    // duplicating a franchise.
+    const candidates: CandidateRow[] = [
+      row("Foopus reached for a punter in round 2, allegedly.", {
+        kind: "offseason_receipt",
+        refKey: "foopus",
+      }),
+      row("Foopus also flipped two firsts for a kicker rumor.", {
+        kind: "offseason_receipt",
+        refKey: "foopus",
+      }),
+      row("Olave Garden torched the FAAB budget on day one.", {
+        kind: "offseason_receipt",
+        refKey: "olave-garden",
+      }),
+      row("Olave Garden kept chasing upside well past sensible.", {
+        kind: "offseason_receipt",
+        refKey: "olave-garden",
+      }),
+    ];
+    const result = selectDiverseSubset(
+      { offseason_receipt: candidates },
+      ctx(),
+      {
+        targetCountsByKind: { offseason_receipt: 4 },
+        similarityThreshold: 0.99,
+        franchiseUniqueKinds: FRANCHISE_UNIQUE_KINDS,
+      },
+    );
+    const refKeys = result.kept.map((r) => r.refKey);
+    expect(new Set(refKeys).size).toBe(refKeys.length);
+    expect(refKeys.length).toBeLessThanOrEqual(2);
+  });
+
+  it("franchiseUniqueKinds: keeps exactly the target count, all distinct franchises, when enough distinct franchises are on offer", () => {
+    const candidates: CandidateRow[] = [
+      row("Foopus reached for a punter in round 2, allegedly.", {
+        kind: "offseason_receipt",
+        refKey: "foopus",
+      }),
+      row("Olave Garden torched the FAAB budget on day one.", {
+        kind: "offseason_receipt",
+        refKey: "olave-garden",
+      }),
+      row("Team C shipped out its whole receiving corps.", {
+        kind: "offseason_receipt",
+        refKey: "team-c",
+      }),
+      row("Team D quietly rebuilt around two rookies.", {
+        kind: "offseason_receipt",
+        refKey: "team-d",
+      }),
+      row("Team E made a panic trade nobody asked for.", {
+        kind: "offseason_receipt",
+        refKey: "team-e",
+      }),
+    ];
+    const testCtx = ctx({
+      leagueStandings: [
+        { name: "Foopus", slug: "foopus", record: "0-0", pointsFor: 0 },
+        { name: "Olave Garden", slug: "olave-garden", record: "0-0", pointsFor: 0 },
+        { name: "Team C", slug: "team-c", record: "0-0", pointsFor: 0 },
+        { name: "Team D", slug: "team-d", record: "0-0", pointsFor: 0 },
+        { name: "Team E", slug: "team-e", record: "0-0", pointsFor: 0 },
+      ],
+    });
+    const result = selectDiverseSubset(
+      { offseason_receipt: candidates },
+      testCtx,
+      {
+        targetCountsByKind: { offseason_receipt: 4 },
+        similarityThreshold: 0.99,
+        franchiseUniqueKinds: FRANCHISE_UNIQUE_KINDS,
+      },
+    );
+    const refKeys = result.kept.map((r) => r.refKey);
+    expect(refKeys).toHaveLength(4);
+    expect(new Set(refKeys).size).toBe(4);
   });
 
   it("is deterministic: identical input yields identical output across repeated calls", () => {

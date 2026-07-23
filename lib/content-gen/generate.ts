@@ -9,6 +9,7 @@ import {
 import { validateRow } from "@/lib/content-gen/validate";
 import {
   extractAnchors,
+  FRANCHISE_UNIQUE_KINDS,
   selectDiverseSubset,
   sharesPrimaryHook,
 } from "@/lib/content-gen/dedupe";
@@ -343,6 +344,17 @@ function targetCountsForSeason(ctx: StatsContext): Partial<Record<HubContentKind
       smack_post: 5,
     };
   }
+  if (ctx.seasonType === "off") {
+    // Lightweight offseason set. trade_verdict is keep-all (one per trade),
+    // never trimmed; the LLM path never produces verdicts, so fillMissingKinds
+    // backfills them from the deterministic templates.
+    return {
+      offseason_receipt: 4,
+      hero_dek: 1,
+      smack_post: 3,
+      trade_verdict: ctx.recentTrades.length,
+    };
+  }
   return {
     division_note: 3,
     burning_question: 3,
@@ -381,6 +393,7 @@ export function applyDiversityLayer(
   const { kept, dropped, relaxedKinds } = selectDiverseSubset(byKind, ctx, {
     targetCountsByKind: targetCountsForSeason(ctx),
     kindPriority: Object.keys(byKind) as HubContentKind[],
+    franchiseUniqueKinds: FRANCHISE_UNIQUE_KINDS,
   });
   return {
     rows: kept as HubContentInsert[],

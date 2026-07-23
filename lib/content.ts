@@ -107,6 +107,27 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
     description: 'Franchise with the worst average margin of defeat in the season (when they lose, they lose big)',
     tone: 'sting',
   },
+  // Coverage-pass fallbacks: always-computable superlatives used to guarantee
+  // every franchise appears in at least one award. Assigned only to franchises
+  // the primary superlatives missed; see getUncoveredFranchiseAwards.
+  LONGEST_DROUGHT: {
+    key: 'LONGEST_DROUGHT',
+    displayText: 'Title Drought',
+    description: 'Franchise that has gone the longest without a championship (or never won one)',
+    tone: 'sting',
+  },
+  PUNCHING_BAG: {
+    key: 'PUNCHING_BAG',
+    displayText: 'Punching Bag',
+    description: 'Uncovered franchise allowing the most points against this season',
+    tone: 'sting',
+  },
+  WALLFLOWER: {
+    key: 'WALLFLOWER',
+    displayText: 'Wallflower',
+    description: 'Franchise that dodged every other superlative; impressively unremarkable',
+    tone: 'neutral',
+  },
 } as const);
 
 // ===========================================================================
@@ -284,20 +305,6 @@ const OFFSEASON_RECEIPTS: readonly OffseasonReceipt[] = Object.freeze([
   },
 ]);
 
-// Hand-written editorial spotlights that survive the generated-content
-// overlay: appended after generated receipts rather than replaced by them.
-// Grounded in real 2026 roster data at time of writing: the Watson Love Diggs
-// headliners are Beckham (33), Hopkins (33), Diggs (32), Conner (31),
-// Chubb (30), and Deebo (30).
-const PINNED_OFFSEASON_RECEIPTS: readonly OffseasonReceipt[] = Object.freeze([
-  {
-    category: 'AGING_CORE',
-    franchiseSlug: 'watson-love-diggs',
-    body:
-      'Beckham, Hopkins, and Diggs headline what would have been the scariest roster of 2019. This is a dynasty league; someone should tell the dynasty.',
-  },
-]);
-
 // No seeded per-pair blurbs: a pair-specific angle would fabricate a rivalry
 // narrative for real teams. byPair is intentionally empty so the between-weeks
 // slate falls back to genericSlateAngle (a truthful records-based line) for
@@ -367,7 +374,7 @@ function seededEditorial(now: number): HubEditorial {
     divisionFallback: DIVISION_FALLBACK,
     burningQuestions: BURNING_QUESTIONS,
     boldPredictions: BOLD_PREDICTIONS,
-    offseasonReceipts: [...OFFSEASON_RECEIPTS, ...PINNED_OFFSEASON_RECEIPTS],
+    offseasonReceipts: OFFSEASON_RECEIPTS,
     matchupAngles: MATCHUP_ANGLES,
     smackPosts: buildSmackPosts(now),
     heroDek: null,
@@ -442,8 +449,7 @@ export function overlayHubEditorial(
     if (predictions.length > 0) result.boldPredictions = predictions;
   }
 
-  // offseason_receipt -> offseasonReceipts (replaces the rotating seeds, but
-  // pinned editorial spotlights are always appended after the generated set).
+  // offseason_receipt -> offseasonReceipts (full replace of the rotating seeds).
   const receiptRows = grouped.offseason_receipt ?? [];
   if (receiptRows.length > 0) {
     const receipts: OffseasonReceipt[] = [];
@@ -457,8 +463,7 @@ export function overlayHubEditorial(
       if (body && franchiseSlug && category)
         receipts.push({ category, franchiseSlug, body });
     }
-    if (receipts.length > 0)
-      result.offseasonReceipts = [...receipts, ...PINNED_OFFSEASON_RECEIPTS];
+    if (receipts.length > 0) result.offseasonReceipts = receipts;
   }
 
   // matchup_angle / game_of_week_blurb -> matchupAngles (byPair merged, blurb replaced).

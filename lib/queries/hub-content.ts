@@ -5,9 +5,11 @@ import { and, eq, isNull, inArray } from "drizzle-orm";
 // ---------------------------------------------------------------------------
 // Kinds
 // ---------------------------------------------------------------------------
-// The eight editorial content kinds the hub renders. Kept here (closest to the
-// DB) so both the query layer and the generation layer share one source of
-// truth without importing from lib/content.ts (which imports THIS module).
+// The editorial content kinds the hub renders. Kept here (closest to the DB)
+// so both the query layer and the generation layer share one source of truth
+// without importing from lib/content.ts (which imports THIS module).
+// `trade_verdict` is not a hub module: it is a per-trade Site Desk aside,
+// keyed by the trade's transaction id in refKey and rendered on /trades.
 export const HUB_CONTENT_KINDS = [
   "division_note",
   "burning_question",
@@ -17,6 +19,7 @@ export const HUB_CONTENT_KINDS = [
   "game_of_week_blurb",
   "hero_dek",
   "smack_post",
+  "trade_verdict",
 ] as const;
 
 export type HubContentKind = (typeof HUB_CONTENT_KINDS)[number];

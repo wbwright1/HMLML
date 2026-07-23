@@ -74,6 +74,7 @@ function baseContext(overrides: Partial<StatsContext> = {}): StatsContext {
     rosterProjections: [],
     projectionSeason: null,
     offseasonMoves: [],
+    recentTrades: [],
     ...overrides,
   };
 }
@@ -138,6 +139,12 @@ describe("generateFromTemplates (preseason)", () => {
     for (const r of rows.filter((r) => r.kind === "offseason_receipt")) {
       expect(validSlugs.has(r.refKey ?? "")).toBe(true);
     }
+  });
+
+  it("keeps exactly 4 offseason receipts, each from a distinct franchise", () => {
+    const receipts = rows.filter((r) => r.kind === "offseason_receipt");
+    expect(receipts).toHaveLength(4);
+    expect(new Set(receipts.map((r) => r.refKey)).size).toBe(4);
   });
 
   it("carries a valid verdict on every bold prediction", () => {
@@ -253,9 +260,8 @@ describe("generateFromTemplates (regular season)", () => {
 });
 
 describe("kindsForSeason (unsupported states)", () => {
-  it("maps post and off to no kinds", () => {
+  it("maps the playoffs (post) to no kinds", () => {
     expect(kindsForSeason("post")).toEqual([]);
-    expect(kindsForSeason("off")).toEqual([]);
   });
 });
 
@@ -375,6 +381,109 @@ describe("generateFromTemplates (preseason, with franchiseHistory + rosterProjec
     expect(
       rows.some((r) => r.body.includes("Team C") && /1420\.3|No\. 1\b/.test(r.body)),
     ).toBe(true);
+  });
+
+  it("never emits an em-dash", () => {
+    for (const r of rows) expect(hasEmDash(r.body)).toBe(false);
+  });
+});
+
+describe("kindsForSeason (offseason)", () => {
+  it("returns the lightweight offseason kind set", () => {
+    expect(kindsForSeason("off")).toEqual([
+      "offseason_receipt",
+      "hero_dek",
+      "smack_post",
+      "trade_verdict",
+    ]);
+  });
+
+  it("still maps the playoffs to no kinds", () => {
+    expect(kindsForSeason("post")).toEqual([]);
+  });
+});
+
+describe("generateFromTemplates (offseason)", () => {
+  const recentTrades = [
+    {
+      id: 101,
+      seasonYear: 2026,
+      // Lopsided volume: Foopus gets 3 assets, Olave Garden 1.
+      sides: [
+        {
+          franchiseName: "Foopus",
+          players: [
+            { name: "Player One", position: "RB" },
+            { name: "Player Two", position: "WR" },
+          ],
+          picks: 1,
+        },
+        {
+          franchiseName: "Olave Garden",
+          players: [{ name: "Player Three", position: "QB" }],
+          picks: 0,
+        },
+      ],
+    },
+    {
+      id: 202,
+      seasonYear: 2026,
+      // Picks vs players, even totals: future vs win-now framing.
+      sides: [
+        { franchiseName: "McCarthyism", players: [], picks: 2 },
+        {
+          franchiseName: "Team C",
+          players: [
+            { name: "Player Four", position: "RB" },
+            { name: "Player Five", position: "TE" },
+          ],
+          picks: 0,
+        },
+      ],
+    },
+  ];
+  const ctx = baseContext({ seasonType: "off", recentTrades });
+  const { kinds, rows, source } = generateFromTemplates(ctx);
+
+  it("reports the template source and offseason kinds", () => {
+    expect(source).toBe("template");
+    expect(kinds).toEqual(kindsForSeason("off"));
+  });
+
+  it("emits only offseason kinds (no division notes, questions, or predictions)", () => {
+    const emitted = new Set(rows.map((r) => r.kind));
+    expect(emitted.has("division_note")).toBe(false);
+    expect(emitted.has("burning_question")).toBe(false);
+    expect(emitted.has("bold_prediction")).toBe(false);
+    for (const r of rows) expect(kindsForSeason("off")).toContain(r.kind);
+  });
+
+  it("produces one trade_verdict per recent trade, keyed by transaction id", () => {
+    const verdicts = rows.filter((r) => r.kind === "trade_verdict");
+    expect(verdicts.length).toBe(2);
+    expect(new Set(verdicts.map((r) => r.refKey))).toEqual(new Set(["101", "202"]));
+  });
+
+  it("favors the higher-volume side on a lopsided trade", () => {
+    const v = rows.find((r) => r.kind === "trade_verdict" && r.refKey === "101");
+    expect(v?.body).toContain("Foopus");
+    expect(v?.body.toLowerCase()).toContain("early returns favor");
+  });
+
+  it("uses win-now-vs-future framing when picks are swapped for players", () => {
+    const v = rows.find((r) => r.kind === "trade_verdict" && r.refKey === "202");
+    expect(v?.body).toMatch(/draft capital|win-now/);
+  });
+
+  it("keeps exactly 4 offseason receipts, each from a distinct franchise", () => {
+    const receipts = rows.filter((r) => r.kind === "offseason_receipt");
+    expect(receipts).toHaveLength(4);
+    expect(new Set(receipts.map((r) => r.refKey)).size).toBe(4);
+  });
+
+  it("emits a single hero dek and at least one smack post", () => {
+    expect(rows.filter((r) => r.kind === "hero_dek").length).toBe(1);
+    expect(rows.filter((r) => r.kind === "smack_post").length).toBeGreaterThanOrEqual(1);
   });
 
   it("never emits an em-dash", () => {

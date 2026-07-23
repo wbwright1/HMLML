@@ -9,6 +9,11 @@ import { resolveHubSeasonType, isPreWeekOne } from "@/lib/hub/season-state";
 import { buildStatsContext } from "@/lib/content-gen/stats-context";
 import { generateContent } from "@/lib/content-gen/generate";
 import { replaceHubContent } from "@/lib/queries/hub-content";
+import {
+  getLastOffseasonGenerationAt,
+  countTransactionsSyncedSince,
+} from "@/lib/queries/content-activity";
+import { shouldGenerateOffseason } from "@/lib/content-gen/activity-gate";
 
 export const maxDuration = 300;
 
@@ -120,10 +125,9 @@ async function runGeneration(request: NextRequest) {
     );
   }
 
-  // No hub state reads generated content during the playoffs or the offseason,
-  // and kindsForSeason maps them to no kinds. Skip generation cleanly rather
-  // than write mis-scoped rows.
-  if (target.seasonType === "post" || target.seasonType === "off") {
+  // No hub state reads generated content during the playoffs (kindsForSeason
+  // maps "post" to no kinds), so skip cleanly rather than write mis-scoped rows.
+  if (target.seasonType === "post") {
     const durationMs = Date.now() - startTime;
     await db.insert(syncLog).values({
       syncType: "generate-content",
@@ -151,6 +155,53 @@ async function runGeneration(request: NextRequest) {
       },
       syncedAt: new Date().toISOString(),
     });
+  }
+
+  // Offseason activity gate: the cron runs weekly, but a quiet offseason week
+  // should stay quiet. If too few transactions have been synced since the last
+  // offseason generation, keep the previously published content untouched.
+  if (target.seasonType === "off") {
+    const lastAt = await getLastOffseasonGenerationAt(target.seasonId);
+    const newTransactionCount = await countTransactionsSyncedSince(
+      target.seasonId,
+      lastAt,
+    );
+    const gate = shouldGenerateOffseason({
+      newTransactionCount,
+      hasExistingContent: lastAt != null,
+    });
+    if (!gate.generate) {
+      const durationMs = Date.now() - startTime;
+      await db.insert(syncLog).values({
+        syncType: "generate-content",
+        dataType: "hub_content",
+        status: "success",
+        rowCount: 0,
+        durationMs,
+        detailsJson: {
+          skipped: "quiet-offseason-kept-previous",
+          seasonId: target.seasonId,
+          seasonType: target.seasonType,
+          week: null,
+          newTransactionCount,
+          lastGeneratedAt: lastAt?.toISOString() ?? null,
+        },
+        startedAt,
+        completedAt: new Date(),
+      });
+      return NextResponse.json({
+        data: {
+          seasonId: target.seasonId,
+          seasonType: target.seasonType,
+          week: null,
+          path: "skipped-quiet",
+          rowCount: 0,
+          kinds: [],
+          newTransactionCount,
+        },
+        syncedAt: new Date().toISOString(),
+      });
+    }
   }
 
   try {

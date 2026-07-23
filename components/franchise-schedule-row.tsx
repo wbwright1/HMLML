@@ -8,7 +8,7 @@ interface FranchiseScheduleRowProps {
   seasonYear: number;
 }
 
-function ResultBadge({ result }: { result: "W" | "L" | "T" }) {
+export function ResultBadge({ result }: { result: "W" | "L" | "T" }) {
   const isWin = result === "W";
   const isTie = result === "T";
   return (
@@ -38,12 +38,19 @@ export function FranchiseScheduleRow({
 
   const content = (
     <div className="flex items-center gap-4 rounded-[14px] border border-border bg-surface p-4 transition-colors hover:border-border-strong">
-      <div className="flex items-center gap-2 shrink-0 w-16">
+      {/* Mobile: compact "W3" / "P1" chip */}
+      <span className="sm:hidden font-mono tabular-nums text-body-sm font-semibold text-text-primary shrink-0">
+        {week.isPlayoff ? "P" : "W"}
+        {week.week}
+      </span>
+
+      {/* Desktop: full label + separate number */}
+      <div className="hidden sm:flex items-center gap-2 shrink-0 w-16">
         <span className="text-kicker">
           {week.isPlayoff ? "Playoff" : "Week"}
         </span>
       </div>
-      <span className="font-mono tabular-nums text-body-sm font-semibold text-text-primary shrink-0 w-6">
+      <span className="hidden sm:inline font-mono tabular-nums text-body-sm font-semibold text-text-primary shrink-0 w-6">
         {week.week}
       </span>
 

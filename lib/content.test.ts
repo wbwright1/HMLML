@@ -27,10 +27,15 @@ describe('UT-01: Module exports', () => {
   });
 });
 
-// UT-02: SNARKY_LABELS contains exactly 15 entries
+// UT-02: SNARKY_LABELS contains at least every required label. The set is
+// intentionally extensible (new superlatives get added over time), so this is a
+// floor keyed off the required-label spec table below rather than an exact
+// count; each required label is verified individually in UT-03+.
 describe('UT-02: Label count', () => {
-  it('contains exactly 15 entries', () => {
-    expect(Object.keys(SNARKY_LABELS).length).toBe(15);
+  it('contains at least every required label', () => {
+    expect(Object.keys(SNARKY_LABELS).length).toBeGreaterThanOrEqual(
+      labelExpectations.length
+    );
   });
 });
 
@@ -56,6 +61,9 @@ const labelExpectations: Array<{
   { testId: 'UT-15', key: 'WHAT_COULDVE_BEEN', displayText: "What Could've Been", tone: 'neutral' },
   { testId: 'UT-16', key: 'COACHING_MALPRACTICE', displayText: 'Coaching Malpractice', tone: 'sting' },
   { testId: 'UT-28', key: 'BLOWOUT_BAIT', displayText: 'Blowout Bait', tone: 'sting' },
+  { testId: 'UT-29', key: 'LONGEST_DROUGHT', displayText: 'Title Drought', tone: 'sting' },
+  { testId: 'UT-30', key: 'PUNCHING_BAG', displayText: 'Punching Bag', tone: 'sting' },
+  { testId: 'UT-31', key: 'WALLFLOWER', displayText: 'Wallflower', tone: 'neutral' },
 ];
 
 describe('UT-03 through UT-16: Per-label field values', () => {

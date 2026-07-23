@@ -16,7 +16,11 @@ import {
 } from "@/lib/queries/preseason-power";
 import { getLatestSeason } from "@/lib/queries/matchups";
 import { getLastCompletedSeason } from "@/lib/queries/seasons";
-import { getSeasonSuperlatives, type SeasonSuperlative } from "@/lib/queries/superlatives";
+import {
+  getSeasonSuperlatives,
+  getUncoveredFranchiseAwards,
+  type SeasonSuperlative,
+} from "@/lib/queries/superlatives";
 import { getSeasonLineupAwards, type LineupAward } from "@/lib/queries/lineup-efficiency";
 import { getPlayoffProjection } from "@/lib/queries/divisions";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
@@ -33,6 +37,11 @@ export const metadata = {
 };
 
 const subPages = [
+  {
+    href: "/records/goat",
+    label: "The GOAT Ladder",
+    description: "All 12 franchises ranked 1 to 12, all-time",
+  },
   {
     href: "/records/head-to-head",
     label: "Head-to-Head",
@@ -194,6 +203,8 @@ export default async function RecordsPage() {
   let projection: PlayoffProjection | null = null;
   let projectionSeasonYear: number | null = null;
   let superlativesSeasonYear: number | null = null;
+  let superlativesSeasonId: number | null = null;
+  let coverageAwards: SeasonSuperlative[] = [];
   let latestSeason: Awaited<ReturnType<typeof getLatestSeason>> = null;
 
   try {
@@ -232,6 +243,7 @@ export default async function RecordsPage() {
       projection = playoffProjection;
       projectionSeasonYear = latestSeason.seasonYear;
       superlativesSeasonYear = latestSeason.seasonYear;
+      superlativesSeasonId = latestSeason.id;
 
       // The latest season row often exists before its games do (e.g. the
       // whole offseason, once next year's season row is created but before
@@ -253,7 +265,24 @@ export default async function RecordsPage() {
           coachingMalpractice = fallbackLineupAwards?.coachingMalpractice ?? null;
           whatCouldveBeen = fallbackLineupAwards?.whatCouldveBeen ?? null;
           superlativesSeasonYear = completedSeason.seasonYear;
+          superlativesSeasonId = completedSeason.id;
         }
+      }
+
+      // Coverage pass: guarantee every franchise the displayed season touched
+      // shows up in at least one card. Feed it the slugs already covered by the
+      // competitive awards (season superlatives + both lineup awards) so it only
+      // fills the gaps and never overrides a real winner.
+      if (superlativesSeasonId != null) {
+        const coveredSlugs = [
+          ...seasonSuperlatives.map((s) => s.franchiseSlug),
+          ...(coachingMalpractice ? [coachingMalpractice.franchiseSlug] : []),
+          ...(whatCouldveBeen ? [whatCouldveBeen.franchiseSlug] : []),
+        ];
+        coverageAwards = await getUncoveredFranchiseAwards(
+          superlativesSeasonId,
+          coveredSlugs,
+        );
       }
     }
   } catch {
@@ -295,7 +324,10 @@ export default async function RecordsPage() {
 
   const recordBook = buildRecordBook(allTimeData);
   const hasSuperlatives =
-    seasonSuperlatives.length > 0 || coachingMalpractice || whatCouldveBeen;
+    seasonSuperlatives.length > 0 ||
+    coachingMalpractice ||
+    whatCouldveBeen ||
+    coverageAwards.length > 0;
 
   return (
     <>
@@ -305,6 +337,30 @@ export default async function RecordsPage() {
           stats, head-to-head records, and every milestone worth remembering.
         </p>
       </PageSection>
+
+      <ScrollReveal>
+        <Link
+          href="/records/goat"
+          className="group mb-10 flex items-center justify-between gap-4 rounded-[14px] border border-accent-gold/30 bg-accent-gold-light p-5 md:p-6 transition-colors hover:border-accent-gold/50"
+        >
+          <div className="min-w-0 space-y-1">
+            <p className="text-kicker text-accent-gold">All-Time · New</p>
+            <p className="text-h3 text-text-primary group-hover:text-accent-gold transition-colors">
+              The GOAT Ladder
+            </p>
+            <p className="text-body-sm text-text-secondary">
+              All 12 franchises ranked 1 to 12, all-time, with a blurb nobody
+              asked for. Find out where you really stand.
+            </p>
+          </div>
+          <span
+            className="shrink-0 text-accent-gold group-hover:translate-x-0.5 transition-transform"
+            aria-hidden
+          >
+            &rarr;
+          </span>
+        </Link>
+      </ScrollReveal>
 
       <section className="pb-12 md:pb-16">
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 lg:gap-10 items-start">
@@ -377,7 +433,7 @@ export default async function RecordsPage() {
                   {projection.firstOut && (
                     <div className="flex items-center gap-3 rounded-lg px-2 py-2 border-t border-divider mt-2 pt-3">
                       <span className="text-caption text-text-tertiary w-4 shrink-0">
-                        &mdash;
+                        &middot;
                       </span>
                       <FranchiseLogo
                         slug={projection.firstOut.slug}
@@ -538,6 +594,29 @@ export default async function RecordsPage() {
                   franchiseSlug={whatCouldveBeen.franchiseSlug}
                   tone={whatCouldveBeen.tone}
                 />
+              )}
+              {/* Coverage-pass fillers so no franchise is left off the board. */}
+              {coverageAwards.map((s) =>
+                s.tone === "sting" ? (
+                  <StingCard
+                    key={`cov-${s.franchiseSlug}-${s.labelKey}`}
+                    label={s.displayText}
+                    franchiseName={s.franchiseName}
+                    franchiseSlug={s.franchiseSlug}
+                    context={s.context}
+                    stat={s.stat}
+                  />
+                ) : (
+                  <TeamAwardCard
+                    key={`cov-${s.franchiseSlug}-${s.labelKey}`}
+                    label={s.displayText}
+                    stat={s.stat}
+                    context={s.context}
+                    franchiseName={s.franchiseName}
+                    franchiseSlug={s.franchiseSlug}
+                    tone={s.tone}
+                  />
+                ),
               )}
             </div>
           </PageSection>

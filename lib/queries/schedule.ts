@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { matchups, franchises, franchiseSeasons } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { pairMatchupRows, type PairedMatchup } from "@/lib/queries/matchups";
+import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -70,8 +71,21 @@ export async function getSeasonSchedule(
       )
       .where(eq(matchups.seasonId, seasonId));
 
-    const byWeek = new Map<number, typeof rows>();
-    for (const row of rows) {
+    // Past seasons only have avatarUrl populated on their own franchise_seasons
+    // row for 2026+; coalesce to each franchise's latest known avatar (across
+    // any season) so older schedule views still show a real crest instead of
+    // the monogram fallback. A season with its own real avatar keeps it, since
+    // the coalesce only fires when avatarUrl is null.
+    const fallbackAvatars = await getLatestAvatarUrls(
+      rows.map((r) => r.franchiseId)
+    );
+    const rowsWithAvatars = rows.map((row) => ({
+      ...row,
+      avatarUrl: row.avatarUrl ?? fallbackAvatars.get(row.franchiseId) ?? null,
+    }));
+
+    const byWeek = new Map<number, typeof rowsWithAvatars>();
+    for (const row of rowsWithAvatars) {
       if (!byWeek.has(row.week)) {
         byWeek.set(row.week, []);
       }
@@ -127,13 +141,24 @@ export async function getFranchiseSchedule(
       )
       .where(eq(matchups.seasonId, seasonId));
 
+    // See getSeasonSchedule: coalesce to each franchise's latest known avatar
+    // so past seasons (avatarUrl populated only for 2026+) still show a real
+    // crest rather than the monogram fallback.
+    const fallbackAvatars = await getLatestAvatarUrls(
+      rows.map((r) => r.franchiseId)
+    );
+    const rowsWithAvatars = rows.map((row) => ({
+      ...row,
+      avatarUrl: row.avatarUrl ?? fallbackAvatars.get(row.franchiseId) ?? null,
+    }));
+
     // Group all rows (both sides of every matchup) by (week, matchupId) so we
     // can find the opponent row for each matchup. matchupId is only unique
     // WITHIN a week (Sleeper reuses small ids like 1-6 every week), so the
     // grouping key must include the week or rows from different weeks that
     // happen to share a matchupId get merged together.
-    const byWeekMatchupId = new Map<string, typeof rows>();
-    for (const row of rows) {
+    const byWeekMatchupId = new Map<string, typeof rowsWithAvatars>();
+    for (const row of rowsWithAvatars) {
       const key = `${row.week}:${row.matchupId}`;
       if (!byWeekMatchupId.has(key)) {
         byWeekMatchupId.set(key, []);
