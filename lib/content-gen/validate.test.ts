@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { validateRow, findHallucinatedNames, noEmDash, BODY_MAX } from "./validate";
+import {
+  validateRow,
+  findHallucinatedNames,
+  findPositionMismatches,
+  noEmDash,
+  BODY_MAX,
+} from "./validate";
 import type { StatsContext } from "./stats-context";
 
 function ctx(overrides: Partial<StatsContext> = {}): StatsContext {
@@ -51,6 +57,90 @@ describe("noEmDash", () => {
   it("replaces em and en dashes with a comma", () => {
     expect(noEmDash("A—B")).toBe("A, B");
     expect(noEmDash("A–B")).toBe("A, B");
+  });
+});
+
+describe("findPositionMismatches", () => {
+  // Mirrors the real production slip: a "receiver haul" listing two WRs and
+  // two RBs (Better call Myballs, July 2026).
+  const draftCtx = () =>
+    ctx({
+      offseasonMoves: [
+        {
+          slug: "better-call-myballs",
+          name: "Better call Myballs",
+          draftedPlayers: [
+            { playerName: "Jordyn Tyson", position: "WR", round: 1, pickNumber: 4, projectedPoints: 178.6 },
+            { playerName: "Omar Cooper", position: "WR", round: 1, pickNumber: 11, projectedPoints: 127.1 },
+            { playerName: "Nicholas Singleton", position: "RB", round: 2, pickNumber: 16, projectedPoints: 63.7 },
+            { playerName: "Kaytron Allen", position: "RB", round: 3, pickNumber: 26, projectedPoints: 45.9 },
+          ],
+          trades: [],
+        },
+      ],
+    });
+
+  it("flags a collective position claim over a list containing mismatched players", () => {
+    const body =
+      "Better call Myballs' four-pick receiver haul (Jordyn Tyson, Omar Cooper, Nicholas Singleton, Kaytron Allen) doesn't lift them out of the bottom half.";
+    const flags = findPositionMismatches(body, draftCtx());
+    expect(flags.some((f) => f.includes("Nicholas Singleton"))).toBe(true);
+    expect(flags.some((f) => f.includes("Kaytron Allen"))).toBe(true);
+    expect(flags.some((f) => f.includes("Jordyn Tyson"))).toBe(false);
+  });
+
+  it("passes a collective claim where every listed player matches", () => {
+    const body = "Two receivers arrived at once: Jordyn Tyson and Omar Cooper.";
+    expect(findPositionMismatches(body, draftCtx())).toEqual([]);
+  });
+
+  it("flags a direct label attached to the wrong player", () => {
+    expect(
+      findPositionMismatches("They spent pick 16 on receiver Nicholas Singleton.", draftCtx()),
+    ).toContainEqual(expect.stringContaining("Nicholas Singleton"));
+    expect(
+      findPositionMismatches("Nicholas Singleton (WR, pick 16) restocks the room.", draftCtx()),
+    ).toContainEqual(expect.stringContaining("Nicholas Singleton"));
+  });
+
+  it("passes a direct label that matches the stored position", () => {
+    expect(
+      findPositionMismatches("They spent pick 16 on RB Nicholas Singleton.", draftCtx()),
+    ).toEqual([]);
+  });
+
+  it("does not flag scattered players when the term attaches to a different clause", () => {
+    // One position term, two known players, but NOT an adjacent list: the
+    // term belongs to Tyson's clause only. Must not over-block.
+    const body =
+      "WR Jordyn Tyson landed at pick 4, and the second round brought Nicholas Singleton for depth.";
+    expect(findPositionMismatches(body, draftCtx())).toEqual([]);
+  });
+
+  it("skips sentences with multiple position terms as ambiguous", () => {
+    const body =
+      "Receivers and running backs alike: Jordyn Tyson, Omar Cooper, Nicholas Singleton, Kaytron Allen all arrived in one weekend.";
+    expect(findPositionMismatches(body, draftCtx())).toEqual([]);
+  });
+
+  it("ignores unknown players entirely", () => {
+    expect(
+      findPositionMismatches("Receiver Random Rookie is not in the stats context at all.", ctx()),
+    ).toEqual([]);
+  });
+
+  it("is enforced by validateRow", () => {
+    const result = validateRow(
+      {
+        kind: "bold_prediction",
+        refKey: null,
+        body: "A four-pick receiver haul (Jordyn Tyson, Omar Cooper, Nicholas Singleton, Kaytron Allen) fixes nothing.",
+        extras: { kicker: "Myballs Ceiling", verdict: "NO" },
+      },
+      draftCtx(),
+    );
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain("position mismatch");
   });
 });
 
