@@ -9,6 +9,7 @@ import { getFranchiseSchedule } from "@/lib/queries/schedule";
 
 interface FranchiseSchedulePageProps {
   params: Promise<{ franchiseSlug: string }>;
+  searchParams: Promise<{ season?: string }>;
 }
 
 export async function generateMetadata({ params }: FranchiseSchedulePageProps) {
@@ -33,8 +34,10 @@ export async function generateMetadata({ params }: FranchiseSchedulePageProps) {
 
 export default async function FranchiseSchedulePage({
   params,
+  searchParams,
 }: FranchiseSchedulePageProps) {
   const { franchiseSlug } = await params;
+  const { season: seasonParam } = await searchParams;
 
   let franchise: Awaited<ReturnType<typeof getFranchiseBySlug>> = null;
 
@@ -48,8 +51,14 @@ export default async function FranchiseSchedulePage({
     notFound();
   }
 
-  // Use the most recent season, same convention as the roster sub-route.
-  const latestSeason = franchise.seasonHistory[0];
+  // Select the requested season (?season=YEAR) if it exists for this franchise;
+  // otherwise fall back to the most recent season, same convention as the
+  // roster sub-route. seasonHistory is ordered newest-first.
+  const requestedYear = seasonParam ? parseInt(seasonParam, 10) : NaN;
+  const latestSeason =
+    (!Number.isNaN(requestedYear)
+      ? franchise.seasonHistory.find((s) => s.seasonYear === requestedYear)
+      : undefined) ?? franchise.seasonHistory[0];
 
   let schedule: Awaited<ReturnType<typeof getFranchiseSchedule>> = [];
 

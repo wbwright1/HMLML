@@ -4,11 +4,26 @@ import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseIdentity } from "@/components/franchise-identity";
-import { StatHero } from "@/components/stat-hero";
 import { SuperlativeBadge } from "@/components/superlative-badge";
+import {
+  FranchiseSignatureBand,
+  type SignatureCallout,
+} from "@/components/franchise-signature-band";
+import {
+  FranchiseH2HGrid,
+  type H2HGridRow,
+} from "@/components/franchise-h2h-grid";
 import { getFranchiseBySlug } from "@/lib/queries/franchises";
+import { getRivalries } from "@/lib/queries/records";
+import { getFranchiseExtremes } from "@/lib/queries/franchise-stats";
 import { getPlayoffLabel, getPlayoffBadgeVariant } from "@/lib/playoff-labels";
 import { EmptyState } from "@/components/empty-state";
+
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
 
 export const dynamic = "force-dynamic";
 
@@ -68,6 +83,146 @@ export default async function FranchiseDetailPage({
   const totalGames = franchise.totalWins + franchise.totalLosses;
   const winPct = totalGames > 0 ? (franchise.totalWins / totalGames) : 0;
 
+  // --- Signature band + "Who Owns Who" data ---------------------------------
+  let rivalries: Awaited<ReturnType<typeof getRivalries>> = [];
+  let extremes: Awaited<ReturnType<typeof getFranchiseExtremes>> = {
+    worstBeatdown: null,
+    longestWinStreak: 0,
+  };
+  try {
+    [rivalries, extremes] = await Promise.all([
+      getRivalries(),
+      getFranchiseExtremes(franchise.id),
+    ]);
+  } catch {
+    // DB may not be connected in dev
+  }
+
+  // Normalize every rivalry to THIS franchise's perspective. getRivalries is
+  // sorted by most games played first, so the first match is the primary rival.
+  const myRivalries = rivalries
+    .filter(
+      (r) => r.franchiseA.id === franchise.id || r.franchiseB.id === franchise.id
+    )
+    .map((r) => {
+      const iAmA = r.franchiseA.id === franchise.id;
+      const opponent = iAmA ? r.franchiseB : r.franchiseA;
+      const wins = iAmA ? r.record.wins : r.record.losses;
+      const losses = iAmA ? r.record.losses : r.record.wins;
+      const ties = r.record.ties;
+      const total = wins + losses + ties;
+      return {
+        opponent,
+        wins,
+        losses,
+        ties,
+        winPct: total > 0 ? wins / total : 0,
+        totalGames: r.totalGames,
+      };
+    });
+
+  const primaryRival = myRivalries[0];
+
+  // Best-to-worst grid, tagging only the genuinely lopsided extremes.
+  const gridRows: H2HGridRow[] = [...myRivalries]
+    .sort((a, b) => {
+      if (b.winPct !== a.winPct) return b.winPct - a.winPct;
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      return a.losses - b.losses;
+    })
+    .map((r, i, arr) => {
+      let tag: H2HGridRow["tag"] = null;
+      if (i === 0 && r.wins > r.losses) tag = "OWNS";
+      else if (i === arr.length - 1 && r.losses > r.wins) tag = "OWNED BY";
+      return {
+        opponent: {
+          name: r.opponent.name,
+          slug: r.opponent.slug,
+          abbreviation: r.opponent.abbreviation,
+          brandingColor: r.opponent.brandingColor,
+          avatarUrl: r.opponent.avatarUrl,
+        },
+        wins: r.wins,
+        losses: r.losses,
+        ties: r.ties,
+        winPct: r.winPct,
+        tag,
+      };
+    });
+
+  // Best regular-season finish (lowest standings number; tiebreak most recent).
+  let bestFinish: { finish: number; year: number } | null = null;
+  for (const s of franchise.seasonHistory) {
+    if (s.standingsFinish == null) continue;
+    if (bestFinish === null || s.standingsFinish < bestFinish.finish) {
+      bestFinish = { finish: s.standingsFinish, year: s.seasonYear };
+    }
+  }
+
+  // Assemble the signature callouts (curated, screenshot-worthy).
+  const callouts: SignatureCallout[] = [];
+
+  if (totalGames > 0) {
+    callouts.push({
+      kicker: "All-Time Record",
+      value: `${franchise.totalWins}-${franchise.totalLosses}`,
+      subline: `${(winPct * 100).toFixed(1)}% win rate across ${franchise.seasonHistory.length} season${franchise.seasonHistory.length !== 1 ? "s" : ""}.`,
+      tone: winPct >= 0.5 ? "gold" : "sting",
+    });
+  }
+
+  callouts.push(
+    franchise.championships > 0
+      ? {
+          kicker: "Hardware",
+          value: franchise.championships,
+          subline: `Championship${franchise.championships !== 1 ? "s" : ""}. The trophy case earns its keep.`,
+          tone: "gold",
+        }
+      : {
+          kicker: "Hardware",
+          value: 0,
+          subline: "Rings. The trophy case is collecting dust.",
+          tone: "sting",
+        }
+  );
+
+  if (bestFinish) {
+    callouts.push({
+      kicker: "Best Finish",
+      value: ordinal(bestFinish.finish),
+      subline:
+        bestFinish.finish === 1
+          ? `Top of the standings in ${bestFinish.year}.`
+          : `Peaked in ${bestFinish.year}.`,
+      tone: bestFinish.finish <= 3 ? "gold" : "neutral",
+    });
+  }
+
+  if (extremes.worstBeatdown) {
+    const b = extremes.worstBeatdown;
+    callouts.push({
+      kicker: "Worst Beatdown",
+      value: `-${b.margin.toFixed(1)}`,
+      subline: `${b.pointsFor.toFixed(1)}–${b.pointsAgainst.toFixed(1)} vs ${b.opponentName}, ${b.seasonYear}.`,
+      tone: "sting",
+    });
+  }
+
+  if (primaryRival) {
+    callouts.push({
+      kicker: "Primary Rival",
+      value: `${primaryRival.wins}-${primaryRival.losses}`,
+      subline: `${primaryRival.opponent.name} · ${primaryRival.totalGames} meeting${primaryRival.totalGames !== 1 ? "s" : ""}.`,
+      tone:
+        primaryRival.wins > primaryRival.losses
+          ? "gold"
+          : primaryRival.wins < primaryRival.losses
+            ? "sting"
+            : "neutral",
+    });
+  }
+
   return (
     <>
       {/* Hero Section — dark canvas frame; brandingColor survives only as a
@@ -92,29 +247,11 @@ export default async function FranchiseDetailPage({
           />
         </ScrollReveal>
 
-        <ScrollReveal delay={100}>
-          <div className="flex flex-wrap items-center justify-center gap-8 md:gap-12 pt-4">
-            <StatHero
-              value={`${franchise.totalWins}-${franchise.totalLosses}`}
-              label="All-Time Record"
-              context={`${(winPct * 100).toFixed(1)}% win rate`}
-              variant="md"
-            />
-            <StatHero
-              value={franchise.totalPointsScored.toFixed(1)}
-              label="Total Points"
-              context={`${franchise.seasonHistory.length} season${franchise.seasonHistory.length !== 1 ? "s" : ""}`}
-              variant="md"
-            />
-            {franchise.championships > 0 && (
-              <StatHero
-                value={franchise.championships}
-                label={franchise.championships === 1 ? "Championship" : "Championships"}
-                variant="md"
-              />
-            )}
-          </div>
-        </ScrollReveal>
+        {callouts.length > 0 && (
+          <ScrollReveal delay={100}>
+            <FranchiseSignatureBand callouts={callouts} />
+          </ScrollReveal>
+        )}
 
         {franchise.seasonHistory.length > 0 && (
           <ScrollReveal delay={200}>
@@ -160,16 +297,17 @@ export default async function FranchiseDetailPage({
           <div className="space-y-3">
             {franchise.seasonHistory.map((season, index) => (
               <ScrollReveal key={season.id} delay={index * 40}>
-                <div className="rounded-xl border border-border bg-surface p-5 transition-colors hover:border-border-strong">
+                <Link
+                  href={`/teams/${franchise.slug}/schedule?season=${season.seasonYear}`}
+                  aria-label={`${season.seasonYear} schedule`}
+                  className="block rounded-xl border border-border bg-surface p-5 transition-colors hover:border-border-strong hover:bg-surface-muted"
+                >
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-3">
-                        <Link
-                          href={`/seasons/${season.seasonYear}`}
-                          className="text-h3 hover:text-primary transition-colors"
-                        >
+                        <span className="text-h3 text-text-primary">
                           {season.seasonYear}
-                        </Link>
+                        </span>
                         {season.isLegacyEra && (
                           <span className="text-caption text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
                             Legacy Era
@@ -231,12 +369,24 @@ export default async function FranchiseDetailPage({
                       <PlayoffBadge result={season.playoffResult} />
                     </div>
                   </div>
-                </div>
+                </Link>
               </ScrollReveal>
             ))}
           </div>
         )}
       </PageSection>
+
+      {/* Who Owns Who — lifetime H2H vs the rest of the league */}
+      {gridRows.length > 0 && (
+        <PageSection label="Lifetime Head-to-Head" title="Who Owns Who">
+          <ScrollReveal>
+            <FranchiseH2HGrid
+              franchiseSlug={franchise.slug}
+              rows={gridRows}
+            />
+          </ScrollReveal>
+        </PageSection>
+      )}
     </>
   );
 }

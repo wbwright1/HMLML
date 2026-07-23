@@ -101,6 +101,12 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
     description: 'Franchise with the largest gap between optimal lineup and actual lineup score (biggest underperformer)',
     tone: 'sting',
   },
+  BLOWOUT_BAIT: {
+    key: 'BLOWOUT_BAIT',
+    displayText: 'Blowout Bait',
+    description: 'Franchise with the worst average margin of defeat in the season (when they lose, they lose big)',
+    tone: 'sting',
+  },
 } as const);
 
 // ===========================================================================
@@ -119,7 +125,7 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
 // fall back gracefully when a key is unknown.
 
 export type PredictionVerdict = 'LOCK' | 'NO' | 'UP' | 'DOWN';
-export type ReceiptCategory = 'DRAFT' | 'TRADE' | 'WAIVERS' | 'FIRE_SALE';
+export type ReceiptCategory = 'DRAFT' | 'TRADE' | 'WAIVERS' | 'FIRE_SALE' | 'AGING_CORE';
 
 /** One-liner character + rivalry note for a division, keyed by division name. */
 export interface DivisionEditorial {
@@ -278,6 +284,20 @@ const OFFSEASON_RECEIPTS: readonly OffseasonReceipt[] = Object.freeze([
   },
 ]);
 
+// Hand-written editorial spotlights that survive the generated-content
+// overlay: appended after generated receipts rather than replaced by them.
+// Grounded in real 2026 roster data at time of writing: the Watson Love Diggs
+// headliners are Beckham (33), Hopkins (33), Diggs (32), Conner (31),
+// Chubb (30), and Deebo (30).
+const PINNED_OFFSEASON_RECEIPTS: readonly OffseasonReceipt[] = Object.freeze([
+  {
+    category: 'AGING_CORE',
+    franchiseSlug: 'watson-love-diggs',
+    body:
+      'Beckham, Hopkins, and Diggs headline what would have been the scariest roster of 2019. This is a dynasty league; someone should tell the dynasty.',
+  },
+]);
+
 // No seeded per-pair blurbs: a pair-specific angle would fabricate a rivalry
 // narrative for real teams. byPair is intentionally empty so the between-weeks
 // slate falls back to genericSlateAngle (a truthful records-based line) for
@@ -347,7 +367,7 @@ function seededEditorial(now: number): HubEditorial {
     divisionFallback: DIVISION_FALLBACK,
     burningQuestions: BURNING_QUESTIONS,
     boldPredictions: BOLD_PREDICTIONS,
-    offseasonReceipts: OFFSEASON_RECEIPTS,
+    offseasonReceipts: [...OFFSEASON_RECEIPTS, ...PINNED_OFFSEASON_RECEIPTS],
     matchupAngles: MATCHUP_ANGLES,
     smackPosts: buildSmackPosts(now),
     heroDek: null,
@@ -360,6 +380,7 @@ const VALID_CATEGORIES: readonly ReceiptCategory[] = [
   "TRADE",
   "WAIVERS",
   "FIRE_SALE",
+  "AGING_CORE",
 ];
 
 function str(v: unknown): string | null {
@@ -421,7 +442,8 @@ export function overlayHubEditorial(
     if (predictions.length > 0) result.boldPredictions = predictions;
   }
 
-  // offseason_receipt -> offseasonReceipts (full replace).
+  // offseason_receipt -> offseasonReceipts (replaces the rotating seeds, but
+  // pinned editorial spotlights are always appended after the generated set).
   const receiptRows = grouped.offseason_receipt ?? [];
   if (receiptRows.length > 0) {
     const receipts: OffseasonReceipt[] = [];
@@ -435,7 +457,8 @@ export function overlayHubEditorial(
       if (body && franchiseSlug && category)
         receipts.push({ category, franchiseSlug, body });
     }
-    if (receipts.length > 0) result.offseasonReceipts = receipts;
+    if (receipts.length > 0)
+      result.offseasonReceipts = [...receipts, ...PINNED_OFFSEASON_RECEIPTS];
   }
 
   // matchup_angle / game_of_week_blurb -> matchupAngles (byPair merged, blurb replaced).

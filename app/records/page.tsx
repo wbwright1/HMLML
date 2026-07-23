@@ -15,6 +15,7 @@ import {
   type PowerRankingsView,
 } from "@/lib/queries/preseason-power";
 import { getLatestSeason } from "@/lib/queries/matchups";
+import { getLastCompletedSeason } from "@/lib/queries/seasons";
 import { getSeasonSuperlatives, type SeasonSuperlative } from "@/lib/queries/superlatives";
 import { getSeasonLineupAwards, type LineupAward } from "@/lib/queries/lineup-efficiency";
 import { getPlayoffProjection } from "@/lib/queries/divisions";
@@ -192,16 +193,23 @@ export default async function RecordsPage() {
   let whatCouldveBeen: LineupAward | null = null;
   let projection: PlayoffProjection | null = null;
   let projectionSeasonYear: number | null = null;
+  let superlativesSeasonYear: number | null = null;
 
   try {
-    [allTimeData, seasonYears, powerView] = await Promise.all([
-      getLeaderboard(),
-      getSeasonYears(),
-      getPowerRankingsView(),
-    ]);
+    // These four are mutually independent; fetch them concurrently rather than
+    // in series so the page waits on one round trip instead of three.
+    let allSeasonData: Awaited<ReturnType<typeof getAllSeasonLeaderboards>>;
+    let latestSeason: Awaited<ReturnType<typeof getLatestSeason>>;
+    [allTimeData, seasonYears, powerView, allSeasonData, latestSeason] =
+      await Promise.all([
+        getLeaderboard(),
+        getSeasonYears(),
+        getPowerRankingsView(),
+        getAllSeasonLeaderboards(),
+        getLatestSeason(),
+      ]);
 
     // Batch-fetch all season leaderboards in a single query
-    const allSeasonData = await getAllSeasonLeaderboards();
     for (const [year, data] of Object.entries(allSeasonData)) {
       seasonDataRecord[year] = data;
     }
@@ -212,7 +220,6 @@ export default async function RecordsPage() {
     // Also the playoff projection for the current season only; hasDivisions
     // gates whether that block renders at all (RISK-B: nothing worth showing
     // for a legacy/no-division season, or when there's no current season).
-    const latestSeason = await getLatestSeason();
     if (latestSeason) {
       const [superlatives, lineupAwards, playoffProjection] = await Promise.all([
         getSeasonSuperlatives(latestSeason.id),
@@ -224,6 +231,30 @@ export default async function RecordsPage() {
       whatCouldveBeen = lineupAwards?.whatCouldveBeen ?? null;
       projection = playoffProjection;
       projectionSeasonYear = latestSeason.seasonYear;
+      superlativesSeasonYear = latestSeason.seasonYear;
+
+      // The latest season row often exists before its games do (e.g. the
+      // whole offseason, once next year's season row is created but before
+      // Week 1). Rather than let "The Superlatives" render as an empty
+      // section for everyone, fall back to the last completed season so the
+      // panel shows real awards until the new season has matchup data of its
+      // own. The playoff projection intentionally does NOT fall back here:
+      // an empty projection for a season with no games yet is correct.
+      const hasLatestSeasonAwards =
+        superlatives.length > 0 || coachingMalpractice != null || whatCouldveBeen != null;
+      if (!hasLatestSeasonAwards) {
+        const completedSeason = await getLastCompletedSeason();
+        if (completedSeason && completedSeason.id !== latestSeason.id) {
+          const [fallbackSuperlatives, fallbackLineupAwards] = await Promise.all([
+            getSeasonSuperlatives(completedSeason.id),
+            getSeasonLineupAwards(completedSeason.id),
+          ]);
+          seasonSuperlatives = fallbackSuperlatives;
+          coachingMalpractice = fallbackLineupAwards?.coachingMalpractice ?? null;
+          whatCouldveBeen = fallbackLineupAwards?.whatCouldveBeen ?? null;
+          superlativesSeasonYear = completedSeason.seasonYear;
+        }
+      }
     }
   } catch {
     // DB may not be connected
@@ -443,7 +474,12 @@ export default async function RecordsPage() {
 
       {hasSuperlatives && (
         <ScrollReveal>
-          <PageSection label="Season Awards" title="The Superlatives">
+          <PageSection
+            label={
+              superlativesSeasonYear ? `Season Awards · ${superlativesSeasonYear}` : "Season Awards"
+            }
+            title="The Superlatives"
+          >
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
               {seasonSuperlatives.map((s) =>
                 s.tone === "sting" ? (
