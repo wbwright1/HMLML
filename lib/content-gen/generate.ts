@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { HubContentInsert, HubContentKind } from "@/lib/queries/hub-content";
-import type { StatsContext } from "@/lib/content-gen/stats-context";
+import type { StatsContext, StatsTeam } from "@/lib/content-gen/stats-context";
 import {
   generateFromTemplates,
   kindsForSeason,
@@ -12,6 +12,7 @@ import {
   selectDiverseSubset,
   sharesPrimaryHook,
 } from "@/lib/content-gen/dedupe";
+import { phaseGuidance, resolveSeasonPhase } from "@/lib/content-gen/season-phase";
 
 // ---------------------------------------------------------------------------
 // LLM generation
@@ -30,8 +31,11 @@ const SYSTEM_PROMPT = `You are the Site Desk: the editorial voice of a 12-team d
 Hard rules, no exceptions:
 - NEVER use em-dashes. Use commas, semicolons, colons, parentheses, or separate sentences.
 - Use ONLY the numbers, names, records, and head-to-head values present in the provided STATS JSON. Do not invent stats, scores, trades, injuries, or head-to-head history. If you do not have a number, do not imply one.
+- Do not add real-world NFL biography or narrative absent from the STATS JSON: a player's career stage, rookie status, injury history, or team situation. Use only the names, positions, points, rounds, and records provided. This applies to transaction players too: you know only the name and the add/drop, never their position, depth-chart role, or career stage, so never call one "a backup", "a rookie", "quarterback insurance", or similar.
 - You are the Site Desk. Smack posts are the site's own editorial voice about the field at large. NEVER put words in a real team's or member's mouth, and never impersonate a franchise.
-- Reference teams by the exact names and slugs given. For any keyed field (divisionName, franchiseSlug, pairKey) use ONLY values that appear in the STATS JSON.
+- Reference teams by the exact names and slugs given, reproducing punctuation exactly. For any keyed field (divisionName, franchiseSlug, pairKey) use ONLY values that appear in the STATS JSON.
+- Respect the SEASON PHASE block in the user message. Never claim a result that has not happened yet at that point in the calendar (a win, a division lead or title, a clinch, a championship), and never attribute a past title to a team the STATS JSON does not name as champion.
+- Player attribution: name a player ONLY in connection with the franchise the STATS JSON attaches them to (their rosterProjections entry, their offseasonMoves draft/trade entry, or their weekInBooks entry). Never weave a player into a different franchise's storyline, and never name a player who does not appear in the STATS JSON at all.
 - Keep each item to one or two punchy sentences. No preamble, no headings.
 
 Output ONLY a single JSON object matching the requested shape. No prose before or after it.`;
@@ -111,6 +115,45 @@ function noEmDash(s: string): string {
   return s.replace(/\s*[—–]\s*/g, ", ");
 }
 
+const ZERO_RECORD = /^0-0(-0)?$/;
+
+/**
+ * The stats view the LLM actually sees. Before any game has been played, the
+ * live-season standings fields are pure noise: every record is 0-0, points
+ * are 0, and the "leader"/ordering is arbitrary. Shipping them invites the
+ * model to narrate them as results (a claimed division winner at 0-0), so
+ * rather than instructing around the temptation the prompt view removes it:
+ * current-season records, points, leaders, and ordering are stripped, with an
+ * explicit note in their place. Completed facts (lastSeason,
+ * franchiseHistory, rosterProjections, offseasonMoves) pass through
+ * untouched. Once a single game has been played, the view is the full
+ * context, unchanged. Exported (pure) for unit tests.
+ */
+export function promptStatsView(ctx: StatsContext): unknown {
+  const unplayed =
+    ctx.leagueStandings.length > 0 &&
+    ctx.leagueStandings.every((t) => ZERO_RECORD.test(t.record));
+  if (!unplayed) return ctx;
+
+  const bareTeam = (t: StatsTeam) => ({ name: t.name, slug: t.slug });
+  return {
+    ...ctx,
+    statsNote:
+      "No games have been played this season. Current-season records, points, leaders, and standings order do not exist yet and are omitted; team order carries no meaning.",
+    divisions: ctx.divisions.map((d) => ({
+      name: d.name,
+      teams: d.teams.map(bareTeam),
+    })),
+    leagueStandings: ctx.leagueStandings.map(bareTeam),
+    currentMatchups: ctx.currentMatchups.map((m) => ({
+      pairKey: m.pairKey,
+      home: bareTeam(m.home),
+      away: bareTeam(m.away),
+      h2h: m.h2h,
+    })),
+  };
+}
+
 function preseasonSpec(ctx: StatsContext): string {
   const divisionNames = ctx.divisions.map((d) => d.name);
   const slugs = ctx.leagueStandings.map((t) => t.slug);
@@ -118,17 +161,24 @@ function preseasonSpec(ctx: StatsContext): string {
 {
   "division_notes": [ { "divisionName": <one of ${JSON.stringify(divisionNames)}>, "characterization": "2-3 word vibe", "body": "one snarky line" } ]  // one per division, up to 3
   "burning_questions": [ "question", ... ]  // 5 to 6, MORE than the ~3 that will ship: over-generate so a diverse subset can be picked
-  "bold_predictions": [ { "kicker": "short label", "verdict": "LOCK|NO|UP|DOWN", "body": "prediction" } ]  // 5 to 6, MORE than the ~4 that will ship
+  "bold_predictions": [ { "kicker": "short label", "verdict": "LOCK|NO|UP|DOWN", "body": "prediction" } ]  // 5 to 6, MORE than the ~4 that will ship. Each verdict must map to a real directional call about the upcoming season: LOCK = will happen, NO = will not happen, UP = will outperform its projection/rank, DOWN = will underperform. Never attach a verdict to a neutral observation (a tie, a truism, a scheduling fact); if it is not a genuine yes/no or over/under call, cut the row. The verdict must be falsifiable by a future season result: if the sentence concedes the outcome is already settled or unknowable ("exactly where a champ should sit", "the only question is whether..."), or states an affirmative expectation under a NO verdict, cut or re-verb the row.
   "offseason_receipts": [ { "franchiseSlug": <one of ${JSON.stringify(slugs)}>, "category": "DRAFT|TRADE|WAIVERS|FIRE_SALE", "body": "teaser" } ]  // 5 to 6, MORE than the ~4 that will ship
   "hero_dek": "one-sentence hero subhead for the preseason hub. Do NOT mention a specific number of days until kickoff; the live day count is added at render time.",
   "smack_posts": [ "site desk post", ... ]  // 5 to 6, MORE than the ~5 that will ship
 }
 
-The STATS JSON also includes franchiseHistory (all-time record, championships, playoff appearances, seasons played, and sustainedDoormat/sustainedContender multi-year trend flags), rosterProjections (each franchise's projected optimal starting-lineup total for the upcoming season, its league rank, and its top projected player), plus projectionSeason, AND offseasonMoves: real draft picks (player name, position, round, pick number, projected points) and real offseason trades (acquired vs surrendered players/picks) per franchise. You may cite franchiseHistory and rosterProjections for all-time records, multi-year trends, and projected ranks/totals. Weigh sustained multi-year futility more heavily than a single bad season when deciding who earns the doormat framing. When rosterProjections is empty, do not reference any projection, rank, or projected total; when franchiseHistory is empty, do not reference all-time records or multi-year trends.
+DATA SOURCES (what each block is for):
+- franchiseHistory: all-time record, championships, playoff appearances, seasons played, sustainedDoormat/sustainedContender multi-year flags. Use for all-time and multi-year framing; weigh a sustained multi-year slump more heavily than one bad season for doormat framing. If empty, never reference all-time records or trends.
+- rosterProjections: each franchise's projected optimal starting-lineup total for the upcoming season, its league rank, and its top projected player. Use for "projects No. N" framing. If empty, never reference a projection, rank, or projected total.
+- offseasonMoves: REAL draft picks (player, position, round, pick number) and REAL trades (acquired vs surrendered) per franchise. Every offseason_receipt MUST cite a real entry when the named franchise has one: name the actual player drafted (with position and round/pick) or the actual assets exchanged. Projection-only framing ("projects No. 1...") is allowed ONLY for a franchise with no offseasonMoves entries. When you state how many picks a franchise spent on a position, count only drafted players whose position field matches, and do not round up. Only call picks "consecutive" or "straight" if their pickNumber values are actually adjacent.
+- recentTransactions carry NO franchise attribution. Never build an offseason_receipt from one (a receipt requires a franchiseSlug you cannot know from a transaction), and never guess which franchise made the move. Use them only inside smack_posts as unattributed, league-wide color.
 
-OFFSEASON RECEIPTS MUST CITE offseasonMoves WHEN AVAILABLE: name the actual player drafted (with position and round/pick number) or the actual players/picks traded, for the franchise named. Only fall back to projection-only framing ("projects No. 1...") for a franchise with no entries in offseasonMoves.
-
-ANGLE-DIVERSITY MANDATE (this is graded): every single row across every list must have its own distinct hook, meaning its own franchise+number or its own central player; do not restate the same fact (same franchise, same number, or same player) in two different rows, even across different lists (e.g. a burning_question must NOT restate an offseason_receipt or bold_prediction's exact fact). No franchise should be the subject of more than 2 rows total across the ENTIRE response. No player should be named in more than 1 offseason_receipt. Prefer breadth: touch as many different franchises, players, and positions as the real data supports, rather than fixating on one or two teams.`;
+GRADED CHECKLIST (violating rows are discarded downstream, so a violation shrinks your output):
+1. Phase fit: every row obeys the SEASON PHASE rules above.
+2. Player attribution: a named player must appear in the STATS JSON under the SAME franchise the row ties them to.
+3. Comparatives and superlatives: before writing "league-high", "lowest", "most", "fewest", "only", "No. 1", or "by a wide margin", confirm it is true across the FULL relevant array in the STATS JSON. rosterProjections lists only each team's single top player, so you may say "the highest top-projected player in the league" but NEVER a "league-best" or "league-high" point total for a player; you cannot see full rosters. This bars "league-high", "league-best", "highest-scoring player", and "second only to [player]" applied to any player POINT TOTAL. WRONG: "Bijan's 324.9, second only to Josh Allen's league-high 361.5." RIGHT: "Josh Allen's 361.5 is the highest top-projected player total in the league" (a claim scoped to the topProjectedPlayer set). Rank team projectedStartingPoints totals freely; never rank players league-wide.
+4. Distinct hooks: every row across every list has its own hook (its own franchise+number, or its own central player). Never restate the same fact in two rows, even across lists (a burning_question must not restate an offseason_receipt's fact).
+5. Breadth: the 2-row cap counts EVERY row that identifies a franchise, whether by exact name or by an unambiguous description ("the reigning champion", "the league's worst win rate"), and division_notes count when they name or clearly point at a franchise. No franchise is the subject of more than 2 rows across the ENTIRE response; no player is named in more than 1 offseason_receipt. Touch as many different franchises, players, and positions as the real data supports. smack_posts are EXEMPT from this cap: a smack may name any franchise or player, including one already at its 2-row limit in the other lists, and smacks are encouraged to name a specific franchise or player so the roast has a real target (never impersonating one; you are the Site Desk). Do not let the cap force every smack into franchise-free league-wide color.`;
 }
 
 function regularSpec(ctx: StatsContext): string {
@@ -144,12 +194,21 @@ function regularSpec(ctx: StatsContext): string {
   "smack_posts": [ "site desk post", ... ]  // 5 to 6, MORE than the ~5 that will ship: over-generate so a diverse subset can be picked
 }
 
-ANGLE-DIVERSITY MANDATE (this is graded): every row must have its own distinct hook (its own franchise+number or its own central player); do not restate the same fact in two different rows, even across matchup_angles and smack_posts. No franchise should be the subject of more than 2 rows total across the entire response.`;
+GRADED CHECKLIST (violating rows are discarded downstream, so a violation shrinks your output):
+1. Phase fit: every row obeys the SEASON PHASE rules above.
+2. Player attribution: a named player must appear in the STATS JSON under the SAME franchise the row ties them to.
+3. Comparatives and superlatives: before writing "league-high", "lowest", "most", "fewest", "only", or "No. 1", confirm it is true across the FULL relevant array in the STATS JSON; never extrapolate a superlative from a partial view of the data.
+4. Distinct hooks: every row has its own hook (its own franchise+number, or its own central player). Never restate the same fact in two rows, even across matchup_angles and smack_posts.
+5. Breadth: the 2-row cap counts EVERY row that identifies a franchise, by name or unambiguous description. No franchise is the subject of more than 2 rows total across the entire response.`;
 }
 
-function buildUserPrompt(ctx: StatsContext): string {
+// Exported for unit tests: the assembled prompt must carry the right phase
+// guidance for the seasonType + week it was built from.
+export function buildUserPrompt(ctx: StatsContext): string {
   const spec = ctx.seasonType === "regular" ? regularSpec(ctx) : preseasonSpec(ctx);
-  return `STATS (the only facts you may use):\n${JSON.stringify(ctx, null, 2)}\n\n${spec}\n\nReturn only the JSON object.`;
+  const phase = resolveSeasonPhase(ctx.seasonType, ctx.week);
+  const guidance = phaseGuidance(phase, ctx);
+  return `STATS (the only facts you may use):\n${JSON.stringify(promptStatsView(ctx), null, 2)}\n\n${guidance}\n\n${spec}\n\nReturn only the JSON object.`;
 }
 
 // ---------------------------------------------------------------------------

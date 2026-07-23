@@ -1,5 +1,11 @@
 import { describe, it, expect } from "vitest";
-import { applyDiversityLayer, fillMissingKinds, topUpShortKinds } from "./generate";
+import {
+  applyDiversityLayer,
+  buildUserPrompt,
+  fillMissingKinds,
+  promptStatsView,
+  topUpShortKinds,
+} from "./generate";
 import { kindsForSeason } from "./templates";
 import type { HubContentInsert } from "@/lib/queries/hub-content";
 import type { StatsContext } from "./stats-context";
@@ -270,5 +276,66 @@ describe("topUpShortKinds", () => {
     const kept: HubContentInsert[] = [];
     const result = topUpShortKinds(kinds, { smack_post: 5 }, kept, ctx);
     expect(result).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// promptStatsView
+// ---------------------------------------------------------------------------
+
+describe("promptStatsView", () => {
+  it("strips records, points, leaders, and standings noise when nothing has been played", () => {
+    const view = promptStatsView(preseasonContext()) as Record<string, unknown>;
+    // Live-season blocks carry only identity: no record, points, or leader.
+    const liveJson = JSON.stringify({
+      divisions: view.divisions,
+      leagueStandings: view.leagueStandings,
+      currentMatchups: view.currentMatchups,
+    });
+    expect(liveJson).not.toContain('"record"');
+    expect(liveJson).not.toContain('"pointsFor"');
+    expect(liveJson).not.toContain('"leader"');
+    expect(view.statsNote).toContain("No games have been played");
+    // Completed facts pass through untouched.
+    expect(JSON.stringify(view.lastSeason)).toContain('"11-3"');
+  });
+
+  it("returns the context unchanged once any game has been played", () => {
+    const ctx = preseasonContext({
+      seasonType: "regular",
+      week: 3,
+      leagueStandings: [
+        { name: "Foopus", slug: "foopus", record: "2-0", pointsFor: 250 },
+        { name: "Team C", slug: "team-c", record: "0-2", pointsFor: 180 },
+      ],
+    });
+    expect(promptStatsView(ctx)).toBe(ctx);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildUserPrompt
+// ---------------------------------------------------------------------------
+
+describe("buildUserPrompt", () => {
+  it("carries preseason phase guidance naming the only legitimate title defender", () => {
+    const prompt = buildUserPrompt(preseasonContext());
+    expect(prompt).toContain("SEASON PHASE: PRESEASON");
+    expect(prompt).toContain("reigning champion is Team C");
+    expect(prompt).toContain("PRESEASON/OFFSEASON content"); // the shape spec still follows
+  });
+
+  it("subdivides regular-season prompts by week", () => {
+    const at = (week: number) =>
+      buildUserPrompt(preseasonContext({ seasonType: "regular", week }));
+    expect(at(2)).toContain("SEASON PHASE: EARLY SEASON");
+    expect(at(6)).toContain("SEASON PHASE: MID SEASON");
+    expect(at(11)).toContain("SEASON PHASE: LATE SEASON");
+    expect(at(16)).toContain("SEASON PHASE: PLAYOFFS");
+  });
+
+  it("bans title-defense framing when the context has no champion", () => {
+    const prompt = buildUserPrompt(preseasonContext({ lastSeason: null }));
+    expect(prompt).toContain("names no reigning champion");
   });
 });
