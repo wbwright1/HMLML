@@ -15,10 +15,29 @@ function getRelativeTime(date: Date): string {
   return `${diffDay} day${diffDay !== 1 ? "s" : ""} ago`;
 }
 
-/** Stale threshold in ms, branched by data type */
+const HOURLY_STALE_THRESHOLD_MS = 7_200_000; // 2 hours
+const DAILY_STALE_THRESHOLD_MS = 93_600_000; // 26 hours
+
+/**
+ * Data types synced on the daily cadence (see lib/sync/daily.ts logSyncStart
+ * calls). "rosters" is deliberately excluded here even though daily.ts also
+ * logs it: lib/sync/hourly.ts re-syncs rosters every hour under the same
+ * data_type string, so the freshest row for "rosters" is effectively
+ * hourly-cadence and should use the tighter 2h threshold.
+ */
+const DAILY_CADENCE_DATA_TYPES = new Set([
+  "league",
+  "members",
+  "players",
+  "drafts",
+  "playoffs",
+  "daily", // generic label, never an actual data_type value, kept for clarity
+]);
+
+/** Stale threshold in ms, branched by data type's sync cadence */
 export function getStaleThresholdMs(dataType: string): number {
-  if (dataType === "daily") return 93_600_000; // 26 hours
-  return 7_200_000; // 2 hours (hourly and all other types)
+  if (DAILY_CADENCE_DATA_TYPES.has(dataType)) return DAILY_STALE_THRESHOLD_MS;
+  return HOURLY_STALE_THRESHOLD_MS; // hourly and all other types
 }
 
 function ClockIcon() {

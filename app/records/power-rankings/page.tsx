@@ -5,8 +5,12 @@ import { FranchiseIdentity } from "@/components/franchise-identity";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { EmptyState } from "@/components/empty-state";
-import { getPowerRankings } from "@/lib/queries/records";
 import type { PowerRankingEntry } from "@/lib/queries/records";
+import {
+  getPowerRankingsView,
+  type PowerRankingsView,
+  type PreseasonPowerEntry,
+} from "@/lib/queries/preseason-power";
 
 export const dynamic = "force-dynamic";
 
@@ -46,18 +50,26 @@ function FormIndicator({ delta }: { delta: number }) {
 }
 
 /** W-L(-T) record, mono with muted letter suffixes. */
-function Record({ entry }: { entry: PowerRankingEntry }) {
+function Record({
+  wins,
+  losses,
+  ties,
+}: {
+  wins: number;
+  losses: number;
+  ties: number;
+}) {
   return (
     <span className="font-mono tabular-nums whitespace-nowrap">
-      <span className="font-bold text-text-primary">{entry.wins}</span>
+      <span className="font-bold text-text-primary">{wins}</span>
       <span className="text-xs text-text-tertiary ml-0.5">W</span>
       <span className="text-text-tertiary mx-1">-</span>
-      <span className="text-text-primary">{entry.losses}</span>
+      <span className="text-text-primary">{losses}</span>
       <span className="text-xs text-text-tertiary ml-0.5">L</span>
-      {entry.ties > 0 && (
+      {ties > 0 && (
         <>
           <span className="text-text-tertiary mx-1">-</span>
-          <span className="text-text-primary">{entry.ties}</span>
+          <span className="text-text-primary">{ties}</span>
           <span className="text-xs text-text-tertiary ml-0.5">T</span>
         </>
       )}
@@ -65,186 +77,429 @@ function Record({ entry }: { entry: PowerRankingEntry }) {
   );
 }
 
-export default async function PowerRankingsPage() {
-  let rankings: PowerRankingEntry[] = [];
+// ---------------------------------------------------------------------------
+// Preseason edition helpers
+// ---------------------------------------------------------------------------
 
-  try {
-    rankings = await getPowerRankings();
-  } catch {
-    // DB may not be connected
-  }
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
+}
 
+const PLAYOFF_RESULT_LABEL: Record<string, string> = {
+  champion: "Champ",
+  runner_up: "Runner-up",
+  made_playoffs: "Playoffs",
+  consolation: "Consolation",
+  toilet_bowl: "Toilet Bowl",
+};
+
+/** Small labeled stat: mono value over a caption label. */
+function IndexStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col items-end">
+      <span className="font-mono text-sm font-bold tabular-nums text-text-primary">
+        {value}
+      </span>
+      <span className="text-[10px] uppercase tracking-wider text-text-muted">
+        {label}
+      </span>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Regular (in-season, last-4-weeks) edition
+// ---------------------------------------------------------------------------
+
+function RegularEdition({ rankings }: { rankings: PowerRankingEntry[] }) {
   return (
     <>
       <PageSection label="Records" title="Power Rankings.">
         <BackLink href="/records" label="All Records" />
 
         <p className="text-body-lg text-text-secondary max-w-prose">
-          Ranked on the last 4 weeks: recent results, scoring trend, and injuries. Not season-long record.
+          Ranked on the last 4 weeks: recent results, scoring trend, and
+          injuries. Not season-long record.
         </p>
       </PageSection>
 
       <section className="pb-8 md:pb-12 space-y-3 md:space-y-6">
-        {rankings.length === 0 ? (
-          <EmptyState
-            icon="chart"
-            title="No Power Rankings"
-            description="Rankings appear once the season is underway."
-          />
-        ) : (
-          rankings.map((entry, index) => {
-            const total = entry.wins + entry.losses + entry.ties;
-            const winPct = total > 0 ? (entry.wins / total) * 100 : 0;
-            const pointsDiff = entry.pointsScored - entry.pointsAgainst;
+        {rankings.map((entry, index) => {
+          const total = entry.wins + entry.losses + entry.ties;
+          const winPct = total > 0 ? (entry.wins / total) * 100 : 0;
+          const pointsDiff = entry.pointsScored - entry.pointsAgainst;
 
-            const badges = (
-              <>
-                {entry.rank === 1 && (
-                  <SuperlativeBadge text="Current Leader" variant="green" />
-                )}
-                {entry.championships > 0 && (
-                  <SuperlativeBadge
-                    text={`${entry.championships}x Champ`}
-                    variant="gold"
-                  />
-                )}
-                {entry.injuryCount > 0 && (
-                  <SuperlativeBadge
-                    text={`${entry.injuryCount} Banged Up`}
-                    variant="brown"
-                  />
-                )}
-              </>
-            );
-            const hasBadges =
-              entry.rank === 1 ||
-              entry.championships > 0 ||
-              entry.injuryCount > 0;
+          const badges = (
+            <>
+              {entry.rank === 1 && (
+                <SuperlativeBadge text="Current Leader" variant="green" />
+              )}
+              {entry.championships > 0 && (
+                <SuperlativeBadge
+                  text={`${entry.championships}x Champ`}
+                  variant="gold"
+                />
+              )}
+              {entry.injuryCount > 0 && (
+                <SuperlativeBadge
+                  text={`${entry.injuryCount} Banged Up`}
+                  variant="brown"
+                />
+              )}
+            </>
+          );
+          const hasBadges =
+            entry.rank === 1 ||
+            entry.championships > 0 ||
+            entry.injuryCount > 0;
 
-            const rankColor =
-              entry.rank <= 3 ? "text-accent-gold" : "text-text-tertiary";
+          const rankColor =
+            entry.rank <= 3 ? "text-accent-gold" : "text-text-tertiary";
 
-            const franchise = {
-              slug: entry.slug,
-              name: entry.name,
-              abbreviation: entry.abbreviation,
-              brandingColor: entry.brandingColor,
-              avatarUrl: entry.avatarUrl,
-            };
+          const franchise = {
+            slug: entry.slug,
+            name: entry.name,
+            abbreviation: entry.abbreviation,
+            brandingColor: entry.brandingColor,
+            avatarUrl: entry.avatarUrl,
+          };
 
-            return (
-              <ScrollReveal key={entry.id} delay={index * 40}>
-                <Link
-                  href={`/teams/${entry.slug}`}
-                  className="block rounded-[14px] border border-border bg-surface p-4 md:p-5 transition-colors hover:border-border-strong hover:bg-surface-muted"
-                >
-                  {/* ------- Mobile: stacked card (hidden on md+) ------- */}
-                  <div className="md:hidden">
-                    {/* Row 1: rank · franchise · trend */}
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`font-mono text-3xl font-black tabular-nums w-9 text-center shrink-0 ${rankColor}`}
-                      >
-                        {entry.rank}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <FranchiseIdentity
-                          franchise={franchise}
-                          championships={entry.championships}
-                          variant="compact"
-                        />
-                      </div>
-                      <div className="flex flex-col items-end shrink-0">
-                        <FormIndicator delta={entry.formDelta} />
-                        <span className="text-[10px] text-text-muted tabular-nums whitespace-nowrap">
-                          std #{entry.standingsRank}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Row 2: badges */}
-                    {hasBadges && (
-                      <div className="flex flex-wrap gap-1 mt-3">{badges}</div>
-                    )}
-
-                    {/* Row 3: stat strip */}
-                    <div className="mt-3 pt-3 border-t border-divider flex items-center justify-between gap-2 font-mono text-xs">
-                      <Record entry={entry} />
-                      <div className="flex items-center gap-3 text-text-tertiary tabular-nums">
-                        <span>{winPct.toFixed(0)}%</span>
-                        <span>{entry.pointsScored.toFixed(1)} PF</span>
-                        <span
-                          className={
-                            pointsDiff >= 0
-                              ? "text-accent-green"
-                              : "text-accent-warm"
-                          }
-                        >
-                          {pointsDiff >= 0 ? "+" : ""}
-                          {pointsDiff.toFixed(1)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* ------- Desktop: single row (hidden below md) ------- */}
-                  <div className="hidden md:flex md:flex-wrap md:items-center md:gap-4">
-                    {/* Rank */}
+          return (
+            <ScrollReveal key={entry.id} delay={index * 40}>
+              <Link
+                href={`/teams/${entry.slug}`}
+                className="block rounded-[14px] border border-border bg-surface p-4 md:p-5 transition-colors hover:border-border-strong hover:bg-surface-muted"
+              >
+                {/* ------- Mobile: stacked card (hidden on md+) ------- */}
+                <div className="md:hidden">
+                  {/* Row 1: rank · franchise · trend */}
+                  <div className="flex items-center gap-3">
                     <span
-                      className={`font-mono text-2xl font-black tabular-nums w-10 text-center shrink-0 ${rankColor}`}
+                      className={`font-mono text-3xl font-black tabular-nums w-9 text-center shrink-0 ${rankColor}`}
                     >
                       {entry.rank}
                     </span>
-
-                    {/* Franchise */}
                     <div className="flex-1 min-w-0">
                       <FranchiseIdentity
                         franchise={franchise}
                         championships={entry.championships}
                         variant="compact"
                       />
-                      {hasBadges && (
-                        <div className="flex flex-wrap gap-1 mt-1">{badges}</div>
-                      )}
                     </div>
-
-                    {/* Form vs standings */}
-                    <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    <div className="flex flex-col items-end shrink-0">
                       <FormIndicator delta={entry.formDelta} />
-                      <span className="text-caption text-text-tertiary normal-case tracking-normal">
-                        vs standings (#{entry.standingsRank})
+                      <span className="text-[10px] text-text-muted tabular-nums whitespace-nowrap">
+                        std #{entry.standingsRank}
                       </span>
                     </div>
+                  </div>
 
-                    {/* Stats */}
-                    <div className="flex flex-col items-end gap-1 text-sm shrink-0">
-                      <Record entry={entry} />
-                      <div className="flex items-center gap-3 font-mono">
-                        <span className="text-xs text-text-tertiary tabular-nums">
-                          {winPct.toFixed(0)}%
-                        </span>
-                        <span className="text-xs text-text-tertiary tabular-nums">
-                          {entry.pointsScored.toFixed(1)} PF
-                        </span>
-                        <span
-                          className={`text-xs tabular-nums ${
-                            pointsDiff >= 0
-                              ? "text-accent-green"
-                              : "text-text-tertiary"
-                          }`}
-                        >
-                          {pointsDiff >= 0 ? "+" : ""}
-                          {pointsDiff.toFixed(1)}
-                        </span>
-                      </div>
+                  {/* Row 2: badges */}
+                  {hasBadges && (
+                    <div className="flex flex-wrap gap-1 mt-3">{badges}</div>
+                  )}
+
+                  {/* Row 3: stat strip */}
+                  <div className="mt-3 pt-3 border-t border-divider flex items-center justify-between gap-2 font-mono text-xs">
+                    <Record
+                      wins={entry.wins}
+                      losses={entry.losses}
+                      ties={entry.ties}
+                    />
+                    <div className="flex items-center gap-3 text-text-tertiary tabular-nums">
+                      <span>{winPct.toFixed(0)}%</span>
+                      <span>{entry.pointsScored.toFixed(1)} PF</span>
+                      <span
+                        className={
+                          pointsDiff >= 0
+                            ? "text-accent-green"
+                            : "text-accent-warm"
+                        }
+                      >
+                        {pointsDiff >= 0 ? "+" : ""}
+                        {pointsDiff.toFixed(1)}
+                      </span>
                     </div>
                   </div>
-                </Link>
-              </ScrollReveal>
-            );
-          })
-        )}
+                </div>
+
+                {/* ------- Desktop: single row (hidden below md) ------- */}
+                <div className="hidden md:flex md:flex-wrap md:items-center md:gap-4">
+                  {/* Rank */}
+                  <span
+                    className={`font-mono text-2xl font-black tabular-nums w-10 text-center shrink-0 ${rankColor}`}
+                  >
+                    {entry.rank}
+                  </span>
+
+                  {/* Franchise */}
+                  <div className="flex-1 min-w-0">
+                    <FranchiseIdentity
+                      franchise={franchise}
+                      championships={entry.championships}
+                      variant="compact"
+                    />
+                    {hasBadges && (
+                      <div className="flex flex-wrap gap-1 mt-1">{badges}</div>
+                    )}
+                  </div>
+
+                  {/* Form vs standings */}
+                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                    <FormIndicator delta={entry.formDelta} />
+                    <span className="text-caption text-text-tertiary normal-case tracking-normal">
+                      vs standings (#{entry.standingsRank})
+                    </span>
+                  </div>
+
+                  {/* Stats */}
+                  <div className="flex flex-col items-end gap-1 text-sm shrink-0">
+                    <Record
+                      wins={entry.wins}
+                      losses={entry.losses}
+                      ties={entry.ties}
+                    />
+                    <div className="flex items-center gap-3 font-mono">
+                      <span className="text-xs text-text-tertiary tabular-nums">
+                        {winPct.toFixed(0)}%
+                      </span>
+                      <span className="text-xs text-text-tertiary tabular-nums">
+                        {entry.pointsScored.toFixed(1)} PF
+                      </span>
+                      <span
+                        className={`text-xs tabular-nums ${
+                          pointsDiff >= 0
+                            ? "text-accent-green"
+                            : "text-text-tertiary"
+                        }`}
+                      >
+                        {pointsDiff >= 0 ? "+" : ""}
+                        {pointsDiff.toFixed(1)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            </ScrollReveal>
+          );
+        })}
       </section>
     </>
   );
+}
+
+// ---------------------------------------------------------------------------
+// Preseason edition (offseason / before Week 1)
+// ---------------------------------------------------------------------------
+
+function PreseasonEdition({ rankings }: { rankings: PreseasonPowerEntry[] }) {
+  return (
+    <>
+      <PageSection label="Preseason Power Rankings" title="Power Rankings.">
+        <BackLink href="/records" label="All Records" />
+
+        <p className="text-body-lg text-text-secondary max-w-prose">
+          No games have kicked off yet, so nobody has a record to hide behind.
+          Until real football exists, we rank on what we know: franchise history
+          (weighted hard toward last season) plus the projected strength of every
+          current roster. Prove us wrong in Week 1.
+        </p>
+      </PageSection>
+
+      <section className="pb-8 md:pb-12 space-y-3 md:space-y-6">
+        {rankings.map((entry, index) => {
+          const powerIndex = (entry.powerScore * 100).toFixed(1);
+          const historyIndex = (entry.historyScore * 100).toFixed(0);
+          const rosterIndex = (entry.rosterScore * 100).toFixed(0);
+
+          const finishLabel =
+            entry.lastPlayoffResult &&
+            PLAYOFF_RESULT_LABEL[entry.lastPlayoffResult]
+              ? PLAYOFF_RESULT_LABEL[entry.lastPlayoffResult]
+              : entry.lastStandingsFinish
+                ? ordinal(entry.lastStandingsFinish)
+                : null;
+
+          const isDefendingChamp = entry.lastPlayoffResult === "champion";
+
+          const badges = (
+            <>
+              {entry.rank === 1 && (
+                <SuperlativeBadge text="Preseason #1" variant="green" />
+              )}
+              {isDefendingChamp && (
+                <SuperlativeBadge text="Defending Champ" variant="gold" />
+              )}
+              {!isDefendingChamp && entry.championships > 0 && (
+                <SuperlativeBadge
+                  text={`${entry.championships}x Champ`}
+                  variant="gold"
+                />
+              )}
+            </>
+          );
+          const hasBadges =
+            entry.rank === 1 || isDefendingChamp || entry.championships > 0;
+
+          const rankColor =
+            entry.rank <= 3 ? "text-accent-gold" : "text-text-tertiary";
+
+          const franchise = {
+            slug: entry.slug,
+            name: entry.name,
+            abbreviation: entry.abbreviation,
+            brandingColor: entry.brandingColor,
+            avatarUrl: entry.avatarUrl,
+          };
+
+          const lastSeasonStrip =
+            entry.lastSeasonYear !== null ? (
+              <div className="flex items-center gap-2 font-mono text-xs">
+                <span className="text-text-muted tabular-nums">
+                  {entry.lastSeasonYear}
+                </span>
+                <Record
+                  wins={entry.lastSeasonWins}
+                  losses={entry.lastSeasonLosses}
+                  ties={entry.lastSeasonTies}
+                />
+                {finishLabel && (
+                  <span
+                    className={`text-xs ${
+                      isDefendingChamp ? "text-accent-gold" : "text-text-tertiary"
+                    }`}
+                  >
+                    {finishLabel}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="font-mono text-xs text-text-muted">
+                No league history
+              </span>
+            );
+
+          return (
+            <ScrollReveal key={entry.id} delay={index * 40}>
+              <Link
+                href={`/teams/${entry.slug}`}
+                className="block rounded-[14px] border border-border bg-surface p-4 md:p-5 transition-colors hover:border-border-strong hover:bg-surface-muted"
+              >
+                {/* ------- Mobile: stacked card (hidden on md+) ------- */}
+                <div className="md:hidden">
+                  {/* Row 1: rank · franchise · power index */}
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`font-mono text-3xl font-black tabular-nums w-9 text-center shrink-0 ${rankColor}`}
+                    >
+                      {entry.rank}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <FranchiseIdentity
+                        franchise={franchise}
+                        championships={entry.championships}
+                        variant="compact"
+                      />
+                    </div>
+                    <IndexStat label="Power" value={powerIndex} />
+                  </div>
+
+                  {/* Row 2: badges */}
+                  {hasBadges && (
+                    <div className="flex flex-wrap gap-1 mt-3">{badges}</div>
+                  )}
+
+                  {/* Row 3: component + last-season strip */}
+                  <div className="mt-3 pt-3 border-t border-divider flex items-center justify-between gap-2">
+                    {lastSeasonStrip}
+                    <div className="flex items-center gap-3 font-mono text-xs text-text-tertiary tabular-nums">
+                      <span>Hist {historyIndex}</span>
+                      <span>Roster {rosterIndex}</span>
+                      <span>{Math.round(entry.rosterProjPoints)} proj</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* ------- Desktop: single row (hidden below md) ------- */}
+                <div className="hidden md:flex md:flex-wrap md:items-center md:gap-4">
+                  {/* Rank */}
+                  <span
+                    className={`font-mono text-2xl font-black tabular-nums w-10 text-center shrink-0 ${rankColor}`}
+                  >
+                    {entry.rank}
+                  </span>
+
+                  {/* Franchise */}
+                  <div className="flex-1 min-w-0">
+                    <FranchiseIdentity
+                      franchise={franchise}
+                      championships={entry.championships}
+                      variant="compact"
+                    />
+                    <div className="mt-1">{lastSeasonStrip}</div>
+                    {hasBadges && (
+                      <div className="flex flex-wrap gap-1 mt-1">{badges}</div>
+                    )}
+                  </div>
+
+                  {/* Component indices */}
+                  <div className="flex items-center gap-5 shrink-0">
+                    <IndexStat label="History" value={historyIndex} />
+                    <IndexStat label="Roster" value={rosterIndex} />
+                    <IndexStat
+                      label="Proj PF"
+                      value={String(Math.round(entry.rosterProjPoints))}
+                    />
+                    <div className="flex flex-col items-end pl-2 border-l border-divider">
+                      <span className="font-mono text-lg font-black tabular-nums text-accent-gold">
+                        {powerIndex}
+                      </span>
+                      <span className="text-[10px] uppercase tracking-wider text-text-muted">
+                        Power
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </Link>
+            </ScrollReveal>
+          );
+        })}
+      </section>
+    </>
+  );
+}
+
+export default async function PowerRankingsPage() {
+  let view: PowerRankingsView = { mode: "regular", entries: [] };
+
+  try {
+    view = await getPowerRankingsView();
+  } catch {
+    // DB may not be connected
+  }
+
+  if (view.entries.length === 0) {
+    return (
+      <>
+        <PageSection label="Records" title="Power Rankings.">
+          <BackLink href="/records" label="All Records" />
+        </PageSection>
+        <section className="pb-8 md:pb-12">
+          <EmptyState
+            icon="chart"
+            title="No Power Rankings"
+            description="Rankings appear once franchises and rosters are in the system."
+          />
+        </section>
+      </>
+    );
+  }
+
+  if (view.mode === "preseason") {
+    return <PreseasonEdition rankings={view.entries} />;
+  }
+
+  return <RegularEdition rankings={view.entries} />;
 }

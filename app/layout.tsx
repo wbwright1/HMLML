@@ -18,14 +18,31 @@ const jetbrainsMono = JetBrains_Mono({
   variable: "--font-mono",
 });
 
+const siteDescription =
+  "The official home of the Harambe Memorial League Memorial League: dynasty fantasy football history, records, and live scores.";
+
 export const metadata: Metadata = {
+  metadataBase: new URL("https://hmlml.app"),
   title: "Harambe Memorial League Memorial League",
-  description:
-    "The official home of the Harambe Memorial League Memorial League: dynasty fantasy football history, records, and live scores.",
+  description: siteDescription,
+  openGraph: {
+    title: "HMLML",
+    description: siteDescription,
+    url: "https://hmlml.app",
+    siteName: "HMLML",
+    type: "website",
+    locale: "en_US",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "HMLML",
+    description: siteDescription,
+  },
 };
 
 export const viewport: Viewport = {
   viewportFit: "cover",
+  themeColor: "#1A1613",
 };
 
 export default function RootLayout({
