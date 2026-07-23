@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { matchups, franchises, seasons, franchiseSeasons } from "@/lib/db/schema";
-import { eq, and, desc } from "drizzle-orm";
-import { getLeagueMatchups } from "@/lib/sleeper";
+import { eq, and, desc, ne } from "drizzle-orm";
+import { getLeagueMatchups, getNFLState } from "@/lib/sleeper";
 import { getLatestSuccessfulSync } from "@/lib/queries/sync-log";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 
@@ -29,6 +29,41 @@ function isCurrentlyGameWindow(): boolean {
   if (day === 6 && etHour >= 13) return true;
 
   return false;
+}
+
+const NFL_STATE_CACHE_MS = 25_000; // Cache NFL state fetches in-memory
+
+/** In-memory cache of the NFL season type to avoid a Sleeper call per poll. */
+let cachedNflSeasonType: string | null = null;
+let cachedNflStateTimestamp = 0;
+
+/**
+ * Whether the NFL is currently in its regular season or playoffs.
+ *
+ * The day/hour heuristic alone is season-blind: during the offseason a
+ * Thursday-evening or weekend poll would otherwise be treated as a live game
+ * window and trigger a Sleeper refresh that can overwrite completed matchups.
+ * We gate the window on the NFL `season_type` ("regular" or "post").
+ *
+ * NFL state is not persisted in a queryable table, so we fetch it from Sleeper
+ * but cache it in-memory (25s) to stay within the route's existing rate budget.
+ * On a fetch failure we retain any previous cached value; with no value yet we
+ * fail safe to `false`, keeping completed data protected.
+ */
+async function isRegularOrPostSeason(): Promise<boolean> {
+  const now = Date.now();
+  if (
+    cachedNflSeasonType === null ||
+    now - cachedNflStateTimestamp >= NFL_STATE_CACHE_MS
+  ) {
+    const result = await getNFLState();
+    if (!("error" in result)) {
+      cachedNflSeasonType = result.data.season_type;
+      cachedNflStateTimestamp = now;
+    }
+    // On error: keep the previous (possibly stale) value rather than clobber it.
+  }
+  return cachedNflSeasonType === "regular" || cachedNflSeasonType === "post";
 }
 
 const STALE_THRESHOLD_MS = 25_000; // 25 seconds — sync if older
@@ -106,6 +141,9 @@ async function refreshScoresIfStale(
             status: (m.points ?? 0) > 0 ? "in_progress" : "scheduled",
             updatedAt: new Date(),
           },
+          // Never downgrade a finished matchup: leave "complete" rows (and
+          // their final scores) untouched regardless of window logic.
+          setWhere: ne(matchups.status, "complete"),
         });
       rowCount++;
     }
@@ -146,7 +184,11 @@ export async function GET() {
     }
 
     const currentWeek = latestMatchup.week;
-    const gameWindow = isCurrentlyGameWindow();
+    // Gate the game window on BOTH the day/hour heuristic AND the NFL season
+    // phase. The cheap day/hour check short-circuits first, so we only fetch
+    // NFL state (cached in-memory) when a poll actually lands in a window.
+    const gameWindow =
+      isCurrentlyGameWindow() && (await isRegularOrPostSeason());
 
     // During game windows, refresh scores from Sleeper if stale
     if (gameWindow && process.env.SLEEPER_LEAGUE_ID) {

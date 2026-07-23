@@ -9,15 +9,18 @@ import {
   getLeaderboard,
   getSeasonYears,
   getAllSeasonLeaderboards,
-  getPowerRankings,
 } from "@/lib/queries/records";
+import {
+  getPowerRankingsView,
+  type PowerRankingsView,
+} from "@/lib/queries/preseason-power";
 import { getLatestSeason } from "@/lib/queries/matchups";
 import { getSeasonSuperlatives, type SeasonSuperlative } from "@/lib/queries/superlatives";
 import { getSeasonLineupAwards, type LineupAward } from "@/lib/queries/lineup-efficiency";
 import { getPlayoffProjection } from "@/lib/queries/divisions";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 import { LeaderboardTable } from "@/app/records/leaderboard-table";
-import type { LeaderboardEntry, PowerRankingEntry } from "@/lib/queries/records";
+import type { LeaderboardEntry } from "@/lib/queries/records";
 import type { PlayoffProjection } from "@/lib/queries/divisions";
 
 export const dynamic = "force-dynamic";
@@ -134,10 +137,55 @@ function RecordBookCard({ label, value, context }: RecordBookEntry) {
   );
 }
 
+/** Compact rank · crest · name row for the inline Power Ranking module, with a
+ * mode-specific trailing indicator (trend arrow in-season, power index
+ * preseason). */
+function PowerMiniRow({
+  rank,
+  slug,
+  name,
+  abbreviation,
+  brandingColor,
+  avatarUrl,
+  trailing,
+}: {
+  rank: number;
+  slug: string;
+  name: string;
+  abbreviation?: string;
+  brandingColor?: string;
+  avatarUrl: string | null;
+  trailing: React.ReactNode;
+}) {
+  return (
+    <Link
+      href={`/teams/${slug}`}
+      className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-muted"
+    >
+      <span className="font-mono text-sm tabular-nums text-text-tertiary w-4 shrink-0">
+        {rank}
+      </span>
+      <FranchiseLogo
+        slug={slug}
+        name={name}
+        abbreviation={abbreviation}
+        brandingColor={brandingColor}
+        avatarUrl={avatarUrl}
+        size="sm"
+        decorative
+      />
+      <span className="text-body-sm font-medium text-text-primary truncate flex-1">
+        {name}
+      </span>
+      {trailing}
+    </Link>
+  );
+}
+
 export default async function RecordsPage() {
   let allTimeData: LeaderboardEntry[] = [];
   let seasonYears: number[] = [];
-  let powerRankings: PowerRankingEntry[] = [];
+  let powerView: PowerRankingsView = { mode: "regular", entries: [] };
   const seasonDataRecord: Record<string, LeaderboardEntry[]> = {};
   let seasonSuperlatives: SeasonSuperlative[] = [];
   let coachingMalpractice: LineupAward | null = null;
@@ -146,10 +194,10 @@ export default async function RecordsPage() {
   let projectionSeasonYear: number | null = null;
 
   try {
-    [allTimeData, seasonYears, powerRankings] = await Promise.all([
+    [allTimeData, seasonYears, powerView] = await Promise.all([
       getLeaderboard(),
       getSeasonYears(),
-      getPowerRankings(),
+      getPowerRankingsView(),
     ]);
 
     // Batch-fetch all season leaderboards in a single query
@@ -306,52 +354,65 @@ export default async function RecordsPage() {
               </div>
             )}
 
-            {powerRankings.length > 0 && (
+            {powerView.entries.length > 0 && (
               <div>
                 <SectionHeader
-                  title="Power Ranking"
+                  title={
+                    powerView.mode === "preseason"
+                      ? "Preseason Power"
+                      : "Power Ranking"
+                  }
                   viewAllHref="/records/power-rankings"
                 />
                 <div className="space-y-1">
-                  {powerRankings.slice(0, 4).map((entry) => (
-                    <Link
-                      key={entry.id}
-                      href={`/teams/${entry.slug}`}
-                      className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-muted"
-                    >
-                      <span className="font-mono text-sm tabular-nums text-text-tertiary w-4 shrink-0">
-                        {entry.rank}
-                      </span>
-                      <FranchiseLogo
-                        slug={entry.slug}
-                        name={entry.name}
-                        abbreviation={entry.abbreviation}
-                        brandingColor={entry.brandingColor}
-                        avatarUrl={entry.avatarUrl}
-                        size="sm"
-                        decorative
-                      />
-                      <span className="text-body-sm font-medium text-text-primary truncate flex-1">
-                        {entry.name}
-                      </span>
-                      {entry.formDelta === 0 ? (
-                        <span className="flex items-center gap-0.5 font-mono text-xs tabular-nums text-text-tertiary shrink-0">
-                          <span aria-hidden>–</span>
-                          <span>0</span>
-                        </span>
-                      ) : entry.formDelta > 0 ? (
-                        <span className="flex items-center gap-0.5 font-mono text-xs font-bold tabular-nums text-accent-green shrink-0">
-                          <span aria-hidden>▲</span>
-                          <span>{entry.formDelta}</span>
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-0.5 font-mono text-xs tabular-nums text-accent-warm shrink-0">
-                          <span aria-hidden>▼</span>
-                          <span>{Math.abs(entry.formDelta)}</span>
-                        </span>
-                      )}
-                    </Link>
-                  ))}
+                  {/* Preseason: deltas are meaningless (no games yet), so show
+                      the power index instead of a trend arrow. */}
+                  {powerView.mode === "preseason"
+                    ? powerView.entries.slice(0, 4).map((entry) => (
+                        <PowerMiniRow
+                          key={entry.id}
+                          rank={entry.rank}
+                          slug={entry.slug}
+                          name={entry.name}
+                          abbreviation={entry.abbreviation}
+                          brandingColor={entry.brandingColor}
+                          avatarUrl={entry.avatarUrl}
+                          trailing={
+                            <span className="font-mono text-xs font-bold tabular-nums text-accent-gold shrink-0">
+                              {(entry.powerScore * 100).toFixed(1)}
+                            </span>
+                          }
+                        />
+                      ))
+                    : powerView.entries.slice(0, 4).map((entry) => (
+                        <PowerMiniRow
+                          key={entry.id}
+                          rank={entry.rank}
+                          slug={entry.slug}
+                          name={entry.name}
+                          abbreviation={entry.abbreviation}
+                          brandingColor={entry.brandingColor}
+                          avatarUrl={entry.avatarUrl}
+                          trailing={
+                            entry.formDelta === 0 ? (
+                              <span className="flex items-center gap-0.5 font-mono text-xs tabular-nums text-text-tertiary shrink-0">
+                                <span aria-hidden>–</span>
+                                <span>0</span>
+                              </span>
+                            ) : entry.formDelta > 0 ? (
+                              <span className="flex items-center gap-0.5 font-mono text-xs font-bold tabular-nums text-accent-green shrink-0">
+                                <span aria-hidden>▲</span>
+                                <span>{entry.formDelta}</span>
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-0.5 font-mono text-xs tabular-nums text-accent-warm shrink-0">
+                                <span aria-hidden>▼</span>
+                                <span>{Math.abs(entry.formDelta)}</span>
+                              </span>
+                            )
+                          }
+                        />
+                      ))}
                 </div>
               </div>
             )}
