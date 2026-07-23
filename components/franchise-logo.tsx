@@ -1,11 +1,9 @@
-import Image from "next/image";
-
 interface FranchiseLogoProps {
   slug: string;
   name: string;
   abbreviation?: string;
   brandingColor?: string;
-  size?: "sm" | "md" | "lg" | "xl";
+  size?: "sm" | "md" | "lg" | "xl" | number;
   decorative?: boolean;
   /**
    * Remote per-season team avatar (e.g. Sleeper CDN). When set it renders over
@@ -49,9 +47,14 @@ export function FranchiseLogo({
   decorative = false,
   avatarUrl,
 }: FranchiseLogoProps) {
-  const px = sizeMap[size];
+  const px = typeof size === "number" ? size : sizeMap[size];
+  const initialsClass =
+    typeof size === "number"
+      ? px < 28
+        ? "text-[9px]"
+        : "text-sm"
+      : textSizeMap[size];
   const altText = decorative ? "" : name;
-  const logoSrc = `/logos/${slug}.png`;
   const radius = crestRadius(px);
 
   return (
@@ -69,18 +72,20 @@ export function FranchiseLogo({
         aria-hidden="true"
       >
         <span
-          className={`font-bold select-none ${textSizeMap[size]}`}
+          className={`font-bold select-none ${initialsClass}`}
           style={{ color: "#1A1613" }}
         >
           {getInitials(name, abbreviation)}
         </span>
       </div>
       {/*
-        Image overlays fallback; if it fails to load the fallback shows through.
-        Remote avatars use a plain <img> (arbitrary CDN hosts aren't in the
-        next/image allowlist) with no-referrer; local logos keep next/image.
+        Remote avatar overlays the monogram fallback; if it fails to load the
+        monogram shows through. Avatars use a plain <img> (arbitrary CDN hosts
+        aren't in the next/image allowlist) with no-referrer. With no avatarUrl
+        we render the monogram alone (there are no bundled local crest images),
+        avoiding a broken-image glyph.
       */}
-      {avatarUrl ? (
+      {avatarUrl && (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={avatarUrl}
@@ -90,15 +95,6 @@ export function FranchiseLogo({
           referrerPolicy="no-referrer"
           className="relative z-10 object-cover"
           style={{ width: px, height: px, borderRadius: radius }}
-        />
-      ) : (
-        <Image
-          src={logoSrc}
-          alt={altText}
-          width={px}
-          height={px}
-          className="relative z-10 object-cover"
-          style={{ borderRadius: radius }}
         />
       )}
     </div>
