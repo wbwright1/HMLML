@@ -46,6 +46,7 @@ export default async function HistoryPage() {
                 teamCount={season.teamCount}
                 championName={season.championName}
                 championSlug={season.championSlug}
+                championAvatarUrl={season.championAvatarUrl}
                 runnerUpName={season.runnerUpName}
                 mostPF={season.mostPF}
                 isLegacy={season.isLegacy}

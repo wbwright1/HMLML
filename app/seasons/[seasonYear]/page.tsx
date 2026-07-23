@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { FranchiseLogo } from "@/components/franchise-logo";
@@ -90,12 +91,7 @@ export default async function SeasonDetailPage({
         title={`${year}`}
       >
         <div className="flex flex-wrap items-center gap-4">
-          <Link
-            href="/seasons"
-            className="text-sm text-text-tertiary hover:text-text-secondary transition-colors"
-          >
-            &larr; All Seasons
-          </Link>
+          <BackLink href="/seasons" label="All Seasons" />
 
           {season.status && season.status !== "complete" && (
             <SuperlativeBadge

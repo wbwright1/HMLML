@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { FranchisePicker } from "@/components/franchise-picker";
@@ -103,6 +103,7 @@ function RosterSection({
         <MobileTableView
           headers={headers}
           keyColumns={keyColumns}
+          primaryColumn={1}
           rows={players.map((player) => {
             const name = getPlayerName(player);
             const row = [
@@ -245,12 +246,7 @@ export default async function RosterPage({ params }: RosterPageProps) {
     <section className="py-8 md:py-12 space-y-8">
       <ScrollReveal>
         <div className="space-y-6">
-          <Link
-            href={`/teams/${franchise.slug}`}
-            className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            &larr; {franchise.name}
-          </Link>
+          <BackLink href={`/teams/${franchise.slug}`} label={franchise.name} />
 
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-4">

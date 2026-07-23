@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { SuperlativeBadge } from "@/components/superlative-badge";
@@ -27,12 +28,7 @@ export default async function PowerRankingsPage() {
   return (
     <>
       <PageSection label="Records" title="Power Rankings.">
-        <Link
-          href="/records"
-          className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
-        >
-          &larr; All Records
-        </Link>
+        <BackLink href="/records" label="All Records" />
 
         <p className="text-body-lg text-text-secondary max-w-prose">
           Ranked on the last 4 weeks: recent results, scoring trend, and injuries. Not season-long record.

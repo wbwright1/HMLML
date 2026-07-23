@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { FranchiseLogo } from "@/components/franchise-logo";
@@ -348,12 +349,7 @@ export default async function PlayoffBracketPage({
     <>
       <PageSection label={`${year} Season`} title="Playoff Results.">
         <div className="flex flex-wrap items-center gap-4">
-          <Link
-            href={`/seasons/${year}`}
-            className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
-          >
-            &larr; {year} Season
-          </Link>
+          <BackLink href={`/seasons/${year}`} label={`${year} Season`} />
         </div>
 
         {/* Champion hero */}

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { H2HHero } from "@/components/h2h-hero";
 import { SuperlativeBadge } from "@/components/superlative-badge";
@@ -58,12 +59,7 @@ export default async function HeadToHeadPage({
   return (
     <>
       <PageSection label="Records" title="Head-to-Head.">
-        <Link
-          href="/records"
-          className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
-        >
-          &larr; All Records
-        </Link>
+        <BackLink href="/records" label="All Records" />
 
         <p className="text-body-lg text-text-secondary max-w-prose">
           Select two franchises to compare their all-time head-to-head record.

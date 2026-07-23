@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseIdentity } from "@/components/franchise-identity";
@@ -76,12 +77,7 @@ export default async function FranchiseDraftsPage({
     <>
       {/* Hero Section */}
       <section className="py-8 md:py-12 space-y-6">
-        <Link
-          href={`/teams/${franchise.slug}`}
-          className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          &larr; {franchise.name}
-        </Link>
+        <BackLink href={`/teams/${franchise.slug}`} label={franchise.name} />
 
         <FranchiseIdentity
           franchise={{

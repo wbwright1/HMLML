@@ -2,14 +2,28 @@ interface MobileTableViewProps {
   headers: string[];
   rows: (string | number | React.ReactNode)[][];
   keyColumns?: number[];
+  /**
+   * Optional column index promoted to a full-width, left-aligned header row at
+   * the top of each mobile card (no kicker label, no right-align, no truncate).
+   * Use it for the identifying column (e.g. a player name) so it reads as the
+   * card title instead of a cramped label/value row. Remaining columns still
+   * render as label/value pairs. When undefined, every column renders as a
+   * label/value pair (original behavior).
+   */
+  primaryColumn?: number;
 }
 
 export function MobileTableView({
   headers,
   rows,
   keyColumns,
+  primaryColumn,
 }: MobileTableViewProps) {
   const visibleColumns = keyColumns ?? headers.map((_, i) => i);
+  const detailColumns =
+    primaryColumn != null
+      ? visibleColumns.filter((colIndex) => colIndex !== primaryColumn)
+      : visibleColumns;
 
   return (
     <>
@@ -21,7 +35,12 @@ export function MobileTableView({
             className="rounded-[14px] border border-border bg-surface p-4 space-y-2"
             role="listitem"
           >
-            {visibleColumns.map((colIndex) => (
+            {primaryColumn != null && (
+              <div className="text-body-sm font-medium text-text-primary">
+                {row[primaryColumn]}
+              </div>
+            )}
+            {detailColumns.map((colIndex) => (
               <div
                 key={`${rowIndex}-${headers[colIndex]}`}
                 className="flex items-center justify-between gap-4"
@@ -29,7 +48,7 @@ export function MobileTableView({
                 <span className="text-kicker shrink-0">
                   {headers[colIndex]}
                 </span>
-                <span className="text-sm font-medium text-right truncate tabular-nums text-text-primary">
+                <span className="text-sm font-medium text-right truncate text-text-primary">
                   {row[colIndex]}
                 </span>
               </div>
