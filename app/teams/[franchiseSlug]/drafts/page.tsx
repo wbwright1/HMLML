@@ -7,6 +7,7 @@ import { FranchiseIdentity } from "@/components/franchise-identity";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { PositionBadge } from "@/components/position-badge";
 import { PlayerHeadshot } from "@/components/player-headshot";
+import { FranchiseLogo } from "@/components/franchise-logo";
 import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getFranchiseDraftHistory, type DraftPickWithFranchise } from "@/lib/queries/drafts";
 import { EmptyState } from "@/components/empty-state";
@@ -225,9 +226,12 @@ function DraftPicksList({
               showTeamBadge={false}
               franchiseBadge={badgeFor(pick)}
             />
-            <p className={`min-w-0 flex-1 truncate text-body font-medium ${nameClass}`}>
-              {pick.playerName ?? "Unknown Player"}
-            </p>
+            <div className="min-w-0 flex-1">
+              <p className={`truncate text-body font-medium ${nameClass}`}>
+                {pick.playerName ?? "Unknown Player"}
+              </p>
+              <ViaNote pick={pick} />
+            </div>
             <PositionBadge position={pick.playerPosition} />
           </div>
         ))}
@@ -262,9 +266,12 @@ function DraftPicksList({
                       showTeamBadge={false}
                       franchiseBadge={badgeFor(pick)}
                     />
-                    <span className={`text-sm font-medium ${nameClass}`}>
-                      {pick.playerName ?? "Unknown Player"}
-                    </span>
+                    <div className="min-w-0">
+                      <span className={`block text-sm font-medium ${nameClass}`}>
+                        {pick.playerName ?? "Unknown Player"}
+                      </span>
+                      <ViaNote pick={pick} />
+                    </div>
                   </div>
                 </td>
                 <td className="py-3 pr-0">
@@ -276,6 +283,28 @@ function DraftPicksList({
         </table>
       </div>
     </>
+  );
+}
+
+// A subtle "via {origin}" note for picks this franchise acquired by trade.
+// originalFranchiseName is only populated for traded picks (null on own picks),
+// so its presence is the acquired-by-trade signal.
+function ViaNote({ pick }: { pick: DraftPickWithFranchise }) {
+  if (!pick.originalFranchiseName) return null;
+  return (
+    <span className="mt-0.5 flex items-center gap-1 text-caption text-text-tertiary">
+      {pick.originalFranchiseSlug && (
+        <FranchiseLogo
+          slug={pick.originalFranchiseSlug}
+          name={pick.originalFranchiseName}
+          abbreviation={pick.originalFranchiseAbbreviation ?? undefined}
+          brandingColor={pick.originalFranchiseBrandingColor ?? undefined}
+          size={14}
+          decorative
+        />
+      )}
+      <span className="truncate">via {pick.originalFranchiseName}</span>
+    </span>
   );
 }
 

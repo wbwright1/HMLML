@@ -33,6 +33,9 @@ export interface DraftPickWithFranchise {
   franchiseAvatarUrl: string | null;
   originalFranchiseId: string | null;
   originalFranchiseName: string | null;
+  originalFranchiseSlug: string | null;
+  originalFranchiseAbbreviation: string | null;
+  originalFranchiseBrandingColor: string | null;
 }
 
 export interface DraftSummary {
@@ -152,6 +155,9 @@ export async function getDraftBySeasonYear(
         franchiseAvatarUrl: franchiseSeasons.avatarUrl,
         originalFranchiseId: draftPicks.originalFranchiseId,
         originalFranchiseName: originalFranchises.name,
+        originalFranchiseSlug: originalFranchises.slug,
+        originalFranchiseAbbreviation: originalFranchises.abbreviation,
+        originalFranchiseBrandingColor: originalFranchises.brandingColor,
       })
       .from(draftPicks)
       .leftJoin(franchises, eq(draftPicks.franchiseId, franchises.id))
@@ -245,6 +251,9 @@ export async function getFranchiseDraftHistory(
         franchiseAvatarUrl: franchiseSeasons.avatarUrl,
         originalFranchiseId: draftPicks.originalFranchiseId,
         originalFranchiseName: originalFranchises.name,
+        originalFranchiseSlug: originalFranchises.slug,
+        originalFranchiseAbbreviation: originalFranchises.abbreviation,
+        originalFranchiseBrandingColor: originalFranchises.brandingColor,
         seasonYear: seasons.seasonYear,
       })
       .from(draftPicks)

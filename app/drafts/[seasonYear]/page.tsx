@@ -149,6 +149,9 @@ interface NormalizedPick {
   currentBrandingColor: string | null;
   currentAvatarUrl: string | null;
   originalName: string | null;
+  originalSlug: string | null;
+  originalAbbreviation: string | null;
+  originalBrandingColor: string | null;
 }
 
 interface DraftBoard {
@@ -173,6 +176,9 @@ function normalizeCompletedPick(pick: DraftPickWithFranchise): NormalizedPick {
     currentBrandingColor: pick.franchiseBrandingColor,
     currentAvatarUrl: pick.franchiseAvatarUrl,
     originalName: pick.originalFranchiseName,
+    originalSlug: pick.originalFranchiseSlug,
+    originalAbbreviation: pick.originalFranchiseAbbreviation,
+    originalBrandingColor: pick.originalFranchiseBrandingColor,
   };
 }
 
@@ -191,6 +197,9 @@ function normalizeUpcomingPick(pick: UpcomingPick): NormalizedPick {
     currentBrandingColor: null,
     currentAvatarUrl: pick.avatarUrl,
     originalName: pick.originalFranchiseName,
+    originalSlug: null,
+    originalAbbreviation: null,
+    originalBrandingColor: null,
   };
 }
 
@@ -348,7 +357,7 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
       )}
 
       {pick.originalName && (
-        <p className="truncate text-[9px] text-text-tertiary">via {pick.currentName}</p>
+        <p className="truncate text-[9px] text-text-tertiary">via {pick.originalName}</p>
       )}
     </div>
   );
@@ -431,7 +440,19 @@ function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
           </p>
         )}
         {pick.originalName && (
-          <p className="truncate text-body-sm text-text-tertiary">via {pick.originalName}</p>
+          <div className="flex items-center gap-1.5 text-body-sm text-text-tertiary">
+            {pick.originalSlug && (
+              <FranchiseLogo
+                slug={pick.originalSlug}
+                name={pick.originalName}
+                abbreviation={pick.originalAbbreviation ?? undefined}
+                brandingColor={pick.originalBrandingColor ?? undefined}
+                size={16}
+                decorative
+              />
+            )}
+            <span className="truncate">via {pick.originalName}</span>
+          </div>
         )}
       </div>
       {pick.playerPosition && (

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { PositionBadge } from "@/components/position-badge";
+import { PlayerHeadshot } from "@/components/player-headshot";
 import type { Trade } from "@/lib/queries/trades";
 
 interface TradeCardProps {
@@ -64,12 +65,19 @@ export function TradeCard({ trade }: TradeCardProps) {
               {side.players.length === 0 && side.picks.length === 0 ? (
                 <p className="text-body-sm text-text-tertiary">Nothing (cash/FAAB only)</p>
               ) : (
-                <ul className="space-y-1.5">
+                <ul className="space-y-2">
                   {side.players.map((player) => (
                     <li
                       key={player.id}
                       className="flex items-center gap-2 text-body-sm text-text-secondary"
                     >
+                      <PlayerHeadshot
+                        size={34}
+                        playerId={player.id}
+                        name={player.name}
+                        nflTeam={player.nflTeam}
+                        showTeamBadge={false}
+                      />
                       <PositionBadge position={player.position} />
                       <span className="truncate">{player.name}</span>
                       {player.nflTeam && (
@@ -82,12 +90,39 @@ export function TradeCard({ trade }: TradeCardProps) {
                   {side.picks.map((pick, pickIndex) => (
                     <li
                       key={`${pick.season}-${pick.round}-${pickIndex}`}
-                      className="flex items-center gap-2 text-body-sm text-text-secondary"
+                      className="flex flex-col gap-1 text-body-sm text-text-secondary"
                     >
-                      <span className="font-mono tabular-nums text-accent-gold">
-                        {pick.season}
-                      </span>
-                      <span>Round {pick.round} pick</span>
+                      <div className="flex items-center gap-2">
+                        {pick.originalFranchise && (
+                          <FranchiseLogo
+                            slug={pick.originalFranchise.slug}
+                            name={pick.originalFranchise.name}
+                            abbreviation={pick.originalFranchise.abbreviation}
+                            brandingColor={pick.originalFranchise.brandingColor}
+                            avatarUrl={pick.originalFranchise.avatarUrl}
+                            size={20}
+                            decorative
+                          />
+                        )}
+                        <span className="font-mono tabular-nums text-accent-gold">
+                          {pick.season}
+                        </span>
+                        <span>Round {pick.round} pick</span>
+                      </div>
+                      {pick.became && (
+                        <div className="flex min-w-0 items-center gap-1.5 pl-1 text-caption text-text-tertiary">
+                          <span className="shrink-0">became</span>
+                          <PlayerHeadshot
+                            size={22}
+                            playerId={pick.became.id}
+                            name={pick.became.name}
+                            showTeamBadge={false}
+                          />
+                          <span className="truncate text-text-secondary">
+                            {pick.became.name}
+                          </span>
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>

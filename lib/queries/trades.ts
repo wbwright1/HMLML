@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { transactions, franchiseSeasons, franchises, players, seasons } from "@/lib/db/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { transactions, franchiseSeasons, franchises, players, seasons, draftPicks } from "@/lib/db/schema";
+import { eq, and, desc, inArray, isNotNull } from "drizzle-orm";
 
 interface DraftPickInvolved {
   season: string;
@@ -10,7 +10,7 @@ interface DraftPickInvolved {
   owner_id: number;
 }
 
-interface FranchiseInfo {
+export interface FranchiseInfo {
   id: string;
   name: string;
   slug: string;
@@ -19,11 +19,90 @@ interface FranchiseInfo {
   avatarUrl?: string | null;
 }
 
+/** What a traded pick became once its draft completed. */
+export interface PickBecame {
+  id: string | null;
+  name: string;
+}
+
+/**
+ * A draft pick moved in a trade, enriched with (a) the crest of the franchise
+ * whose original draft slot it was, and (b) which player the pick became once
+ * that draft completed (null for future/incomplete drafts or legacy-era picks).
+ */
+export interface PickAsset {
+  season: string;
+  round: number;
+  originalFranchise: FranchiseInfo | null;
+  became: PickBecame | null;
+}
+
 interface TradeSide {
   franchise: FranchiseInfo | null;
   rosterId: string;
   players: Array<{ id: string; name: string; position: string | null; nflTeam: string | null }>;
-  picks: Array<{ season: string; round: number }>;
+  picks: PickAsset[];
+}
+
+// ---------------------------------------------------------------------------
+// Pure pick-provenance resolution (unit-tested in trades.test.ts)
+// ---------------------------------------------------------------------------
+
+/** Lookup tables resolved once per getTrades() call, keyed for O(1) access. */
+export interface PickResolutionMaps {
+  /** seasonYear -> seasons.id */
+  seasonYearToId: Map<number, number>;
+  /** `${seasonId}:${rosterId}` -> franchise that held that roster slot that season */
+  franchiseBySeasonRoster: Map<string, FranchiseInfo>;
+  /** `${seasonId}:${round}:${originalFranchiseId}` -> the pick's resulting player */
+  draftPickByKey: Map<string, { playerId: string | null; playerName: string | null }>;
+}
+
+/**
+ * Resolves a raw Sleeper draft-pick asset into a display-ready PickAsset.
+ *
+ * Origin crest: resolve `roster_id` (the original slot owner) against the
+ * pick's OWN season's franchise_seasons; if that season row doesn't exist yet
+ * (e.g. a future pick traded before its season is set up), fall back to the
+ * trade's season, else no crest.
+ *
+ * "Became" player: only when the pick's own season resolves a franchise and a
+ * matching completed draft_picks row exists (originalFranchiseId = that
+ * franchise, same round). Otherwise null (plain pick text), covering future or
+ * incomplete drafts and the legacy era.
+ *
+ * Pure: takes prebuilt maps, touches no I/O.
+ */
+export function resolvePickAsset(
+  raw: { season: string; round: number; roster_id: number },
+  tradeSeasonId: number,
+  maps: PickResolutionMaps
+): PickAsset {
+  const pickSeasonYear = Number(raw.season);
+  const pickSeasonId = Number.isFinite(pickSeasonYear)
+    ? maps.seasonYearToId.get(pickSeasonYear)
+    : undefined;
+
+  const pickSeasonFranchise =
+    pickSeasonId !== undefined
+      ? maps.franchiseBySeasonRoster.get(`${pickSeasonId}:${raw.roster_id}`) ?? null
+      : null;
+  const fallbackFranchise =
+    maps.franchiseBySeasonRoster.get(`${tradeSeasonId}:${raw.roster_id}`) ?? null;
+
+  const originalFranchise = pickSeasonFranchise ?? fallbackFranchise;
+
+  let became: PickBecame | null = null;
+  if (pickSeasonId !== undefined && pickSeasonFranchise) {
+    const dp = maps.draftPickByKey.get(
+      `${pickSeasonId}:${raw.round}:${pickSeasonFranchise.id}`
+    );
+    if (dp && (dp.playerId || dp.playerName)) {
+      became = { id: dp.playerId, name: dp.playerName ?? "Unknown Player" };
+    }
+  }
+
+  return { season: raw.season, round: raw.round, originalFranchise, became };
 }
 
 export interface Trade {
@@ -46,9 +125,13 @@ interface GetTradesParams {
  */
 async function getRosterToFranchiseMapForSeasons(
   seasonIds: number[]
-): Promise<Map<number, Map<string, FranchiseInfo>>> {
-  const result = new Map<number, Map<string, FranchiseInfo>>();
-  if (seasonIds.length === 0) return result;
+): Promise<{
+  bySeason: Map<number, Map<string, FranchiseInfo>>;
+  flat: Map<string, FranchiseInfo>;
+}> {
+  const bySeason = new Map<number, Map<string, FranchiseInfo>>();
+  const flat = new Map<string, FranchiseInfo>();
+  if (seasonIds.length === 0) return { bySeason, flat };
 
   const rows = await db
     .select({
@@ -66,20 +149,60 @@ async function getRosterToFranchiseMapForSeasons(
     .where(inArray(franchiseSeasons.seasonId, seasonIds));
 
   for (const row of rows) {
-    if (!result.has(row.seasonId)) {
-      result.set(row.seasonId, new Map());
-    }
-    result.get(row.seasonId)!.set(row.rosterId, {
+    const info: FranchiseInfo = {
       id: row.franchiseId,
       name: row.name,
       slug: row.slug,
       abbreviation: row.abbreviation ?? undefined,
       brandingColor: row.brandingColor ?? undefined,
       avatarUrl: row.avatarUrl,
+    };
+    if (!bySeason.has(row.seasonId)) {
+      bySeason.set(row.seasonId, new Map());
+    }
+    bySeason.get(row.seasonId)!.set(row.rosterId, info);
+    flat.set(`${row.seasonId}:${row.rosterId}`, info);
+  }
+
+  return { bySeason, flat };
+}
+
+/**
+ * Builds the `${seasonId}:${round}:${originalFranchiseId}` -> resulting player
+ * index for #58 "pick became player". Only traded picks carry a non-null
+ * originalFranchiseId, which is exactly the slot we match a traded pick asset
+ * against, so we filter to those rows.
+ */
+async function getDraftPickIndex(
+  seasonIds: number[]
+): Promise<Map<string, { playerId: string | null; playerName: string | null }>> {
+  const map = new Map<string, { playerId: string | null; playerName: string | null }>();
+  if (seasonIds.length === 0) return map;
+
+  const rows = await db
+    .select({
+      seasonId: draftPicks.seasonId,
+      round: draftPicks.round,
+      originalFranchiseId: draftPicks.originalFranchiseId,
+      playerId: draftPicks.playerId,
+      playerName: draftPicks.playerName,
+    })
+    .from(draftPicks)
+    .where(
+      and(
+        inArray(draftPicks.seasonId, seasonIds),
+        isNotNull(draftPicks.originalFranchiseId)
+      )
+    );
+
+  for (const r of rows) {
+    map.set(`${r.seasonId}:${r.round}:${r.originalFranchiseId}`, {
+      playerId: r.playerId,
+      playerName: r.playerName,
     });
   }
 
-  return result;
+  return map;
 }
 
 /**
@@ -124,9 +247,54 @@ export async function getTrades({
 
     if (rows.length === 0) return [];
 
-    // Batch-fetch roster -> franchise maps for all seasons involved.
-    const seasonIds = Array.from(new Set(rows.map((r) => r.seasonId)));
-    const rosterMapBySeason = await getRosterToFranchiseMapForSeasons(seasonIds);
+    // seasonYear -> seasonId, seeded from the trade rows themselves.
+    const seasonYearToId = new Map<number, number>();
+    for (const row of rows) seasonYearToId.set(row.seasonYear, row.seasonId);
+
+    // Pick assets can reference a season different from the trade's (e.g. a
+    // 2025 trade of a 2026 pick). Gather those years and resolve any not
+    // already known from the trade rows.
+    const pickSeasonYears = new Set<number>();
+    for (const row of rows) {
+      const picks = (row.draftPicksInvolved as DraftPickInvolved[] | null) ?? [];
+      for (const p of picks) {
+        const y = Number(p.season);
+        if (Number.isFinite(y)) pickSeasonYears.add(y);
+      }
+    }
+    const unknownYears = Array.from(pickSeasonYears).filter(
+      (y) => !seasonYearToId.has(y)
+    );
+    if (unknownYears.length > 0) {
+      const seasonRows = await db
+        .select({ id: seasons.id, seasonYear: seasons.seasonYear })
+        .from(seasons)
+        .where(inArray(seasons.seasonYear, unknownYears));
+      for (const s of seasonRows) seasonYearToId.set(s.seasonYear, s.id);
+    }
+
+    // Union of trade seasons and resolved pick seasons drives every downstream
+    // lookup, so a pick's own-season franchise resolves even when no trade in
+    // this result set happened that season.
+    const tradeSeasonIds = rows.map((r) => r.seasonId);
+    const pickSeasonIds = Array.from(pickSeasonYears)
+      .map((y) => seasonYearToId.get(y))
+      .filter((v): v is number => v !== undefined);
+    const allSeasonIds = Array.from(new Set([...tradeSeasonIds, ...pickSeasonIds]));
+
+    // Batch-fetch roster -> franchise maps (nested for trade sides, flat for
+    // pick provenance) and the draft-pick "became" index in parallel.
+    const [{ bySeason: rosterMapBySeason, flat: franchiseBySeasonRoster }, draftPickByKey] =
+      await Promise.all([
+        getRosterToFranchiseMapForSeasons(allSeasonIds),
+        getDraftPickIndex(pickSeasonIds),
+      ]);
+
+    const pickMaps: PickResolutionMaps = {
+      seasonYearToId,
+      franchiseBySeasonRoster,
+      draftPickByKey,
+    };
 
     // Batch-fetch player names/positions/teams for all players involved.
     const allPlayerIds = new Set<string>();
@@ -185,7 +353,7 @@ export async function getTrades({
 
         const receivedPicks = picks
           .filter((p) => p.owner_id === rosterIdNum)
-          .map((p) => ({ season: p.season, round: p.round }));
+          .map((p) => resolvePickAsset(p, row.seasonId, pickMaps));
 
         return {
           franchise,
