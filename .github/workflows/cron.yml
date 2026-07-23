@@ -8,4 +8,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger cron endpoint
-        run: curl -f --max-time 55 -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" https://hmlml-jade.vercel.app/api/sync-hourly
+        run: >
+          curl -f --max-time 55
+          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
+          https://hmlml-jade.vercel.app/api/sync-hourly
