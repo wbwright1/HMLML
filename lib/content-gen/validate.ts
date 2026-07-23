@@ -124,6 +124,130 @@ export function findHallucinatedNames(body: string, ctx: StatsContext): string[]
 }
 
 // ---------------------------------------------------------------------------
+// Position-claim guard
+// ---------------------------------------------------------------------------
+// Catches copy that mislabels a player's position ("four-pick receiver haul"
+// listing two RBs). Deliberately conservative, two narrow patterns only:
+//  1. A position label directly attached to a known player ("receiver Nick
+//     Singleton", "Nick Singleton (WR)") must match that player's stored
+//     position.
+//  2. A sentence with exactly ONE position term and an adjacent comma-list of
+//     two or more known players ("receiver haul (A, B, C, D)") requires every
+//     listed player to match that position.
+// Anything more ambiguous (multiple position terms, players scattered through
+// the sentence, unknown players) is skipped: under-block, never over-block.
+
+const POSITION_TERMS: Array<{ pos: string; re: RegExp }> = [
+  { pos: "QB", re: /\bQBs?\d?\b|\bquarterbacks?\b/i },
+  { pos: "RB", re: /\bRBs?\d?\b|\brunning ?backs?\b/i },
+  { pos: "WR", re: /\bWRs?\d?\b|\bwide receivers?\b|\breceivers?\b|\bwideouts?\b/i },
+  { pos: "TE", re: /\bTEs?\d?\b|\btight ends?\b/i },
+];
+
+const LABEL_WORD_TO_POS: Array<{ pos: string; re: string }> = [
+  { pos: "QB", re: "QB\\d?|quarterback" },
+  { pos: "RB", re: "RB\\d?|running ?back" },
+  { pos: "WR", re: "WR\\d?|wide receiver|receiver|wideout" },
+  { pos: "TE", re: "TE\\d?|tight end" },
+];
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/** Every player name in the context whose position is known. */
+function knownPlayerPositions(ctx: StatsContext): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const m of ctx.offseasonMoves ?? []) {
+    for (const dp of m.draftedPlayers) {
+      if (dp.position) map.set(dp.playerName, dp.position);
+    }
+  }
+  for (const p of ctx.rosterProjections) {
+    if (p.topProjectedPlayer?.position) {
+      map.set(p.topProjectedPlayer.name, p.topProjectedPlayer.position);
+    }
+  }
+  if (ctx.weekInBooks?.playerOfWeek?.position) {
+    map.set(ctx.weekInBooks.playerOfWeek.name, ctx.weekInBooks.playerOfWeek.position);
+  }
+  if (ctx.weekInBooks?.dudStarter?.position) {
+    map.set(ctx.weekInBooks.dudStarter.name, ctx.weekInBooks.dudStarter.position);
+  }
+  return map;
+}
+
+/**
+ * Finds position labels in the body that contradict a known player's stored
+ * position. Returns human-readable mismatch descriptions (empty = clean).
+ * Pure; exported for unit tests.
+ */
+export function findPositionMismatches(body: string, ctx: StatsContext): string[] {
+  const positions = knownPlayerPositions(ctx);
+  if (positions.size === 0) return [];
+  const flagged: string[] = [];
+
+  // Pattern 1: label directly attached to a name, either "label Name" or
+  // "Name (LABEL" — the tightest possible attribution.
+  for (const [name, actual] of positions) {
+    if (!body.includes(name)) continue;
+    for (const { pos, re } of LABEL_WORD_TO_POS) {
+      if (pos === actual) continue;
+      const before = new RegExp(`\\b(?:${re})\\s+${escapeRegExp(name)}`, "i");
+      const after = new RegExp(`${escapeRegExp(name)}\\s*\\(\\s*(?:${re})\\b`, "i");
+      if (before.test(body) || after.test(body)) {
+        flagged.push(`${name} labeled ${pos} but is ${actual}`);
+      }
+    }
+  }
+
+  // Pattern 2: one position term + an adjacent list of >=2 known players in
+  // the same sentence -> every listed player must hold that position.
+  for (const sentence of body.split(/(?<=[.!?])\s+/)) {
+    const terms = POSITION_TERMS.filter((t) => t.re.test(sentence));
+    if (terms.length !== 1) continue;
+    const claimed = terms[0].pos;
+
+    // Locate known names and group consecutive ones (separated only by
+    // commas/"and"/parens) into list runs.
+    const hits: Array<{ name: string; start: number; end: number }> = [];
+    for (const name of positions.keys()) {
+      const idx = sentence.indexOf(name);
+      if (idx !== -1) hits.push({ name, start: idx, end: idx + name.length });
+    }
+    hits.sort((a, b) => a.start - b.start);
+    let run: string[] = [];
+    const runs: string[][] = [];
+    for (let i = 0; i < hits.length; i++) {
+      if (run.length === 0) {
+        run = [hits[i].name];
+      } else {
+        const gap = sentence.slice(hits[i - 1].end, hits[i].start);
+        if (/^[\s,()]*(?:and\s+)?$/.test(gap)) {
+          run.push(hits[i].name);
+        } else {
+          runs.push(run);
+          run = [hits[i].name];
+        }
+      }
+    }
+    if (run.length > 0) runs.push(run);
+
+    for (const listRun of runs) {
+      if (listRun.length < 2) continue;
+      for (const name of listRun) {
+        const actual = positions.get(name);
+        if (actual && actual !== claimed) {
+          flagged.push(`${name} listed under ${claimed} but is ${actual}`);
+        }
+      }
+    }
+  }
+
+  return [...new Set(flagged)];
+}
+
+// ---------------------------------------------------------------------------
 // Row validation
 // ---------------------------------------------------------------------------
 
@@ -205,6 +329,11 @@ export function validateRow(row: ValidatableRow, ctx: StatsContext): ValidationR
   const hallucinated = findHallucinatedNames(row.body, ctx);
   if (hallucinated.length > 0) {
     return { valid: false, reason: `possible hallucinated name(s): ${hallucinated.join(", ")}` };
+  }
+
+  const positionMismatches = findPositionMismatches(row.body, ctx);
+  if (positionMismatches.length > 0) {
+    return { valid: false, reason: `position mismatch: ${positionMismatches.join("; ")}` };
   }
 
   return { valid: true };
