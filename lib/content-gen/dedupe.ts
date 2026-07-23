@@ -127,6 +127,27 @@ export function extractAnchors(row: CandidateRow, ctx: StatsContext): Anchors {
   };
 }
 
+/**
+ * The PRIMARY duplicate signal, on its own: two rows share a hook when they
+ * are about the same franchise AND cite an overlapping central number, or
+ * when they name the same central player. Exported so callers outside
+ * selectDiverseSubset (e.g. the template top-up in generate.ts) can apply the
+ * exact same rule when merging rows into an already-selected set.
+ */
+export function sharesPrimaryHook(a: Anchors, b: Anchors): boolean {
+  if (
+    a.franchiseKey &&
+    b.franchiseKey === a.franchiseKey &&
+    a.numbers.some((n) => b.numbers.includes(n))
+  ) {
+    return true;
+  }
+  if (a.playerNames.length > 0 && a.playerNames.some((p) => b.playerNames.includes(p))) {
+    return true;
+  }
+  return false;
+}
+
 // ---------------------------------------------------------------------------
 // Diverse subset selection
 // ---------------------------------------------------------------------------
@@ -188,19 +209,7 @@ export function selectDiverseSubset(
 
   function isDuplicate(anchors: Anchors): boolean {
     for (const k of keptAnchors) {
-      if (
-        anchors.franchiseKey &&
-        k.franchiseKey === anchors.franchiseKey &&
-        anchors.numbers.some((n) => k.numbers.includes(n))
-      ) {
-        return true;
-      }
-      if (
-        anchors.playerNames.length > 0 &&
-        anchors.playerNames.some((p) => k.playerNames.includes(p))
-      ) {
-        return true;
-      }
+      if (sharesPrimaryHook(anchors, k)) return true;
       if (jaccard(anchors.trigrams, k.trigrams) >= similarityThreshold) return true;
     }
     return false;
@@ -259,16 +268,34 @@ export function selectDiverseSubset(
   const targetFor = (kind: HubContentKind): number =>
     targetCounts[kind] ?? (candidatesByKind[kind] ?? []).length;
 
+  // "Keep-all" kinds: the target already admits every candidate, so there is
+  // no selection to make and the duplicate gate is pure noise. The canonical
+  // case is matchup_angle: every current matchup MUST get its angle, and the
+  // rows share a boilerplate skeleton ("X (record) hosts Y (record)...") that
+  // trips the trigram threshold, producing spurious drop-then-relax cycles
+  // that inflate droppedCount and list matchup_angle in relaxedKinds every
+  // regular-season run. Each matchup already has a unique pairKey, so
+  // cross-matchup dedup buys nothing; accept them outright. Anchors are still
+  // recorded so OTHER kinds' candidates dedupe against these rows.
+  const keepAllKinds = new Set(
+    kinds.filter((k) => targetFor(k) >= (candidatesByKind[k] ?? []).length),
+  );
+
   const addedPerKind = new Map<HubContentKind, number>();
   const maxLen = Math.max(0, ...kinds.map((k) => (candidatesByKind[k] ?? []).length));
 
-  // Round-robin pass: strict caps + dedup.
+  // Round-robin pass: strict caps + dedup (keep-all kinds bypass both).
   for (let i = 0; i < maxLen; i++) {
     for (const kind of kinds) {
       const candidates = candidatesByKind[kind] ?? [];
       const row = candidates[i];
       if (!row) continue;
       if ((addedPerKind.get(kind) ?? 0) >= targetFor(kind)) continue;
+      if (keepAllKinds.has(kind)) {
+        accept(row, extractAnchors(row, ctx));
+        addedPerKind.set(kind, (addedPerKind.get(kind) ?? 0) + 1);
+        continue;
+      }
       if (tryAddStrict(row)) {
         addedPerKind.set(kind, (addedPerKind.get(kind) ?? 0) + 1);
       }

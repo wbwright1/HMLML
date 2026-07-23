@@ -30,16 +30,11 @@ const KINDS_BY_SEASON: Record<string, HubContentKind[]> = {
     "hero_dek",
     "smack_post",
   ],
-  off: [
-    "division_note",
-    "burning_question",
-    "bold_prediction",
-    "offseason_receipt",
-    "hero_dek",
-    "smack_post",
-  ],
   regular: ["matchup_angle", "game_of_week_blurb", "hero_dek", "smack_post"],
+  // The generate-content route skips "post"/"off" entirely (kindsForSeason
+  // maps them to no kinds), so no row is ever valid in those states.
   post: [],
+  off: [],
 };
 
 export interface ValidatableRow {

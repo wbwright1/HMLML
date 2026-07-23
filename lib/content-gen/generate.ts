@@ -7,7 +7,11 @@ import {
   type GeneratedContent,
 } from "@/lib/content-gen/templates";
 import { validateRow } from "@/lib/content-gen/validate";
-import { selectDiverseSubset } from "@/lib/content-gen/dedupe";
+import {
+  extractAnchors,
+  selectDiverseSubset,
+  sharesPrimaryHook,
+} from "@/lib/content-gen/dedupe";
 
 // ---------------------------------------------------------------------------
 // LLM generation
@@ -297,9 +301,9 @@ function targetCountsForSeason(ctx: StatsContext): Partial<Record<HubContentKind
  * per kind via selectDiverseSubset, using the same targets/caps the template
  * path uses. This is what makes the ANGLE-DIVERSITY MANDATE in the prompt an
  * enforced contract rather than a suggestion: even if the model restates a
- * fact across two lists, only one survives.
+ * fact across two lists, only one survives. Exported (pure) for unit tests.
  */
-function applyDiversityLayer(
+export function applyDiversityLayer(
   ctx: StatsContext,
   rows: HubContentInsert[],
 ): {
@@ -329,13 +333,17 @@ function applyDiversityLayer(
 /**
  * Tops up any kind that HAS some rows but falls short of its display target
  * (e.g. half its candidates were invalid or deduped away) with template
- * candidates for that same kind, skipping any template candidate whose
- * refKey collides with a row already present. Complements fillMissingKinds,
- * which only handles a kind with ZERO rows; this handles the "some but not
- * enough" case so a thin LLM kind doesn't ship under-filled when the
- * deterministic templates have more real material available.
+ * candidates for that same kind. A template candidate is skipped when its
+ * refKey collides with a row already present for that kind, OR when it
+ * shares a primary hook (same franchise + overlapping number, or same
+ * central player, via sharesPrimaryHook) with ANY row already in the set:
+ * without that second check a padded template row could restate a kept LLM
+ * row's exact angle. Complements fillMissingKinds, which only handles a
+ * kind with ZERO rows; this handles the "some but not enough" case so a
+ * thin LLM kind doesn't ship under-filled when the deterministic templates
+ * have more real material available. Exported (pure) for unit tests.
  */
-function topUpShortKinds(
+export function topUpShortKinds(
   kinds: HubContentKind[],
   targets: Partial<Record<HubContentKind, number>>,
   rows: HubContentInsert[],
@@ -345,6 +353,7 @@ function topUpShortKinds(
   for (const r of rows) countByKind.set(r.kind, (countByKind.get(r.kind) ?? 0) + 1);
 
   const result = [...rows];
+  const resultAnchors = result.map((r) => extractAnchors(r, ctx));
   let templateAll: HubContentInsert[] | null = null;
 
   for (const kind of kinds) {
@@ -362,7 +371,10 @@ function topUpShortKinds(
       if (candidate.kind !== kind) continue;
       if (have + added >= target) break;
       if (candidate.refKey != null && existingRefKeys.has(candidate.refKey)) continue;
+      const candidateAnchors = extractAnchors(candidate, ctx);
+      if (resultAnchors.some((a) => sharesPrimaryHook(candidateAnchors, a))) continue;
       result.push(candidate);
+      resultAnchors.push(candidateAnchors);
       existingRefKeys.add(candidate.refKey);
       added++;
     }

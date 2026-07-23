@@ -208,21 +208,48 @@ describe("selectDiverseSubset", () => {
   });
 
   it("relaxes a kind's target rather than shipping it empty when every candidate would otherwise be dropped", () => {
+    // offseason_receipt has MORE candidates (2) than its target (1) so the
+    // keep-all bypass does not apply, and both candidates are duplicates of
+    // burning_question's row. An empty offseason_receipt module is worse
+    // than the mild echo, so one is kept anyway and the kind is flagged.
     const candidates: CandidateRow[] = [
       row("Foopus projects No. 1 in the league at 145.0 points.", { kind: "burning_question" }),
       row("Foopus projects No. 1 in the league at 145.0 points, seriously.", {
         kind: "offseason_receipt",
       }),
+      row("Foopus projects No. 1 in the league at 145.0 points, believe it.", {
+        kind: "offseason_receipt",
+      }),
     ];
     const result = selectDiverseSubset(
-      { burning_question: [candidates[0]], offseason_receipt: [candidates[1]] },
+      { burning_question: [candidates[0]], offseason_receipt: [candidates[1], candidates[2]] },
       ctx(),
       { targetCountsByKind: { offseason_receipt: 1 }, similarityThreshold: 0.5 },
     );
-    // offseason_receipt's only candidate is a duplicate of burning_question's row;
-    // an empty offseason_receipt module is worse than the mild echo, so it is kept anyway.
-    expect(result.kept.some((r) => r.kind === "offseason_receipt")).toBe(true);
+    expect(result.kept.filter((r) => r.kind === "offseason_receipt")).toHaveLength(1);
     expect(result.relaxedKinds).toContain("offseason_receipt");
+  });
+
+  it("skips the duplicate gate entirely for keep-all kinds (target >= candidate count)", () => {
+    // matchup_angle boilerplate: near-identical skeletons with unique pairKeys.
+    const angles: CandidateRow[] = [
+      row("Foopus (0-0) hosts Olave Garden (0-0). First-ever meeting between these two.", {
+        kind: "matchup_angle",
+        refKey: "foopus__olave-garden",
+      }),
+      row("Team C (0-0) hosts Foopus (0-0). First-ever meeting between these two.", {
+        kind: "matchup_angle",
+        refKey: "foopus__team-c",
+      }),
+    ];
+    const result = selectDiverseSubset(
+      { matchup_angle: angles },
+      ctx(),
+      { targetCountsByKind: { matchup_angle: 2 }, similarityThreshold: 0.5 },
+    );
+    expect(result.kept).toHaveLength(2);
+    expect(result.dropped).toEqual([]);
+    expect(result.relaxedKinds).toEqual([]);
   });
 
   it("is deterministic: identical input yields identical output across repeated calls", () => {
