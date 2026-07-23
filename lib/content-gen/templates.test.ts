@@ -158,6 +158,53 @@ describe("generateFromTemplates (preseason)", () => {
   });
 });
 
+describe("generateFromTemplates (preseason, nothing played yet)", () => {
+  // True preseason: every record is 0-0. The division "leader" slot is
+  // ordering noise, not a result, and must not be cited as one.
+  const zeroTeam = (name: string, slug: string) => ({ name, slug, record: "0-0", pointsFor: 0 });
+  const ctx = baseContext({
+    seasonType: "pre",
+    divisions: [
+      {
+        name: "Division 1",
+        leader: zeroTeam("Foopus", "foopus"),
+        teams: [zeroTeam("Foopus", "foopus"), zeroTeam("Olave Garden", "olave-garden")],
+      },
+      {
+        name: "Division 2",
+        leader: zeroTeam("McCarthyism", "mccarthyism"),
+        teams: [zeroTeam("McCarthyism", "mccarthyism"), zeroTeam("Better Call Hall", "better-call-hall")],
+      },
+      {
+        name: "Division 3",
+        leader: zeroTeam("Team C", "team-c"),
+        teams: [zeroTeam("Team C", "team-c")],
+      },
+    ],
+    leagueStandings: [
+      zeroTeam("Foopus", "foopus"),
+      zeroTeam("Olave Garden", "olave-garden"),
+      zeroTeam("McCarthyism", "mccarthyism"),
+      zeroTeam("Better Call Hall", "better-call-hall"),
+      zeroTeam("Team C", "team-c"),
+    ],
+  });
+  const { rows } = generateFromTemplates(ctx);
+
+  it("never crowns a division winner off a 0-0 leader", () => {
+    const kickers = rows
+      .filter((r) => r.kind === "bold_prediction")
+      .map((r) => (r.extras as { kicker: string }).kicker);
+    expect(kickers).not.toContain("Division Winner");
+  });
+
+  it("never cites a 0-0 record as a standings result in any body", () => {
+    for (const r of rows) {
+      expect(r.body).not.toMatch(/at 0-0\b|0-0 baseline|sat at the top/);
+    }
+  });
+});
+
 describe("generateFromTemplates (regular season)", () => {
   const ctx = baseContext({ seasonType: "regular" });
   const { kinds, rows } = generateFromTemplates(ctx);

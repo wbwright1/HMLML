@@ -189,7 +189,9 @@ function boldPredictions(ctx: StatsContext): HubContentInsert[] {
       extras: { kicker: "Title Repeat", verdict: "NO" },
     });
   }
-  if (topLeader) {
+  // Only cite a division "baseline" once games have been played; at 0-0 the
+  // leader slot is alphabetical noise and the line reads as a claimed result.
+  if (topLeader && !/^0-0(-0)?$/.test(topLeader.record)) {
     rows.push({
       week: null,
       kind: "bold_prediction",
