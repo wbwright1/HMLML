@@ -27,10 +27,10 @@ describe('UT-01: Module exports', () => {
   });
 });
 
-// UT-02: SNARKY_LABELS contains exactly 14 entries
+// UT-02: SNARKY_LABELS contains exactly 15 entries
 describe('UT-02: Label count', () => {
-  it('contains exactly 14 entries', () => {
-    expect(Object.keys(SNARKY_LABELS).length).toBe(14);
+  it('contains exactly 15 entries', () => {
+    expect(Object.keys(SNARKY_LABELS).length).toBe(15);
   });
 });
 
@@ -55,6 +55,7 @@ const labelExpectations: Array<{
   { testId: 'UT-14', key: 'CARDIAC_CREW', displayText: 'Cardiac Crew', tone: 'neutral' },
   { testId: 'UT-15', key: 'WHAT_COULDVE_BEEN', displayText: "What Could've Been", tone: 'neutral' },
   { testId: 'UT-16', key: 'COACHING_MALPRACTICE', displayText: 'Coaching Malpractice', tone: 'sting' },
+  { testId: 'UT-28', key: 'BLOWOUT_BAIT', displayText: 'Blowout Bait', tone: 'sting' },
 ];
 
 describe('UT-03 through UT-16: Per-label field values', () => {

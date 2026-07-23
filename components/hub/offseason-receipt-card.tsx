@@ -6,6 +6,7 @@ const CATEGORY_LABELS: Record<ReceiptCategory, string> = {
   TRADE: "Blockbuster Trade",
   WAIVERS: "Waivers",
   FIRE_SALE: "The Fire Sale",
+  AGING_CORE: "The Time Capsule",
 };
 
 export interface ReceiptFranchise {
@@ -28,11 +29,11 @@ interface OffseasonReceiptCardProps {
  * franchise's crest top-right, and the site-voice recap below.
  */
 export function OffseasonReceiptCard({ receipt, franchise }: OffseasonReceiptCardProps) {
-  const isFireSale = receipt.category === "FIRE_SALE";
+  const isSting = receipt.category === "FIRE_SALE" || receipt.category === "AGING_CORE";
   return (
     <div className="card-surface flex h-full flex-col p-5">
       <div className="flex items-start justify-between gap-3">
-        <p className={`text-kicker ${isFireSale ? "text-accent-warm" : "text-accent-gold"}`}>
+        <p className={`text-kicker ${isSting ? "text-accent-warm" : "text-accent-gold"}`}>
           {CATEGORY_LABELS[receipt.category]}
         </p>
         <FranchiseLogo

@@ -32,6 +32,13 @@ Site (including `/claim` and commish flows) is fully crawlable. Decision should 
 
 ---
 
+## Section 1b — Found in post-merge verification (Blake, 2026-07-23) — IN PROGRESS
+
+- **Slow navigation on mobile:** tapping nav tabs / opening the roster page takes a couple of seconds before anything visibly begins loading. Suspected: fully dynamic RSC pages with no `loading.tsx` boundaries (tap gives no feedback until the full server response), plus possible query waterfalls / per-request DB connection cost. Diagnosis + fix in flight (loading skeletons, Promise.all parallelization, connection reuse; no caching per Phase 1 decision).
+- **Dead season-history year links:** Teams > [Team] > Season History years are not clickable / don't open that year's schedule. Fix in flight alongside the franchise-page Tier 1 work.
+
+---
+
 ## Section 2 — Fix before the season starts (P1)
 
 ### Correctness

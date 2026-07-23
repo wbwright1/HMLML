@@ -351,3 +351,24 @@
         opacity: 0;
     }
 }
+
+/* Loading skeleton blocks (route-level loading.tsx). A subtle opacity breathe
+   on a translucent surface fill; never disappears fully so a frozen frame
+   (prefers-reduced-motion neutralizes the animation) still reads as a
+   placeholder. Radius inherits from callers via utility classes. */
+@keyframes skeleton-pulse {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0.55;
+    }
+}
+
+@layer utilities {
+    .skeleton {
+        background: var(--surface-muted);
+        animation: skeleton-pulse 1.6s ease-in-out infinite;
+    }
+}

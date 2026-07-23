@@ -17,11 +17,17 @@ export async function getOffseasonRecap(seasonId: number) {
   try {
     let effectiveSeasonId = seasonId;
 
-    // Check if this season has any matchup data
+    // Check if this season has any COMPLETED matchup data. The daily sync
+    // pre-populates a season's entire schedule as `status: "scheduled"` rows
+    // (0 points, no winner) as soon as Sleeper publishes it, so a plain
+    // row-count check here would never trip: the season's matchups table is
+    // never actually empty once the schedule exists, even months before Week
+    // 1 kicks off. Gate on `status = "complete"` so this recap keeps showing
+    // the last real season's data through the entire offseason.
     const [matchupCount] = await db
       .select({ count: sql<number>`count(*)::int` })
       .from(matchups)
-      .where(eq(matchups.seasonId, seasonId));
+      .where(and(eq(matchups.seasonId, seasonId), eq(matchups.status, "complete")));
 
     if (!matchupCount || matchupCount.count === 0) {
       // Fall back to most recent completed season with matchup data
@@ -84,7 +90,7 @@ export async function getOffseasonRecap(seasonId: number) {
       .select({
         winner: sql<string>`winner_f.name`,
         loser: sql<string>`loser_f.name`,
-        margin: sql<number>`ABS(w.points - l.points)`,
+        margin: sql<number>`ABS(sub.points - sub.loser_points)`,
       })
       .from(sql`
         (SELECT m1.franchise_id as winner_id, m1.points, m2.franchise_id as loser_id, m2.points as loser_points

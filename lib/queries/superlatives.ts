@@ -355,6 +355,117 @@ export async function getSeasonSuperlatives(
       }
     }
 
+    // Cardiac Crew / Mercy Rule / Blowout Bait: season-wide margin awards,
+    // computed from every regular-season matchup paired by (week, matchupId)
+    // (same pairing approach as getWeeklySuperlatives, but scoped to the full
+    // season rather than one week). CARDIAC_CREW and MERCY_RULE reuse labels
+    // already defined in SNARKY_LABELS that, until now, only powered the
+    // weekly "This Week's Damage" cards; this surfaces a season-long analog
+    // on the records page so a single week's outlier margin isn't the only
+    // way a franchise shows up here.
+    const marginRows = await db
+      .select({
+        matchupId: matchups.matchupId,
+        franchiseId: matchups.franchiseId,
+        week: matchups.week,
+        points: matchups.points,
+        isWinner: matchups.isWinner,
+      })
+      .from(matchups)
+      .where(
+        and(
+          eq(matchups.seasonId, seasonId),
+          eq(matchups.status, "complete"),
+          eq(matchups.isPlayoff, false)
+        )
+      );
+
+    const marginGroups = new Map<string, typeof marginRows>();
+    for (const row of marginRows) {
+      const key = `${row.week}:${row.matchupId}`;
+      const arr = marginGroups.get(key) ?? [];
+      arr.push(row);
+      marginGroups.set(key, arr);
+    }
+
+    let closestWin: { franchiseId: string; margin: number } | null = null;
+    let biggestBlowoutWin: { franchiseId: string; margin: number } | null = null;
+    const lossMarginsByFranchise = new Map<string, number[]>();
+
+    for (const [, pair] of marginGroups) {
+      if (pair.length !== 2) continue;
+      const [a, b] = pair;
+      const margin = Math.abs((a.points ?? 0) - (b.points ?? 0));
+      const winner = a.isWinner ? a : b.isWinner ? b : null;
+      const loser = a.isWinner ? b : b.isWinner ? a : null;
+      if (winner) {
+        if (!closestWin || margin < closestWin.margin) {
+          closestWin = { franchiseId: winner.franchiseId, margin };
+        }
+        if (!biggestBlowoutWin || margin > biggestBlowoutWin.margin) {
+          biggestBlowoutWin = { franchiseId: winner.franchiseId, margin };
+        }
+      }
+      if (loser) {
+        const arr = lossMarginsByFranchise.get(loser.franchiseId) ?? [];
+        arr.push(margin);
+        lossMarginsByFranchise.set(loser.franchiseId, arr);
+      }
+    }
+
+    if (closestWin) {
+      const f = franchiseLookup.get(closestWin.franchiseId);
+      if (f) {
+        push(
+          "CARDIAC_CREW",
+          f.franchiseName,
+          f.franchiseSlug,
+          `${closestWin.margin.toFixed(1)} pts`,
+          "Closest win of the season"
+        );
+      }
+    }
+
+    if (biggestBlowoutWin) {
+      const f = franchiseLookup.get(biggestBlowoutWin.franchiseId);
+      if (f) {
+        push(
+          "MERCY_RULE",
+          f.franchiseName,
+          f.franchiseSlug,
+          `${biggestBlowoutWin.margin.toFixed(1)} pts`,
+          "Biggest blowout win of the season"
+        );
+      }
+    }
+
+    // Blowout Bait: worst average margin of defeat, min 3 losses so a single
+    // early-season laugher doesn't crown a franchise that otherwise plays
+    // close games.
+    const MIN_LOSSES_FOR_BLOWOUT_BAIT = 3;
+    let worstAvgLossMargin: { franchiseId: string; avgMargin: number; losses: number } | null =
+      null;
+    for (const [franchiseId, margins] of lossMarginsByFranchise) {
+      if (margins.length < MIN_LOSSES_FOR_BLOWOUT_BAIT) continue;
+      const avgMargin = margins.reduce((sum, m) => sum + m, 0) / margins.length;
+      if (!worstAvgLossMargin || avgMargin > worstAvgLossMargin.avgMargin) {
+        worstAvgLossMargin = { franchiseId, avgMargin, losses: margins.length };
+      }
+    }
+
+    if (worstAvgLossMargin) {
+      const f = franchiseLookup.get(worstAvgLossMargin.franchiseId);
+      if (f) {
+        push(
+          "BLOWOUT_BAIT",
+          f.franchiseName,
+          f.franchiseSlug,
+          `${worstAvgLossMargin.avgMargin.toFixed(1)} pts`,
+          `Average margin of defeat across ${worstAvgLossMargin.losses} losses`
+        );
+      }
+    }
+
     return result;
   } catch (e) {
     console.error("[superlatives] getSeasonSuperlatives error:", e);
