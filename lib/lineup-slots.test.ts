@@ -158,4 +158,21 @@ describe("computeProjectedPoints", () => {
     // adp is not a scoring stat and no pts_* total to fall back to
     expect(computeProjectedPoints({ rec: 1 }, { adp_dd_ppr: 1000 })).toBeNull();
   });
+
+  it("scores a season-projection stat map by league weights, diverging from raw pts_ppr", () => {
+    // Simulates a raw season-projection row: full stat line plus Sleeper's
+    // full-PPR aggregate. A half-PPR league (rec = 0.5) must score the raw
+    // reception count itself, yielding a total below the pts_ppr aggregate.
+    const seasonProjStats = {
+      rec: 80, // 80 * 0.5 = 40 under half-PPR (vs 80 under full PPR)
+      rec_yd: 1000, // 1000 * 0.1 = 100
+      rec_td: 8, // 8 * 6 = 48
+      pts_ppr: 268, // full-PPR aggregate Sleeper ships; must be ignored
+    };
+    const halfPprScoring = { rec: 0.5, rec_yd: 0.1, rec_td: 6 };
+    // 40 + 100 + 48 = 188, which is NOT the raw pts_ppr (268).
+    const result = computeProjectedPoints(halfPprScoring, seasonProjStats);
+    expect(result).toBe(188);
+    expect(result).not.toBe(seasonProjStats.pts_ppr);
+  });
 });

@@ -35,6 +35,41 @@ export async function getAllSeasons() {
 }
 
 /**
+ * Loads a season's scoring_settings map from seasons.settings_json, keyed by
+ * season year (not the internal season id). Returns the map used to weight raw
+ * projection/stat lines into league-scored fantasy points.
+ *
+ * Falls back to the latest season's scoring settings when no row exists for
+ * projSeason (e.g. the upcoming season has no row yet), since scoring settings
+ * carry over year to year. Returns null only when there is no season row at
+ * all, or the row carries no scoring_settings.
+ */
+export async function loadSeasonScoringSettings(
+  projSeason: number
+): Promise<Record<string, number> | null> {
+  const [exact] = await db
+    .select({ settingsJson: seasons.settingsJson })
+    .from(seasons)
+    .where(eq(seasons.seasonYear, projSeason))
+    .limit(1);
+
+  const row =
+    exact ??
+    (
+      await db
+        .select({ settingsJson: seasons.settingsJson })
+        .from(seasons)
+        .orderBy(desc(seasons.seasonYear))
+        .limit(1)
+    )[0];
+
+  const settings = (row?.settingsJson ?? null) as {
+    scoring_settings?: Record<string, number>;
+  } | null;
+  return settings?.scoring_settings ?? null;
+}
+
+/**
  * Returns the most recent season with status 'complete'.
  * Used by preseason/offseason hubs to pull awards and recap from the last finished season.
  */

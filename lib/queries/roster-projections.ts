@@ -73,8 +73,9 @@ export function buildProjectionPools(
 
 /**
  * Upcoming-season roster-strength projections: each current-season roster's
- * optimal starting lineup total, computed from players.proj_points_ppr for
- * the given projection season, then ranked across the league. Reuses the pure
+ * optimal starting lineup total, computed from players.proj_points_ppr (a
+ * league-scored projection despite the column name) for the given projection
+ * season, then ranked across the league. Reuses the pure
  * bestPossibleLineup solver from lib/queries/lineup-efficiency.ts (same
  * optimal-lineup logic used for the Coaching Malpractice awards) so "optimal"
  * means the same thing everywhere.
