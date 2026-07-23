@@ -14,6 +14,9 @@ import { selectGameOfTheWeek, type GotwCandidate } from "@/lib/hub/between-weeks
 import type { NflSeasonType } from "@/lib/queries/nfl-state";
 import { getLeagueLongevity } from "@/lib/queries/franchise-longevity";
 import { getRosterProjections } from "@/lib/queries/roster-projections";
+import { getOffseasonMoves, type StatsOffseasonMoves } from "@/lib/queries/offseason-moves";
+
+export type { StatsOffseasonMoves } from "@/lib/queries/offseason-moves";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -145,6 +148,13 @@ export interface StatsContext {
   rosterProjections: StatsRosterProjection[];
   /** The season the roster projections are for (matches players.proj_season). Null when rosterProjections is empty. */
   projectionSeason: number | null;
+  /**
+   * Real offseason activity (draft picks, offseason trades) per franchise, so
+   * offseason receipts can cite an actual pick/trade instead of leaning on
+   * projection-only framing. Populated for "pre"/"off" season types only;
+   * empty for "regular"/"post" (and on any query failure).
+   */
+  offseasonMoves: StatsOffseasonMoves[];
 }
 
 export interface StatsContextInput {
@@ -425,6 +435,17 @@ export async function buildStatsContext(
     console.error("[stats-context] roster projections unavailable:", e);
   }
 
+  // Real offseason activity (draft order, offseason trades), only relevant to
+  // preseason/offseason hub content. Same degrade-to-empty pattern as above.
+  let offseasonMoves: StatsOffseasonMoves[] = [];
+  if (seasonType === "pre" || seasonType === "off") {
+    try {
+      offseasonMoves = await getOffseasonMoves(seasonId, seasonYear);
+    } catch (e) {
+      console.error("[stats-context] offseason moves unavailable:", e);
+    }
+  }
+
   return {
     seasonYear,
     week,
@@ -440,5 +461,6 @@ export async function buildStatsContext(
     franchiseHistory,
     rosterProjections,
     projectionSeason,
+    offseasonMoves,
   };
 }
