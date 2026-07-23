@@ -5,8 +5,9 @@ import type {
   StatsFranchiseHistory,
   StatsMatchup,
   StatsRosterProjection,
-  StatsTeam,
 } from "@/lib/content-gen/stats-context";
+import { validateRow } from "@/lib/content-gen/validate";
+import { selectDiverseSubset } from "@/lib/content-gen/dedupe";
 
 // ---------------------------------------------------------------------------
 // Deterministic template fallback
@@ -27,6 +28,13 @@ export interface GeneratedContent {
    * them (per-kind fallback). Empty/undefined on the pure template path.
    */
   templateFilledKinds?: HubContentKind[];
+  /**
+   * Observability for the diversity/validation layer (applyDiversityLayer):
+   * how many candidate rows were dropped as duplicates/invalid, and which
+   * kinds had to relax their cap to avoid shipping empty. Logged to
+   * sync_log.detailsJson by the generate-content route.
+   */
+  diversityStats?: { droppedCount: number; relaxedKinds: HubContentKind[] };
 }
 
 const CHARACTERIZATIONS = ["a knife fight", "wide open", "nobody blinking"];
@@ -142,13 +150,21 @@ function burningQuestions(ctx: StatsContext): HubContentInsert[] {
       `${worstProjected.name} projects dead last in starting-lineup points. Is the roster really that thin, or is preseason math just wrong again?`,
     );
   }
+  const bestProjected = topProjected(ctx);
+  if (bestProjected) {
+    qs.push(
+      `${bestProjected.name} projects No. 1 in starting-lineup points before a snap is played. Does that hold up, or is preseason math about to get embarrassed?`,
+    );
+  }
 
   while (qs.length < 3) {
     qs.push(
       "Which team talks the biggest game in August and then quietly misses the playoffs?",
     );
   }
-  return qs.slice(0, 5).map((q) => ({
+  // No cap here: the candidate pool is trimmed to its display target (and
+  // deduped against every other module's rows) by applyDiversityLayer.
+  return qs.map((q) => ({
     week: null,
     kind: "burning_question" as const,
     refKey: null,
@@ -239,63 +255,154 @@ function boldPredictions(ctx: StatsContext): HubContentInsert[] {
       extras: { kicker: "Early Panic", verdict: "DOWN" },
     });
   }
-  return rows.slice(0, 6);
+  // No cap here: trimmed to its display target by applyDiversityLayer.
+  return rows;
 }
 
+/**
+ * Builds offseason_receipt candidates that cite REAL offseason moves
+ * (draft_picks / offseason trades) whenever the DB has them. Projection-only
+ * framing is used ONLY as the fallback when ctx.offseasonMoves has no
+ * activity for a franchise (e.g. before draft-day sync or before the
+ * projection migration lands). Drafted-player picks are cited in draft
+ * ORDER (earliest pick first, per buildOffseasonMoves), and this function
+ * actively varies the position cited across franchises so a run of receipts
+ * doesn't read as "everyone drafted a QB."
+ */
 function offseasonReceipts(ctx: StatsContext): HubContentInsert[] {
-  // Real franchise slugs, generic category teasers (no fabricated specific
-  // moves). Pick a spread of franchises across the standings.
   const teams = ctx.leagueStandings;
-  const picks: { slug: string; category: string; body: string }[] = [];
-  const push = (team: StatsTeam | undefined, category: string, body: string) => {
-    if (team) picks.push({ slug: team.slug, category, body });
-  };
+  const moves = ctx.offseasonMoves;
+  type Pick = { slug: string; category: string; body: string };
 
   const best = topProjected(ctx);
   const worst = lowestProjected(ctx);
 
-  // When roster projections exist, the draft-win and fire-sale angles cite
-  // the actual projected rank/total instead of the generic mock-draft framing.
-  if (best) {
-    push(
-      teams.find((t) => t.slug === best.slug),
-      "DRAFT",
-      `${best.name} projects No. 1 in the league at ${best.projectedStartingPoints.toFixed(1)} starting-lineup points. September settles whether the draft board actually reads that well.`,
-    );
-  } else {
-    push(
-      teams[0],
-      "DRAFT",
-      `${teams[0]?.name} drafted like the mock never ended. September settles whether that was genius or a group-chat punchline.`,
-    );
+  // DRAFT: one candidate per franchise with a real draft pick on file, citing
+  // the earliest pick whose position hasn't already been cited elsewhere in
+  // this run (falling back to that franchise's earliest pick otherwise).
+  const draftCandidates = moves.filter((m) => m.draftedPlayers.length > 0);
+  const draftPicks: Pick[] = [];
+  const usedPositions = new Set<string>();
+  for (const m of draftCandidates) {
+    const pick =
+      m.draftedPlayers.find((p) => !p.position || !usedPositions.has(p.position)) ??
+      m.draftedPlayers[0];
+    usedPositions.add(pick.position ?? "");
+    const posLabel = pick.position ? `${pick.position} ` : "";
+    draftPicks.push({
+      slug: m.slug,
+      category: "DRAFT",
+      body: `${m.name} took ${posLabel}${pick.playerName} with pick No. ${pick.pickNumber} (Round ${pick.round}). September settles whether that pick reads as genius or a group-chat punchline.`,
+    });
+  }
+  if (draftCandidates.length === 0) {
+    if (best) {
+      const team = teams.find((t) => t.slug === best.slug);
+      if (team) {
+        draftPicks.push({
+          slug: team.slug,
+          category: "DRAFT",
+          body: `${best.name} projects No. 1 in the league at ${best.projectedStartingPoints.toFixed(1)} starting-lineup points. September settles whether the draft board actually reads that well.`,
+        });
+      }
+    } else if (teams[0]) {
+      draftPicks.push({
+        slug: teams[0].slug,
+        category: "DRAFT",
+        body: `${teams[0].name} drafted like the mock never ended. September settles whether that was genius or a group-chat punchline.`,
+      });
+    }
   }
 
-  push(
-    teams[Math.floor(teams.length / 3)],
-    "TRADE",
-    "Rewired half the roster before Labor Day. All-in energy from a team that swears this is finally the year.",
-  );
-  push(
-    teams[Math.floor((2 * teams.length) / 3)],
-    "WAIVERS",
-    "Torched the waiver budget early chasing upside. Bold strategy, assuming any of it actually hits.",
-  );
-
-  if (worst) {
-    push(
-      teams.find((t) => t.slug === worst.slug),
-      "FIRE_SALE",
-      `${worst.name} projects dead last in the league at ${worst.projectedStartingPoints.toFixed(1)} starting-lineup points. The rebuild timeline remains a closely guarded secret.`,
-    );
-  } else {
-    push(
-      teams[teams.length - 1],
-      "FIRE_SALE",
-      "Sold off the veterans and called it a plan. The rebuild timeline remains a closely guarded secret.",
-    );
+  // TRADE: one candidate per franchise with a real offseason trade on file,
+  // citing the actual assets exchanged.
+  const tradeCandidates = moves.filter((m) => m.trades.length > 0);
+  const tradePicks: Pick[] = [];
+  for (const m of tradeCandidates) {
+    const trade = m.trades[0];
+    const acquired = [...trade.acquired.players, ...trade.acquired.picks];
+    const surrendered = [...trade.surrendered.players, ...trade.surrendered.picks];
+    if (acquired.length === 0 && surrendered.length === 0) continue;
+    const acquiredLabel = acquired.length > 0 ? acquired.join(", ") : "a stack of picks";
+    const surrenderedLabel = surrendered.length > 0 ? surrendered.join(", ") : "a pile of depth pieces";
+    tradePicks.push({
+      slug: m.slug,
+      category: "TRADE",
+      body: `${m.name} sent out ${surrenderedLabel} to bring in ${acquiredLabel}. All-in energy from a team that swears this is finally the year.`,
+    });
+  }
+  if (tradeCandidates.length === 0) {
+    const midTeam = teams[Math.floor(teams.length / 3)];
+    if (midTeam) {
+      tradePicks.push({
+        slug: midTeam.slug,
+        category: "TRADE",
+        body: "Rewired half the roster before Labor Day. All-in energy from a team that swears this is finally the year.",
+      });
+    }
   }
 
-  return picks.slice(0, 4).map((p) => ({
+  // WAIVERS: no waiver-specific data source exists yet, so this stays
+  // category-generic; the franchise cited is still real.
+  const waiverPicks: Pick[] = [];
+  const waiverTeam = teams[Math.floor((2 * teams.length) / 3)];
+  if (waiverTeam) {
+    waiverPicks.push({
+      slug: waiverTeam.slug,
+      category: "WAIVERS",
+      body: "Torched the waiver budget early chasing upside. Bold strategy, assuming any of it actually hits.",
+    });
+  }
+
+  // FIRE_SALE: a franchise whose real offseason trade gave up more players
+  // than it got back, else fall back to the worst-projected framing, else
+  // the fully generic line.
+  const fireSalePicks: Pick[] = [];
+  const fireSaleCandidate = moves.find(
+    (m) =>
+      m.trades.length > 0 &&
+      m.trades[0].surrendered.players.length > m.trades[0].acquired.players.length,
+  );
+  if (fireSaleCandidate) {
+    const trade = fireSaleCandidate.trades[0];
+    fireSalePicks.push({
+      slug: fireSaleCandidate.slug,
+      category: "FIRE_SALE",
+      body: `${fireSaleCandidate.name} shipped out ${trade.surrendered.players.join(", ") || "the veterans"} for spare parts. The rebuild timeline remains a closely guarded secret.`,
+    });
+  } else if (worst) {
+    const team = teams.find((t) => t.slug === worst.slug);
+    if (team) {
+      fireSalePicks.push({
+        slug: team.slug,
+        category: "FIRE_SALE",
+        body: `${worst.name} projects dead last in the league at ${worst.projectedStartingPoints.toFixed(1)} starting-lineup points. The rebuild timeline remains a closely guarded secret.`,
+      });
+    }
+  } else if (teams[teams.length - 1]) {
+    fireSalePicks.push({
+      slug: teams[teams.length - 1].slug,
+      category: "FIRE_SALE",
+      body: "Sold off the veterans and called it a plan. The rebuild timeline remains a closely guarded secret.",
+    });
+  }
+
+  // Interleave the 4 categories round-robin (rather than concatenating
+  // DRAFT-then-TRADE-then-WAIVERS-then-FIRE_SALE) so that when a real league
+  // has many more DRAFT candidates than the display target, the trimmed-down
+  // final set still spans all 4 categories instead of the pool being
+  // dominated by whichever category happened to be built first.
+  const buckets = [draftPicks, tradePicks, waiverPicks, fireSalePicks];
+  const picks: Pick[] = [];
+  const maxLen = Math.max(0, ...buckets.map((b) => b.length));
+  for (let i = 0; i < maxLen; i++) {
+    for (const bucket of buckets) {
+      if (bucket[i]) picks.push(bucket[i]);
+    }
+  }
+
+  // No cap here: trimmed to its display target by applyDiversityLayer.
+  return picks.map((p) => ({
     week: null,
     kind: "offseason_receipt" as const,
     refKey: p.slug,
@@ -349,9 +456,16 @@ function preseasonSmack(ctx: StatsContext): HubContentInsert[] {
       `${bestProjected.name} projects No. 1 in the league before a single snap. Enjoy the preseason crown while it is still just math.`,
     );
   }
+  const worstProjectedForSmack = lowestProjected(ctx);
+  if (worstProjectedForSmack) {
+    posts.push(
+      `${worstProjectedForSmack.name} projects dead last before a single snap. The preseason math is already unkind.`,
+    );
+  }
 
   posts.push("Everybody is 0-0 today. For most of you this is as good as the record gets.");
-  return posts.slice(0, 7).map((body) => ({
+  // No cap here: the pool is trimmed to its display target by applyDiversityLayer.
+  return posts.map((body) => ({
     week: null,
     kind: "smack_post" as const,
     refKey: null,
@@ -482,32 +596,97 @@ export function kindsForSeason(seasonType: StatsContext["seasonType"]): HubConte
   return [];
 }
 
+// ---------------------------------------------------------------------------
+// Diversity layer wiring
+// ---------------------------------------------------------------------------
+
+/**
+ * Validates every candidate row (dropping anything that fails validateRow),
+ * then picks a diverse, non-repeating subset per kind via selectDiverseSubset.
+ * The per-kind functions above deliberately over-generate (more candidates
+ * than the display target) so this has real room to pick the most distinct
+ * hooks instead of just truncating in generation order.
+ */
+function applyDiversityLayer(
+  ctx: StatsContext,
+  candidatesByKind: Partial<Record<HubContentKind, HubContentInsert[]>>,
+  targetCountsByKind: Partial<Record<HubContentKind, number>>,
+): { rows: HubContentInsert[]; diversityStats: { droppedCount: number; relaxedKinds: HubContentKind[] } } {
+  const validatedByKind: Partial<Record<HubContentKind, HubContentInsert[]>> = {};
+  let invalidCount = 0;
+  for (const kind of Object.keys(candidatesByKind) as HubContentKind[]) {
+    const all = candidatesByKind[kind] ?? [];
+    const valid = all.filter((row) => validateRow(row, ctx).valid);
+    invalidCount += all.length - valid.length;
+    validatedByKind[kind] = valid;
+  }
+  const { kept, dropped, relaxedKinds } = selectDiverseSubset(validatedByKind, ctx, {
+    targetCountsByKind,
+    kindPriority: Object.keys(validatedByKind) as HubContentKind[],
+  });
+  return {
+    rows: kept as HubContentInsert[],
+    diversityStats: { droppedCount: invalidCount + dropped.length, relaxedKinds },
+  };
+}
+
 /**
  * Builds the full content batch for a run from the StatsContext alone. Pure and
  * dependency-free (no DB, no network), so it is both the deterministic fallback
  * and directly unit-testable. `ordinal` is retained for future superlative
  * copy; unused today.
+ *
+ * Every kind's candidates are validated and run through the diversity
+ * selector before shipping: no two rows in the batch should share the same
+ * franchise + number hook, and matchup_angle always keeps every current
+ * matchup (its target is the full candidate count, since every matchup needs
+ * a card).
  */
 export function generateFromTemplates(ctx: StatsContext): GeneratedContent {
   void ordinal;
   const kinds = kindsForSeason(ctx.seasonType);
-  const rows: HubContentInsert[] = [];
 
   if (ctx.seasonType === "regular") {
-    rows.push(...matchupAngles(ctx));
+    const matchupCandidates = matchupAngles(ctx);
     const gotw = gameOfWeek(ctx);
-    if (gotw) rows.push(gotw);
-    rows.push(regularHeroDek(ctx));
-    rows.push(...regularSmack(ctx));
-  } else if (ctx.seasonType === "pre") {
-    rows.push(...divisionNotes(ctx.divisions));
-    rows.push(...burningQuestions(ctx));
-    rows.push(...boldPredictions(ctx));
-    rows.push(...offseasonReceipts(ctx));
-    rows.push(preseasonHeroDek(ctx));
-    rows.push(...preseasonSmack(ctx));
+    const smackCandidates = regularSmack(ctx);
+    const candidatesByKind: Partial<Record<HubContentKind, HubContentInsert[]>> = {
+      matchup_angle: matchupCandidates,
+      game_of_week_blurb: gotw ? [gotw] : [],
+      hero_dek: [regularHeroDek(ctx)],
+      smack_post: smackCandidates,
+    };
+    const targetCountsByKind: Partial<Record<HubContentKind, number>> = {
+      matchup_angle: matchupCandidates.length,
+      game_of_week_blurb: gotw ? 1 : 0,
+      hero_dek: 1,
+      smack_post: 5,
+    };
+    const { rows, diversityStats } = applyDiversityLayer(ctx, candidatesByKind, targetCountsByKind);
+    return { kinds, rows, source: "template", diversityStats };
   }
-  // "post"/"off" produce no rows: no hub state reads generated content there.
 
-  return { kinds, rows, source: "template" };
+  if (ctx.seasonType === "pre") {
+    const candidatesByKind: Partial<Record<HubContentKind, HubContentInsert[]>> = {
+      division_note: divisionNotes(ctx.divisions),
+      burning_question: burningQuestions(ctx),
+      bold_prediction: boldPredictions(ctx),
+      offseason_receipt: offseasonReceipts(ctx),
+      hero_dek: [preseasonHeroDek(ctx)],
+      smack_post: preseasonSmack(ctx),
+    };
+    const targetCountsByKind: Partial<Record<HubContentKind, number>> = {
+      division_note: 3,
+      burning_question: 3,
+      bold_prediction: 6,
+      offseason_receipt: 4,
+      hero_dek: 1,
+      smack_post: 5,
+    };
+    const { rows, diversityStats } = applyDiversityLayer(ctx, candidatesByKind, targetCountsByKind);
+    return { kinds, rows, source: "template", diversityStats };
+  }
+
+  // "post"/"off" produce no rows: no hub state reads generated content there.
+  return { kinds, rows: [], source: "template" };
 }

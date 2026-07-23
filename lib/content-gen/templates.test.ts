@@ -73,6 +73,7 @@ function baseContext(overrides: Partial<StatsContext> = {}): StatsContext {
     franchiseHistory: [],
     rosterProjections: [],
     projectionSeason: null,
+    offseasonMoves: [],
     ...overrides,
   };
 }
@@ -318,9 +319,15 @@ describe("generateFromTemplates (preseason, with franchiseHistory + rosterProjec
     expect(questions.some((r) => r.body.includes("Better Call Hall"))).toBe(true);
   });
 
-  it("seeds a smack post from the top roster projection", () => {
-    const smack = rows.filter((r) => r.kind === "smack_post");
-    expect(smack.some((r) => r.body.includes("Team C") && r.body.includes("No. 1"))).toBe(true);
+  it("cites the top roster projection somewhere in the run", () => {
+    // The top-projection fact ("Team C" projecting No. 1) is a real, valid
+    // hook for several kinds (smack_post, bold_prediction, offseason_receipt).
+    // The diversity layer's job is to avoid citing the SAME fact more than
+    // once across the whole run, so this only asserts the fact appears
+    // somewhere, not that it lands in a specific kind.
+    expect(
+      rows.some((r) => r.body.includes("Team C") && /1420\.3|No\. 1\b/.test(r.body)),
+    ).toBe(true);
   });
 
   it("never emits an em-dash", () => {

@@ -55,6 +55,7 @@ function preseasonContext(): StatsContext {
     franchiseHistory: [],
     rosterProjections: [],
     projectionSeason: null,
+    offseasonMoves: [],
   };
 }
 

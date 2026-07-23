@@ -181,6 +181,12 @@ async function runGeneration(request: NextRequest) {
         week,
         kinds: generated.kinds,
         templateFilledKinds: generated.templateFilledKinds ?? [],
+        // Content diversity/dedup observability: how many candidate rows the
+        // validate + selectDiverseSubset layer dropped (invalid or
+        // duplicate), and which kinds had to relax their cap to avoid
+        // shipping an empty module.
+        diversityDroppedCount: generated.diversityStats?.droppedCount ?? 0,
+        diversityRelaxedKinds: generated.diversityStats?.relaxedKinds ?? [],
       },
       startedAt,
       completedAt: new Date(),
