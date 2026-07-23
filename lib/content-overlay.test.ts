@@ -73,15 +73,10 @@ describe("overlayHubEditorial", () => {
         r("offseason_receipt", "bad", "foopus", { category: "NONSENSE" }),
       ]),
     );
-    // Generated rows replace the rotating seeds, then pinned editorial
-    // spotlights (currently the watson-love-diggs AGING_CORE card) append.
-    expect(out.offseasonReceipts[0]).toEqual({ category: "TRADE", franchiseSlug: "foopus", body: "teaser" });
-    const pinned = out.offseasonReceipts.slice(1);
-    expect(pinned.length).toBeGreaterThan(0);
-    for (const receipt of pinned) {
-      expect(receipt.category).toBe("AGING_CORE");
-    }
-    expect(pinned.some((p) => p.franchiseSlug === "watson-love-diggs")).toBe(true);
+    // Generated rows fully replace the seeds; no pinned card is appended.
+    expect(out.offseasonReceipts).toEqual([
+      { category: "TRADE", franchiseSlug: "foopus", body: "teaser" },
+    ]);
   });
 
   it("merges matchup angles by pair and replaces the game-of-week blurb", async () => {

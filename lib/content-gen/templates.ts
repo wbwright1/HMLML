@@ -9,7 +9,7 @@ import type {
   StatsTradeSide,
 } from "@/lib/content-gen/stats-context";
 import { validateRow } from "@/lib/content-gen/validate";
-import { selectDiverseSubset } from "@/lib/content-gen/dedupe";
+import { FRANCHISE_UNIQUE_KINDS, selectDiverseSubset } from "@/lib/content-gen/dedupe";
 
 // ---------------------------------------------------------------------------
 // Deterministic template fallback
@@ -736,6 +736,7 @@ function applyDiversityLayer(
   const { kept, dropped, relaxedKinds } = selectDiverseSubset(validatedByKind, ctx, {
     targetCountsByKind,
     kindPriority: Object.keys(validatedByKind) as HubContentKind[],
+    franchiseUniqueKinds: FRANCHISE_UNIQUE_KINDS,
   });
   return {
     rows: kept as HubContentInsert[],

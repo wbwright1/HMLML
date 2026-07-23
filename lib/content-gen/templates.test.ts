@@ -141,6 +141,12 @@ describe("generateFromTemplates (preseason)", () => {
     }
   });
 
+  it("keeps exactly 4 offseason receipts, each from a distinct franchise", () => {
+    const receipts = rows.filter((r) => r.kind === "offseason_receipt");
+    expect(receipts).toHaveLength(4);
+    expect(new Set(receipts.map((r) => r.refKey)).size).toBe(4);
+  });
+
   it("carries a valid verdict on every bold prediction", () => {
     for (const r of rows.filter((r) => r.kind === "bold_prediction")) {
       expect(["LOCK", "NO", "UP", "DOWN"]).toContain((r.extras as { verdict: string }).verdict);
@@ -467,6 +473,12 @@ describe("generateFromTemplates (offseason)", () => {
   it("uses win-now-vs-future framing when picks are swapped for players", () => {
     const v = rows.find((r) => r.kind === "trade_verdict" && r.refKey === "202");
     expect(v?.body).toMatch(/draft capital|win-now/);
+  });
+
+  it("keeps exactly 4 offseason receipts, each from a distinct franchise", () => {
+    const receipts = rows.filter((r) => r.kind === "offseason_receipt");
+    expect(receipts).toHaveLength(4);
+    expect(new Set(receipts.map((r) => r.refKey)).size).toBe(4);
   });
 
   it("emits a single hero dek and at least one smack post", () => {

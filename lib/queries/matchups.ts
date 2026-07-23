@@ -8,6 +8,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, and, desc, gte } from "drizzle-orm";
 import { getNflState } from "@/lib/queries/nfl-state";
+import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -195,7 +196,19 @@ export async function getMatchupsByWeek(
       )
       .where(and(eq(matchups.seasonId, seasonId), eq(matchups.week, week)));
 
-    return pairMatchupRows(rows);
+    // Past seasons only have avatarUrl populated on their own franchise_seasons
+    // row for 2026+; coalesce to each franchise's latest known avatar so older
+    // weeks still show a real crest instead of the monogram fallback. Applied
+    // before pairing so pairMatchupRows' input shape is unchanged.
+    const fallbackAvatars = await getLatestAvatarUrls(
+      rows.map((r) => r.franchiseId)
+    );
+    const rowsWithAvatars = rows.map((row) => ({
+      ...row,
+      avatarUrl: row.avatarUrl ?? fallbackAvatars.get(row.franchiseId) ?? null,
+    }));
+
+    return pairMatchupRows(rowsWithAvatars);
   } catch (e) {
     console.error("[matchups] getMatchupsByWeek error:", e);
     return [];
@@ -326,9 +339,19 @@ export async function getPlayoffMatchups(
         );
     }
 
+    // See getMatchupsByWeek: coalesce to each franchise's latest known avatar
+    // so past playoff weeks still show a real crest, applied before pairing.
+    const fallbackAvatars = await getLatestAvatarUrls(
+      rows.map((r) => r.franchiseId)
+    );
+    const rowsWithAvatars = rows.map((row) => ({
+      ...row,
+      avatarUrl: row.avatarUrl ?? fallbackAvatars.get(row.franchiseId) ?? null,
+    }));
+
     // Group rows by week, then pair within each week
-    const byWeek = new Map<number, typeof rows>();
-    for (const row of rows) {
+    const byWeek = new Map<number, typeof rowsWithAvatars>();
+    for (const row of rowsWithAvatars) {
       if (!byWeek.has(row.week)) {
         byWeek.set(row.week, []);
       }

@@ -9,6 +9,7 @@ import {
 import { validateRow } from "@/lib/content-gen/validate";
 import {
   extractAnchors,
+  FRANCHISE_UNIQUE_KINDS,
   selectDiverseSubset,
   sharesPrimaryHook,
 } from "@/lib/content-gen/dedupe";
@@ -392,6 +393,7 @@ export function applyDiversityLayer(
   const { kept, dropped, relaxedKinds } = selectDiverseSubset(byKind, ctx, {
     targetCountsByKind: targetCountsForSeason(ctx),
     kindPriority: Object.keys(byKind) as HubContentKind[],
+    franchiseUniqueKinds: FRANCHISE_UNIQUE_KINDS,
   });
   return {
     rows: kept as HubContentInsert[],

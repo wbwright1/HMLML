@@ -163,7 +163,12 @@ export interface SelectOptions {
   targetCountsByKind?: Partial<Record<HubContentKind, number>>;
   /** Kind processing order (also the round-robin column order). Defaults to candidatesByKind's own key order. */
   kindPriority?: HubContentKind[];
+  /** Kinds where at most ONE row per franchise may ever be kept, overriding maxPerFranchise. */
+  franchiseUniqueKinds?: Set<HubContentKind>;
 }
+
+/** Kinds where every row must come from a distinct franchise (e.g. offseason receipts). */
+export const FRANCHISE_UNIQUE_KINDS: Set<HubContentKind> = new Set(["offseason_receipt"]);
 
 export interface DroppedRow {
   row: CandidateRow;
@@ -195,6 +200,7 @@ export function selectDiverseSubset(
   const maxPerFranchise = opts.maxPerFranchise ?? 2;
   const maxPerPlayer = opts.maxPerPlayer ?? 1;
   const targetCounts = opts.targetCountsByKind ?? {};
+  const franchiseUniqueKinds = opts.franchiseUniqueKinds ?? new Set<HubContentKind>();
   const kinds: HubContentKind[] =
     opts.kindPriority ?? (Object.keys(candidatesByKind) as HubContentKind[]);
 
@@ -239,9 +245,10 @@ export function selectDiverseSubset(
 
   function tryAddStrict(row: CandidateRow): boolean {
     const anchors = extractAnchors(row, ctx);
+    const cap = franchiseUniqueKinds.has(row.kind) ? 1 : maxPerFranchise;
     if (
       anchors.franchiseKey &&
-      (franchiseCounts.get(`${row.kind}::${anchors.franchiseKey}`) ?? 0) >= maxPerFranchise
+      (franchiseCounts.get(`${row.kind}::${anchors.franchiseKey}`) ?? 0) >= cap
     ) {
       dropped.push({ row, reason: "franchise-cap" });
       droppedSet.add(row);
@@ -276,9 +283,13 @@ export function selectDiverseSubset(
   // that inflate droppedCount and list matchup_angle in relaxedKinds every
   // regular-season run. Each matchup already has a unique pairKey, so
   // cross-matchup dedup buys nothing; accept them outright. Anchors are still
-  // recorded so OTHER kinds' candidates dedupe against these rows.
+  // recorded so OTHER kinds' candidates dedupe against these rows. Excludes
+  // franchiseUniqueKinds: those kinds must ALWAYS enforce the one-per-franchise
+  // cap, even when candidate count happens to equal the target.
   const keepAllKinds = new Set(
-    kinds.filter((k) => targetFor(k) >= (candidatesByKind[k] ?? []).length),
+    kinds.filter(
+      (k) => targetFor(k) >= (candidatesByKind[k] ?? []).length && !franchiseUniqueKinds.has(k),
+    ),
   );
 
   const addedPerKind = new Map<HubContentKind, number>();
@@ -309,18 +320,29 @@ export function selectDiverseSubset(
     const target = targetFor(kind);
     let added = addedPerKind.get(kind) ?? 0;
     if (added >= target) continue;
-    relaxedKinds.push(kind);
+    let pushedRelaxedKind = false;
     for (const row of candidatesByKind[kind] ?? []) {
       if (added >= target) break;
       if (keptSet.has(row)) continue;
+      const anchors = extractAnchors(row, ctx);
+      if (
+        franchiseUniqueKinds.has(row.kind) &&
+        anchors.franchiseKey &&
+        (franchiseCounts.get(`${row.kind}::${anchors.franchiseKey}`) ?? 0) >= 1
+      ) {
+        continue;
+      }
       if (droppedSet.has(row)) {
         const idx = dropped.findIndex((d) => d.row === row);
         if (idx >= 0) dropped.splice(idx, 1);
         droppedSet.delete(row);
       }
-      const anchors = extractAnchors(row, ctx);
       accept(row, anchors);
       added++;
+      if (!pushedRelaxedKind) {
+        relaxedKinds.push(kind);
+        pushedRelaxedKind = true;
+      }
     }
     addedPerKind.set(kind, added);
   }
