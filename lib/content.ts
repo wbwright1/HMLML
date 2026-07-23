@@ -107,6 +107,27 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
     description: 'Franchise with the worst average margin of defeat in the season (when they lose, they lose big)',
     tone: 'sting',
   },
+  // Coverage-pass fallbacks: always-computable superlatives used to guarantee
+  // every franchise appears in at least one award. Assigned only to franchises
+  // the primary superlatives missed; see getUncoveredFranchiseAwards.
+  LONGEST_DROUGHT: {
+    key: 'LONGEST_DROUGHT',
+    displayText: 'Title Drought',
+    description: 'Franchise that has gone the longest without a championship (or never won one)',
+    tone: 'sting',
+  },
+  PUNCHING_BAG: {
+    key: 'PUNCHING_BAG',
+    displayText: 'Punching Bag',
+    description: 'Uncovered franchise allowing the most points against this season',
+    tone: 'sting',
+  },
+  WALLFLOWER: {
+    key: 'WALLFLOWER',
+    displayText: 'Wallflower',
+    description: 'Franchise that dodged every other superlative; impressively unremarkable',
+    tone: 'neutral',
+  },
 } as const);
 
 // ===========================================================================

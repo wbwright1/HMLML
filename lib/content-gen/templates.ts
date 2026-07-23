@@ -5,6 +5,8 @@ import type {
   StatsFranchiseHistory,
   StatsMatchup,
   StatsRosterProjection,
+  StatsTrade,
+  StatsTradeSide,
 } from "@/lib/content-gen/stats-context";
 import { validateRow } from "@/lib/content-gen/validate";
 import { selectDiverseSubset } from "@/lib/content-gen/dedupe";
@@ -477,6 +479,110 @@ function preseasonSmack(ctx: StatsContext): HubContentInsert[] {
 }
 
 // ---------------------------------------------------------------------------
+// Offseason (season-scoped, week = null) — deliberately lightweight
+// ---------------------------------------------------------------------------
+// The owner's instruction: keep the offseason side light. When little has
+// changed the whole run is skipped by the activity gate in the route; when it
+// does run, it produces a small recap/lookahead set plus per-trade verdicts.
+
+function offseasonHeroDek(ctx: StatsContext): HubContentInsert {
+  const champ = ctx.lastSeason?.champion;
+  const body = champ
+    ? `The ${ctx.lastSeason?.year} season is in the books, ${champ.name} has the ring, and everyone else is already rewriting their roster in the group chat. The offseason is where next year's receipts get printed.`
+    : `The season is in the books and the offseason is where next year's receipts get printed. Every roster move now is a promise somebody will be held to in the fall.`;
+  return { week: null, kind: "hero_dek", refKey: null, body, extras: null };
+}
+
+function offseasonSmack(ctx: StatsContext): HubContentInsert[] {
+  const posts: string[] = [
+    "The offseason is undefeated. Every team is a contender in a group chat and nowhere else.",
+    "Roster moves are cheap in the offseason. Come the fall, somebody has to actually start these guys.",
+  ];
+  if (ctx.lastSeason?.champion) {
+    posts.push(
+      `${ctx.lastSeason.champion.name} won it all and now gets to defend it. The target does not get smaller in the offseason.`,
+    );
+  }
+  if (ctx.lastSeason?.doormat) {
+    posts.push(
+      `${ctx.lastSeason.doormat.name} went ${ctx.lastSeason.doormat.record} and has a whole offseason to convince the group chat it was bad luck.`,
+    );
+  }
+  const sustainedDoormatFranchise = sustainedDoormatEntry(ctx);
+  if (sustainedDoormatFranchise) {
+    posts.push(
+      `${slugToName(ctx, sustainedDoormatFranchise.slug)} has been bottom-third for multiple seasons running. An offseason of bold talk does not undo a resume.`,
+    );
+  }
+  // No cap here: trimmed to its display target by applyDiversityLayer.
+  return posts.map((body) => ({
+    week: null,
+    kind: "smack_post" as const,
+    refKey: null,
+    body,
+    extras: null,
+  }));
+}
+
+/**
+ * A deterministic, hedged "who won this trade" line per recent trade, derived
+ * ONLY from the assets each side received: how many players, how much draft
+ * capital. No value model exists, so the copy never declares a settled winner;
+ * it leans on volume and on the win-now-vs-future split, always with a "graded
+ * later" hedge. refKey is the trade's transaction id, so /trades can attach the
+ * verdict to the right card. Player positions/names are intentionally NOT named
+ * here (avoids position-claim/hallucination flags); the take is about shape.
+ */
+function tradeVerdicts(ctx: StatsContext): HubContentInsert[] {
+  return ctx.recentTrades.map((t) => ({
+    week: null,
+    kind: "trade_verdict" as const,
+    refKey: String(t.id),
+    body: verdictLine(t),
+    extras: null,
+  }));
+}
+
+function assetCount(side: StatsTradeSide): number {
+  return side.players.length + side.picks;
+}
+
+function verdictLine(t: StatsTrade): string {
+  const sides = t.sides;
+  if (sides.length !== 2) {
+    return "A multi-team deal with enough moving parts that nobody in the group chat will ever agree who won it. Grade it once the standings weigh in.";
+  }
+  const [a, b] = sides;
+  const aName = a.franchiseName ?? "One side";
+  const bName = b.franchiseName ?? "the other side";
+  const aTotal = assetCount(a);
+  const bTotal = assetCount(b);
+  const diff = aTotal - bTotal;
+
+  if (Math.abs(diff) >= 2) {
+    const more = diff > 0 ? a : b;
+    const less = diff > 0 ? b : a;
+    const moreName = more.franchiseName ?? "one side";
+    const lessName = less.franchiseName ?? "the other";
+    const moreN = assetCount(more);
+    const lessN = assetCount(less);
+    return `${moreName} walked away with ${moreN} ${moreN === 1 ? "piece" : "pieces"} to ${lessName}'s ${lessN}. Early returns favor the side that got more bodies, though a lopsided haul on paper has flattered plenty of GMs before.`;
+  }
+
+  const aPickHeavy = a.picks > a.players.length;
+  const bPickHeavy = b.picks > b.players.length;
+  if (aPickHeavy !== bPickHeavy) {
+    const future = aPickHeavy ? a : b;
+    const now = aPickHeavy ? b : a;
+    const futureName = future.franchiseName ?? "one side";
+    const nowName = now.franchiseName ?? "the other";
+    return `${futureName} banked the draft capital while ${nowName} took the win-now pieces. Whether patience or urgency wins this one is a story for a later season, not this week.`;
+  }
+
+  return `${aName} and ${bName} both gave up real value here, and both are already calling it a steal. Too even to grade until the points do the talking in the fall.`;
+}
+
+// ---------------------------------------------------------------------------
 // Regular season (week-scoped)
 // ---------------------------------------------------------------------------
 
@@ -577,9 +683,11 @@ function regularSmack(ctx: StatsContext): HubContentInsert[] {
 // ---------------------------------------------------------------------------
 
 /**
- * The kinds this run generates, given the seasonal state. Only "regular" and
- * "pre" produce hub editorial; "post"/"off" have no hub state that reads
- * generated content, so they map to no kinds (the endpoint skips them).
+ * The kinds this run generates, given the seasonal state. "regular" and "pre"
+ * produce the full hub editorial; "off" produces a deliberately lightweight
+ * set (season-scoped receipts/dek/smack that the preseason hub reads, plus
+ * per-trade verdicts rendered on /trades). "post" (the playoffs) still maps to
+ * no kinds and the endpoint skips it.
  */
 export function kindsForSeason(seasonType: StatsContext["seasonType"]): HubContentKind[] {
   if (seasonType === "regular") {
@@ -594,6 +702,9 @@ export function kindsForSeason(seasonType: StatsContext["seasonType"]): HubConte
       "hero_dek",
       "smack_post",
     ];
+  }
+  if (seasonType === "off") {
+    return ["offseason_receipt", "hero_dek", "smack_post", "trade_verdict"];
   }
   return [];
 }
@@ -689,6 +800,27 @@ export function generateFromTemplates(ctx: StatsContext): GeneratedContent {
     return { kinds, rows, source: "template", diversityStats };
   }
 
-  // "post"/"off" produce no rows: no hub state reads generated content there.
+  if (ctx.seasonType === "off") {
+    const receipts = offseasonReceipts(ctx);
+    const verdicts = tradeVerdicts(ctx);
+    const candidatesByKind: Partial<Record<HubContentKind, HubContentInsert[]>> = {
+      offseason_receipt: receipts,
+      hero_dek: [offseasonHeroDek(ctx)],
+      smack_post: offseasonSmack(ctx),
+      trade_verdict: verdicts,
+    };
+    const targetCountsByKind: Partial<Record<HubContentKind, number>> = {
+      offseason_receipt: 4,
+      hero_dek: 1,
+      smack_post: 3,
+      // Every recent trade gets its own verdict (keep-all, like matchup_angle).
+      trade_verdict: verdicts.length,
+    };
+    const { rows, diversityStats } = applyDiversityLayer(ctx, candidatesByKind, targetCountsByKind);
+    return { kinds, rows, source: "template", diversityStats };
+  }
+
+  // "post" (the playoffs) produces no rows: no hub state reads generated
+  // content there, and kindsForSeason maps it to no kinds.
   return { kinds, rows: [], source: "template" };
 }

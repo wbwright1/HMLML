@@ -343,6 +343,17 @@ function targetCountsForSeason(ctx: StatsContext): Partial<Record<HubContentKind
       smack_post: 5,
     };
   }
+  if (ctx.seasonType === "off") {
+    // Lightweight offseason set. trade_verdict is keep-all (one per trade),
+    // never trimmed; the LLM path never produces verdicts, so fillMissingKinds
+    // backfills them from the deterministic templates.
+    return {
+      offseason_receipt: 4,
+      hero_dek: 1,
+      smack_post: 3,
+      trade_verdict: ctx.recentTrades.length,
+    };
+  }
   return {
     division_note: 3,
     burning_question: 3,

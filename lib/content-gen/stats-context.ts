@@ -15,6 +15,7 @@ import type { NflSeasonType } from "@/lib/queries/nfl-state";
 import { getLeagueLongevity } from "@/lib/queries/franchise-longevity";
 import { getRosterProjections } from "@/lib/queries/roster-projections";
 import { getOffseasonMoves, type StatsOffseasonMoves } from "@/lib/queries/offseason-moves";
+import { getTrades } from "@/lib/queries/trades";
 
 export type { StatsOffseasonMoves } from "@/lib/queries/offseason-moves";
 
@@ -115,6 +116,26 @@ export interface StatsRosterProjection {
   topProjectedPlayer: { name: string; position: string | null; points: number } | null;
 }
 
+/** One side of a recent trade, reduced to what a deterministic verdict needs. */
+export interface StatsTradeSide {
+  franchiseName: string | null;
+  /** Players received by this side (name + position where known). */
+  players: { name: string; position: string | null }[];
+  /** Count of draft picks received by this side (the draft-capital signal). */
+  picks: number;
+}
+
+/**
+ * A recent completed trade, keyed by its transaction id (the refKey a
+ * trade_verdict row carries). Only the assets exchanged are kept, so the
+ * verdict copy is derived from real, citable volume/capital, never invented.
+ */
+export interface StatsTrade {
+  id: number;
+  seasonYear: number;
+  sides: StatsTradeSide[];
+}
+
 export interface StatsContext {
   seasonYear: number;
   week: number;
@@ -156,6 +177,12 @@ export interface StatsContext {
    * empty for "regular"/"post" (and on any query failure).
    */
   offseasonMoves: StatsOffseasonMoves[];
+  /**
+   * The most recent completed trades league-wide (capped, newest first), for
+   * per-trade Site Desk verdicts. Populated for "pre"/"off" season types only;
+   * empty for "regular"/"post" (and on any query failure).
+   */
+  recentTrades: StatsTrade[];
 }
 
 export interface StatsContextInput {
@@ -168,6 +195,9 @@ export interface StatsContextInput {
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/** Bound the per-trade verdict work: only the N most recent trades are graded. */
+const RECENT_TRADES_CAP = 10;
 
 function fmtRecord(wins: number, losses: number, ties: number): string {
   return ties > 0 ? `${wins}-${losses}-${ties}` : `${wins}-${losses}`;
@@ -439,11 +469,28 @@ export async function buildStatsContext(
   // Real offseason activity (draft order, offseason trades), only relevant to
   // preseason/offseason hub content. Same degrade-to-empty pattern as above.
   let offseasonMoves: StatsOffseasonMoves[] = [];
+  let recentTrades: StatsTrade[] = [];
   if (seasonType === "pre" || seasonType === "off") {
     try {
       offseasonMoves = await getOffseasonMoves(seasonId, seasonYear);
     } catch (e) {
       console.error("[stats-context] offseason moves unavailable:", e);
+    }
+    try {
+      // League-wide, newest first, capped: verdicts are graded on the most
+      // recent deals only. getTrades already degrades to [] on failure.
+      const trades = await getTrades();
+      recentTrades = trades.slice(0, RECENT_TRADES_CAP).map((t) => ({
+        id: t.id,
+        seasonYear: t.seasonYear,
+        sides: t.sides.map((s) => ({
+          franchiseName: s.franchise?.name ?? null,
+          players: s.players.map((p) => ({ name: p.name, position: p.position })),
+          picks: s.picks.length,
+        })),
+      }));
+    } catch (e) {
+      console.error("[stats-context] recent trades unavailable:", e);
     }
   }
 
@@ -463,5 +510,6 @@ export async function buildStatsContext(
     rosterProjections,
     projectionSeason,
     offseasonMoves,
+    recentTrades,
   };
 }

@@ -65,6 +65,18 @@ export default async function DraftsPage() {
 
   const years = Array.from(draftsByYear.keys()).sort((a, b) => b - a);
 
+  // "Fresh off the board": when there is no upcoming (undrafted) season to
+  // headline, spotlight the newest COMPLETED draft so a just-synced rookie
+  // board is the first thing anyone sees. The remaining years list normally.
+  const spotlightYear =
+    !upcomingSeasonYear && years.length > 0 ? years[0] : null;
+  const listYears = spotlightYear
+    ? years.filter((y) => y !== spotlightYear)
+    : years;
+  const spotlightDrafts = spotlightYear
+    ? draftsByYear.get(spotlightYear)!
+    : [];
+
   return (
     <PageSection label="Draft Room" title="The Drafts.">
       <p className="text-body-lg text-text-tertiary max-w-prose">
@@ -73,6 +85,44 @@ export default async function DraftsPage() {
       </p>
 
       <div className="mt-8 space-y-4">
+        {spotlightYear && (
+          <ScrollReveal>
+            <Link
+              href={`/drafts/${spotlightYear}`}
+              className="group block rounded-[14px] border border-accent-gold/30 bg-accent-gold-light p-6 transition-colors hover:border-accent-gold/50"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-h2 group-hover:text-accent-gold transition-colors">
+                      {spotlightYear}
+                    </span>
+                    <SuperlativeBadge text="Fresh off the board" variant="gold" />
+                    {spotlightDrafts.map((d) => (
+                      <SuperlativeBadge
+                        key={d.draftId}
+                        text={d.draftType === "startup" ? "Startup" : "Rookie"}
+                        variant={d.draftType === "startup" ? "gold" : "neutral"}
+                      />
+                    ))}
+                  </div>
+                  <p className="text-body-sm text-text-secondary max-w-prose">
+                    The newest board is in the books.{" "}
+                    {spotlightDrafts.reduce((sum, d) => sum + d.pickCount, 0)}{" "}
+                    picks, every reach and every steal on the record. See who won
+                    the room.
+                  </p>
+                </div>
+                <span
+                  className="shrink-0 text-accent-gold group-hover:translate-x-0.5 transition-transform"
+                  aria-hidden="true"
+                >
+                  &rarr;
+                </span>
+              </div>
+            </Link>
+          </ScrollReveal>
+        )}
         {upcomingSeasonYear && (
           <ScrollReveal>
             <Link

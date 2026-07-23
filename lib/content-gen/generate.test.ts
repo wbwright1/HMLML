@@ -62,6 +62,7 @@ function preseasonContext(overrides: Partial<StatsContext> = {}): StatsContext {
     rosterProjections: [],
     projectionSeason: null,
     offseasonMoves: [],
+    recentTrades: [],
     ...overrides,
   };
 }

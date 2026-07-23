@@ -7,10 +7,33 @@ import { StatHero } from "@/components/stat-hero";
 import { OffseasonRecapCard } from "@/components/offseason-recap-card";
 import { TransactionActivityCard } from "@/components/transaction-activity-card";
 import { ChampionshipStars } from "@/components/championship-stars";
+import {
+  OffseasonReceiptCard,
+  type ReceiptFranchise,
+} from "@/components/hub/offseason-receipt-card";
+import {
+  SmackFeed,
+  SmackComposerSlot,
+  smackItemsFromPosts,
+  smackItemsFromSeeds,
+} from "@/components/smack-feed";
 import { getSeasonStandings, getLastCompletedSeason } from "@/lib/queries/seasons";
 import { getLeagueAtAGlance } from "@/lib/queries/homepage";
 import { getOffseasonRecap, getRecentTransactions } from "@/lib/queries/offseason";
+import { getAllFranchises } from "@/lib/queries/franchises";
+import { getHubEditorial } from "@/lib/content";
+import { getPublishedHubContent } from "@/lib/queries/hub-content";
+import { getSessionMember } from "@/lib/auth";
+import { getRecentSmackPosts, anySmackPostsExist } from "@/lib/queries/smack";
 import type { getLatestSeason } from "@/lib/queries/matchups";
+
+function titleCaseSlug(slug: string): string {
+  return slug
+    .split("-")
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(" ");
+}
 
 export async function OffseasonHub({
   latestSeason,
@@ -50,6 +73,70 @@ export async function OffseasonHub({
     // Data may not be available
   }
 
+  // Season-scoped Site Desk editorial (offseason receipts, hero dek, smack),
+  // written by the generate-content cron and keyed to the latest season the
+  // cron targets. The hub only surfaces a module when the DB actually holds
+  // GENERATED rows for it; with no rows the static recap below is unchanged,
+  // so this is purely additive. Every read degrades independently.
+  const editorialSeasonId = latestSeason?.id;
+  const editorial = await getHubEditorial({ seasonId: editorialSeasonId });
+
+  let hasGeneratedReceipts = false;
+  let hasGeneratedSmack = false;
+  const franchiseBySlug = new Map<string, ReceiptFranchise>();
+  if (editorialSeasonId != null) {
+    try {
+      const grouped = await getPublishedHubContent(editorialSeasonId, null);
+      hasGeneratedReceipts = (grouped.offseason_receipt?.length ?? 0) > 0;
+      hasGeneratedSmack = (grouped.smack_post?.length ?? 0) > 0;
+    } catch {
+      // No generated content available; static recap stands on its own.
+    }
+  }
+  if (hasGeneratedReceipts) {
+    try {
+      const franchises = await getAllFranchises();
+      for (const f of franchises ?? []) {
+        franchiseBySlug.set(f.slug, {
+          slug: f.slug,
+          name: f.name,
+          abbreviation: f.abbreviation ?? null,
+          brandingColor: f.brandingColor ?? null,
+          avatarUrl: null,
+        });
+      }
+    } catch {
+      // Crest lookup failed; the card falls back to a slug-derived monogram.
+    }
+  }
+  const resolveReceiptFranchise = (slug: string): ReceiptFranchise =>
+    franchiseBySlug.get(slug) ?? {
+      slug,
+      name: titleCaseSlug(slug),
+      abbreviation: null,
+      brandingColor: null,
+      avatarUrl: null,
+    };
+
+  // Smack feed: real member posts win when any exist; Site Desk seeds/generated
+  // posts only stand in when the board is genuinely empty. The section is shown
+  // only when there is something real to show (member posts OR generated smack),
+  // so a quiet offseason keeps the static recap layout untouched.
+  const [memberResult, smackResult] = await Promise.allSettled([
+    getSessionMember(),
+    Promise.all([getRecentSmackPosts(4), anySmackPostsExist()]),
+  ]);
+  const sessionMember =
+    memberResult.status === "fulfilled" ? memberResult.value : null;
+  const [realSmack, anySmack] =
+    smackResult.status === "fulfilled" ? smackResult.value : [[], false];
+  const smackFromDesk = realSmack.length === 0 && !anySmack;
+  const showSmack = realSmack.length > 0 || hasGeneratedSmack;
+  const smackItems = smackFromDesk
+    ? smackItemsFromSeeds(editorial.smackPosts.slice(0, 4))
+    : smackItemsFromPosts(realSmack);
+  const canPost = Boolean(sessionMember?.franchiseId);
+
   // Champion banner data from the completed season
   const championStandings = completedStandings.length > 0 ? completedStandings : standings;
   const champion = championStandings.find((s) => s.playoffResult === "champion");
@@ -64,6 +151,11 @@ export async function OffseasonHub({
           Harambe Memorial League &middot; {championSeasonYear ?? new Date().getFullYear()}
         </p>
         <h1 className="text-display">The Offseason.</h1>
+        {editorial.heroDek && (
+          <p className="mt-4 text-body-lg text-text-secondary max-w-xl">
+            {editorial.heroDek}
+          </p>
+        )}
       </section>
 
       {/* Champion Banner */}
@@ -155,6 +247,47 @@ export async function OffseasonHub({
                   : []),
               ]}
             />
+          </PageSection>
+        </ScrollReveal>
+      )}
+
+      {/* Offseason Receipts (generated Site Desk content; hidden when none) */}
+      {hasGeneratedReceipts && editorial.offseasonReceipts.length > 0 && (
+        <ScrollReveal>
+          <PageSection label="Site Desk" title="Offseason Receipts">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {editorial.offseasonReceipts.map((receipt, i) => (
+                <OffseasonReceiptCard
+                  key={`${receipt.category}-${i}`}
+                  receipt={receipt}
+                  franchise={resolveReceiptFranchise(receipt.franchiseSlug)}
+                />
+              ))}
+            </div>
+          </PageSection>
+        </ScrollReveal>
+      )}
+
+      {/* The Smack Feed (real posts win; Site Desk stands in only when empty) */}
+      {showSmack && (
+        <ScrollReveal>
+          <PageSection
+            label={smackFromDesk ? "Site Desk" : "The League"}
+            title="The Smack Feed"
+          >
+            <div className="space-y-3">
+              <SmackComposerSlot canPost={canPost} />
+              {smackItems.length > 0 ? (
+                <SmackFeed
+                  items={smackItems}
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                />
+              ) : (
+                <p className="card-surface block p-4 text-body-sm text-text-tertiary">
+                  Nothing on the board right now.
+                </p>
+              )}
+            </div>
           </PageSection>
         </ScrollReveal>
       )}

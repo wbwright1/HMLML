@@ -1,9 +1,11 @@
 import { LiveMatchupCard } from "@/components/live-matchup-card";
 import { computeWinProbability } from "@/lib/win-probability";
+import { deriveLiveAside } from "@/lib/live-aside";
 import type { HubLiveData } from "@/lib/queries/homepage";
 import type { PairedMatchup } from "@/lib/queries/matchups";
 import type { getSeasonStandings } from "@/lib/queries/seasons";
 import type { getPlayoffProjection } from "@/lib/queries/divisions";
+import type { PlayoffRaceTag } from "@/lib/queries/playoff-race";
 
 /** Small left-aligned stat card for the hub hero row. */
 export function StatChip({
@@ -44,6 +46,7 @@ export function GameCard({
   seasonYear,
   hubLive,
   avatars,
+  isRivalry,
 }: {
   matchup: PairedMatchup;
   week: number;
@@ -51,6 +54,8 @@ export function GameCard({
   hubLive?: HubLiveData;
   /** franchiseId → per-season crest URL; absent entries fall back to monograms. */
   avatars?: ReadonlyMap<string, string>;
+  /** True when this pairing is a mutual-top-rival Rivalry Week matchup. */
+  isRivalry?: boolean;
 }) {
   const status = cardStatus(matchup.status);
   const homeRoster = matchup.homeTeam.rosterId;
@@ -65,6 +70,7 @@ export function GameCard({
 
   let winProbHome: number | undefined;
   let playersLeft: { home: number; away: number } | undefined;
+  let aside: string | undefined;
   if (status === "live" && hasPlayerData) {
     winProbHome = computeWinProbability({
       scoreA: matchup.homeTeam.points,
@@ -73,6 +79,14 @@ export function GameCard({
       projRemainingB: hubLive?.projRemaining.get(awayRoster) ?? 0,
     });
     playersLeft = { home: homeLeft.left, away: awayLeft.left };
+    // Swing-moment aside, derived deterministically from the live snapshot.
+    aside =
+      deriveLiveAside({
+        homeScore: matchup.homeTeam.points,
+        awayScore: matchup.awayTeam.points,
+        winProbHome,
+        playersLeft,
+      }) ?? undefined;
   }
 
   return (
@@ -99,6 +113,8 @@ export function GameCard({
       seasonYear={seasonYear}
       winProbHome={winProbHome}
       playersLeft={playersLeft}
+      aside={aside}
+      isRivalry={isRivalry}
     />
   );
 }
@@ -107,10 +123,12 @@ export function GameCard({
  * always derived from record (wins DESC, points DESC), never
  * standingsFinish, which is null in-season and only populated by the legacy
  * importer post-season. Optionally merges a playoff projection's seed/in-out
- * data keyed by franchiseId. */
+ * data keyed by franchiseId, and provably-correct playoff-race tags. */
 export function toLadderEntries(
   standings: Awaited<ReturnType<typeof getSeasonStandings>>,
-  projection?: Awaited<ReturnType<typeof getPlayoffProjection>>
+  projection?: Awaited<ReturnType<typeof getPlayoffProjection>>,
+  /** Provably-correct playoff-race tags keyed by franchiseId; absent = none. */
+  raceTags?: ReadonlyMap<string, PlayoffRaceTag>
 ) {
   const projectionById = new Map(
     (projection?.field ?? []).map((t) => [t.franchiseId, t])
@@ -129,7 +147,10 @@ export function toLadderEntries(
       rank: i + 1,
       franchiseName: s.franchiseName,
       franchiseSlug: s.franchiseSlug,
-      record: `${s.wins ?? 0}-${s.losses ?? 0}`,
+      record:
+        (s.ties ?? 0) > 0
+          ? `${s.wins ?? 0}-${s.losses ?? 0}-${s.ties}`
+          : `${s.wins ?? 0}-${s.losses ?? 0}`,
       abbreviation: s.franchiseAbbreviation,
       brandingColor: s.franchiseBrandingColor,
       avatarUrl: s.avatarUrl ?? null,
@@ -138,6 +159,7 @@ export function toLadderEntries(
       seed: projected?.seed ?? null,
       isDivisionWinner: projected?.isDivisionWinner ?? false,
       isIn: projection ? (projected?.isIn ?? false) : undefined,
+      raceTag: raceTags?.get(s.franchiseId),
     };
   });
 }

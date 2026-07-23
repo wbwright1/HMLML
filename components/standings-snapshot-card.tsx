@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { SNARKY_LABELS } from "@/lib/content";
+import type { PlayoffRaceTag } from "@/lib/queries/playoff-race";
 
 interface StandingsEntry {
   rank: number;
@@ -19,7 +20,16 @@ interface StandingsEntry {
   isDivisionWinner?: boolean;
   /** Whether the team is projected to make the playoff field. */
   isIn?: boolean;
+  /** Provably-correct playoff-race tag; overrides the soft isIn projection. */
+  raceTag?: PlayoffRaceTag;
 }
+
+/** Sage clinch/win-and-in, rust elimination; always carries a text label. */
+const RACE_TAG_META: Record<PlayoffRaceTag, { label: string; className: string }> = {
+  clinched: { label: "Clinched", className: "text-accent-green" },
+  "win-and-in": { label: "Win + in", className: "text-accent-green" },
+  eliminated: { label: "Eliminated", className: "text-accent-warm" },
+};
 
 interface StandingsSnapshotCardProps {
   standings: StandingsEntry[];
@@ -170,14 +180,24 @@ function LadderRow({
           {`#${entry.seed} ${entry.isDivisionWinner ? "DIV" : "WC"}`}
         </span>
       )}
-      {entry.isIn !== undefined && (
+      {entry.raceTag ? (
         <span
           className={`text-caption shrink-0 font-semibold ${
-            entry.isIn ? "text-accent-green" : "text-accent-warm"
+            RACE_TAG_META[entry.raceTag].className
           }`}
         >
-          {entry.isIn ? "IN" : "OUT"}
+          {RACE_TAG_META[entry.raceTag].label}
         </span>
+      ) : (
+        entry.isIn !== undefined && (
+          <span
+            className={`text-caption shrink-0 font-semibold ${
+              entry.isIn ? "text-accent-green" : "text-accent-warm"
+            }`}
+          >
+            {entry.isIn ? "IN" : "OUT"}
+          </span>
+        )
       )}
       <span
         className={`text-stat text-sm shrink-0 tabular-nums ${

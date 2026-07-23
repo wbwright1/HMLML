@@ -24,6 +24,7 @@ function minimalContext(overrides: Partial<StatsContext> = {}): StatsContext {
     rosterProjections: [],
     projectionSeason: null,
     offseasonMoves: [],
+    recentTrades: [],
     ...overrides,
   };
 }

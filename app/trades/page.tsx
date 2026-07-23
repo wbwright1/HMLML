@@ -6,6 +6,7 @@ import { FranchiseIdentity } from "@/components/franchise-identity";
 import { TradeCard } from "@/components/trade-card";
 import { TradeFilters } from "@/app/trades/trade-filters";
 import { getTrades } from "@/lib/queries/trades";
+import { getTradeVerdicts } from "@/lib/queries/trade-verdicts";
 import { getAllFranchises } from "@/lib/queries/franchises";
 import { getAllSeasons } from "@/lib/queries/seasons";
 
@@ -44,10 +45,13 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
     ? allSeasons.find((s) => String(s.seasonYear) === season)
     : undefined;
 
-  const trades = await getTrades({
-    seasonId: selectedSeason?.id,
-    franchiseId: selectedFranchise?.id,
-  });
+  const [trades, verdicts] = await Promise.all([
+    getTrades({
+      seasonId: selectedSeason?.id,
+      franchiseId: selectedFranchise?.id,
+    }),
+    getTradeVerdicts(),
+  ]);
 
   return (
     <PageSection label="The Receipts" title="Trade History.">
@@ -97,7 +101,7 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
         <div className="space-y-4">
           {trades.map((trade, index) => (
             <ScrollReveal key={trade.id} delay={index * 40}>
-              <TradeCard trade={trade} />
+              <TradeCard trade={trade} verdict={verdicts.get(String(trade.id))} />
             </ScrollReveal>
           ))}
         </div>

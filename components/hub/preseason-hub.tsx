@@ -16,10 +16,17 @@ import {
   type ReceiptFranchise,
 } from "@/components/hub/offseason-receipt-card";
 import { BurningQuestionsCard } from "@/components/hub/burning-questions-card";
+import { TeamAwardCard } from "@/components/team-award-card";
+import { StingCard } from "@/components/sting-card";
 import { getHubEditorial } from "@/lib/content";
 import { getPreseasonField } from "@/lib/queries/preseason-field";
 import { getNextKickoff } from "@/lib/queries/kickoff";
 import { getLastCompletedSeason } from "@/lib/queries/seasons";
+import {
+  getSeasonSuperlatives,
+  getUncoveredFranchiseAwards,
+  type SeasonSuperlative,
+} from "@/lib/queries/superlatives";
 import { daysUntil } from "@/lib/hub/live-pill-label";
 import type { getLatestSeason } from "@/lib/queries/matchups";
 
@@ -137,6 +144,26 @@ export async function PreseasonHub({
   const canPost = Boolean(sessionMember?.franchiseId);
 
   const hasField = field.divisions.length > 0;
+
+  // Season Superlatives (Wall of Shame): the last completed season's awards,
+  // plus a coverage pass so every one of the 12 franchises lands on at least
+  // one card. Additive and self-contained: fetched in its own settled block so
+  // a failure here never affects the rest of the hub, and the section simply
+  // does not render when there is nothing (empty DB or no completed season).
+  let seasonSuperlatives: SeasonSuperlative[] = [];
+  try {
+    const completedForAwards = await getLastCompletedSeason();
+    if (completedForAwards) {
+      const base = await getSeasonSuperlatives(completedForAwards.id);
+      const fillers = await getUncoveredFranchiseAwards(
+        completedForAwards.id,
+        base.map((s) => s.franchiseSlug),
+      );
+      seasonSuperlatives = [...base, ...fillers];
+    }
+  } catch {
+    // DB unavailable; the Season Superlatives section is omitted.
+  }
 
   // Nothing to show (empty DB): keep a calm, on-voice fallback.
   if (!hasField && !draftUpcoming && !kickoffTarget) {
@@ -280,6 +307,43 @@ export async function PreseasonHub({
           </section>
         </aside>
       </div>
+
+      {/* Season Superlatives · Nobody Escapes: full-width Wall of Shame. The
+          coverage pass guarantees all 12 franchises appear, so every member
+          finds themselves before Week 1. */}
+      {seasonSuperlatives.length > 0 && (
+        <section className="pt-2 pb-8">
+          <ModuleLabel
+            meta={lastCompletedSeasonYear ? `${lastCompletedSeasonYear} · all 12` : "all 12"}
+          >
+            Season Superlatives · Nobody Escapes
+          </ModuleLabel>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {seasonSuperlatives.map((s) =>
+              s.tone === "sting" ? (
+                <StingCard
+                  key={`${s.franchiseSlug}-${s.labelKey}`}
+                  label={s.displayText}
+                  franchiseName={s.franchiseName}
+                  franchiseSlug={s.franchiseSlug}
+                  context={s.context}
+                  stat={s.stat}
+                />
+              ) : (
+                <TeamAwardCard
+                  key={`${s.franchiseSlug}-${s.labelKey}`}
+                  label={s.displayText}
+                  stat={s.stat}
+                  context={s.context}
+                  franchiseName={s.franchiseName}
+                  franchiseSlug={s.franchiseSlug}
+                  tone={s.tone}
+                />
+              ),
+            )}
+          </div>
+        </section>
+      )}
     </>
   );
 }

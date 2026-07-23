@@ -8,6 +8,10 @@ import {
   getSeasonByYearSimple,
 } from "@/lib/queries/matchups";
 import { getMatchupLineups } from "@/lib/queries/player-points";
+import { getHubLiveData } from "@/lib/queries/homepage";
+import { getRivalryWeek, rivalryPairKey } from "@/lib/queries/rivalry-week";
+import { computeWinProbability } from "@/lib/win-probability";
+import { deriveLiveAside } from "@/lib/live-aside";
 import type { MatchupTeam, PairedMatchup } from "@/lib/queries/matchups";
 import type { MatchupLineups as MatchupLineupsData } from "@/lib/queries/player-points";
 
@@ -84,6 +88,44 @@ export default async function MatchupDetailPage({
     // Per-player lineup data may not be available
   }
 
+  // Rivalry Week: is this pairing a mutual-top-rival matchup?
+  let isRivalry = false;
+  try {
+    const rivalrySet = await getRivalryWeek(matchups);
+    isRivalry = rivalrySet.has(
+      rivalryPairKey(homeTeam.franchiseId, awayTeam.franchiseId)
+    );
+  } catch {
+    // Rivalry data may not be available
+  }
+
+  // Live swing-moment aside, computed from the same game-status-based live
+  // inputs the hub cards use. Only shown while the game is in progress.
+  let aside: string | null = null;
+  if (isLive) {
+    try {
+      const hubLive = await getHubLiveData(season.id, week);
+      const homeLeft = hubLive.playersLeft.get(homeTeam.rosterId);
+      const awayLeft = hubLive.playersLeft.get(awayTeam.rosterId);
+      if (homeLeft != null && awayLeft != null) {
+        const winProbHome = computeWinProbability({
+          scoreA: homeTeam.points,
+          scoreB: awayTeam.points,
+          projRemainingA: hubLive.projRemaining.get(homeTeam.rosterId) ?? 0,
+          projRemainingB: hubLive.projRemaining.get(awayTeam.rosterId) ?? 0,
+        });
+        aside = deriveLiveAside({
+          homeScore: homeTeam.points,
+          awayScore: awayTeam.points,
+          winProbHome,
+          playersLeft: { home: homeLeft.left, away: awayLeft.left },
+        });
+      }
+    } catch {
+      // Live inputs may not be available; no aside
+    }
+  }
+
   return (
     <div className="py-4 md:py-6">
       {/* Back link */}
@@ -106,6 +148,14 @@ export default async function MatchupDetailPage({
 
           {/* Score + status */}
           <div className="flex flex-col items-center gap-2 order-first md:order-none">
+            {isRivalry && (
+              <span
+                className="text-kicker text-accent-gold"
+                title="Mutual top rivals"
+              >
+                Rivalry Week
+              </span>
+            )}
             <p className="text-stat text-4xl md:text-5xl whitespace-nowrap">
               <span className={isUpcoming ? "text-text-muted" : homeWins ? "text-text-primary" : "text-text-tertiary"}>
                 {isUpcoming ? "--" : homeTeam.points.toFixed(1)}
@@ -119,6 +169,11 @@ export default async function MatchupDetailPage({
               <LiveIndicator />
             ) : (
               <span className="text-kicker">{isComplete ? "Final" : "Upcoming"}</span>
+            )}
+            {aside && (
+              <span className="font-serif italic text-body-sm text-accent-warm">
+                {aside}
+              </span>
             )}
           </div>
 

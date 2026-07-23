@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { matchups, franchises, franchiseSeasons } from "@/lib/db/schema";
+import { matchups, franchises, franchiseSeasons, seasons } from "@/lib/db/schema";
 import { eq, and, asc } from "drizzle-orm";
 import { SNARKY_LABELS, type LabelTone } from "@/lib/content";
 
@@ -473,6 +473,160 @@ export async function getSeasonSuperlatives(
     return result;
   } catch (e) {
     console.error("[superlatives] getSeasonSuperlatives error:", e);
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Coverage pass: guarantee every franchise appears in at least one superlative
+// ---------------------------------------------------------------------------
+//
+// The primary awards (getSeasonSuperlatives + the lineup-efficiency awards) are
+// competitive, so a quiet, middling franchise can end a season mentioned
+// nowhere. On a surface whose whole promise is "find yourself in one tap", that
+// leaves holes. This pass takes the set of franchise slugs ALREADY covered by
+// those awards and hands every remaining franchise a fallback superlative drawn
+// from a small pool of always-computable roasts. It never touches or overrides
+// an existing winner; it only fills gaps.
+//
+// Assignment is deterministic and gives each gap a distinct flavor where it can:
+//   1. Title Drought  -> the uncovered franchise with the longest ring drought
+//   2. Punching Bag    -> among the rest, whoever conceded the most points this season
+//   3. Wallflower      -> everyone still uncovered (the catch-all neutral roast)
+
+export async function getUncoveredFranchiseAwards(
+  seasonId: number,
+  coveredSlugs: string[],
+): Promise<SeasonSuperlative[]> {
+  try {
+    const covered = new Set(coveredSlugs);
+
+    // This season's standings (identity + PA for the Punching Bag pick).
+    const standings = await db
+      .select({
+        franchiseId: franchiseSeasons.franchiseId,
+        franchiseName: franchises.name,
+        franchiseSlug: franchises.slug,
+        wins: franchiseSeasons.wins,
+        losses: franchiseSeasons.losses,
+        ties: franchiseSeasons.ties,
+        pointsAgainst: franchiseSeasons.pointsAgainst,
+      })
+      .from(franchiseSeasons)
+      .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
+      .where(eq(franchiseSeasons.seasonId, seasonId));
+
+    const uncovered = standings.filter((s) => !covered.has(s.franchiseSlug));
+    if (uncovered.length === 0) return [];
+
+    // Career title-drought context: for every franchise, its completed-season
+    // count and the most recent year it won a title (if ever). Drought is
+    // measured against the newest completed season year in the league so a
+    // franchise that skipped the latest year still reads sensibly.
+    const historyRows = await db
+      .select({
+        franchiseId: franchiseSeasons.franchiseId,
+        seasonYear: seasons.seasonYear,
+        playoffResult: franchiseSeasons.playoffResult,
+      })
+      .from(franchiseSeasons)
+      .innerJoin(seasons, eq(franchiseSeasons.seasonId, seasons.id))
+      .where(eq(seasons.status, "complete"));
+
+    let newestCompletedYear = 0;
+    const seasonsCountByFranchise = new Map<string, number>();
+    const lastTitleYearByFranchise = new Map<string, number>();
+    for (const r of historyRows) {
+      newestCompletedYear = Math.max(newestCompletedYear, r.seasonYear);
+      seasonsCountByFranchise.set(
+        r.franchiseId,
+        (seasonsCountByFranchise.get(r.franchiseId) ?? 0) + 1,
+      );
+      if (r.playoffResult === "champion") {
+        lastTitleYearByFranchise.set(
+          r.franchiseId,
+          Math.max(lastTitleYearByFranchise.get(r.franchiseId) ?? 0, r.seasonYear),
+        );
+      }
+    }
+
+    const droughtOf = (franchiseId: string): number => {
+      const lastTitle = lastTitleYearByFranchise.get(franchiseId);
+      // Never won: the drought is the length of their whole existence.
+      if (!lastTitle) return seasonsCountByFranchise.get(franchiseId) ?? 0;
+      return Math.max(0, newestCompletedYear - lastTitle);
+    };
+
+    const result: SeasonSuperlative[] = [];
+    const assigned = new Set<string>();
+
+    const pushAward = (
+      key: keyof typeof SNARKY_LABELS,
+      row: (typeof uncovered)[number],
+      stat: string,
+      context: string,
+    ) => {
+      const label = SNARKY_LABELS[key];
+      result.push({
+        labelKey: label.key,
+        displayText: label.displayText,
+        franchiseName: row.franchiseName,
+        franchiseSlug: row.franchiseSlug,
+        stat,
+        context,
+        tone: label.tone,
+      });
+      assigned.add(row.franchiseId);
+    };
+
+    // 1. Title Drought: longest ring drought among the uncovered.
+    const remaining = () => uncovered.filter((u) => !assigned.has(u.franchiseId));
+    const droughtPick = [...remaining()].sort(
+      (a, b) => droughtOf(b.franchiseId) - droughtOf(a.franchiseId),
+    )[0];
+    if (droughtPick) {
+      const neverWon = !lastTitleYearByFranchise.has(droughtPick.franchiseId);
+      const yrs = droughtOf(droughtPick.franchiseId);
+      pushAward(
+        "LONGEST_DROUGHT",
+        droughtPick,
+        `${yrs} ${yrs === 1 ? "season" : "seasons"}`,
+        neverWon
+          ? "Seasons in the league, still zero rings"
+          : "Seasons since their last and only glory",
+      );
+    }
+
+    // 2. Punching Bag: most points conceded this season, among the rest.
+    const paPick = [...remaining()]
+      .filter((u) => Number(u.pointsAgainst ?? 0) > 0)
+      .sort((a, b) => Number(b.pointsAgainst ?? 0) - Number(a.pointsAgainst ?? 0))[0];
+    if (paPick) {
+      pushAward(
+        "PUNCHING_BAG",
+        paPick,
+        `${Number(paPick.pointsAgainst ?? 0).toFixed(1)} PA`,
+        "Points conceded; the league's favorite matchup",
+      );
+    }
+
+    // 3. Wallflower: the catch-all for anyone still uncovered.
+    for (const row of remaining()) {
+      const w = row.wins ?? 0;
+      const l = row.losses ?? 0;
+      const t = row.ties ?? 0;
+      const rec = t > 0 ? `${w}-${l}-${t}` : `${w}-${l}`;
+      pushAward(
+        "WALLFLOWER",
+        row,
+        rec,
+        "Dodged every other superlative. Impressively unremarkable.",
+      );
+    }
+
+    return result;
+  } catch (e) {
+    console.error("[superlatives] getUncoveredFranchiseAwards error:", e);
     return [];
   }
 }

@@ -20,6 +20,8 @@ import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
 import { getWeeklyLineupAwards } from "@/lib/queries/lineup-efficiency";
 import { SNARKY_LABELS } from "@/lib/content";
 import { getPlayoffProjection } from "@/lib/queries/divisions";
+import { getRivalryWeek, rivalryPairKey } from "@/lib/queries/rivalry-week";
+import { computeStandingsRaceTags } from "@/lib/queries/playoff-race";
 import { StatChip, GameCard, toLadderEntries } from "@/components/hub/shared";
 import { BetweenWeeksHub } from "@/components/hub/between-weeks-hub";
 
@@ -127,7 +129,23 @@ export async function RegularSeasonHub({
       }, null)
     : null;
 
-  const ladderEntries = toLadderEntries(standings, projection);
+  // Rivalry Week: badge current-week pairings that are mutual top rivals.
+  // Empty (renders nothing) in the offseason or with no lifetime history.
+  let rivalrySet = new Set<string>();
+  try {
+    rivalrySet = await getRivalryWeek(currentMatchups);
+  } catch {
+    // Rivalry data may not be available; badges simply do not render.
+  }
+
+  // Provably-correct playoff-race tags. Renders nothing before week 8, outside
+  // the regular season, or when the data is incomplete.
+  const raceTags = computeStandingsRaceTags(standings, {
+    week,
+    playoffWeekStart: latestSeason?.playoffWeekStart,
+  });
+
+  const ladderEntries = toLadderEntries(standings, projection, raceTags);
 
   // Per-season crests keyed by franchise, sourced from the standings (which
   // carry avatarUrl); GameCard falls back to monograms for any missing entry.
@@ -197,6 +215,12 @@ export async function RegularSeasonHub({
                   seasonYear={seasonYear}
                   hubLive={hubLive}
                   avatars={avatarByFranchiseId}
+                  isRivalry={rivalrySet.has(
+                    rivalryPairKey(
+                      matchup.homeTeam.franchiseId,
+                      matchup.awayTeam.franchiseId
+                    )
+                  )}
                 />
               ))}
             </div>

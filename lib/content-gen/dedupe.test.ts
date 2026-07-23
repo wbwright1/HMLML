@@ -37,6 +37,7 @@ function ctx(overrides: Partial<StatsContext> = {}): StatsContext {
     ],
     projectionSeason: 2026,
     offseasonMoves: [],
+    recentTrades: [],
     ...overrides,
   };
 }
