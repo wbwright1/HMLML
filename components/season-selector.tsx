@@ -79,13 +79,15 @@ export function SeasonSelector({
     }
   }, [activeSeason]);
 
-  const items: { label: string; value: number | "all-time" }[] = seasons.map(
-    (year) => ({ label: String(year), value: year })
-  );
-
-  if (showAllTime) {
-    items.push({ label: "All-Time", value: "all-time" });
-  }
+  // "All-Time" leads, followed by seasons in the order given (expected
+  // newest-to-oldest) so the most-wanted pills are reachable without
+  // horizontal scrolling on mobile.
+  const items: { label: string; value: number | "all-time" }[] = showAllTime
+    ? [
+        { label: "All-Time", value: "all-time" as const },
+        ...seasons.map((year) => ({ label: String(year), value: year })),
+      ]
+    : seasons.map((year) => ({ label: String(year), value: year }));
 
   return (
     <div className="relative">
