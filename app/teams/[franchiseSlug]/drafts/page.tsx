@@ -5,10 +5,10 @@ import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { SuperlativeBadge } from "@/components/superlative-badge";
-import { MobileTableView } from "@/components/mobile-table-view";
 import { PositionBadge } from "@/components/position-badge";
+import { PlayerHeadshot } from "@/components/player-headshot";
 import { getFranchiseBySlug } from "@/lib/queries/franchises";
-import { getFranchiseDraftHistory } from "@/lib/queries/drafts";
+import { getFranchiseDraftHistory, type DraftPickWithFranchise } from "@/lib/queries/drafts";
 import { EmptyState } from "@/components/empty-state";
 
 export const dynamic = "force-dynamic";
@@ -152,36 +152,17 @@ export default async function FranchiseDraftsPage({
                     </span>
                   </div>
 
-                  {/* Picks table */}
-                  <MobileTableView
-                    headers={["Round", "Pick", "Player", "Pos"]}
-                    keyColumns={[0, 1, 2, 3]}
-                    rows={draft.picks.map((pick) => [
-                      <span
-                        key="round"
-                        className="font-mono tabular-nums text-muted-foreground"
-                      >
-                        Rd {pick.round}
-                      </span>,
-                      <span
-                        key="pick"
-                        className="font-mono tabular-nums text-muted-foreground"
-                      >
-                        #{pick.pickNumber}
-                      </span>,
-                      <span
-                        key="player"
-                        className={`font-medium ${
-                          draft.isLegacyEra ? "text-muted-foreground" : "text-text-primary"
-                        }`}
-                      >
-                        {pick.playerName ?? "Unknown Player"}
-                      </span>,
-                      <PositionBadge
-                        key="pos"
-                        position={pick.playerPosition}
-                      />,
-                    ])}
+                  {/* Picks list (dense rows on mobile, table on desktop) */}
+                  <DraftPicksList
+                    picks={draft.picks}
+                    isLegacyEra={draft.isLegacyEra}
+                    fallbackBadge={{
+                      slug: franchise.slug,
+                      name: franchise.name,
+                      abbreviation: franchise.abbreviation ?? null,
+                      brandingColor: franchise.brandingColor ?? null,
+                      avatarUrl: franchise.avatarUrl ?? null,
+                    }}
                   />
                 </div>
               </ScrollReveal>
@@ -189,6 +170,111 @@ export default async function FranchiseDraftsPage({
           </div>
         )}
       </PageSection>
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// DraftPicksList — dense per-pick rows on mobile, a headshot table on desktop.
+// The franchise badge on each headshot uses the pick's own-season franchise
+// fields, falling back to the page-level franchise identity.
+// ---------------------------------------------------------------------------
+
+interface FallbackBadge {
+  slug: string | null;
+  name: string;
+  abbreviation: string | null;
+  brandingColor: string | null;
+  avatarUrl: string | null;
+}
+
+function DraftPicksList({
+  picks,
+  isLegacyEra,
+  fallbackBadge,
+}: {
+  picks: DraftPickWithFranchise[];
+  isLegacyEra: boolean;
+  fallbackBadge: FallbackBadge;
+}) {
+  function badgeFor(pick: DraftPickWithFranchise) {
+    return {
+      slug: pick.franchiseSlug ?? fallbackBadge.slug,
+      name: pick.franchiseName ?? fallbackBadge.name,
+      abbreviation: pick.franchiseAbbreviation ?? fallbackBadge.abbreviation,
+      brandingColor: pick.franchiseBrandingColor ?? fallbackBadge.brandingColor,
+      avatarUrl: pick.franchiseAvatarUrl ?? fallbackBadge.avatarUrl,
+    };
+  }
+
+  const nameClass = isLegacyEra ? "text-text-tertiary" : "text-text-primary";
+
+  return (
+    <>
+      {/* Mobile: dense rows */}
+      <div className="md:hidden card-surface divide-y divide-divider">
+        {picks.map((pick) => (
+          <div key={pick.id} className="flex items-center gap-3 p-3">
+            <span className="w-10 shrink-0 font-mono text-body-sm tabular-nums text-accent-gold">
+              {pick.round}.{pick.pickNumber}
+            </span>
+            <PlayerHeadshot
+              size={40}
+              playerId={pick.playerId}
+              name={pick.playerName ?? "Unknown Player"}
+              showTeamBadge={false}
+              franchiseBadge={badgeFor(pick)}
+            />
+            <p className={`min-w-0 flex-1 truncate text-body font-medium ${nameClass}`}>
+              {pick.playerName ?? "Unknown Player"}
+            </p>
+            <PositionBadge position={pick.playerPosition} />
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop: table with a headshot + name cell */}
+      <div className="hidden md:block overflow-x-auto">
+        <table className="w-full text-left">
+          <thead>
+            <tr className="border-b border-border">
+              <th className="pb-3 pr-4 text-left text-kicker">Round</th>
+              <th className="pb-3 pr-4 text-left text-kicker">Pick</th>
+              <th className="pb-3 pr-4 text-left text-kicker">Player</th>
+              <th className="pb-3 pr-0 text-left text-kicker">Pos</th>
+            </tr>
+          </thead>
+          <tbody>
+            {picks.map((pick) => (
+              <tr key={pick.id} className="border-b border-divider last:border-0">
+                <td className="py-3 pr-4 font-mono text-sm tabular-nums text-text-tertiary">
+                  Rd {pick.round}
+                </td>
+                <td className="py-3 pr-4 font-mono text-sm tabular-nums text-text-tertiary">
+                  #{pick.pickNumber}
+                </td>
+                <td className="py-3 pr-4">
+                  <div className="flex items-center gap-3">
+                    <PlayerHeadshot
+                      size={36}
+                      playerId={pick.playerId}
+                      name={pick.playerName ?? "Unknown Player"}
+                      showTeamBadge={false}
+                      franchiseBadge={badgeFor(pick)}
+                    />
+                    <span className={`text-sm font-medium ${nameClass}`}>
+                      {pick.playerName ?? "Unknown Player"}
+                    </span>
+                  </div>
+                </td>
+                <td className="py-3 pr-0">
+                  <PositionBadge position={pick.playerPosition} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }

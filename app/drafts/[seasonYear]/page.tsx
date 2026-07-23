@@ -7,6 +7,7 @@ import { eq, desc, and, sql } from "drizzle-orm";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { PlayerHeadshot } from "@/components/player-headshot";
 import { getPositionColor } from "@/lib/position-colors";
 import {
   getDraftBySeasonYear,
@@ -137,6 +138,7 @@ interface ColumnMeta {
 interface NormalizedPick {
   pickNumber: number;
   round: number;
+  playerId: string | null;
   playerName: string | null;
   playerPosition: string | null;
   roster: PositionCounts | null;
@@ -160,6 +162,7 @@ function normalizeCompletedPick(pick: DraftPickWithFranchise): NormalizedPick {
   return {
     pickNumber: pick.pickNumber,
     round: pick.round,
+    playerId: pick.playerId,
     playerName: pick.playerName,
     playerPosition: pick.playerPosition,
     roster: null,
@@ -177,6 +180,7 @@ function normalizeUpcomingPick(pick: UpcomingPick): NormalizedPick {
   return {
     pickNumber: pick.pickNumber,
     round: pick.round,
+    playerId: null,
     playerName: null,
     playerPosition: null,
     roster: pick.roster,
@@ -312,9 +316,24 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
       </div>
 
       {pick.playerName && (
-        <p className="truncate text-[11px] font-semibold leading-tight text-text-primary">
-          {pick.playerName}
-        </p>
+        <div className="flex flex-col items-center gap-1">
+          <PlayerHeadshot
+            size={30}
+            playerId={pick.playerId}
+            name={pick.playerName}
+            showTeamBadge={false}
+            franchiseBadge={{
+              slug: pick.currentSlug,
+              name: pick.currentName,
+              abbreviation: pick.currentAbbreviation,
+              brandingColor: pick.currentBrandingColor,
+              avatarUrl: pick.currentAvatarUrl,
+            }}
+          />
+          <p className="w-full truncate text-center text-[11px] font-semibold leading-tight text-text-primary">
+            {pick.playerName}
+          </p>
+        </div>
       )}
 
       {pick.roster && (
@@ -379,13 +398,29 @@ function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
       <span className="w-10 shrink-0 font-mono text-body-sm tabular-nums text-accent-gold">
         {pick.round}.{slot}
       </span>
-      <TeamCrest
-        slug={pick.currentSlug}
-        name={pick.currentName}
-        abbreviation={pick.currentAbbreviation}
-        brandingColor={pick.currentBrandingColor}
-        avatarUrl={pick.currentAvatarUrl}
-      />
+      {pick.playerName ? (
+        <PlayerHeadshot
+          size={44}
+          playerId={pick.playerId}
+          name={pick.playerName}
+          showTeamBadge={false}
+          franchiseBadge={{
+            slug: pick.currentSlug,
+            name: pick.currentName,
+            abbreviation: pick.currentAbbreviation,
+            brandingColor: pick.currentBrandingColor,
+            avatarUrl: pick.currentAvatarUrl,
+          }}
+        />
+      ) : (
+        <TeamCrest
+          slug={pick.currentSlug}
+          name={pick.currentName}
+          abbreviation={pick.currentAbbreviation}
+          brandingColor={pick.currentBrandingColor}
+          avatarUrl={pick.currentAvatarUrl}
+        />
+      )}
       <div className="min-w-0 flex-1">
         {pick.playerName && (
           <p className="truncate text-body font-semibold text-text-primary">{pick.playerName}</p>

@@ -3,15 +3,31 @@
 import { useState } from "react";
 import Image from "next/image";
 import { NflTeamLogo } from "@/components/nfl-team-logo";
+import { FranchiseLogo } from "@/components/franchise-logo";
+
+export interface PlayerHeadshotFranchiseBadge {
+  slug: string | null;
+  name: string;
+  abbreviation?: string | null;
+  brandingColor?: string | null;
+  avatarUrl?: string | null;
+}
 
 export interface PlayerHeadshotProps {
-  playerId: string;
+  /** Sleeper player ID. Null/empty renders the initials monogram directly (legacy picks). */
+  playerId: string | null;
   name: string;
   /** Common sizes: 44/48px in table rows, 48-56px in rail/hub rows, 72px in detail cards, 96px in award cards. */
   size: number;
   nflTeam?: string | null;
   /** Renders an NflTeamLogo badge bottom-right, ~50% of headshot size. Defaults to true when nflTeam is given. */
   showTeamBadge?: boolean;
+  /**
+   * Renders a franchise crest badge bottom-right (~50% of headshot size) instead
+   * of the NFL team logo. Wins over nflTeam when both are supplied. Keeps the
+   * crest's rounded-square shape.
+   */
+  franchiseBadge?: PlayerHeadshotFranchiseBadge | null;
   className?: string;
 }
 
@@ -24,7 +40,8 @@ function getInitials(name: string): string {
 
 /**
  * Circular player headshot, keyed by Sleeper player ID. Falls back to a
- * 2-letter initials monogram on load error — never color alone.
+ * 2-letter initials monogram on load error or when no player ID is given
+ * (legacy picks) — never color alone.
  *
  * DEF/DST rows: Sleeper does not serve headshots for team defenses. Callers
  * rendering a DEF/DST slot should use <NflTeamLogo> (nfl-team-logo.tsx) as
@@ -37,17 +54,20 @@ export function PlayerHeadshot({
   size,
   nflTeam,
   showTeamBadge = true,
+  franchiseBadge,
   className = "",
 }: PlayerHeadshotProps) {
   const [failed, setFailed] = useState(false);
   const badgeSize = Math.round(size * 0.5);
+  const hasPlayerId = Boolean(playerId && playerId.trim());
+  const showMonogram = failed || !hasPlayerId;
 
   return (
     <div
       className={`relative inline-block shrink-0 ${className}`}
       style={{ width: size, height: size }}
     >
-      {failed ? (
+      {showMonogram ? (
         <div
           className="flex h-full w-full items-center justify-center rounded-full bg-surface text-text-tertiary select-none"
           style={{ fontSize: Math.max(9, Math.round(size * 0.36)) }}
@@ -66,13 +86,35 @@ export function PlayerHeadshot({
           onError={() => setFailed(true)}
         />
       )}
-      {nflTeam && showTeamBadge && (
+      {franchiseBadge ? (
         <span
-          className="absolute -bottom-0.5 -right-0.5 overflow-hidden rounded-full ring-2 ring-canvas"
-          style={{ width: badgeSize, height: badgeSize }}
+          className="absolute -bottom-0.5 -right-0.5 overflow-hidden ring-2 ring-canvas"
+          style={{
+            width: badgeSize,
+            height: badgeSize,
+            borderRadius: Math.round(badgeSize * 0.28),
+          }}
         >
-          <NflTeamLogo teamAbbrev={nflTeam} size={badgeSize} />
+          <FranchiseLogo
+            slug={franchiseBadge.slug ?? ""}
+            name={franchiseBadge.name}
+            abbreviation={franchiseBadge.abbreviation ?? undefined}
+            brandingColor={franchiseBadge.brandingColor ?? undefined}
+            avatarUrl={franchiseBadge.avatarUrl}
+            size={badgeSize}
+            decorative
+          />
         </span>
+      ) : (
+        nflTeam &&
+        showTeamBadge && (
+          <span
+            className="absolute -bottom-0.5 -right-0.5 overflow-hidden rounded-full ring-2 ring-canvas"
+            style={{ width: badgeSize, height: badgeSize }}
+          >
+            <NflTeamLogo teamAbbrev={nflTeam} size={badgeSize} />
+          </span>
+        )
       )}
     </div>
   );
