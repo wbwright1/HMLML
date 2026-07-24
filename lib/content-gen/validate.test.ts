@@ -5,6 +5,7 @@ import {
   findPositionMismatches,
   noEmDash,
   BODY_MAX,
+  QUESTION_MAX,
 } from "./validate";
 import type { StatsContext } from "./stats-context";
 
@@ -247,8 +248,34 @@ describe("validateRow", () => {
     expect(validateRow(row, ctx()).valid).toBe(false);
   });
 
-  it("rejects a body longer than BODY_MAX", () => {
-    const row = { ...validBurningQuestion, body: "x".repeat(BODY_MAX + 1) };
+  it("rejects a body longer than BODY_MAX for a kind on the generic length range", () => {
+    // hero_dek has no per-kind override, so it uses the generic BODY_MAX.
+    const row = { kind: "hero_dek" as const, refKey: null, body: "x".repeat(BODY_MAX + 1), extras: null };
+    expect(validateRow(row, ctx()).valid).toBe(false);
+  });
+
+  it("rejects a burning_question longer than QUESTION_MAX even though it is under BODY_MAX", () => {
+    // Regression: burning_question has its own tighter cap (mirrors
+    // generate.ts's QUESTION_MAX), independent of the generic BODY_MAX other
+    // kinds use. Length here is between QUESTION_MAX and BODY_MAX, so this
+    // only fails if the per-kind override is actually applied.
+    const row = { ...validBurningQuestion, body: "x".repeat(QUESTION_MAX + 1) };
+    expect(row.body.length).toBeLessThanOrEqual(BODY_MAX);
+    expect(validateRow(row, ctx()).valid).toBe(false);
+  });
+
+  it("accepts a burning_question right at QUESTION_MAX", () => {
+    const row = { ...validBurningQuestion, body: "x".repeat(QUESTION_MAX) };
+    expect(validateRow(row, ctx()).valid).toBe(true);
+  });
+
+  it("rejects a division_note whose characterization exceeds the kicker length cap", () => {
+    const row = {
+      kind: "division_note" as const,
+      refKey: "Division 1",
+      body: "Some division vibe check that is long enough to pass length.",
+      extras: { characterization: "x".repeat(41) },
+    };
     expect(validateRow(row, ctx()).valid).toBe(false);
   });
 

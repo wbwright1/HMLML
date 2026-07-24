@@ -5,8 +5,11 @@ import {
   buildUserPrompt,
   fillMissingKinds,
   PreseasonSchema,
+  PreseasonWireSchema,
   promptStatsView,
   RegularSchema,
+  RegularWireSchema,
+  toRowsPreseason,
   topUpShortKinds,
 } from "./generate";
 import { kindsForSeason } from "./templates";
@@ -22,6 +25,9 @@ import type { StatsContext } from "./stats-context";
 // line up, this throws at build time rather than at request time. Runs first
 // (before any network-touching code) so a version mismatch fails loud here
 // instead of surfacing as an opaque "no JSON object in response" in prod.
+// Both the strict schemas (canonical shape, used for the prompt spec) and the
+// wire schemas (what's actually sent to messages.parse) are checked, since
+// they're built independently by preseasonSchemaShape/regularSchemaShape.
 describe("zodOutputFormat builds without throwing", () => {
   it("builds a JSON schema format for PreseasonSchema", () => {
     expect(() => zodOutputFormat(PreseasonSchema)).not.toThrow();
@@ -33,6 +39,20 @@ describe("zodOutputFormat builds without throwing", () => {
   it("builds a JSON schema format for RegularSchema", () => {
     expect(() => zodOutputFormat(RegularSchema)).not.toThrow();
     const format = zodOutputFormat(RegularSchema);
+    expect(format.type).toBe("json_schema");
+    expect(format.schema).toBeTruthy();
+  });
+
+  it("builds a JSON schema format for PreseasonWireSchema", () => {
+    expect(() => zodOutputFormat(PreseasonWireSchema)).not.toThrow();
+    const format = zodOutputFormat(PreseasonWireSchema);
+    expect(format.type).toBe("json_schema");
+    expect(format.schema).toBeTruthy();
+  });
+
+  it("builds a JSON schema format for RegularWireSchema", () => {
+    expect(() => zodOutputFormat(RegularWireSchema)).not.toThrow();
+    const format = zodOutputFormat(RegularWireSchema);
     expect(format.type).toBe("json_schema");
     expect(format.schema).toBeTruthy();
   });
@@ -264,6 +284,65 @@ describe("applyDiversityLayer", () => {
     expect(result.diversityStats.droppedCount).toBe(1);
     expect(result.rows.some((r) => r.refKey === "not-a-real-franchise")).toBe(false);
     expect(result.rows.some((r) => r.kind === "burning_question")).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Lenient wire-schema parse + per-row drop (round 2 fix)
+// ---------------------------------------------------------------------------
+// Regression coverage for the prod failure: zodOutputFormat() strips .max()
+// from the JSON Schema sent to the API, but messages.parse() still
+// client-side re-validates the FULL parsed object against the Zod schema. On
+// the strict schemas, one overlong field anywhere failed that whole-object
+// validation and discarded every other row in the same response. The fix
+// parses against the relaxed PreseasonWireSchema/RegularWireSchema (no
+// string .max()) and instead enforces per-field length downstream, one row
+// at a time, via validateRow (called from applyDiversityLayer).
+
+describe("lenient wire schema + per-row drop", () => {
+  it("the strict schema rejects a payload with one overlong burning_question, but the wire schema parses it", () => {
+    const payload = {
+      division_notes: [],
+      // 250 chars: over generate.ts's QUESTION_MAX (200, enforced via the
+      // strict PreseasonSchema's per-item .max(QUESTION_MAX)) but comfortably
+      // under BODY_MAX (400), so this specifically exercises the tighter
+      // burning_question-only cap, not just the generic body cap.
+      burning_questions: ["x".repeat(250)],
+      bold_predictions: [],
+      offseason_receipts: [],
+      hero_dek: "",
+      smack_posts: [],
+    };
+    expect(PreseasonSchema.safeParse(payload).success).toBe(false);
+    expect(() => PreseasonWireSchema.parse(payload)).not.toThrow();
+  });
+
+  it("an overlong burning_question costs only that one row through toRowsPreseason + applyDiversityLayer, not the whole response", () => {
+    const ctx = preseasonContext();
+    // Parsed exactly the way callOnce does in generateContent: through the
+    // relaxed wire schema, so the overlong item survives parsing.
+    const parsed = PreseasonWireSchema.parse({
+      division_notes: [],
+      burning_questions: [
+        "Is Foopus actually good this year, or is the group chat lying to itself again?", // valid length
+        "x".repeat(250), // over QUESTION_MAX; parses fine under the wire schema
+      ],
+      bold_predictions: [],
+      offseason_receipts: [],
+      hero_dek: "",
+      smack_posts: [],
+    });
+    const rawRows = toRowsPreseason(parsed, ctx);
+    expect(rawRows.filter((r) => r.kind === "burning_question")).toHaveLength(2);
+
+    const { rows, invalidCount } = applyDiversityLayer(ctx, rawRows);
+    const survivors = rows.filter((r) => r.kind === "burning_question");
+    // Exactly the overlong row was dropped by validateRow's per-kind length
+    // check; the valid row shipped. A pre-fix strict-schema parse would have
+    // thrown before either row ever reached this point.
+    expect(survivors).toHaveLength(1);
+    expect(survivors[0].body).toContain("Foopus actually good");
+    expect(invalidCount).toBeGreaterThanOrEqual(1);
   });
 });
 

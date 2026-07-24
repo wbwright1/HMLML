@@ -13,9 +13,18 @@ import type { StatsContext } from "@/lib/content-gen/stats-context";
 export const BODY_MIN = 24;
 export const BODY_MAX = 400;
 const KICKER_MAX = 40;
+export const QUESTION_MAX = 200;
 
 const VERDICTS = new Set(["LOCK", "NO", "UP", "DOWN"]);
 const CATEGORIES = new Set(["DRAFT", "TRADE", "WAIVERS", "FIRE_SALE"]);
+
+// burning_question has its own, tighter cap than the generic body range (one
+// sentence, not one-or-two): mirrors generate.ts's QUESTION_MAX. Every other
+// kind uses the generic [BODY_MIN, BODY_MAX] range checked below. This map
+// only needs to override the MAX side; nothing currently needs a tighter min.
+const BODY_MAX_BY_KIND: Partial<Record<HubContentKind, number>> = {
+  burning_question: QUESTION_MAX,
+};
 
 // Kept independent of templates.ts's kindsForSeason to avoid a
 // validate.ts <-> templates.ts circular import (templates.ts routes its
@@ -297,6 +306,7 @@ function extrasValid(row: ValidatableRow): boolean {
     if (!extras || typeof extras.characterization !== "string" || !extras.characterization.trim()) {
       return false;
     }
+    if (extras.characterization.length > KICKER_MAX) return false;
     return true;
   }
   return true; // other kinds carry no extras contract
@@ -324,8 +334,9 @@ export function validateRow(row: ValidatableRow, ctx: StatsContext): ValidationR
   }
 
   const trimmed = row.body.trim();
-  if (trimmed.length < BODY_MIN || trimmed.length > BODY_MAX) {
-    return { valid: false, reason: `body length ${trimmed.length} outside [${BODY_MIN}, ${BODY_MAX}]` };
+  const bodyMax = BODY_MAX_BY_KIND[row.kind] ?? BODY_MAX;
+  if (trimmed.length < BODY_MIN || trimmed.length > bodyMax) {
+    return { valid: false, reason: `body length ${trimmed.length} outside [${BODY_MIN}, ${bodyMax}]` };
   }
 
   // The row's body is expected to have already been run through noEmDash by
