@@ -323,10 +323,11 @@ export default async function HallOfFamePage() {
           <div className="pb-1">
             <p className="text-kicker text-accent-gold mb-1.5">League Lore</p>
             <h3 className="text-h3 text-text-primary">
-              The Wanderer, the Yo-Yo, and the Cornerstone
+              Twelve Legends and Cautionary Tales
             </h3>
             <p className="text-body-sm text-text-tertiary mt-1">
-              The players who made the history books, for better or worse.
+              The best single game at every position, the steals, the busts,
+              and the seasons that wrote themselves into the record.
             </p>
           </div>
           <PlayerLoreCards />

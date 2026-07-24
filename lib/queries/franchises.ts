@@ -98,7 +98,11 @@ export async function getFranchiseCrestById(franchiseId: string) {
       .where(eq(franchises.id, franchiseId))
       .limit(1);
 
-    return row ?? null;
+    if (!row) return null;
+
+    const avatarUrls = await getLatestAvatarUrls([row.id]);
+
+    return { ...row, avatarUrl: avatarUrls.get(row.id) ?? null };
   } catch (e) {
     console.error("[franchises] getFranchiseCrestById error:", e);
     return null;

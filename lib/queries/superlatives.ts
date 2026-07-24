@@ -270,7 +270,7 @@ export async function getSeasonSuperlatives(
         byMostPA[0].franchiseName,
         byMostPA[0].franchiseSlug,
         `${(byMostPA[0].pointsAgainst ?? 0).toFixed(1)} PA`,
-        "Most points scored against; the league's favorite target"
+        "The league's favorite target."
       );
     }
 
@@ -565,7 +565,7 @@ function assignCoverage<T extends CoverageProfile>(
       "WALLFLOWER",
       profile,
       `${profile.games} games`,
-      "Dodged every other superlative. Impressively unremarkable.",
+      "Dodged every superlative. Unremarkable.",
     );
   }
 
@@ -598,13 +598,13 @@ const PER_SEASON_COVERAGE_DEFS: CoverageAwardDef<FranchiseCoverageProfile>[] = [
     key: "HEARTBREAKER",
     score: (p) => p.highestScoringLoss,
     stat: (p) => `${p.highestScoringLoss!.toFixed(1)} pts`,
-    context: () => "Their best game of the year was a loss. Brutal.",
+    context: () => "Their best game was a loss. Brutal.",
   },
   {
     key: "STICK_UP",
     score: (p) => (p.lowestScoringWin != null ? -p.lowestScoringWin : null),
     stat: (p) => `${p.lowestScoringWin!.toFixed(1)} pts`,
-    context: () => "Won with the league's ugliest total. Still counts.",
+    context: () => "The league's ugliest winning total.",
   },
   {
     key: "SWEAT_MERCHANT",
@@ -625,7 +625,7 @@ const PER_SEASON_COVERAGE_DEFS: CoverageAwardDef<FranchiseCoverageProfile>[] = [
       const actualWins = p.wins + 0.5 * p.ties;
       return `+${(actualWins - expectedWins).toFixed(1)} W`;
     },
-    context: () => "Won more than the box scores earned. Schedule did them a favor.",
+    context: () => "Won more than the scores earned. Lucky.",
   },
   {
     key: "SNAKEBIT",
@@ -640,19 +640,19 @@ const PER_SEASON_COVERAGE_DEFS: CoverageAwardDef<FranchiseCoverageProfile>[] = [
       const actualWins = p.wins + 0.5 * p.ties;
       return `${(expectedWins - actualWins).toFixed(1)} W short`;
     },
-    context: () => "Lost more than the scores deserved. Robbed weekly.",
+    context: () => "Lost more than the scores deserved.",
   },
   {
     key: "BOOM_GAME",
     score: (p) => (p.maxWeek > 0 ? p.maxWeek : null),
     stat: (p) => `${p.maxWeek.toFixed(1)} pts`,
-    context: () => "Their season-high week. For one Sunday, unstoppable.",
+    context: () => "Season-high week. Briefly unstoppable.",
   },
   {
     key: "NO_SHOW",
     score: (p) => (p.minWeek > 0 ? -p.minWeek : null),
     stat: (p) => `${p.minWeek.toFixed(1)} pts`,
-    context: () => "Their quietest week of the year. Nobody forgot.",
+    context: () => "The quietest week of the year.",
   },
   {
     key: "WHIPLASH",
@@ -664,7 +664,7 @@ const PER_SEASON_COVERAGE_DEFS: CoverageAwardDef<FranchiseCoverageProfile>[] = [
     key: "METRONOME",
     score: (p) => (p.stdDev > 0 ? -p.stdDev : null),
     stat: (p) => `${p.stdDev.toFixed(1)} pts`,
-    context: () => "Nearly the same score every week. Reliable to a fault.",
+    context: () => "Same score every week, basically.",
   },
   {
     key: "ALPHA_DOG",
@@ -977,7 +977,7 @@ export async function getAllTimeSuperlativeCards(): Promise<SeasonSuperlative[]>
         r.franchiseName,
         r.franchiseSlug,
         recordOf(r),
-        `Best single-season record in league history · ${r.seasonYear}`,
+        `Best single-season record ever · ${r.seasonYear}`,
       );
     }
 
@@ -990,7 +990,7 @@ export async function getAllTimeSuperlativeCards(): Promise<SeasonSuperlative[]>
         r.franchiseName,
         r.franchiseSlug,
         recordOf(r),
-        `Worst single-season record in league history · ${r.seasonYear}`,
+        `Worst single-season record ever · ${r.seasonYear}`,
       );
     }
 
@@ -1242,7 +1242,7 @@ export async function getAllTimeSuperlativeCards(): Promise<SeasonSuperlative[]>
           f.name,
           f.slug,
           `${worstAvgLossMargin.avgMargin.toFixed(1)} pts`,
-          `Worst average margin of defeat across a season (${worstAvgLossMargin.losses} losses) · ${year}`,
+          `Worst average defeat margin in a season · ${year}`,
         );
       }
     }
@@ -1280,7 +1280,7 @@ export async function getAllTimeSuperlativeCards(): Promise<SeasonSuperlative[]>
         bestMalpractice.franchiseName,
         bestMalpractice.franchiseSlug,
         bestMalpractice.stat,
-        `Most points left on the bench across a season · ${bestMalpractice.seasonYear}`,
+        `Most bench points wasted in a season · ${bestMalpractice.seasonYear}`,
       );
     }
 
@@ -1328,7 +1328,7 @@ const ALL_TIME_COVERAGE_DEFS: CoverageAwardDef<AllTimeCoverageProfile>[] = [
     key: "PUNCHING_BAG",
     score: (p) => (p.careerPA > 0 ? p.careerPA : null),
     stat: (p) => `${p.careerPA.toFixed(1)} PA`,
-    context: () => "Career points conceded; the league's favorite matchup",
+    context: () => "Career points conceded. Favorite target.",
   },
   {
     key: "NEARLY_MAN",
@@ -1340,19 +1340,19 @@ const ALL_TIME_COVERAGE_DEFS: CoverageAwardDef<AllTimeCoverageProfile>[] = [
     key: "WORKHORSE",
     score: (p) => (p.careerWins > 0 ? p.careerWins : null),
     stat: (p) => `${p.careerWins} W`,
-    context: () => "More career wins than any other unsung franchise.",
+    context: () => "More career wins than any unsung franchise.",
   },
   {
     key: "SISYPHUS",
     score: (p) => (p.careerLosses > 0 ? p.careerLosses : null),
     stat: (p) => `${p.careerLosses} L`,
-    context: () => "More career losses than anyone. Keeps showing up.",
+    context: () => "More career losses than anyone. Persistent.",
   },
   {
     key: "ELDER_STATESMAN",
     score: (p) => (p.seasonsCount > 0 ? p.seasonsCount : null),
     stat: (p) => `${p.seasonsCount} seasons`,
-    context: () => "More seasons logged than any other unsung franchise.",
+    context: () => "More seasons logged than any unsung franchise.",
   },
 ];
 
