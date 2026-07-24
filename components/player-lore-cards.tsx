@@ -34,7 +34,10 @@ export async function PlayerLoreCards() {
   const cornerstoneLabel = SNARKY_LABELS.LEAGUE_CORNERSTONE;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <div
+      data-testid="player-wing-cards"
+      className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
+    >
       {wanderer && (
         <div className="card-surface rounded-[14px] border border-border p-5">
           <p className="text-caption uppercase text-text-tertiary mb-2">

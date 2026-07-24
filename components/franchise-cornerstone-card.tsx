@@ -54,8 +54,8 @@ export function FranchiseCornerstoneCard({
     const seasonsPhrase = `${c.tenureSeasons} season${c.tenureSeasons !== 1 ? "s" : ""} and counting`;
 
     return (
-      <div className="rounded-[14px] border border-accent-gold/20 bg-accent-gold-light p-5">
-        <p className="text-caption text-accent-gold mb-3">
+      <div className="card-surface card-tint-gold p-5">
+        <p className="text-kicker text-accent-gold mb-3">
           <span className="flex items-center gap-1.5">
             {getAwardIcon("Franchise Cornerstone")}
             Franchise Cornerstone
@@ -88,8 +88,8 @@ export function FranchiseCornerstoneCard({
     : `Since ${apYear(a.acquiredYear)} and ${apYear(b.acquiredYear)} · ${combinedPts.toLocaleString()} pts combined.`;
 
   return (
-    <div className="rounded-[14px] border border-accent-gold/20 bg-accent-gold-light p-5">
-      <p className="text-caption text-accent-gold mb-3">
+    <div className="card-surface card-tint-gold p-5">
+      <p className="text-kicker text-accent-gold mb-3">
         <span className="flex items-center gap-1.5">
           {getAwardIcon("Franchise Cornerstones")}
           Franchise Cornerstones
