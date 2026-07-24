@@ -71,13 +71,29 @@ export function derivePlayoffResults(
   }
 
   // --- Losers bracket ---
-  // Find the "toilet bowl" loser: the loser of the match with the highest
-  // `p` value in the losers bracket (last-place match).
-  let toiletBowlRosterId: number | null = null;
-  if (losersBracket.length > 0) {
-    const lastPlaceMatch = losersBracket.reduce((max, m) => ((m.p ?? 0) > (max.p ?? 0) ? m : max), losersBracket[0]);
-    if (lastPlaceMatch.l != null) {
-      toiletBowlRosterId = lastPlaceMatch.l;
+  // The league's "Toilet Bowl" is the losers-bracket FINAL: the `p === 1`
+  // match in Sleeper's losers_bracket. BOTH participants of that match carry
+  // the `toilet_bowl` result (it is an appearance in the Toilet Bowl, not a
+  // single last-place team). Every other losers-bracket roster is
+  // `consolation`. Bracket shapes vary (4-team losers brackets have maxP=3,
+  // 6-team have maxP=5), so we key off the fixed `p === 1` final, not maxP.
+  //
+  // Graceful mid-season behavior: the final may be unplayed, so t1/t2/w/l can
+  // be null. We only tag rosters that are actually known; unresolved slots are
+  // left untagged until a later sync fills them in.
+  const toiletBowlRosterIds = new Set<number>();
+  const toiletBowlFinal = losersBracket.find((m) => m.p === 1);
+  if (toiletBowlFinal) {
+    // Prefer decided participants (w/l) but fall back to seeded slots (t1/t2)
+    // so an in-progress or seeded-but-unplayed final still resolves both teams.
+    const candidates = [
+      toiletBowlFinal.w,
+      toiletBowlFinal.l,
+      typeof toiletBowlFinal.t1 === "number" ? toiletBowlFinal.t1 : null,
+      typeof toiletBowlFinal.t2 === "number" ? toiletBowlFinal.t2 : null,
+    ];
+    for (const rosterId of candidates) {
+      if (rosterId != null) toiletBowlRosterIds.add(rosterId);
     }
   }
 
@@ -93,7 +109,7 @@ export function derivePlayoffResults(
   for (const rosterId of losersBracketRosterIds) {
     const franchiseId = rosterToFranchise.get(rosterId);
     if (franchiseId && !franchiseResults.has(franchiseId)) {
-      if (rosterId === toiletBowlRosterId) {
+      if (toiletBowlRosterIds.has(rosterId)) {
         franchiseResults.set(franchiseId, "toilet_bowl");
       } else {
         franchiseResults.set(franchiseId, "consolation");
