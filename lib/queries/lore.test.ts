@@ -16,6 +16,7 @@ import {
   pickTopFranchiseByPoints,
   pickTopFranchiseByStarts,
   scopedFranchisePoints,
+  wandererSeasonNugget,
   wasTradedAwayByDrafter,
   type BustBaselineEntry,
   type PlayerFranchiseWeekRow,
@@ -394,5 +395,23 @@ describe("bustShortfall", () => {
 
   it("is zero when actual matches expected exactly", () => {
     expect(bustShortfall(100, 100)).toBe(0);
+  });
+});
+
+describe("wandererSeasonNugget", () => {
+  it("names the single season directly when every trade falls in one year (DeAndre Hopkins: 2022 x3)", () => {
+    expect(wandererSeasonNugget([2022, 2022, 2022])).toBe("all inside 2022");
+  });
+
+  it("gives a season count when trades span multiple years", () => {
+    expect(wandererSeasonNugget([2021, 2022, 2023])).toBe("across 3 seasons");
+  });
+
+  it("dedupes years before counting the span", () => {
+    expect(wandererSeasonNugget([2021, 2021, 2022, 2022])).toBe("across 2 seasons");
+  });
+
+  it("returns null when no season years are known", () => {
+    expect(wandererSeasonNugget([])).toBeNull();
   });
 });
