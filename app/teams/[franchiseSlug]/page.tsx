@@ -16,6 +16,7 @@ import {
 import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getRivalries } from "@/lib/queries/records";
 import { getFranchiseExtremes } from "@/lib/queries/franchise-stats";
+import { getFranchiseCornerstone } from "@/lib/queries/franchise-players";
 import { getPlayoffLabel, getPlayoffBadgeVariant } from "@/lib/playoff-labels";
 import { EmptyState } from "@/components/empty-state";
 
@@ -89,10 +90,12 @@ export default async function FranchiseDetailPage({
     worstBeatdown: null,
     longestWinStreak: 0,
   };
+  let cornerstones: Awaited<ReturnType<typeof getFranchiseCornerstone>> = [];
   try {
-    [rivalries, extremes] = await Promise.all([
+    [rivalries, extremes, cornerstones] = await Promise.all([
       getRivalries(),
       getFranchiseExtremes(franchise.id),
+      getFranchiseCornerstone(franchise.id),
     ]);
   } catch {
     // DB may not be connected in dev
@@ -220,6 +223,42 @@ export default async function FranchiseDetailPage({
           : primaryRival.wins < primaryRival.losses
             ? "sting"
             : "neutral",
+    });
+  }
+
+  // Franchise Cornerstone(s): the player(s) drafted or traded for and never
+  // let go, scored by points in this franchise's colors. See
+  // lib/queries/franchise-players.ts for eligibility/scoring rules.
+  const apYear = (year: number) => `'${String(year).slice(-2)}`;
+  const lastName = (fullName: string) => fullName.trim().split(/\s+/).slice(-1)[0] ?? fullName;
+
+  if (cornerstones.length === 1) {
+    const c = cornerstones[0];
+    const verb =
+      c.via === "draft"
+        ? "Drafted"
+        : c.blockbuster === true
+          ? "Blockbuster trade,"
+          : "Traded for";
+    const seasonsPhrase = `${c.tenureSeasons} season${c.tenureSeasons !== 1 ? "s" : ""} and counting`;
+    callouts.push({
+      kicker: "Franchise Cornerstone",
+      value: c.playerName,
+      subline: `${verb} ${apYear(c.acquiredYear)} · ${Math.round(c.franchisePoints).toLocaleString()} pts · ${c.franchiseStarts} starts · ${seasonsPhrase}.`,
+      tone: "gold",
+    });
+  } else if (cornerstones.length === 2) {
+    const [a, b] = cornerstones;
+    const combinedPts = Math.round(a.franchisePoints + b.franchisePoints);
+    const sameOrigin = a.via === b.via && a.acquiredYear === b.acquiredYear;
+    const subline = sameOrigin
+      ? `Both ${a.via === "draft" ? "drafted" : "traded for"} ${apYear(a.acquiredYear)} · ${combinedPts.toLocaleString()} pts combined.`
+      : `Since ${apYear(a.acquiredYear)} and ${apYear(b.acquiredYear)} · ${combinedPts.toLocaleString()} pts combined.`;
+    callouts.push({
+      kicker: "Franchise Cornerstones",
+      value: `${lastName(a.playerName)} · ${lastName(b.playerName)}`,
+      subline,
+      tone: "gold",
     });
   }
 

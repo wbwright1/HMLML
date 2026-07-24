@@ -80,6 +80,32 @@ export async function getAllFranchises() {
 }
 
 /**
+ * Lightweight franchise-id -> crest lookup (name/slug/abbreviation/color),
+ * for callers (e.g. player-lore cards) that already have a franchiseId and
+ * just need a link + branding, without the full getFranchiseBySlug payload.
+ */
+export async function getFranchiseCrestById(franchiseId: string) {
+  try {
+    const [row] = await db
+      .select({
+        id: franchises.id,
+        slug: franchises.slug,
+        name: franchises.name,
+        abbreviation: franchises.abbreviation,
+        brandingColor: franchises.brandingColor,
+      })
+      .from(franchises)
+      .where(eq(franchises.id, franchiseId))
+      .limit(1);
+
+    return row ?? null;
+  } catch (e) {
+    console.error("[franchises] getFranchiseCrestById error:", e);
+    return null;
+  }
+}
+
+/**
  * Returns a single franchise by slug, together with all of its
  * franchise_seasons rows joined with season info, ordered newest-first.
  */
