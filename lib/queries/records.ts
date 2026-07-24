@@ -134,20 +134,13 @@ export interface TrophyEntry {
   championAvatarUrl: string | null;
   runnerUpName: string | null;
   runnerUpSlug: string | null;
-  waiverPlayerName: string | null;
-  waiverPlayerPosition: string | null;
-  waiverPoints: number | null;
-  waiverFranchiseName: string | null;
-  waiverFranchiseSlug: string | null;
-  waiverFranchiseAbbreviation: string | null;
-  waiverFranchiseBrandingColor: string | null;
-  waiverFranchiseAvatarUrl: string | null;
 }
 
-interface WaiverPickupRow {
+export interface WaiverPickupRow {
   seasonYear: number;
   points: number;
   franchiseId: string | null;
+  playerId: string | null;
   playerName: string | null;
   playerPosition: string | null;
   franchiseName: string | null;
@@ -1117,7 +1110,7 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
  * them (not necessarily the adding franchise, since the player may have been
  * traded afterward).
  */
-async function getBestWaiverPickupsBySeason(): Promise<
+export async function getBestWaiverPickupsBySeason(): Promise<
   Map<number, WaiverPickupRow>
 > {
   try {
@@ -1145,6 +1138,7 @@ async function getBestWaiverPickupsBySeason(): Promise<
         r.season_year,
         r.pts,
         r.franchise_id,
+        r.player_id,
         p.full_name AS player_name,
         p.position,
         f.name,
@@ -1164,6 +1158,7 @@ async function getBestWaiverPickupsBySeason(): Promise<
         seasonYear,
         points: Number((row.pts as number | null) ?? 0),
         franchiseId: (row.franchise_id as string | null) ?? null,
+        playerId: (row.player_id as string | null) ?? null,
         playerName: (row.player_name as string | null) ?? null,
         playerPosition: (row.position as string | null) ?? null,
         franchiseName: (row.name as string | null) ?? null,
@@ -1208,46 +1203,24 @@ export async function getTrophyCase(): Promise<TrophyEntry[]> {
       )
       .orderBy(desc(seasons.seasonYear));
 
-    const waiverBySeason = await getBestWaiverPickupsBySeason();
-
-    const waiverFranchiseIds = Array.from(waiverBySeason.values())
-      .map((w) => w.franchiseId)
-      .filter((id): id is string => id != null);
-
     const championIds = rows
       .map((row) => row.championFranchiseId)
       .filter((id): id is string => id != null);
-    const avatarUrls = await getLatestAvatarUrls([
-      ...championIds,
-      ...waiverFranchiseIds,
-    ]);
+    const avatarUrls = await getLatestAvatarUrls(championIds);
 
-    return rows.map((row) => {
-      const w = waiverBySeason.get(row.seasonYear);
-      return {
-        seasonYear: row.seasonYear,
-        championFranchiseId: row.championFranchiseId,
-        championName: row.championName,
-        championSlug: row.championSlug,
-        championAbbreviation: row.championAbbreviation,
-        championBrandingColor: row.championBrandingColor,
-        championAvatarUrl: row.championFranchiseId
-          ? avatarUrls.get(row.championFranchiseId) ?? null
-          : null,
-        runnerUpName: row.runnerUpName,
-        runnerUpSlug: row.runnerUpSlug,
-        waiverPlayerName: w?.playerName ?? null,
-        waiverPlayerPosition: w?.playerPosition ?? null,
-        waiverPoints: w?.points ?? null,
-        waiverFranchiseName: w?.franchiseName ?? null,
-        waiverFranchiseSlug: w?.franchiseSlug ?? null,
-        waiverFranchiseAbbreviation: w?.franchiseAbbreviation ?? null,
-        waiverFranchiseBrandingColor: w?.franchiseBrandingColor ?? null,
-        waiverFranchiseAvatarUrl: w?.franchiseId
-          ? avatarUrls.get(w.franchiseId) ?? null
-          : null,
-      };
-    });
+    return rows.map((row) => ({
+      seasonYear: row.seasonYear,
+      championFranchiseId: row.championFranchiseId,
+      championName: row.championName,
+      championSlug: row.championSlug,
+      championAbbreviation: row.championAbbreviation,
+      championBrandingColor: row.championBrandingColor,
+      championAvatarUrl: row.championFranchiseId
+        ? avatarUrls.get(row.championFranchiseId) ?? null
+        : null,
+      runnerUpName: row.runnerUpName,
+      runnerUpSlug: row.runnerUpSlug,
+    }));
   } catch {
     return [];
   }

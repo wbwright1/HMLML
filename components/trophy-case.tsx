@@ -1,16 +1,25 @@
 import Link from "next/link";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { FranchiseLogo } from "@/components/franchise-logo";
-import { getAwardsHonorRoll, type AwardEntry } from "@/lib/queries/awards";
+import {
+  getAwardsHonorRoll,
+  type AwardEntry,
+  type AwardFranchiseCrest,
+} from "@/lib/queries/awards";
+import {
+  getBestWaiverPickupsBySeason,
+  type WaiverPickupRow,
+} from "@/lib/queries/records";
+import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 import { AWARD_METADATA } from "@/lib/awards";
 import { getAwardTypeIcon } from "@/lib/award-icons";
 
 /** Small franchise crest chip linking to the franchise page. */
-function FranchiseCrestChip({ franchise }: { franchise: NonNullable<AwardEntry["franchise"]> }) {
+function FranchiseCrestChip({ franchise }: { franchise: AwardFranchiseCrest }) {
   return (
     <Link
       href={`/teams/${franchise.slug}`}
-      className="inline-flex items-center gap-1.5 rounded-full bg-surface px-2 py-1 text-caption text-text-secondary transition-colors hover:bg-surface-muted hover:text-text-primary"
+      className="inline-flex min-w-0 items-center gap-1.5 rounded-full bg-surface px-2 py-1 text-caption text-text-secondary transition-colors hover:bg-surface-muted hover:text-text-primary"
     >
       <FranchiseLogo
         slug={franchise.slug}
@@ -28,14 +37,25 @@ function FranchiseCrestChip({ franchise }: { franchise: NonNullable<AwardEntry["
   );
 }
 
-function AwardRow({
-  award,
+/** Shared row layout for both award rows and the waiver-pickup row. */
+function TrophyRow({
+  seasonYear,
+  playerId,
+  playerName,
+  position,
+  franchise,
   repeatCount,
   highlight,
+  stat,
 }: {
-  award: AwardEntry;
+  seasonYear: number;
+  playerId: string | null;
+  playerName: string;
+  position: string | null;
+  franchise: AwardFranchiseCrest | null;
   repeatCount: number;
   highlight: boolean;
+  stat?: string;
 }) {
   return (
     <div
@@ -46,19 +66,19 @@ function AwardRow({
       }`}
     >
       <span className="w-9 shrink-0 font-mono text-body-sm font-bold tabular-nums text-accent-gold">
-        {String(award.seasonYear).slice(-2)}
+        {String(seasonYear).slice(-2)}
         <span className="text-[10px] text-text-tertiary">&rsquo;</span>
       </span>
       <PlayerHeadshot
-        playerId={award.playerId}
-        name={award.playerName}
+        playerId={playerId}
+        name={playerName}
         size={40}
         showTeamBadge={false}
       />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <p className="truncate text-body-sm font-semibold text-text-primary">
-            {award.playerName}
+            {playerName}
           </p>
           {repeatCount > 1 && (
             <span className="inline-flex shrink-0 items-center rounded-full bg-accent-gold-light px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-accent-gold">
@@ -66,15 +86,20 @@ function AwardRow({
             </span>
           )}
         </div>
-        <div className="mt-1 flex items-center gap-2">
-          {award.position && (
-            <span className="text-caption text-text-tertiary">{award.position}</span>
+        <div className="mt-1 flex min-w-0 items-center gap-2">
+          {position && (
+            <span className="text-caption text-text-tertiary">{position}</span>
           )}
-          {award.franchise ? (
-            <FranchiseCrestChip franchise={award.franchise} />
+          {franchise ? (
+            <FranchiseCrestChip franchise={franchise} />
           ) : (
             <span className="text-caption text-text-muted normal-case tracking-normal">
               Franchise unknown
+            </span>
+          )}
+          {stat && (
+            <span className="ml-auto shrink-0 font-mono text-caption font-bold tabular-nums text-accent-gold">
+              {stat}
             </span>
           )}
         </div>
@@ -83,16 +108,87 @@ function AwardRow({
   );
 }
 
+function AwardRow({
+  award,
+  repeatCount,
+  highlight,
+}: {
+  award: AwardEntry;
+  repeatCount: number;
+  highlight: boolean;
+}) {
+  return (
+    <TrophyRow
+      seasonYear={award.seasonYear}
+      playerId={award.playerId}
+      playerName={award.playerName}
+      position={award.position}
+      franchise={award.franchise}
+      repeatCount={repeatCount}
+      highlight={highlight}
+    />
+  );
+}
+
+function WaiverRow({
+  row,
+  avatarUrl,
+}: {
+  row: WaiverPickupRow;
+  avatarUrl: string | null;
+}) {
+  const franchise: AwardFranchiseCrest | null =
+    row.franchiseId && row.franchiseSlug && row.franchiseName
+      ? {
+          id: row.franchiseId,
+          slug: row.franchiseSlug,
+          name: row.franchiseName,
+          abbreviation: row.franchiseAbbreviation,
+          brandingColor: row.franchiseBrandingColor,
+          avatarUrl,
+        }
+      : null;
+
+  return (
+    <TrophyRow
+      seasonYear={row.seasonYear}
+      playerId={row.playerId}
+      playerName={row.playerName ?? "Unknown player"}
+      position={row.playerPosition}
+      franchise={franchise}
+      repeatCount={1}
+      highlight={false}
+      stat={row.points.toFixed(1)}
+    />
+  );
+}
+
 /**
  * The Trophy Case: the "Yearly Hardware" subsection of the Player Wing
  * module, surfacing every league award (Regular Season MVP, Championship
- * MVP, Rookie of the Year) in three columns. Self-fetching async RSC;
- * renders NOTHING when no awards exist (empty table or pre-migration), so
- * the page never shows an empty shell.
+ * MVP, Rookie of the Year) plus the season's best waiver pickup, in four
+ * columns. Self-fetching async RSC; renders NOTHING when there is no award
+ * data AND no waiver data (empty tables or pre-migration), so the page never
+ * shows an empty shell.
  */
 export async function TrophyCase() {
-  const roll = await getAwardsHonorRoll();
-  if (roll.total === 0 || roll.groups.length === 0) return null;
+  const [roll, waiverMap] = await Promise.all([
+    getAwardsHonorRoll(),
+    getBestWaiverPickupsBySeason(),
+  ]);
+
+  const waiverRows = Array.from(waiverMap.values()).sort(
+    (a, b) => b.seasonYear - a.seasonYear,
+  );
+
+  const hasAwards = roll.total > 0 && roll.groups.length > 0;
+  const hasWaivers = waiverRows.length > 0;
+  if (!hasAwards && !hasWaivers) return null;
+
+  const waiverFranchiseIds = waiverRows
+    .map((r) => r.franchiseId)
+    .filter((id): id is string => id != null);
+  const waiverAvatarUrls = await getLatestAvatarUrls(waiverFranchiseIds);
 
   return (
     <div data-testid="trophy-case" className="space-y-3">
@@ -100,12 +196,12 @@ export async function TrophyCase() {
         <p className="text-kicker text-accent-gold mb-1.5">Yearly Hardware</p>
         <h3 className="text-h3 text-text-primary">The Trophy Case</h3>
         <p className="text-body-sm text-text-tertiary mt-1">
-          Every MVP, Finals MVP, and Rookie of the Year, and the roster that
-          cashed the ticket.
+          Every MVP, Finals MVP, Rookie of the Year, and waiver heist, and the
+          roster that cashed the ticket.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {roll.groups.map((group) => {
           const meta = AWARD_METADATA[group.awardType];
           return (
@@ -134,6 +230,27 @@ export async function TrophyCase() {
             </div>
           );
         })}
+
+        {hasWaivers && (
+          <div className="card-surface p-5">
+            <p className="text-kicker text-accent-gold mb-3 flex items-center gap-1.5">
+              Best Waiver Pickup
+            </p>
+            <div className="space-y-2">
+              {waiverRows.map((row) => (
+                <WaiverRow
+                  key={row.seasonYear}
+                  row={row}
+                  avatarUrl={
+                    row.franchiseId
+                      ? (waiverAvatarUrls.get(row.franchiseId) ?? null)
+                      : null
+                  }
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
