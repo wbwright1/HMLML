@@ -713,6 +713,20 @@ export function bustShortfall(expectedPts: number, actualPts: number): number {
 }
 
 /**
+ * The Wanderer card's season-span nugget: when every trade fell inside a
+ * single season, name it directly ("all inside 2022"); when trades span
+ * multiple seasons, give the count instead ("across 4 seasons") since
+ * listing every year would blow the card's line-clamp. Empty input (no
+ * season data resolved) yields no nugget at all.
+ */
+export function wandererSeasonNugget(seasonYears: readonly number[]): string | null {
+  const distinct = Array.from(new Set(seasonYears));
+  if (distinct.length === 0) return null;
+  if (distinct.length === 1) return `all inside ${distinct[0]}`;
+  return `across ${distinct.length} seasons`;
+}
+
+/**
  * Builds the set of "this franchise traded this player away" pairs (as
  * `${playerId}:${franchiseId}` keys) from raw trade-drop rows and the
  * roster->franchise map, both scoped by season since roster_id is only
@@ -888,6 +902,7 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
   let wandererPiece: LorePiece | null = null;
   if (wanderer) {
     const label = SNARKY_LABELS.THE_WANDERER;
+    const seasonNugget = wandererSeasonNugget(wanderer.seasonYears);
     wandererPiece = {
       key: label.key,
       title: label.displayText,
@@ -899,6 +914,7 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       statValue: `${wanderer.count}x traded`,
       story:
         `Traded ${wanderer.count}x, most in league history` +
+        (seasonNugget ? `, ${seasonNugget}` : "") +
         (wanderer.position ? ` (${wanderer.position})` : "") +
         ".",
     };
