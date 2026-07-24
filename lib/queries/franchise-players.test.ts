@@ -6,6 +6,7 @@ import {
   selectCornerstones,
   computeTenureAnchor,
   resolveVia,
+  evaluateEligibility,
   type RosterEvent,
   type ScoredCandidate,
 } from "./franchise-players";
@@ -57,6 +58,77 @@ describe("resolveVia", () => {
     const draftYears = new Set<number>();
     const tradeYears = new Set<number>();
     expect(resolveVia(2021, draftYears, tradeYears)).toBe("draft");
+  });
+});
+
+describe("evaluateEligibility (presence-anchored gate semantics)", () => {
+  const draft = (seasonYear: number): RosterEvent => ({
+    type: "draft",
+    seasonYear,
+    week: -1,
+    sleeperMs: -Infinity,
+  });
+
+  it("INCLUDES a player re-drafted in a current-year startup re-draft who was already rostered the prior year (old latest-event logic excluded: tenure would be 1)", () => {
+    // Scenario (a): rostered 2025, hypothetical 2026 startup re-draft.
+    // Anchor walks back to 2025, tenure = 2, passes the < 2 gate. This is the
+    // commissioner's rule: re-drafting a held player must not reset tenure.
+    const result = evaluateEligibility(
+      new Set([2025, 2026]),
+      [draft(2026)],
+      [],
+      2026
+    );
+    expect(result).not.toBeNull();
+    expect(result!.acquiredYear).toBe(2025);
+    expect(result!.tenureSeasons).toBe(2);
+  });
+
+  it("EXCLUDES a continuously-present player with a mid-stint drop, even though a later re-acquisition event exists (old latest-event logic included)", () => {
+    // Scenario (b): drafted 2021, present every year, but a 2023 drop event
+    // followed by a 2023 trade back. The anchor is 2021, so the drop window
+    // covers the full stint and the 2023 drop disqualifies.
+    const tradeBack2023: RosterEvent = {
+      type: "trade",
+      seasonYear: 2023,
+      week: 8,
+      sleeperMs: 2000,
+      tradeAdds: { p1: 1 },
+      tradePicksInvolved: 0,
+    };
+    const drop2023: RosterEvent = { type: "drop", seasonYear: 2023, week: 5, sleeperMs: 1000 };
+    const result = evaluateEligibility(
+      new Set([2021, 2022, 2023, 2024, 2025, 2026]),
+      [draft(2021), tradeBack2023],
+      [drop2023],
+      2026
+    );
+    expect(result).toBeNull();
+  });
+
+  it("is ineligible with no acquisition events at all (waiver/FA only)", () => {
+    expect(evaluateEligibility(new Set([2024, 2025, 2026]), [], [], 2026)).toBeNull();
+  });
+
+  it("is ineligible when presence starts this year (tenure < 2 gate)", () => {
+    expect(
+      evaluateEligibility(new Set([2026]), [draft(2026)], [], 2026)
+    ).toBeNull();
+  });
+
+  it("keeps the continuous 2021-2026 re-draft case eligible with acquired 2021 / tenure 6 via draft (Mahomes case, end to end)", () => {
+    const result = evaluateEligibility(
+      new Set([2021, 2022, 2023, 2024, 2025, 2026]),
+      [draft(2021), draft(2023)],
+      [],
+      2026
+    );
+    expect(result).toEqual({
+      via: "draft",
+      acquiredYear: 2021,
+      tenureSeasons: 6,
+      blockbuster: null,
+    });
   });
 });
 
