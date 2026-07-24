@@ -317,7 +317,7 @@ export default async function FranchiseDetailPage({
                 <Link
                   href={`/teams/${franchise.slug}/schedule?season=${season.seasonYear}`}
                   aria-label={`${season.seasonYear} schedule`}
-                  className="block rounded-xl border border-border bg-surface p-5 transition-colors hover:border-border-strong hover:bg-surface-muted"
+                  className="card-surface block p-5 transition-colors hover:border-border-strong hover:bg-surface-muted"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-1">
@@ -326,13 +326,13 @@ export default async function FranchiseDetailPage({
                           {season.seasonYear}
                         </span>
                         {season.isLegacyEra && (
-                          <span className="text-caption text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                          <span className="text-caption text-text-tertiary bg-surface-muted px-2 py-0.5 rounded-full">
                             Legacy Era
                           </span>
                         )}
                       </div>
                       {season.ownerDisplayName && (
-                        <p className="text-body-sm text-muted-foreground">
+                        <p className="text-body-sm text-text-tertiary">
                           {season.ownerDisplayName}{season.coOwnerDisplayName ? ` & ${season.coOwnerDisplayName}` : ""}
                         </p>
                       )}
@@ -342,21 +342,21 @@ export default async function FranchiseDetailPage({
                       {/* Record */}
                       <span className="tabular-nums whitespace-nowrap">
                         <span className="font-bold text-text-primary">{season.wins ?? 0}</span>
-                        <span className="text-xs text-muted-foreground ml-0.5">
+                        <span className="text-xs text-text-tertiary ml-0.5">
                           W
                         </span>
-                        <span className="text-muted-foreground mx-1">-</span>
+                        <span className="text-text-tertiary mx-1">-</span>
                         <span className="text-text-secondary">{season.losses ?? 0}</span>
-                        <span className="text-xs text-muted-foreground ml-0.5">
+                        <span className="text-xs text-text-tertiary ml-0.5">
                           L
                         </span>
                         {(season.ties ?? 0) > 0 && (
                           <>
-                            <span className="text-muted-foreground mx-1">
+                            <span className="text-text-tertiary mx-1">
                               -
                             </span>
                             <span className="text-text-secondary">{season.ties}</span>
-                            <span className="text-xs text-muted-foreground ml-0.5">
+                            <span className="text-xs text-text-tertiary ml-0.5">
                               T
                             </span>
                           </>
@@ -365,20 +365,20 @@ export default async function FranchiseDetailPage({
 
                       {/* Points scored */}
                       {(season.pointsScored ?? 0) > 0 && (
-                        <span className="text-muted-foreground tabular-nums whitespace-nowrap">
+                        <span className="text-text-tertiary tabular-nums whitespace-nowrap">
                           {(season.pointsScored ?? 0).toFixed(1)} pts
                         </span>
                       )}
 
                       {/* Standings finish */}
                       {season.standingsFinish != null && (
-                        <span className="text-muted-foreground tabular-nums whitespace-nowrap">
+                        <span className="text-text-tertiary tabular-nums whitespace-nowrap">
                           #{season.standingsFinish}
                         </span>
                       )}
 
                       {/* Division */}
-                      <span className="text-muted-foreground whitespace-nowrap normal-case tracking-normal">
+                      <span className="text-text-tertiary whitespace-nowrap normal-case tracking-normal">
                         {season.divisionName ?? "—"}
                       </span>
 

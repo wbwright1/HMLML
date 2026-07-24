@@ -501,7 +501,7 @@ export function PlayerTable({
         {filtered.map((player) => (
           <div
             key={player.id}
-            className="rounded-2xl border border-border bg-surface p-4 space-y-3"
+            className="card-surface p-4 space-y-3"
           >
             <div className="flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">

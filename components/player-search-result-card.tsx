@@ -27,7 +27,7 @@ export function PlayerSearchResultCard({
   pointsPpr,
 }: PlayerSearchResultCardProps) {
   return (
-    <div className="rounded-2xl border border-border bg-surface p-4 transition-colors hover:bg-surface-muted">
+    <div className="card-surface p-4 transition-colors hover:bg-surface-muted">
       <div className="flex items-center gap-4">
         <PlayerHeadshot
           playerId={playerId}

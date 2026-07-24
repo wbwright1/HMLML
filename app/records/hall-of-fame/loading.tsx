@@ -22,7 +22,7 @@ export default function HallOfFameLoading() {
         <SkeletonCard>
           <div className="flex items-center gap-5">
             <Skeleton className="h-16 w-12" />
-            <Skeleton className="h-24 w-24 rounded-2xl" />
+            <Skeleton className="h-24 w-24 rounded-[14px]" />
             <div className="flex-1 space-y-3">
               <Skeleton className="h-3 w-24" />
               <Skeleton className="h-8 w-56 max-w-full" />
@@ -38,7 +38,7 @@ export default function HallOfFameLoading() {
           >
             <div className="flex items-center gap-4">
               <Skeleton className="h-7 w-8" />
-              <Skeleton className="h-12 w-12 rounded-xl" />
+              <Skeleton className="h-12 w-12 rounded-[14px]" />
               <div className="flex-1 space-y-2">
                 <Skeleton className="h-3 w-20" />
                 <Skeleton className="h-5 w-40 max-w-full" />

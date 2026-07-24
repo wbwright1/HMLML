@@ -69,7 +69,7 @@ export function FranchiseHeader({
           <h1 className="text-h1">{franchiseName}</h1>
           <ChampionshipStars count={championships} variant="hero" />
           {ownerLabel && (
-            <p className="text-body-sm text-muted-foreground">{ownerLabel}</p>
+            <p className="text-body-sm text-text-tertiary">{ownerLabel}</p>
           )}
         </div>
       </div>
@@ -78,20 +78,20 @@ export function FranchiseHeader({
       <div className="flex flex-col items-center gap-6 sm:flex-row sm:justify-center sm:gap-12 pt-2">
         {/* All-time record */}
         <div className="flex flex-col items-center text-center">
-          <p className="text-caption text-muted-foreground mb-1">
+          <p className="text-caption text-text-tertiary mb-1">
             All-Time Record
           </p>
           <p className="text-[32px] leading-none font-mono font-bold tabular-nums text-text-primary">
             {allTimeRecord.wins}-{allTimeRecord.losses}
           </p>
-          <p className="text-caption text-muted-foreground mt-0.5">
+          <p className="text-caption text-text-tertiary mt-0.5">
             {winPct.toFixed(1)}% win rate
           </p>
         </div>
 
         {/* Championships */}
         <div className="flex flex-col items-center text-center">
-          <p className="text-caption text-muted-foreground mb-1">
+          <p className="text-caption text-text-tertiary mb-1">
             Championships
           </p>
           <p
@@ -111,13 +111,13 @@ export function FranchiseHeader({
         {/* Current season */}
         {currentSeason && (
           <div className="flex flex-col items-center text-center">
-            <p className="text-caption text-muted-foreground mb-1">
+            <p className="text-caption text-text-tertiary mb-1">
               Current Season
             </p>
             <p className="text-[32px] leading-none font-mono font-bold tabular-nums text-text-primary">
               {currentSeason.record}
             </p>
-            <p className="text-caption text-muted-foreground mt-0.5">
+            <p className="text-caption text-text-tertiary mt-0.5">
               #{currentSeason.rank} in standings
             </p>
           </div>

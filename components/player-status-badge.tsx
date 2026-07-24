@@ -11,7 +11,7 @@ export function PlayerStatusBadge({
 }: PlayerStatusBadgeProps) {
   if (!isRostered) {
     return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+      <span className="inline-flex items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-xs font-medium text-text-tertiary">
         Free Agent
       </span>
     );

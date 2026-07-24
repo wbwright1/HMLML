@@ -26,7 +26,7 @@ export function StatHero({
       {badge && <span className="text-kicker mb-2">{badge}</span>}
 
       <p
-        className={`font-mono font-bold tabular-nums text-text-primary ${valueSizeMap[variant]}`}
+        className={`text-stat text-text-primary ${valueSizeMap[variant]}`}
       >
         {value}
       </p>
