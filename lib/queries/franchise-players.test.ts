@@ -4,6 +4,8 @@ import {
   isDisqualifiedByLaterDrop,
   computeBlockbuster,
   selectCornerstones,
+  computeTenureAnchor,
+  resolveVia,
   type RosterEvent,
   type ScoredCandidate,
 } from "./franchise-players";
@@ -13,6 +15,48 @@ describe("pickLatestAcquisition", () => {
     const draft2021: RosterEvent = { type: "draft", seasonYear: 2021, week: -1, sleeperMs: -Infinity };
     const trade2023: RosterEvent = { type: "trade", seasonYear: 2023, week: 4, sleeperMs: 1000 };
     expect(pickLatestAcquisition([draft2021, trade2023])).toEqual(trade2023);
+  });
+});
+
+describe("computeTenureAnchor", () => {
+  it("anchors to 2021 for continuous presence across a 2023 startup re-draft (Mahomes/Tokyo case)", () => {
+    const presenceYears = new Set([2021, 2022, 2023, 2024, 2025, 2026]);
+    expect(computeTenureAnchor(presenceYears, 2026)).toBe(2021);
+  });
+
+  it("anchors to the year after a presence gap, not the original draft year (CeeDee Lamb case)", () => {
+    const presenceYears = new Set([2021, 2022, 2024, 2025, 2026]);
+    expect(computeTenureAnchor(presenceYears, 2026)).toBe(2024);
+  });
+
+  it("anchors to 2023 when presence starts after an early gap (Burrow case)", () => {
+    const presenceYears = new Set([2021, 2023, 2024, 2025, 2026]);
+    expect(computeTenureAnchor(presenceYears, 2026)).toBe(2023);
+  });
+
+  it("anchors to 2023 for a genuine 2023-only startup arrival", () => {
+    const presenceYears = new Set([2023, 2024, 2025, 2026]);
+    expect(computeTenureAnchor(presenceYears, 2026)).toBe(2023);
+  });
+});
+
+describe("resolveVia", () => {
+  it("resolves to draft when the franchise drafted the player in the anchor year", () => {
+    const draftYears = new Set([2021, 2023]);
+    const tradeYears = new Set<number>();
+    expect(resolveVia(2021, draftYears, tradeYears)).toBe("draft");
+  });
+
+  it("resolves to trade when a trade (not a draft) moved the player in the anchor year", () => {
+    const draftYears = new Set<number>();
+    const tradeYears = new Set([2024]);
+    expect(resolveVia(2024, draftYears, tradeYears)).toBe("trade");
+  });
+
+  it("falls back to draft for the 2021 base year with no logged event", () => {
+    const draftYears = new Set<number>();
+    const tradeYears = new Set<number>();
+    expect(resolveVia(2021, draftYears, tradeYears)).toBe("draft");
   });
 });
 
