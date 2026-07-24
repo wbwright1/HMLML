@@ -1,0 +1,33 @@
+name: Daily Sync
+on:
+  schedule:
+    - cron: '0 6 * * *'  # every day at 06:00 UTC
+  workflow_dispatch:
+jobs:
+  call-api:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Trigger cron endpoint
+        run: |
+          HTTP=$(curl -sS -w '%{http_code}' -o resp.json --max-time 290 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://hmlml.app/api/sync-daily)
+          echo "HTTP $HTTP"; cat resp.json || true
+          if [ "$HTTP" != "200" ]; then echo "Non-2xx from sync-daily"; exit 1; fi
+          if [ "$(jq -r '.partial' resp.json)" = "true" ]; then echo "Daily sync reported partial failure"; exit 1; fi
+      - name: File issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TITLE="Daily sync failing"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          NUMBER=$(gh issue list --search "$TITLE in:title" --state open --json number --jq '.[0].number')
+          if [ -n "$NUMBER" ]; then
+            gh issue comment "$NUMBER" --body "Daily sync failed again: $RUN_URL"
+          else
+            gh issue create --title "$TITLE" --body "The daily sync cron failed: $RUN_URL"
+          fi
