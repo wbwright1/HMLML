@@ -91,6 +91,14 @@ test.describe("Records: The Superlatives section", () => {
     const min = Math.min(...heights);
     const max = Math.max(...heights);
     expect(max - min, `card heights should be uniform: ${heights.join(", ")}`).toBeLessThanOrEqual(1);
+
+    // Distinct coverage: every card carries a distinct label. A repeated
+    // label (e.g. two "Wallflower"s) means the coverage pass ran out of
+    // distinct roasts before it ran out of franchises.
+    const labels = await cards.evaluateAll((els) =>
+      els.map((e) => e.querySelector("p")?.textContent ?? ""),
+    );
+    expect(new Set(labels).size, `card labels should be unique: ${labels.join(", ")}`).toBe(labels.length);
   });
 
   test("R09: season tab sync", async ({ page }) => {
@@ -131,6 +139,14 @@ test.describe("Records: The Superlatives section", () => {
       return;
     }
     await expect(label.first()).toBeVisible();
+
+    // Season-scoped superlatives are all-time-drought-free: "Title Drought" is
+    // an all-time-only award now (LONGEST_DROUGHT no longer appears in the
+    // per-season coverage pool).
+    const heading = page.getByRole("heading", { name: "The Superlatives", level: 2 });
+    const section = page.locator("section", { has: heading });
+    const sectionText = await section.innerText();
+    expect(sectionText).not.toContain("Title Drought");
   });
 
   test("R10: all-time superlatives", async ({ page }) => {
@@ -163,6 +179,12 @@ test.describe("Records: The Superlatives section", () => {
       els.map((e) => e.getAttribute("href")),
     );
     expect(new Set(hrefs).size).toBe(hrefs.length);
+
+    // Distinct coverage: every card carries a distinct label.
+    const labels = await cards.evaluateAll((els) =>
+      els.map((e) => e.querySelector("p")?.textContent ?? ""),
+    );
+    expect(new Set(labels).size, `card labels should be unique: ${labels.join(", ")}`).toBe(labels.length);
 
     // Every card must carry a numeric stat.
     for (let i = 0; i < cardCount; i++) {

@@ -23,8 +23,7 @@ import { getPreseasonField } from "@/lib/queries/preseason-field";
 import { getNextKickoff } from "@/lib/queries/kickoff";
 import { getLastCompletedSeason } from "@/lib/queries/seasons";
 import {
-  getSeasonSuperlatives,
-  getUncoveredFranchiseAwards,
+  getSeasonSuperlativeCards,
   type SeasonSuperlative,
 } from "@/lib/queries/superlatives";
 import { daysUntil } from "@/lib/hub/live-pill-label";
@@ -156,12 +155,7 @@ export async function PreseasonHub({
   try {
     const completedForAwards = await getLastCompletedSeason();
     if (completedForAwards) {
-      const base = await getSeasonSuperlatives(completedForAwards.id);
-      const fillers = await getUncoveredFranchiseAwards(
-        completedForAwards.id,
-        base.map((s) => s.franchiseSlug),
-      );
-      seasonSuperlatives = [...base, ...fillers];
+      seasonSuperlatives = await getSeasonSuperlativeCards(completedForAwards.id);
     }
   } catch {
     // DB unavailable; the Season Superlatives section is omitted.
@@ -252,17 +246,25 @@ export async function PreseasonHub({
             </section>
           )}
 
-          {/* Bold Predictions */}
-          {editorial.boldPredictions.length > 0 && (
-            <section>
-              <ModuleLabel>Bold Predictions · Site Desk</ModuleLabel>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                {editorial.boldPredictions.map((prediction) => (
-                  <BoldPredictionCard key={prediction.kicker} prediction={prediction} />
-                ))}
-              </div>
-            </section>
-          )}
+          {/* Bold Predictions: always an even count (max 6) so the two-column
+              grid never leaves an orphan card on the last row. */}
+          {(() => {
+            const capped = Math.min(editorial.boldPredictions.length, 6);
+            const shownCount = capped - (capped % 2);
+            const boldPredictions = editorial.boldPredictions.slice(0, shownCount);
+            return (
+              boldPredictions.length > 0 && (
+                <section>
+                  <ModuleLabel>Bold Predictions · Site Desk</ModuleLabel>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {boldPredictions.map((prediction) => (
+                      <BoldPredictionCard key={prediction.kicker} prediction={prediction} />
+                    ))}
+                  </div>
+                </section>
+              )
+            );
+          })()}
 
           {/* Offseason Receipts */}
           {editorial.offseasonReceipts.length > 0 && (

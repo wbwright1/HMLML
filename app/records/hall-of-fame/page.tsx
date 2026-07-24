@@ -104,27 +104,29 @@ function GoatHero({ entry }: { entry: GoatEntry }) {
           <p className="text-body-lg text-text-secondary mt-2 max-w-prose">
             {entry.blurb}
           </p>
-          <div className="mt-5 flex flex-wrap items-end gap-x-8 gap-y-4">
-            <Stat value={record(entry)} label="All-time" accent="gold" />
-            <Stat
-              value={`${(entry.winPct * 100).toFixed(1)}%`}
-              label="Win rate"
-            />
-            <Stat
-              value={`${entry.playoffAppearances}/${entry.seasonsPlayed}`}
-              label="Playoffs"
-            />
-            <div className="ml-auto flex flex-col items-end gap-1">
-              <span className="font-mono text-[40px] md:text-[52px] font-bold leading-none tabular-nums text-accent-gold">
-                {(entry.goatScore * 100).toFixed(1)}
-              </span>
-              <span className="text-[10px] uppercase tracking-[0.14em] text-text-tertiary">
-                GOAT Index
-              </span>
+          <div className="mt-5 space-y-4">
+            <div className="flex items-end justify-between gap-4">
+              <div className="flex flex-col gap-1">
+                <span className="font-mono text-[44px] md:text-[52px] font-bold leading-none tabular-nums text-accent-gold">
+                  {(entry.goatScore * 100).toFixed(1)}
+                </span>
+                <span className="text-[10px] uppercase tracking-[0.14em] text-text-tertiary">
+                  GOAT Index
+                </span>
+              </div>
+              <RingsChip count={entry.championships} />
             </div>
-          </div>
-          <div className="mt-4">
-            <RingsChip count={entry.championships} />
+            <div className="grid grid-cols-3 gap-3 border-t border-divider pt-4">
+              <Stat value={record(entry)} label="All-time" accent="gold" />
+              <Stat
+                value={`${(entry.winPct * 100).toFixed(1)}%`}
+                label="Win rate"
+              />
+              <Stat
+                value={`${entry.playoffAppearances}/${entry.seasonsPlayed}`}
+                label="Playoffs"
+              />
+            </div>
           </div>
         </div>
       </div>

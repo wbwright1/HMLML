@@ -147,76 +147,79 @@ export default async function TrophyCasePage() {
               </ScrollReveal>
             )}
 
-            {/* Historical champions */}
-            {trophies.slice(1).map((trophy, index) => (
-              <ScrollReveal key={trophy.seasonYear} delay={(index + 1) * 40}>
-                <div
-                  className={`rounded-[14px] border p-5 transition-colors ${
-                    trophy.championName
-                      ? "border-primary/30 bg-primary/5"
-                      : "border-border bg-surface"
-                  }`}
-                >
-                  <div className="flex flex-wrap items-center justify-between gap-4">
-                    <div className="space-y-1">
-                      <Link
-                        href={`/seasons/${trophy.seasonYear}`}
-                        className="text-h3 font-mono tabular-nums hover:text-primary transition-colors"
-                      >
-                        {trophy.seasonYear}
-                      </Link>
-                    </div>
+            {/* Historical champions: two-up on desktop, newest-first reading
+                left-to-right across the grid. */}
+            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+              {trophies.slice(1).map((trophy, index) => (
+                <ScrollReveal key={trophy.seasonYear} delay={(index + 1) * 40}>
+                  <div
+                    className={`rounded-[14px] border p-5 transition-colors ${
+                      trophy.championName
+                        ? "border-primary/30 bg-primary/5"
+                        : "border-border bg-surface"
+                    }`}
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-4">
+                      <div className="space-y-1">
+                        <Link
+                          href={`/seasons/${trophy.seasonYear}`}
+                          className="text-h3 font-mono tabular-nums hover:text-primary transition-colors"
+                        >
+                          {trophy.seasonYear}
+                        </Link>
+                      </div>
 
-                    <div className="flex flex-wrap items-center gap-4">
-                      {trophy.championName ? (
-                        <div className="flex items-center gap-3">
-                          <Link
-                            href={trophy.championSlug ? `/teams/${trophy.championSlug}` : "#"}
-                            className="hover:opacity-80 transition-opacity"
-                          >
-                            <FranchiseIdentity
-                              franchise={{
-                                slug: trophy.championSlug ?? "",
-                                name: trophy.championName,
-                                abbreviation: trophy.championAbbreviation ?? undefined,
-                                brandingColor: trophy.championBrandingColor ?? undefined,
-                                avatarUrl: trophy.championAvatarUrl,
-                              }}
-                              championships={champCounts.get(trophy.championName) ?? 1}
-                              variant="compact"
-                            />
-                          </Link>
-                          <SuperlativeBadge text="League Champion" variant="gold" />
-                        </div>
-                      ) : (
-                        <SuperlativeBadge text="No Champion" variant="neutral" />
-                      )}
-
-                      {trophy.runnerUpName && (
-                        <div className="flex items-center gap-2">
-                          <span className="text-xs text-text-tertiary">
-                            vs
-                          </span>
-                          {trophy.runnerUpSlug ? (
+                      <div className="flex flex-wrap items-center gap-4">
+                        {trophy.championName ? (
+                          <div className="flex items-center gap-3">
                             <Link
-                              href={`/teams/${trophy.runnerUpSlug}`}
-                              className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
+                              href={trophy.championSlug ? `/teams/${trophy.championSlug}` : "#"}
+                              className="hover:opacity-80 transition-opacity"
                             >
-                              {trophy.runnerUpName}
+                              <FranchiseIdentity
+                                franchise={{
+                                  slug: trophy.championSlug ?? "",
+                                  name: trophy.championName,
+                                  abbreviation: trophy.championAbbreviation ?? undefined,
+                                  brandingColor: trophy.championBrandingColor ?? undefined,
+                                  avatarUrl: trophy.championAvatarUrl,
+                                }}
+                                championships={champCounts.get(trophy.championName) ?? 1}
+                                variant="compact"
+                              />
                             </Link>
-                          ) : (
-                            <span className="text-body-sm text-text-tertiary">
-                              {trophy.runnerUpName}
+                            <SuperlativeBadge text="League Champion" variant="gold" />
+                          </div>
+                        ) : (
+                          <SuperlativeBadge text="No Champion" variant="neutral" />
+                        )}
+
+                        {trophy.runnerUpName && (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-text-tertiary">
+                              vs
                             </span>
-                          )}
-                          <SuperlativeBadge text="Runner-Up" variant="neutral" />
-                        </div>
-                      )}
+                            {trophy.runnerUpSlug ? (
+                              <Link
+                                href={`/teams/${trophy.runnerUpSlug}`}
+                                className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
+                              >
+                                {trophy.runnerUpName}
+                              </Link>
+                            ) : (
+                              <span className="text-body-sm text-text-tertiary">
+                                {trophy.runnerUpName}
+                              </span>
+                            )}
+                            <SuperlativeBadge text="Runner-Up" variant="neutral" />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              </ScrollReveal>
-            ))}
+                </ScrollReveal>
+              ))}
+            </div>
           </div>
         )}
       </PageSection>

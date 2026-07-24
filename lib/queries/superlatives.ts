@@ -488,13 +488,197 @@ export async function getSeasonSuperlatives(
 // nowhere. On a surface whose whole promise is "find yourself in one tap", that
 // leaves holes. This pass takes the set of franchise slugs ALREADY covered by
 // those awards and hands every remaining franchise a fallback superlative drawn
-// from a small pool of always-computable roasts. It never touches or overrides
+// from a pool of always-computable roasts, each used at most once, followed by
+// a Wallflower sweep for anyone still uncovered. It never touches or overrides
 // an existing winner; it only fills gaps.
-//
-// Assignment is deterministic and gives each gap a distinct flavor where it can:
-//   1. Title Drought  -> the uncovered franchise with the longest ring drought
-//   2. Punching Bag    -> among the rest, whoever conceded the most points this season
-//   3. Wallflower      -> everyone still uncovered (the catch-all neutral roast)
+
+/** Minimum shape every coverage-pool candidate needs for assignCoverage. */
+interface CoverageProfile {
+  franchiseId: string;
+  franchiseName: string;
+  franchiseSlug: string;
+  /** Games played; powers the Wallflower catch-all stat ("N games"). */
+  games: number;
+}
+
+/**
+ * One entry in a priority-ordered coverage pool. `score` returns null when a
+ * candidate is ineligible for this award; assignCoverage skips it. Ties break
+ * by the candidates' pre-sort order (franchiseId), so results stay
+ * deterministic run to run.
+ */
+interface CoverageAwardDef<T extends CoverageProfile> {
+  key: keyof typeof SNARKY_LABELS;
+  score: (profile: T) => number | null;
+  stat: (profile: T) => string;
+  context: (profile: T) => string;
+}
+
+/**
+ * Walks a priority-ordered award pool and, for each award, hands it to the
+ * highest-scoring still-unassigned eligible candidate (candidates pre-sorted
+ * by franchiseId, so the first max found wins ties). Each award is used at
+ * most once. Anyone left after the pool is exhausted gets a Wallflower.
+ */
+function assignCoverage<T extends CoverageProfile>(
+  profiles: T[],
+  defs: CoverageAwardDef<T>[],
+): SeasonSuperlative[] {
+  const sorted = [...profiles].sort((a, b) => a.franchiseId.localeCompare(b.franchiseId));
+  const assigned = new Set<string>();
+  const result: SeasonSuperlative[] = [];
+
+  const pushAward = (key: keyof typeof SNARKY_LABELS, profile: T, stat: string, context: string) => {
+    const label = SNARKY_LABELS[key];
+    result.push({
+      labelKey: label.key,
+      displayText: label.displayText,
+      franchiseName: profile.franchiseName,
+      franchiseSlug: profile.franchiseSlug,
+      stat,
+      context,
+      tone: label.tone,
+    });
+    assigned.add(profile.franchiseId);
+  };
+
+  for (const def of defs) {
+    let best: T | null = null;
+    let bestScore = -Infinity;
+    for (const profile of sorted) {
+      if (assigned.has(profile.franchiseId)) continue;
+      const score = def.score(profile);
+      if (score === null) continue;
+      if (score > bestScore) {
+        bestScore = score;
+        best = profile;
+      }
+    }
+    if (best) {
+      pushAward(def.key, best, def.stat(best), def.context(best));
+    }
+  }
+
+  for (const profile of sorted) {
+    if (assigned.has(profile.franchiseId)) continue;
+    pushAward(
+      "WALLFLOWER",
+      profile,
+      `${profile.games} games`,
+      "Dodged every other superlative. Impressively unremarkable.",
+    );
+  }
+
+  return result;
+}
+
+const CLOSE_GAME_MARGIN = 5;
+
+interface FranchiseCoverageProfile extends CoverageProfile {
+  wins: number;
+  losses: number;
+  ties: number;
+  weekScores: number[];
+  maxWeek: number;
+  minWeek: number;
+  stdDev: number;
+  closeGames: number;
+  highestScoringLoss: number | null;
+  lowestScoringWin: number | null;
+  allPlayWinPct: number;
+}
+
+function winPctOf(wins: number, losses: number, ties: number): number {
+  const total = wins + losses + ties;
+  return total > 0 ? (wins + ties * 0.5) / total : 0;
+}
+
+const PER_SEASON_COVERAGE_DEFS: CoverageAwardDef<FranchiseCoverageProfile>[] = [
+  {
+    key: "HEARTBREAKER",
+    score: (p) => p.highestScoringLoss,
+    stat: (p) => `${p.highestScoringLoss!.toFixed(1)} pts`,
+    context: () => "Their best game of the year was a loss. Brutal.",
+  },
+  {
+    key: "STICK_UP",
+    score: (p) => (p.lowestScoringWin != null ? -p.lowestScoringWin : null),
+    stat: (p) => `${p.lowestScoringWin!.toFixed(1)} pts`,
+    context: () => "Won with the league's ugliest total. Still counts.",
+  },
+  {
+    key: "SWEAT_MERCHANT",
+    score: (p) => (p.closeGames > 0 ? p.closeGames : null),
+    stat: (p) => `${p.closeGames} games`,
+    context: () => "More one-possession finishes than anyone.",
+  },
+  {
+    key: "HORSESHOE",
+    score: (p) => {
+      const expectedWins = p.allPlayWinPct * (p.wins + p.losses + p.ties);
+      const actualWins = p.wins + 0.5 * p.ties;
+      const diff = actualWins - expectedWins;
+      return expectedWins > 0 && diff > 0.5 ? diff : null;
+    },
+    stat: (p) => {
+      const expectedWins = p.allPlayWinPct * (p.wins + p.losses + p.ties);
+      const actualWins = p.wins + 0.5 * p.ties;
+      return `+${(actualWins - expectedWins).toFixed(1)} W`;
+    },
+    context: () => "Won more than the box scores earned. Schedule did them a favor.",
+  },
+  {
+    key: "SNAKEBIT",
+    score: (p) => {
+      const expectedWins = p.allPlayWinPct * (p.wins + p.losses + p.ties);
+      const actualWins = p.wins + 0.5 * p.ties;
+      const diff = expectedWins - actualWins;
+      return diff > 0.5 ? diff : null;
+    },
+    stat: (p) => {
+      const expectedWins = p.allPlayWinPct * (p.wins + p.losses + p.ties);
+      const actualWins = p.wins + 0.5 * p.ties;
+      return `${(expectedWins - actualWins).toFixed(1)} W short`;
+    },
+    context: () => "Lost more than the scores deserved. Robbed weekly.",
+  },
+  {
+    key: "BOOM_GAME",
+    score: (p) => (p.maxWeek > 0 ? p.maxWeek : null),
+    stat: (p) => `${p.maxWeek.toFixed(1)} pts`,
+    context: () => "Their season-high week. For one Sunday, unstoppable.",
+  },
+  {
+    key: "NO_SHOW",
+    score: (p) => (p.minWeek > 0 ? -p.minWeek : null),
+    stat: (p) => `${p.minWeek.toFixed(1)} pts`,
+    context: () => "Their quietest week of the year. Nobody forgot.",
+  },
+  {
+    key: "WHIPLASH",
+    score: (p) => (p.stdDev > 0 ? p.stdDev : null),
+    stat: (p) => `${p.stdDev.toFixed(1)} pts`,
+    context: () => "Ceiling of a contender, floor of a dumpster.",
+  },
+  {
+    key: "METRONOME",
+    score: (p) => (p.stdDev > 0 ? -p.stdDev : null),
+    stat: (p) => `${p.stdDev.toFixed(1)} pts`,
+    context: () => "Nearly the same score every week. Reliable to a fault.",
+  },
+  {
+    key: "ALPHA_DOG",
+    score: (p) => (p.wins > 0 ? winPctOf(p.wins, p.losses, p.ties) : null),
+    stat: (p) => `${p.wins}-${p.losses}${p.ties > 0 ? `-${p.ties}` : ""}`,
+    context: () => "Quietly the best record still on the board.",
+  },
+  {
+    key: "LEAGUE_DOORMAT",
+    score: (p) => (p.losses > 0 ? -winPctOf(p.wins, p.losses, p.ties) : null),
+    stat: (p) => `${p.losses} L`,
+    context: (p) => `League-worst record at ${p.wins}-${p.losses}${p.ties > 0 ? `-${p.ties}` : ""}`,
+  },
+];
 
 export async function getUncoveredFranchiseAwards(
   seasonId: number,
@@ -503,7 +687,6 @@ export async function getUncoveredFranchiseAwards(
   try {
     const covered = new Set(coveredSlugs);
 
-    // This season's standings (identity + PA for the Punching Bag pick).
     const standings = await db
       .select({
         franchiseId: franchiseSeasons.franchiseId,
@@ -512,121 +695,128 @@ export async function getUncoveredFranchiseAwards(
         wins: franchiseSeasons.wins,
         losses: franchiseSeasons.losses,
         ties: franchiseSeasons.ties,
-        pointsAgainst: franchiseSeasons.pointsAgainst,
       })
       .from(franchiseSeasons)
       .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
       .where(eq(franchiseSeasons.seasonId, seasonId));
 
-    const uncovered = standings.filter((s) => !covered.has(s.franchiseSlug));
-    if (uncovered.length === 0) return [];
+    if (standings.length === 0) return [];
 
-    // Career title-drought context: for every franchise, its completed-season
-    // count and the most recent year it won a title (if ever). Drought is
-    // measured against the newest completed season year in the league so a
-    // franchise that skipped the latest year still reads sensibly.
-    const historyRows = await db
+    const matchupRows = await db
       .select({
-        franchiseId: franchiseSeasons.franchiseId,
-        seasonYear: seasons.seasonYear,
-        playoffResult: franchiseSeasons.playoffResult,
+        matchupId: matchups.matchupId,
+        franchiseId: matchups.franchiseId,
+        week: matchups.week,
+        points: matchups.points,
+        isWinner: matchups.isWinner,
       })
-      .from(franchiseSeasons)
-      .innerJoin(seasons, eq(franchiseSeasons.seasonId, seasons.id))
-      .where(eq(seasons.status, "complete"));
-
-    let newestCompletedYear = 0;
-    const seasonsCountByFranchise = new Map<string, number>();
-    const lastTitleYearByFranchise = new Map<string, number>();
-    for (const r of historyRows) {
-      newestCompletedYear = Math.max(newestCompletedYear, r.seasonYear);
-      seasonsCountByFranchise.set(
-        r.franchiseId,
-        (seasonsCountByFranchise.get(r.franchiseId) ?? 0) + 1,
+      .from(matchups)
+      .where(
+        and(
+          eq(matchups.seasonId, seasonId),
+          eq(matchups.status, "complete"),
+          eq(matchups.isPlayoff, false),
+        ),
       );
-      if (r.playoffResult === "champion") {
-        lastTitleYearByFranchise.set(
-          r.franchiseId,
-          Math.max(lastTitleYearByFranchise.get(r.franchiseId) ?? 0, r.seasonYear),
+
+    const byFranchise = new Map<string, typeof matchupRows>();
+    for (const row of matchupRows) {
+      const arr = byFranchise.get(row.franchiseId) ?? [];
+      arr.push(row);
+      byFranchise.set(row.franchiseId, arr);
+    }
+
+    // Pairs by (week, matchupId) power the one-possession-game count.
+    const pairGroups = new Map<string, typeof matchupRows>();
+    for (const row of matchupRows) {
+      const key = `${row.week}:${row.matchupId}`;
+      const arr = pairGroups.get(key) ?? [];
+      arr.push(row);
+      pairGroups.set(key, arr);
+    }
+    const closeGamesByFranchise = new Map<string, number>();
+    for (const [, pair] of pairGroups) {
+      if (pair.length !== 2) continue;
+      const [a, b] = pair;
+      const margin = Math.abs((a.points ?? 0) - (b.points ?? 0));
+      if (margin < CLOSE_GAME_MARGIN) {
+        closeGamesByFranchise.set(a.franchiseId, (closeGamesByFranchise.get(a.franchiseId) ?? 0) + 1);
+        closeGamesByFranchise.set(b.franchiseId, (closeGamesByFranchise.get(b.franchiseId) ?? 0) + 1);
+      }
+    }
+
+    // All-play win pct: every franchise's score compared against every other
+    // franchise's score in the same week, not just its own opponent.
+    const weekGroups = new Map<number, typeof matchupRows>();
+    for (const row of matchupRows) {
+      const arr = weekGroups.get(row.week) ?? [];
+      arr.push(row);
+      weekGroups.set(row.week, arr);
+    }
+    const allPlayWinsByFranchise = new Map<string, number>();
+    const allPlayGamesByFranchise = new Map<string, number>();
+    for (const [, entries] of weekGroups) {
+      for (const entry of entries) {
+        let wins = 0;
+        for (const other of entries) {
+          if (other.franchiseId === entry.franchiseId) continue;
+          const ep = entry.points ?? 0;
+          const op = other.points ?? 0;
+          if (ep > op) wins += 1;
+          else if (ep === op) wins += 0.5;
+        }
+        allPlayWinsByFranchise.set(
+          entry.franchiseId,
+          (allPlayWinsByFranchise.get(entry.franchiseId) ?? 0) + wins,
+        );
+        allPlayGamesByFranchise.set(
+          entry.franchiseId,
+          (allPlayGamesByFranchise.get(entry.franchiseId) ?? 0) + (entries.length - 1),
         );
       }
     }
 
-    const droughtOf = (franchiseId: string): number => {
-      const lastTitle = lastTitleYearByFranchise.get(franchiseId);
-      // Never won: the drought is the length of their whole existence.
-      if (!lastTitle) return seasonsCountByFranchise.get(franchiseId) ?? 0;
-      return Math.max(0, newestCompletedYear - lastTitle);
-    };
+    const profiles: FranchiseCoverageProfile[] = standings.map((s) => {
+      const games = byFranchise.get(s.franchiseId) ?? [];
+      const weekScores = games.map((g) => g.points ?? 0);
+      const maxWeek = weekScores.length > 0 ? Math.max(...weekScores) : 0;
+      const minWeek = weekScores.length > 0 ? Math.min(...weekScores) : 0;
+      const mean =
+        weekScores.length > 0 ? weekScores.reduce((sum, v) => sum + v, 0) / weekScores.length : 0;
+      const stdDev =
+        weekScores.length > 0
+          ? Math.sqrt(
+              weekScores.reduce((sum, v) => sum + (v - mean) ** 2, 0) / weekScores.length,
+            )
+          : 0;
+      const lossScores = games.filter((g) => g.isWinner === false).map((g) => g.points ?? 0);
+      const winScores = games.filter((g) => g.isWinner === true).map((g) => g.points ?? 0);
+      const allPlayWins = allPlayWinsByFranchise.get(s.franchiseId) ?? 0;
+      const allPlayGames = allPlayGamesByFranchise.get(s.franchiseId) ?? 0;
 
-    const result: SeasonSuperlative[] = [];
-    const assigned = new Set<string>();
+      return {
+        franchiseId: s.franchiseId,
+        franchiseName: s.franchiseName,
+        franchiseSlug: s.franchiseSlug,
+        wins: s.wins ?? 0,
+        losses: s.losses ?? 0,
+        ties: s.ties ?? 0,
+        games: (s.wins ?? 0) + (s.losses ?? 0) + (s.ties ?? 0),
+        weekScores,
+        maxWeek,
+        minWeek,
+        stdDev,
+        closeGames: closeGamesByFranchise.get(s.franchiseId) ?? 0,
+        highestScoringLoss: lossScores.length > 0 ? Math.max(...lossScores) : null,
+        lowestScoringWin: winScores.length > 0 ? Math.min(...winScores) : null,
+        allPlayWinPct: allPlayGames > 0 ? allPlayWins / allPlayGames : 0,
+      };
+    });
 
-    const pushAward = (
-      key: keyof typeof SNARKY_LABELS,
-      row: (typeof uncovered)[number],
-      stat: string,
-      context: string,
-    ) => {
-      const label = SNARKY_LABELS[key];
-      result.push({
-        labelKey: label.key,
-        displayText: label.displayText,
-        franchiseName: row.franchiseName,
-        franchiseSlug: row.franchiseSlug,
-        stat,
-        context,
-        tone: label.tone,
-      });
-      assigned.add(row.franchiseId);
-    };
+    const uncovered = profiles.filter((p) => !covered.has(p.franchiseSlug));
+    if (uncovered.length === 0) return [];
 
-    // 1. Title Drought: longest ring drought among the uncovered.
-    const remaining = () => uncovered.filter((u) => !assigned.has(u.franchiseId));
-    const droughtPick = [...remaining()].sort(
-      (a, b) => droughtOf(b.franchiseId) - droughtOf(a.franchiseId),
-    )[0];
-    if (droughtPick) {
-      const neverWon = !lastTitleYearByFranchise.has(droughtPick.franchiseId);
-      const yrs = droughtOf(droughtPick.franchiseId);
-      pushAward(
-        "LONGEST_DROUGHT",
-        droughtPick,
-        `${yrs} ${yrs === 1 ? "season" : "seasons"}`,
-        neverWon
-          ? "Seasons in the league, still zero rings"
-          : "Seasons since their last and only glory",
-      );
-    }
-
-    // 2. Punching Bag: most points conceded this season, among the rest.
-    const paPick = [...remaining()]
-      .filter((u) => Number(u.pointsAgainst ?? 0) > 0)
-      .sort((a, b) => Number(b.pointsAgainst ?? 0) - Number(a.pointsAgainst ?? 0))[0];
-    if (paPick) {
-      pushAward(
-        "PUNCHING_BAG",
-        paPick,
-        `${Number(paPick.pointsAgainst ?? 0).toFixed(1)} PA`,
-        "Points conceded; the league's favorite matchup",
-      );
-    }
-
-    // 3. Wallflower: the catch-all for anyone still uncovered.
-    for (const row of remaining()) {
-      const w = row.wins ?? 0;
-      const l = row.losses ?? 0;
-      const t = row.ties ?? 0;
-      const rec = t > 0 ? `${w}-${l}-${t}` : `${w}-${l}`;
-      pushAward(
-        "WALLFLOWER",
-        row,
-        rec,
-        "Dodged every other superlative. Impressively unremarkable.",
-      );
-    }
-
-    return result;
+    return assignCoverage(uncovered, PER_SEASON_COVERAGE_DEFS);
   } catch (e) {
     console.error("[superlatives] getUncoveredFranchiseAwards error:", e);
     return [];
@@ -1114,6 +1304,58 @@ export async function getAllTimeSuperlativeCards(): Promise<SeasonSuperlative[]>
 // latest completed season, so a franchise that folded before the league's
 // most recent season never shows up as an unfilled gap.
 
+interface AllTimeCoverageProfile extends CoverageProfile {
+  careerWins: number;
+  careerLosses: number;
+  careerTies: number;
+  careerPA: number;
+  seasonsCount: number;
+  neverWonTitle: boolean;
+  drought: number;
+}
+
+const ALL_TIME_COVERAGE_DEFS: CoverageAwardDef<AllTimeCoverageProfile>[] = [
+  {
+    key: "LONGEST_DROUGHT",
+    score: (p) => p.drought,
+    stat: (p) => `${p.drought} ${p.drought === 1 ? "season" : "seasons"}`,
+    context: (p) =>
+      p.neverWonTitle
+        ? "Seasons in the league, still zero rings"
+        : "Seasons since their last and only glory",
+  },
+  {
+    key: "PUNCHING_BAG",
+    score: (p) => (p.careerPA > 0 ? p.careerPA : null),
+    stat: (p) => `${p.careerPA.toFixed(1)} PA`,
+    context: () => "Career points conceded; the league's favorite matchup",
+  },
+  {
+    key: "NEARLY_MAN",
+    score: (p) => (p.neverWonTitle && p.games > 0 ? winPctOf(p.careerWins, p.careerLosses, p.careerTies) : null),
+    stat: (p) => `${p.careerWins}-${p.careerLosses}${p.careerTies > 0 ? `-${p.careerTies}` : ""}`,
+    context: () => "Best career record never to lift the trophy.",
+  },
+  {
+    key: "WORKHORSE",
+    score: (p) => (p.careerWins > 0 ? p.careerWins : null),
+    stat: (p) => `${p.careerWins} W`,
+    context: () => "More career wins than any other unsung franchise.",
+  },
+  {
+    key: "SISYPHUS",
+    score: (p) => (p.careerLosses > 0 ? p.careerLosses : null),
+    stat: (p) => `${p.careerLosses} L`,
+    context: () => "More career losses than anyone. Keeps showing up.",
+  },
+  {
+    key: "ELDER_STATESMAN",
+    score: (p) => (p.seasonsCount > 0 ? p.seasonsCount : null),
+    stat: (p) => `${p.seasonsCount} seasons`,
+    context: () => "More seasons logged than any other unsung franchise.",
+  },
+];
+
 export async function getAllTimeUncoveredFranchiseAwards(
   coveredSlugs: string[],
 ): Promise<SeasonSuperlative[]> {
@@ -1183,81 +1425,30 @@ export async function getAllTimeUncoveredFranchiseAwards(
       return Math.max(0, newestCompletedYear - lastTitle);
     };
 
-    const result: SeasonSuperlative[] = [];
-    const assigned = new Set<string>();
+    const uncoveredProfiles: AllTimeCoverageProfile[] = uncovered.map((u) => {
+      const acc = careerByFranchise.get(u.franchiseId) ?? {
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        pointsAgainst: 0,
+        seasonsCount: 0,
+      };
+      return {
+        franchiseId: u.franchiseId,
+        franchiseName: u.franchiseName,
+        franchiseSlug: u.franchiseSlug,
+        games: acc.wins + acc.losses + acc.ties,
+        careerWins: acc.wins,
+        careerLosses: acc.losses,
+        careerTies: acc.ties,
+        careerPA: acc.pointsAgainst,
+        seasonsCount: acc.seasonsCount,
+        neverWonTitle: !lastTitleYearByFranchise.has(u.franchiseId),
+        drought: droughtOf(u.franchiseId),
+      };
+    });
 
-    const pushAward = (
-      key: keyof typeof SNARKY_LABELS,
-      row: (typeof uncovered)[number],
-      stat: string,
-      context: string,
-    ) => {
-      const label = SNARKY_LABELS[key];
-      result.push({
-        labelKey: label.key,
-        displayText: label.displayText,
-        franchiseName: row.franchiseName,
-        franchiseSlug: row.franchiseSlug,
-        stat,
-        context,
-        tone: label.tone,
-      });
-      assigned.add(row.franchiseId);
-    };
-
-    const remaining = () => uncovered.filter((u) => !assigned.has(u.franchiseId));
-
-    // 1. Longest Drought (already all-time): longest ring drought among the uncovered.
-    const droughtPick = [...remaining()].sort(
-      (a, b) => droughtOf(b.franchiseId) - droughtOf(a.franchiseId),
-    )[0];
-    if (droughtPick) {
-      const neverWon = !lastTitleYearByFranchise.has(droughtPick.franchiseId);
-      const yrs = droughtOf(droughtPick.franchiseId);
-      pushAward(
-        "LONGEST_DROUGHT",
-        droughtPick,
-        `${yrs} ${yrs === 1 ? "season" : "seasons"}`,
-        neverWon
-          ? "Seasons in the league, still zero rings"
-          : "Seasons since their last and only glory",
-      );
-    }
-
-    // 2. Punching Bag: most career points conceded, among the rest.
-    const paPick = [...remaining()]
-      .filter((u) => (careerByFranchise.get(u.franchiseId)?.pointsAgainst ?? 0) > 0)
-      .sort(
-        (a, b) =>
-          (careerByFranchise.get(b.franchiseId)?.pointsAgainst ?? 0) -
-          (careerByFranchise.get(a.franchiseId)?.pointsAgainst ?? 0),
-      )[0];
-    if (paPick) {
-      const pa = careerByFranchise.get(paPick.franchiseId)?.pointsAgainst ?? 0;
-      pushAward(
-        "PUNCHING_BAG",
-        paPick,
-        `${pa.toFixed(1)} PA`,
-        "Career points conceded; the league's favorite matchup",
-      );
-    }
-
-    // 3. Wallflower: catch-all for anyone still uncovered, career record as stat.
-    for (const row of remaining()) {
-      const acc = careerByFranchise.get(row.franchiseId);
-      const w = acc?.wins ?? 0;
-      const l = acc?.losses ?? 0;
-      const t = acc?.ties ?? 0;
-      const rec = t > 0 ? `${w}-${l}-${t}` : `${w}-${l}`;
-      pushAward(
-        "WALLFLOWER",
-        row,
-        rec,
-        "Dodged every other superlative, career-long. Impressively unremarkable.",
-      );
-    }
-
-    return result;
+    return assignCoverage(uncoveredProfiles, ALL_TIME_COVERAGE_DEFS);
   } catch (e) {
     console.error("[superlatives] getAllTimeUncoveredFranchiseAwards error:", e);
     return [];
