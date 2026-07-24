@@ -6,7 +6,7 @@ import {
   seasons,
   transactions,
 } from "@/lib/db/schema";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { SNARKY_LABELS, type LabelTone } from "@/lib/content";
 import { getMostTradedPlayers, getMostChurnedPlayers } from "@/lib/queries/player-lore";
 import { getLeagueCornerstone } from "@/lib/queries/franchise-players";
@@ -42,6 +42,12 @@ export interface LorePiece {
   statValue: string;
   story: string;
   franchiseBadge?: LoreFranchiseBadge | null;
+  /**
+   * Every franchise the player logged a player_week_points row for, ordered
+   * by first season/week appearance. Only populated for The Wanderer and
+   * Waiver Yo-Yo (the "teams they passed through" crest strip).
+   */
+  franchiseSequence?: LoreFranchiseBadge[];
   href?: string;
 }
 
@@ -152,6 +158,7 @@ export interface StartupPickRow {
   round: number;
   pickNumber: number;
   seasonYear: number;
+  franchiseId: string | null;
 }
 
 /** Startup-draft picks only (excludes rookie drafts), with the season year. */
@@ -163,6 +170,7 @@ export async function getStartupDraftPicks(): Promise<StartupPickRow[]> {
         round: draftPicks.round,
         pickNumber: draftPicks.pickNumber,
         seasonYear: seasons.seasonYear,
+        franchiseId: draftPicks.franchiseId,
       })
       .from(draftPicks)
       .innerJoin(seasons, eq(draftPicks.seasonId, seasons.id))
@@ -175,6 +183,7 @@ export async function getStartupDraftPicks(): Promise<StartupPickRow[]> {
         round: r.round,
         pickNumber: r.pickNumber,
         seasonYear: r.seasonYear,
+        franchiseId: r.franchiseId,
       }));
   } catch (error) {
     console.error("[lore] getStartupDraftPicks error:", error);
@@ -241,6 +250,147 @@ export async function getBiggestSeasons(limit = 15): Promise<SeasonPointsRow[]> 
     console.error("[lore] getBiggestSeasons error:", error);
     return [];
   }
+}
+
+export interface PlayerFranchiseWeekRow {
+  playerId: string;
+  franchiseId: string;
+  seasonYear: number;
+  week: number;
+  started: boolean;
+  points: number;
+}
+
+/**
+ * Every player_week_points row (started or benched) for a small set of
+ * candidate player ids, restricted to completed seasons. One batched query,
+ * reused to attribute franchise credit for the Comet, Waiver Miracle, Iron
+ * Man, Wanderer, and Waiver Yo-Yo cards.
+ */
+export async function getPlayerFranchiseWeeks(
+  playerIds: readonly string[],
+): Promise<PlayerFranchiseWeekRow[]> {
+  if (playerIds.length === 0) return [];
+  try {
+    const rows = await db
+      .select({
+        playerId: playerWeekPoints.playerId,
+        franchiseId: playerWeekPoints.franchiseId,
+        seasonYear: seasons.seasonYear,
+        week: playerWeekPoints.week,
+        started: playerWeekPoints.started,
+        points: playerWeekPoints.points,
+      })
+      .from(playerWeekPoints)
+      .innerJoin(seasons, eq(playerWeekPoints.seasonId, seasons.id))
+      .where(
+        and(
+          inArray(playerWeekPoints.playerId, Array.from(playerIds)),
+          eq(seasons.status, "complete"),
+        ),
+      );
+
+    return rows.map((r) => ({
+      playerId: r.playerId,
+      franchiseId: r.franchiseId,
+      seasonYear: r.seasonYear,
+      week: r.week,
+      started: r.started,
+      points: Number(r.points ?? 0),
+    }));
+  } catch (error) {
+    console.error("[lore] getPlayerFranchiseWeeks error:", error);
+    return [];
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Pure franchise-attribution helpers, each scoped to one player's rows
+// (caller filters getPlayerFranchiseWeeks by playerId first). Unit-tested in
+// lore.test.ts.
+// ---------------------------------------------------------------------------
+
+/**
+ * Which franchise started this player most in the given season (mode of
+ * franchiseId among started=true rows), ties broken by total points scored
+ * for that franchise that season. Null when the player has no started rows
+ * that season.
+ */
+export function pickSeasonFranchise(
+  rows: readonly PlayerFranchiseWeekRow[],
+  seasonYear: number,
+): string | null {
+  const buckets = new Map<string, { starts: number; points: number }>();
+  for (const r of rows) {
+    if (!r.started || r.seasonYear !== seasonYear) continue;
+    const b = buckets.get(r.franchiseId) ?? { starts: 0, points: 0 };
+    b.starts += 1;
+    b.points += r.points;
+    buckets.set(r.franchiseId, b);
+  }
+  let best: string | null = null;
+  let bestBucket = { starts: -1, points: -1 };
+  for (const [franchiseId, b] of buckets) {
+    if (b.starts > bestBucket.starts || (b.starts === bestBucket.starts && b.points > bestBucket.points)) {
+      best = franchiseId;
+      bestBucket = b;
+    }
+  }
+  return best;
+}
+
+/** Franchise that reaped the most total started points from this player, career-wide. */
+export function pickTopFranchiseByPoints(rows: readonly PlayerFranchiseWeekRow[]): string | null {
+  const totals = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.started) continue;
+    totals.set(r.franchiseId, (totals.get(r.franchiseId) ?? 0) + r.points);
+  }
+  let best: string | null = null;
+  let bestPoints = -1;
+  for (const [franchiseId, points] of totals) {
+    if (points > bestPoints) {
+      best = franchiseId;
+      bestPoints = points;
+    }
+  }
+  return best;
+}
+
+/** Franchise with the most career starts of this player. */
+export function pickTopFranchiseByStarts(rows: readonly PlayerFranchiseWeekRow[]): string | null {
+  const counts = new Map<string, number>();
+  for (const r of rows) {
+    if (!r.started) continue;
+    counts.set(r.franchiseId, (counts.get(r.franchiseId) ?? 0) + 1);
+  }
+  let best: string | null = null;
+  let bestCount = -1;
+  for (const [franchiseId, count] of counts) {
+    if (count > bestCount) {
+      best = franchiseId;
+      bestCount = count;
+    }
+  }
+  return best;
+}
+
+/**
+ * Every distinct franchise this player logged a week (started or benched)
+ * for, ordered by first (seasonYear, week) appearance.
+ */
+export function franchiseSequenceFor(rows: readonly PlayerFranchiseWeekRow[]): string[] {
+  const firstSeen = new Map<string, [number, number]>();
+  for (const r of rows) {
+    const key: [number, number] = [r.seasonYear, r.week];
+    const existing = firstSeen.get(r.franchiseId);
+    if (!existing || key[0] < existing[0] || (key[0] === existing[0] && key[1] < existing[1])) {
+      firstSeen.set(r.franchiseId, key);
+    }
+  }
+  return Array.from(firstSeen.entries())
+    .sort((a, b) => a[1][0] - b[1][0] || a[1][1] - b[1][1])
+    .map(([franchiseId]) => franchiseId);
 }
 
 // ---------------------------------------------------------------------------
@@ -448,11 +598,56 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       bustCandidates,
     );
 
+  // --- Franchise attribution for Comet/Waiver Miracle/Iron Man/Wanderer/
+  // Waiver Yo-Yo: one batched query grouping player_week_points by
+  // playerId+franchiseId for this small set of winners, reused across all
+  // five. Draft Steal and Bust don't need it: draft_picks already carries
+  // franchiseId on the startup pick row.
+  const franchiseWeekPlayerIds = Array.from(
+    new Set(
+      [
+        cometWinner?.playerId,
+        waiverMiracleWinner?.playerId,
+        ironManWinner?.playerId,
+        wanderer?.playerId,
+        yoyo?.playerId,
+      ].filter((id): id is string => id != null),
+    ),
+  );
+  const franchiseWeeks = await getPlayerFranchiseWeeks(franchiseWeekPlayerIds);
+  const franchiseWeeksByPlayer = new Map<string, PlayerFranchiseWeekRow[]>();
+  for (const row of franchiseWeeks) {
+    if (!franchiseWeeksByPlayer.has(row.playerId)) franchiseWeeksByPlayer.set(row.playerId, []);
+    franchiseWeeksByPlayer.get(row.playerId)!.push(row);
+  }
+
+  function franchiseSequenceBadges(playerId: string): LoreFranchiseBadge[] {
+    const rows = franchiseWeeksByPlayer.get(playerId) ?? [];
+    const badges: LoreFranchiseBadge[] = [];
+    for (const franchiseId of franchiseSequenceFor(rows)) {
+      const badge = franchiseById.get(franchiseId);
+      if (badge) badges.push(badge);
+    }
+    return badges;
+  }
+
+  if (wandererPiece && wanderer) {
+    const sequence = franchiseSequenceBadges(wanderer.playerId);
+    if (sequence.length > 0) wandererPiece.franchiseSequence = sequence;
+  }
+  if (yoyoPiece && yoyo) {
+    const sequence = franchiseSequenceBadges(yoyo.playerId);
+    if (sequence.length > 0) yoyoPiece.franchiseSequence = sequence;
+  }
+
   let draftStealPiece: LorePiece | null = null;
   if (draftStealWinner) {
     const label = SNARKY_LABELS.THE_DRAFT_STEAL;
     const info = careerByPlayerId.get(draftStealWinner.playerId);
     const pts = Math.round(draftStealWinner.careerPts);
+    const crest = draftStealWinner.franchiseId
+      ? franchiseById.get(draftStealWinner.franchiseId) ?? null
+      : null;
     draftStealPiece = {
       key: label.key,
       title: label.displayText,
@@ -464,7 +659,9 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       statValue: `${pts.toLocaleString()} pts`,
       story:
         `Round ${draftStealWinner.round}, pick ${draftStealWinner.pickNumber} of the ` +
-        `${draftStealWinner.seasonYear} startup. ${pts.toLocaleString()} career points. Larceny.`,
+        `${draftStealWinner.seasonYear} startup${crest ? ` by ${crest.name}` : ""}. ` +
+        `${pts.toLocaleString()} career points. Larceny.`,
+      franchiseBadge: crest,
     };
   }
 
@@ -472,6 +669,10 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
   if (waiverMiracleWinner) {
     const label = SNARKY_LABELS.THE_WAIVER_MIRACLE;
     const pts = Math.round(waiverMiracleWinner.careerPts);
+    const topFranchiseId = pickTopFranchiseByPoints(
+      franchiseWeeksByPlayer.get(waiverMiracleWinner.playerId) ?? [],
+    );
+    const crest = topFranchiseId ? franchiseById.get(topFranchiseId) ?? null : null;
     waiverMiraclePiece = {
       key: label.key,
       title: label.displayText,
@@ -482,12 +683,17 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       position: waiverMiracleWinner.position,
       statValue: `${pts.toLocaleString()} pts`,
       story: `${pts.toLocaleString()} career points from a guy the league left on waivers. Free money.`,
+      franchiseBadge: crest,
     };
   }
 
   let ironManPiece: LorePiece | null = null;
   if (ironManWinner) {
     const label = SNARKY_LABELS.THE_IRON_MAN;
+    const topFranchiseId = pickTopFranchiseByStarts(
+      franchiseWeeksByPlayer.get(ironManWinner.playerId) ?? [],
+    );
+    const crest = topFranchiseId ? franchiseById.get(topFranchiseId) ?? null : null;
     ironManPiece = {
       key: label.key,
       title: label.displayText,
@@ -500,12 +706,18 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       story:
         `${ironManWinner.careerStarts} career starts across ${ironManWinner.seasonsCount} seasons. ` +
         "Never off the field.",
+      franchiseBadge: crest,
     };
   }
 
   let cometPiece: LorePiece | null = null;
   if (cometWinner) {
     const label = SNARKY_LABELS.THE_COMET;
+    const seasonFranchiseId = pickSeasonFranchise(
+      franchiseWeeksByPlayer.get(cometWinner.playerId) ?? [],
+      cometWinner.seasonYear,
+    );
+    const crest = seasonFranchiseId ? franchiseById.get(seasonFranchiseId) ?? null : null;
     cometPiece = {
       key: label.key,
       title: label.displayText,
@@ -516,8 +728,9 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       position: cometWinner.position,
       statValue: `${cometWinner.seasonPoints.toFixed(1)} pts`,
       story:
-        `${cometWinner.seasonPoints.toFixed(1)} points in ${cometWinner.seasonYear}. ` +
-        "The single greatest fantasy season this league has witnessed.",
+        `${cometWinner.seasonPoints.toFixed(1)} points in ${cometWinner.seasonYear}` +
+        `${crest ? ` for ${crest.name}` : ""}. The single greatest fantasy season this league has witnessed.`,
+      franchiseBadge: crest,
     };
   }
 
@@ -526,6 +739,7 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
     const label = SNARKY_LABELS.THE_BUST;
     const info = careerByPlayerId.get(bustWinner.playerId);
     const pts = Math.round(bustWinner.careerPts);
+    const crest = bustWinner.franchiseId ? franchiseById.get(bustWinner.franchiseId) ?? null : null;
     bustPiece = {
       key: label.key,
       title: label.displayText,
@@ -536,8 +750,9 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       position: info?.position ?? null,
       statValue: `${pts.toLocaleString()} pts`,
       story:
-        `First round, pick ${bustWinner.pickNumber} of the ${bustWinner.seasonYear} startup. ` +
-        `${pts.toLocaleString()} career points to show for it. Woof.`,
+        `First round, pick ${bustWinner.pickNumber} of the ${bustWinner.seasonYear} startup` +
+        `${crest ? ` by ${crest.name}` : ""}. ${pts.toLocaleString()} career points to show for it. Woof.`,
+      franchiseBadge: crest,
     };
   }
 
