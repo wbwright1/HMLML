@@ -300,22 +300,36 @@ export default async function HallOfFamePage() {
         </p>
       </section>
 
-      {/* Player Wing: the players who wrote the legend, alongside the
-          franchises that rostered them. */}
-      <section className="pb-12 md:pb-16 space-y-3">
+      {/* The Player Wing: the hardware and the legends behind it, in one
+          module. Yearly Hardware (commissioner-decided season honors: MVP /
+          Finals MVP / Rookie of the Year) leads, followed by League Lore
+          (the Wanderer / Waiver Yo-Yo / League Cornerstone callouts). Either
+          subsection can render nothing on its own until its underlying data
+          is seeded/synced. */}
+      <section className="pb-12 md:pb-16 space-y-8">
         <div className="pb-2">
           <p className="text-kicker text-accent-gold mb-1.5">Module</p>
           <h2 className="text-h2 text-text-primary">The Player Wing</h2>
           <p className="text-body-sm text-text-tertiary mt-1">
-            The players who made the history books, for better or worse.
+            The hardware handed out and the legends who earned it.
           </p>
         </div>
-        <PlayerLoreCards />
-      </section>
 
-      {/* The Trophy Case: commissioner-decided season honors (MVP / Finals MVP
-          / Rookie of the Year). Renders nothing until awards are seeded. */}
-      <TrophyCase />
+        <TrophyCase />
+
+        <div className="space-y-3">
+          <div className="pb-1">
+            <p className="text-kicker text-accent-gold mb-1.5">League Lore</p>
+            <h3 className="text-h3 text-text-primary">
+              The Wanderer, the Yo-Yo, and the Cornerstone
+            </h3>
+            <p className="text-body-sm text-text-tertiary mt-1">
+              The players who made the history books, for better or worse.
+            </p>
+          </div>
+          <PlayerLoreCards />
+        </div>
+      </section>
     </>
   );
 }
