@@ -3,8 +3,7 @@ import { PageSection } from "@/components/page-section";
 import { SectionHeader } from "@/components/section-header";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { ScrollReveal } from "@/components/scroll-reveal";
-import { TeamAwardCard } from "@/components/team-award-card";
-import { StingCard } from "@/components/sting-card";
+import { SuperlativeCard } from "@/components/superlative-card";
 import {
   getLeaderboard,
   getSeasonYears,
@@ -329,6 +328,25 @@ export default async function RecordsPage() {
     whatCouldveBeen ||
     coverageAwards.length > 0;
 
+  // Flatten every award source into one priority-ordered list, then dedupe
+  // by franchise so each franchise renders exactly one card (highest-priority
+  // award wins). The coverage pass guarantees all 12 franchises are present,
+  // so after slicing to 12 the grid is exactly one card per franchise.
+  const allAwards: SeasonSuperlative[] = [
+    ...seasonSuperlatives,
+    ...(coachingMalpractice ? [coachingMalpractice] : []),
+    ...(whatCouldveBeen ? [whatCouldveBeen] : []),
+    ...coverageAwards,
+  ];
+  const seenSlugs = new Set<string>();
+  const superlativeCards: SeasonSuperlative[] = [];
+  for (const award of allAwards) {
+    if (seenSlugs.has(award.franchiseSlug)) continue;
+    seenSlugs.add(award.franchiseSlug);
+    superlativeCards.push(award);
+  }
+  superlativeCards.splice(12);
+
   return (
     <>
       <PageSection label="Standings · Record Book" title="The Records.">
@@ -523,17 +541,17 @@ export default async function RecordsPage() {
 
             <div>
               <p className="text-kicker mb-4">Explore</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-3 items-stretch">
                 {subPages.map((page, index) => (
                   <ScrollReveal key={page.href} delay={index * 60}>
                     <Link
                       href={page.href}
-                      className="card-surface block p-4 transition-colors hover:border-border-strong hover:bg-surface-muted"
+                      className="card-surface flex h-full min-h-[104px] flex-col p-4 transition-colors hover:border-border-strong hover:bg-surface-muted"
                     >
                       <p className="text-body-sm font-semibold text-accent-gold">
                         {page.label}
                       </p>
-                      <p className="text-caption text-text-tertiary mt-1 hidden sm:block normal-case tracking-normal font-normal">
+                      <p className="text-caption text-text-tertiary mt-1 hidden sm:block normal-case tracking-normal font-normal line-clamp-2">
                         {page.description}
                       </p>
                     </Link>
@@ -553,71 +571,18 @@ export default async function RecordsPage() {
             }
             title="The Superlatives"
           >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-              {seasonSuperlatives.map((s) =>
-                s.tone === "sting" ? (
-                  <StingCard
-                    key={s.labelKey}
-                    label={s.displayText}
-                    franchiseName={s.franchiseName}
-                    franchiseSlug={s.franchiseSlug}
-                    context={s.context}
-                    stat={s.stat}
-                  />
-                ) : (
-                  <TeamAwardCard
-                    key={s.labelKey}
-                    label={s.displayText}
-                    stat={s.stat}
-                    context={s.context}
-                    franchiseName={s.franchiseName}
-                    franchiseSlug={s.franchiseSlug}
-                    tone={s.tone}
-                  />
-                )
-              )}
-              {coachingMalpractice && (
-                <StingCard
-                  label={coachingMalpractice.displayText}
-                  franchiseName={coachingMalpractice.franchiseName}
-                  franchiseSlug={coachingMalpractice.franchiseSlug}
-                  context={coachingMalpractice.context}
-                  stat={coachingMalpractice.stat}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 items-stretch">
+              {superlativeCards.map((s) => (
+                <SuperlativeCard
+                  key={s.franchiseSlug}
+                  label={s.displayText}
+                  stat={s.stat}
+                  context={s.context}
+                  franchiseName={s.franchiseName}
+                  franchiseSlug={s.franchiseSlug}
+                  tone={s.tone}
                 />
-              )}
-              {whatCouldveBeen && (
-                <TeamAwardCard
-                  label={whatCouldveBeen.displayText}
-                  stat={whatCouldveBeen.stat}
-                  context={whatCouldveBeen.context}
-                  franchiseName={whatCouldveBeen.franchiseName}
-                  franchiseSlug={whatCouldveBeen.franchiseSlug}
-                  tone={whatCouldveBeen.tone}
-                />
-              )}
-              {/* Coverage-pass fillers so no franchise is left off the board. */}
-              {coverageAwards.map((s) =>
-                s.tone === "sting" ? (
-                  <StingCard
-                    key={`cov-${s.franchiseSlug}-${s.labelKey}`}
-                    label={s.displayText}
-                    franchiseName={s.franchiseName}
-                    franchiseSlug={s.franchiseSlug}
-                    context={s.context}
-                    stat={s.stat}
-                  />
-                ) : (
-                  <TeamAwardCard
-                    key={`cov-${s.franchiseSlug}-${s.labelKey}`}
-                    label={s.displayText}
-                    stat={s.stat}
-                    context={s.context}
-                    franchiseName={s.franchiseName}
-                    franchiseSlug={s.franchiseSlug}
-                    tone={s.tone}
-                  />
-                ),
-              )}
+              ))}
             </div>
           </PageSection>
         </ScrollReveal>
