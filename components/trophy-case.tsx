@@ -185,6 +185,8 @@ export async function TrophyCase() {
   const hasWaivers = waiverRows.length > 0;
   if (!hasAwards && !hasWaivers) return null;
 
+  const totalGroups = roll.groups.length + (hasWaivers ? 1 : 0);
+
   const waiverFranchiseIds = waiverRows
     .map((r) => r.franchiseId)
     .filter((id): id is string => id != null);
@@ -201,53 +203,67 @@ export async function TrophyCase() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <p className="lg:hidden text-caption text-text-tertiary mb-2">
+        Swipe for all {totalGroups} trophies &rarr;
+      </p>
+
+      <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 no-scrollbar md:-mx-6 md:px-6 lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 lg:pb-0">
         {roll.groups.map((group) => {
           const meta = AWARD_METADATA[group.awardType];
           return (
-            <div key={group.awardType} className="card-surface p-5">
-              <p className="text-kicker text-accent-gold mb-3 flex items-center gap-1.5">
-                {getAwardTypeIcon(group.awardType)}
-                {meta.label}
-              </p>
-              <div className="space-y-2">
-                {group.awards.map((award) => (
-                  <AwardRow
-                    key={award.id}
-                    award={award}
-                    repeatCount={
-                      award.playerId
-                        ? (roll.awardCountByPlayer[award.playerId] ?? 1)
-                        : 1
-                    }
-                    highlight={
-                      !!award.playerId &&
-                      award.playerId === roll.mostDecoratedPlayerId
-                    }
-                  />
-                ))}
+            <div
+              key={group.awardType}
+              className="snap-center shrink-0 basis-[85%] sm:basis-[60%] lg:basis-auto"
+            >
+              <div className="card-surface p-5 h-full">
+                <p className="text-kicker text-accent-gold mb-3 flex items-center gap-1.5">
+                  {getAwardTypeIcon(group.awardType)}
+                  {meta.label}
+                </p>
+                <div className="space-y-2">
+                  {group.awards.map((award) => (
+                    <AwardRow
+                      key={award.id}
+                      award={award}
+                      repeatCount={
+                        award.playerId
+                          ? (roll.awardCountByPlayer[award.playerId] ?? 1)
+                          : 1
+                      }
+                      highlight={
+                        !!award.playerId &&
+                        award.playerId === roll.mostDecoratedPlayerId
+                      }
+                    />
+                  ))}
+                </div>
               </div>
             </div>
           );
         })}
 
         {hasWaivers && (
-          <div className="card-surface p-5">
-            <p className="text-kicker text-accent-gold mb-3 flex items-center gap-1.5">
-              Best Waiver Pickup
-            </p>
-            <div className="space-y-2">
-              {waiverRows.map((row) => (
-                <WaiverRow
-                  key={row.seasonYear}
-                  row={row}
-                  avatarUrl={
-                    row.franchiseId
-                      ? (waiverAvatarUrls.get(row.franchiseId) ?? null)
-                      : null
-                  }
-                />
-              ))}
+          <div
+            key="waiver"
+            className="snap-center shrink-0 basis-[85%] sm:basis-[60%] lg:basis-auto"
+          >
+            <div className="card-surface p-5 h-full">
+              <p className="text-kicker text-accent-gold mb-3 flex items-center gap-1.5">
+                Best Waiver Pickup
+              </p>
+              <div className="space-y-2">
+                {waiverRows.map((row) => (
+                  <WaiverRow
+                    key={row.seasonYear}
+                    row={row}
+                    avatarUrl={
+                      row.franchiseId
+                        ? (waiverAvatarUrls.get(row.franchiseId) ?? null)
+                        : null
+                    }
+                  />
+                ))}
+              </div>
             </div>
           </div>
         )}
