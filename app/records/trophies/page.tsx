@@ -113,7 +113,7 @@ export default async function TrophyCasePage() {
             {/* Most recent champion: featured */}
             {trophies.length > 0 && trophies[0].championName && (
               <ScrollReveal>
-                <div className="rounded-[14px] border border-gold/30 bg-gold/5 p-8 text-center space-y-4">
+                <div className="card-surface card-tint-gold p-8 text-center space-y-4">
                   <StatHero
                     value={trophies[0].seasonYear}
                     label="Reigning Champion"
