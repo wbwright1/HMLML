@@ -1,16 +1,17 @@
 import { test, expect } from "@playwright/test";
 
 // ============================================================================
-// The Trophy Case (Hall of Fame & Shame): the league-awards module surfacing
-// the 15 commissioner-entered honors (5 seasons x MVP / Finals MVP / Rookie of
-// the Year). Read-only against the real DB; no seeding here. Scoped to the
-// data-testid="trophy-case" module. Each award row renders a PlayerHeadshot,
-// which always exposes role="img" with the player's name as its accessible
-// name (whether the sleepercdn image loads or the initials monogram falls
-// back), so the count assertion is robust to both outcomes.
+// The Trophy Case (Hall of Fame & Shame): the "Yearly Hardware" subsection of
+// The Player Wing module, surfacing the 15 commissioner-entered honors (5
+// seasons x MVP / Finals MVP / Rookie of the Year). Read-only against the
+// real DB; no seeding here. Scoped to the data-testid="trophy-case" block.
+// Each award row renders a PlayerHeadshot, which always exposes role="img"
+// with the player's name as its accessible name (whether the sleepercdn
+// image loads or the initials monogram falls back), so the count assertion
+// is robust to both outcomes.
 //
-// Pre-seed contract: the module renders nothing until league_awards is
-// populated, so the test skips cleanly when the module is absent rather than
+// Pre-seed contract: the block renders nothing until league_awards is
+// populated, so the test skips cleanly when the block is absent rather than
 // asserting fabricated data.
 // ============================================================================
 
@@ -21,12 +22,18 @@ test.describe("The Trophy Case", () => {
     await page.goto("/records/hall-of-fame");
     await expect(page.locator("h1, h2").first()).toBeVisible();
 
-    // The live DB is seeded with 15 award rows; the module must render.
-    // A missing module means the feature (or its query) regressed.
+    // The Player Wing module (parent of Trophy Case + League Lore) is titled.
+    await expect(
+      page.getByRole("heading", { name: "The Player Wing" }),
+    ).toBeVisible();
+
+    // The live DB is seeded with 15 award rows; the block must render.
+    // A missing block means the feature (or its query) regressed.
     const trophyCase = page.getByTestId("trophy-case");
     await expect(trophyCase).toBeVisible();
 
-    // Titled module present.
+    // "Yearly Hardware" subheading present inside the Player Wing section.
+    await expect(trophyCase.getByText("Yearly Hardware")).toBeVisible();
     await expect(
       trophyCase.getByRole("heading", { name: "The Trophy Case" }),
     ).toBeVisible();
