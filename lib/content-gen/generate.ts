@@ -27,6 +27,31 @@ import { phaseGuidance, resolveSeasonPhase } from "@/lib/content-gen/season-phas
 
 const DEFAULT_MODEL = "claude-sonnet-5";
 
+// ---------------------------------------------------------------------------
+// LLM call budget (this route runs behind maxDuration = 300 on Vercel)
+// ---------------------------------------------------------------------------
+// The function MUST NEVER 504: worst case it falls back to deterministic
+// templates well inside the 300s budget. Two guards make that true by
+// construction:
+//  - PER_CALL_TIMEOUT_MS bounds a single messages.create so one stalled call
+//    can't eat the whole budget (the SDK default is 10 minutes, which alone
+//    exceeds maxDuration).
+//  - LLM_DEADLINE_MS bounds the ENTIRE LLM attempt (both callOnce tries +
+//    parsing) via an AbortController. On expiry the in-flight request is
+//    aborted and the outer catch runs generateFromTemplates, leaving ~80s of
+//    headroom before the 300s function limit.
+const PER_CALL_TIMEOUT_MS = 100_000;
+const LLM_DEADLINE_MS = 220_000;
+
+// Real output is a handful of short editorial items. The largest shape
+// (PreseasonSchema) worst-cases at roughly: 3 division_notes + 6
+// burning_questions + 6 bold_predictions + 6 offseason_receipts + 1 hero_dek +
+// 6 smack_posts, each body <= 400 chars. That is ~11K chars of JSON, on the
+// order of ~3.5K output tokens. A 6000-token cap leaves comfortable headroom
+// while keeping generation fast (the old 16000 cap invited needlessly long,
+// budget-eating runs).
+const MAX_OUTPUT_TOKENS = 6000;
+
 const SYSTEM_PROMPT = `You are the Site Desk: the editorial voice of a 12-team dynasty fantasy football league history site. Your voice is confident and snarky, "the friend in the group chat who always has the receipts." You roast losses with the same care you celebrate wins.
 
 Hard rules, no exceptions:
@@ -291,14 +316,32 @@ function toRowsRegular(out: RegularOut, ctx: StatsContext): HubContentInsert[] {
 // JSON extraction + parse
 // ---------------------------------------------------------------------------
 
-/** Pulls the first balanced top-level JSON object out of the model's text. */
-function extractJson(text: string): unknown {
+/**
+ * Pulls the JSON object out of the model's text. Belt-and-suspenders: handles
+ * both shapes so the parser survives regardless of how the object is delimited.
+ *  - Full object somewhere in the text (the normal response): slice from the
+ *    first "{" to the last "}".
+ *  - An object BODY whose leading "{" is absent (the shape you'd get if the
+ *    opening brace were supplied via an assistant prefill): re-add the brace
+ *    before parsing.
+ * We do not currently send an assistant prefill: it returns a 400 on the
+ * Sonnet/Opus 4.6+ family that CONTENT_MODEL defaults to (claude-sonnet-5), so
+ * a prefill would break the LLM path outright rather than steady it. Tolerating
+ * the prefilled shape anyway is cheap insurance if CONTENT_MODEL is ever
+ * pointed at an older model where prefill is reintroduced. Exported for unit tests.
+ */
+export function extractJson(text: string): unknown {
   const start = text.indexOf("{");
   const end = text.lastIndexOf("}");
-  if (start === -1 || end === -1 || end <= start) {
+  if (end === -1) {
     throw new Error("no JSON object in response");
   }
-  return JSON.parse(text.slice(start, end + 1));
+  if (start !== -1 && start < end) {
+    return JSON.parse(text.slice(start, end + 1));
+  }
+  // No opening brace before the closing one: treat the text as a prefilled
+  // object body and restore the missing leading brace.
+  return JSON.parse("{" + text.slice(0, end + 1));
 }
 
 // ---------------------------------------------------------------------------
@@ -475,17 +518,29 @@ export async function generateContent(ctx: StatsContext): Promise<GeneratedConte
   try {
     // Import lazily so the SDK is only loaded when the LLM path is actually used.
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
-    const client = new Anthropic({ apiKey });
+    // maxRetries: 1 is explicit so the SDK's default retry backoff can't add
+    // hidden minutes to the budget; the deadline below is the real ceiling.
+    const client = new Anthropic({ apiKey, maxRetries: 1 });
     const model = process.env.CONTENT_MODEL || DEFAULT_MODEL;
     const userPrompt = buildUserPrompt(ctx);
 
+    // Bounds the WHOLE LLM attempt. On expiry the signal aborts any in-flight
+    // messages.create so the outer catch can run generateFromTemplates inside
+    // the function's 300s budget instead of being killed by a 504.
+    const deadline = new AbortController();
+    const deadlineTimer = setTimeout(() => deadline.abort(), LLM_DEADLINE_MS);
+
     const callOnce = async (): Promise<HubContentInsert[]> => {
-      const response = await client.messages.create({
-        model,
-        max_tokens: 16000,
-        system: SYSTEM_PROMPT,
-        messages: [{ role: "user", content: userPrompt }],
-      });
+      const response = await client.messages.create(
+        {
+          model,
+          max_tokens: MAX_OUTPUT_TOKENS,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: "user", content: userPrompt }],
+        },
+        // Per-call ceiling + the shared deadline signal.
+        { timeout: PER_CALL_TIMEOUT_MS, signal: deadline.signal },
+      );
       const text = response.content
         .map((b) => (b.type === "text" ? b.text : ""))
         .join("");
@@ -498,10 +553,20 @@ export async function generateContent(ctx: StatsContext): Promise<GeneratedConte
 
     let rows: HubContentInsert[];
     try {
-      rows = await callOnce();
-    } catch (firstError) {
-      console.warn("[content-gen] LLM output invalid, retrying once:", firstError);
-      rows = await callOnce();
+      try {
+        rows = await callOnce();
+      } catch (firstError) {
+        console.warn("[content-gen] LLM attempt 1 failed, retrying once:", firstError);
+        try {
+          rows = await callOnce();
+        } catch (secondError) {
+          console.warn("[content-gen] LLM attempt 2 failed, falling back to templates:", secondError);
+          // Rethrow so the outer catch runs generateFromTemplates.
+          throw secondError;
+        }
+      }
+    } finally {
+      clearTimeout(deadlineTimer);
     }
 
     // Diversity layer: validate every raw LLM row (refKey/enum/length/dash/

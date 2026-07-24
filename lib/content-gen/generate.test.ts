@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   applyDiversityLayer,
   buildUserPrompt,
+  extractJson,
   fillMissingKinds,
   promptStatsView,
   topUpShortKinds,
@@ -323,6 +324,38 @@ describe("topUpShortKinds", () => {
     const kept: HubContentInsert[] = [];
     const result = topUpShortKinds(kinds, { smack_post: 5 }, kept, ctx);
     expect(result).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// extractJson
+// ---------------------------------------------------------------------------
+
+describe("extractJson", () => {
+  it("parses a full JSON object embedded in surrounding prose", () => {
+    const text = 'Here you go:\n{"smack_posts": ["a"], "hero_dek": "x"}\nHope that helps.';
+    expect(extractJson(text)).toEqual({ smack_posts: ["a"], hero_dek: "x" });
+  });
+
+  it("parses a bare JSON object with no surrounding text", () => {
+    expect(extractJson('{"a":1}')).toEqual({ a: 1 });
+  });
+
+  it("tolerates a prefilled body whose leading brace is missing", () => {
+    // Shape you'd get if the opening "{" had been supplied via an assistant
+    // prefill: the response text is the object body, closing brace included.
+    const prefilledBody = '"smack_posts": ["a"], "hero_dek": "x"}';
+    expect(extractJson(prefilledBody)).toEqual({ smack_posts: ["a"], hero_dek: "x" });
+  });
+
+  it("throws when there is no closing brace to anchor on", () => {
+    expect(() => extractJson("the model just wrote prose, no json here")).toThrow(
+      "no JSON object in response",
+    );
+  });
+
+  it("throws on an empty response", () => {
+    expect(() => extractJson("")).toThrow("no JSON object in response");
   });
 });
 
