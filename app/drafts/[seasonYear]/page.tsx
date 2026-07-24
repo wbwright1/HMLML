@@ -9,6 +9,7 @@ import { SuperlativeBadge } from "@/components/superlative-badge";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { getPositionColor } from "@/lib/position-colors";
+import { teamAcronym } from "@/lib/team-acronym";
 import {
   getDraftBySeasonYear,
   type DraftPickWithFranchise,
@@ -302,14 +303,14 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
   if (!pick) {
     return (
       <div
-        className="min-h-[56px] rounded-lg border border-divider bg-surface/40"
+        className="min-h-[72px] rounded-lg border border-divider bg-surface/40"
         aria-hidden="true"
       />
     );
   }
 
   return (
-    <div className="flex min-h-[56px] flex-col justify-between gap-1 rounded-lg border border-divider bg-surface p-2">
+    <div className="flex min-h-[72px] min-w-0 flex-col justify-between gap-1 rounded-lg border border-divider bg-surface p-2">
       <div className="flex items-center justify-between gap-1">
         <span className="font-mono text-[10px] tabular-nums text-text-tertiary">
           {pick.round}.{slot ?? "-"}
@@ -325,7 +326,7 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
       </div>
 
       {pick.playerName && (
-        <div className="flex flex-col items-center gap-1">
+        <div className="flex min-w-0 w-full flex-col items-center gap-1">
           <PlayerHeadshot
             size={30}
             playerId={pick.playerId}
@@ -339,7 +340,10 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
               avatarUrl: pick.currentAvatarUrl,
             }}
           />
-          <p className="w-full truncate text-center text-[11px] font-semibold leading-tight text-text-primary">
+          <p
+            className="w-full line-clamp-2 min-h-[2.4em] text-center text-[11px] font-semibold leading-tight text-text-primary"
+            title={pick.playerName ?? undefined}
+          >
             {pick.playerName}
           </p>
         </div>
@@ -440,19 +444,7 @@ function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
           </p>
         )}
         {pick.originalName && (
-          <div className="flex items-center gap-1.5 text-body-sm text-text-tertiary">
-            {pick.originalSlug && (
-              <FranchiseLogo
-                slug={pick.originalSlug}
-                name={pick.originalName}
-                abbreviation={pick.originalAbbreviation ?? undefined}
-                brandingColor={pick.originalBrandingColor ?? undefined}
-                size={16}
-                decorative
-              />
-            )}
-            <span className="truncate">via {pick.originalName}</span>
-          </div>
+          <p className="truncate text-body-sm text-text-tertiary">via {pick.originalName}</p>
         )}
       </div>
       {pick.playerPosition && (
@@ -490,13 +482,13 @@ function PositionLegend({ positions }: { positions: string[] }) {
 
 function DesktopBoard({ board }: { board: DraftBoard }) {
   if (board.columns.length === 0) return null;
-  const columnStyle = { gridTemplateColumns: `repeat(${board.columns.length}, minmax(72px, 1fr))` };
+  const columnStyle = { gridTemplateColumns: `repeat(${board.columns.length}, minmax(96px, 1fr))` };
 
   return (
     <div className="hidden md:block card-surface overflow-x-auto p-4 lg:p-[18px]">
       <div className="grid gap-1.5" style={columnStyle}>
         {board.columns.map((col) => (
-          <div key={col.key} className="flex flex-col items-center gap-1.5 pb-2">
+          <div key={col.key} className="flex min-w-0 flex-col items-center gap-1.5 pb-2" title={col.name}>
             <TeamCrest
               slug={col.slug}
               name={col.name}
@@ -506,7 +498,7 @@ function DesktopBoard({ board }: { board: DraftBoard }) {
               size="sm"
             />
             <span className="max-w-full truncate text-[9px] font-bold text-text-tertiary">
-              {col.abbreviation ?? col.name.slice(0, 3).toUpperCase()}
+              {teamAcronym(col.name)}
             </span>
           </div>
         ))}
