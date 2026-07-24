@@ -79,12 +79,85 @@ const CategorySchema = z.enum(["DRAFT", "TRADE", "WAIVERS", "FIRE_SALE"]);
 // Length caps: generous enough that on-spec output always passes, tight enough
 // to reject a runaway model (which then falls back to templates). Bodies are
 // one or two sentences; kickers are short labels; questions are one sentence.
+// These are the CANONICAL per-field caps: they drive the prompt spec text
+// (see preseasonSpec/regularSpec below), the strict schemas used for the
+// build-check test, and validate.ts's per-row length enforcement. They are
+// deliberately NOT sent to the model as a JSON Schema constraint (see the
+// wire-schema note below) -- they're enforced after the fact, per row.
 const BODY_MAX = 400;
 const KICKER_MAX = 40;
 const QUESTION_MAX = 200;
 
-const bodyStr = z.string().max(BODY_MAX);
-const kickerStr = z.string().max(KICKER_MAX);
+// ---------------------------------------------------------------------------
+// Strict vs. wire schemas
+// ---------------------------------------------------------------------------
+// zodOutputFormat() strips .max() string-length constraints from the JSON
+// Schema actually sent to the API (the API doesn't support minLength/
+// maxLength -- see the claude-api skill's Structured Outputs limitations),
+// but STILL re-validates the parsed response against the full Zod schema
+// client-side in messages.parse(). That client-side re-validation is
+// whole-object: one field one character over its cap fails
+// `.safeParse()` for the ENTIRE response, discarding every other otherwise-
+// valid row in the same JSON object. Since the model routinely overshoots a
+// soft length target by a few characters on exactly one item, this turned
+// "one long burning question" into "zero content, fall back to templates"
+// twice in a row in prod.
+//
+// The fix: build the request's output_config.format from a RELAXED "wire"
+// schema (same shape, same enums, same array-count caps, but no .max() on
+// any string) so parsing succeeds regardless of any single field's length.
+// Length is then enforced per row, after parsing, by validateRow (called
+// from applyDiversityLayer in generateContent) -- so a single overlong item
+// costs exactly that one row, which fillMissingKinds/topUpShortKinds then
+// backfills from the templates, instead of nuking the whole response.
+//
+// The STRICT schemas (PreseasonSchema/RegularSchema) remain the canonical
+// shape definition: they're what the prompt spec is generated to match, and
+// what the zodOutputFormat-builds-without-throwing test exercises. They are
+// no longer what's sent to messages.parse().
+function preseasonSchemaShape(bodyField: z.ZodString, kickerField: z.ZodString, questionField: z.ZodString) {
+  return z.object({
+    division_notes: z
+      .array(
+        z.object({
+          divisionName: z.string().max(KICKER_MAX),
+          characterization: kickerField,
+          body: bodyField,
+        }),
+      )
+      .max(3)
+      .default([]),
+    burning_questions: z.array(questionField).max(6).default([]),
+    bold_predictions: z
+      .array(z.object({ kicker: kickerField, verdict: VerdictSchema, body: bodyField }))
+      .max(6)
+      .default([]),
+    offseason_receipts: z
+      .array(
+        z.object({
+          franchiseSlug: z.string().max(KICKER_MAX),
+          category: CategorySchema,
+          body: bodyField,
+        }),
+      )
+      .max(6)
+      .default([]),
+    hero_dek: bodyField.default(""),
+    smack_posts: z.array(bodyField).max(6).default([]),
+  });
+}
+
+function regularSchemaShape(bodyField: z.ZodString) {
+  return z.object({
+    matchup_angles: z
+      .array(z.object({ pairKey: z.string().max(KICKER_MAX), body: bodyField }))
+      .max(8)
+      .default([]),
+    game_of_week_blurb: bodyField.default(""),
+    hero_dek: bodyField.default(""),
+    smack_posts: z.array(bodyField).max(6).default([]),
+  });
+}
 
 // Every array below is over-generated relative to its display target: the
 // model is asked for MORE candidates than the hub actually shows, so the
@@ -92,48 +165,20 @@ const kickerStr = z.string().max(KICKER_MAX);
 // generateContent below) has real room to pick a non-repeating subset
 // instead of just truncating in model-output order. Display targets live in
 // TARGET_COUNTS_BY_KIND further down.
-export const PreseasonSchema = z.object({
-  division_notes: z
-    .array(
-      z.object({
-        divisionName: z.string().max(KICKER_MAX),
-        characterization: kickerStr,
-        body: bodyStr,
-      }),
-    )
-    .max(3)
-    .default([]),
-  burning_questions: z.array(z.string().max(QUESTION_MAX)).max(6).default([]),
-  bold_predictions: z
-    .array(z.object({ kicker: kickerStr, verdict: VerdictSchema, body: bodyStr }))
-    .max(6)
-    .default([]),
-  offseason_receipts: z
-    .array(
-      z.object({
-        franchiseSlug: z.string().max(KICKER_MAX),
-        category: CategorySchema,
-        body: bodyStr,
-      }),
-    )
-    .max(6)
-    .default([]),
-  hero_dek: bodyStr.default(""),
-  smack_posts: z.array(bodyStr).max(6).default([]),
-});
+export const PreseasonSchema = preseasonSchemaShape(
+  z.string().max(BODY_MAX),
+  z.string().max(KICKER_MAX),
+  z.string().max(QUESTION_MAX),
+);
+export const RegularSchema = regularSchemaShape(z.string().max(BODY_MAX));
 
-export const RegularSchema = z.object({
-  matchup_angles: z
-    .array(z.object({ pairKey: z.string().max(KICKER_MAX), body: bodyStr }))
-    .max(8)
-    .default([]),
-  game_of_week_blurb: bodyStr.default(""),
-  hero_dek: bodyStr.default(""),
-  smack_posts: z.array(bodyStr).max(6).default([]),
-});
+// Wire (relaxed) variants: identical shape, no per-string .max(). Used only
+// for the actual API request's output_config.format -- see the note above.
+export const PreseasonWireSchema = preseasonSchemaShape(z.string(), z.string(), z.string());
+export const RegularWireSchema = regularSchemaShape(z.string());
 
-type PreseasonOut = z.infer<typeof PreseasonSchema>;
-type RegularOut = z.infer<typeof RegularSchema>;
+type PreseasonOut = z.infer<typeof PreseasonWireSchema>;
+type RegularOut = z.infer<typeof RegularWireSchema>;
 
 // ---------------------------------------------------------------------------
 // Prompt construction
@@ -186,14 +231,14 @@ export function promptStatsView(ctx: StatsContext): unknown {
 function preseasonSpec(ctx: StatsContext): string {
   const divisionNames = ctx.divisions.map((d) => d.name);
   const slugs = ctx.leagueStandings.map((t) => t.slug);
-  return `This is PRESEASON/OFFSEASON content (season-scoped). Produce this exact JSON shape:
+  return `This is PRESEASON/OFFSEASON content (season-scoped). Produce this exact JSON shape. Character budgets are HARD limits: a field over its budget gets that entire row discarded downstream (the response is not rejected, but that row is), so stay comfortably under, not right at, the number.
 {
-  "division_notes": [ { "divisionName": <one of ${JSON.stringify(divisionNames)}>, "characterization": "2-3 word vibe", "body": "one snarky line" } ]  // one per division, up to 3
-  "burning_questions": [ "question", ... ]  // 5 to 6, MORE than the ~3 that will ship: over-generate so a diverse subset can be picked
-  "bold_predictions": [ { "kicker": "short label", "verdict": "LOCK|NO|UP|DOWN", "body": "prediction" } ]  // 5 to 6, MORE than the ~4 that will ship. Each verdict must map to a real directional call about the upcoming season: LOCK = will happen, NO = will not happen, UP = will outperform its projection/rank, DOWN = will underperform. Never attach a verdict to a neutral observation (a tie, a truism, a scheduling fact); if it is not a genuine yes/no or over/under call, cut the row. The verdict must be falsifiable by a future season result: if the sentence concedes the outcome is already settled or unknowable ("exactly where a champ should sit", "the only question is whether..."), or states an affirmative expectation under a NO verdict, cut or re-verb the row.
-  "offseason_receipts": [ { "franchiseSlug": <one of ${JSON.stringify(slugs)}>, "category": "DRAFT|TRADE|WAIVERS|FIRE_SALE", "body": "teaser" } ]  // 5 to 6, MORE than the ~4 that will ship
-  "hero_dek": "one-sentence hero subhead for the preseason hub. Do NOT mention a specific number of days until kickoff; the live day count is added at render time.",
-  "smack_posts": [ "site desk post", ... ]  // 5 to 6, MORE than the ~5 that will ship
+  "division_notes": [ { "divisionName": <one of ${JSON.stringify(divisionNames)}>, "characterization": "2-3 word vibe, under ${KICKER_MAX} characters", "body": "one snarky line, under ${BODY_MAX} characters" } ]  // one per division, up to 3
+  "burning_questions": [ "question, under ${QUESTION_MAX} characters", ... ]  // 5 to 6, MORE than the ~3 that will ship: over-generate so a diverse subset can be picked
+  "bold_predictions": [ { "kicker": "short label, under ${KICKER_MAX} characters", "verdict": "LOCK|NO|UP|DOWN", "body": "prediction, under ${BODY_MAX} characters" } ]  // 5 to 6, MORE than the ~4 that will ship. Each verdict must map to a real directional call about the upcoming season: LOCK = will happen, NO = will not happen, UP = will outperform its projection/rank, DOWN = will underperform. Never attach a verdict to a neutral observation (a tie, a truism, a scheduling fact); if it is not a genuine yes/no or over/under call, cut the row. The verdict must be falsifiable by a future season result: if the sentence concedes the outcome is already settled or unknowable ("exactly where a champ should sit", "the only question is whether..."), or states an affirmative expectation under a NO verdict, cut or re-verb the row.
+  "offseason_receipts": [ { "franchiseSlug": <one of ${JSON.stringify(slugs)}>, "category": "DRAFT|TRADE|WAIVERS|FIRE_SALE", "body": "teaser, under ${BODY_MAX} characters" } ]  // 5 to 6, MORE than the ~4 that will ship
+  "hero_dek": "one-sentence hero subhead for the preseason hub, under ${BODY_MAX} characters. Do NOT mention a specific number of days until kickoff; the live day count is added at render time.",
+  "smack_posts": [ "site desk post, under ${BODY_MAX} characters", ... ]  // 5 to 6, MORE than the ~5 that will ship
 }
 
 DATA SOURCES (what each block is for):
@@ -215,12 +260,12 @@ function regularSpec(ctx: StatsContext): string {
   const gotwClause = ctx.gameOfWeekPairKey
     ? `the featured Game of the Week, which is the matchup with pairKey ${JSON.stringify(ctx.gameOfWeekPairKey)}`
     : "the marquee matchup of the week";
-  return `This is REGULAR SEASON content for week ${ctx.week} (week-scoped). Produce this exact JSON shape:
+  return `This is REGULAR SEASON content for week ${ctx.week} (week-scoped). Produce this exact JSON shape. Character budgets are HARD limits: a field over its budget gets that entire row discarded downstream (the response is not rejected, but that row is), so stay comfortably under, not right at, the number.
 {
-  "matchup_angles": [ { "pairKey": <one of ${JSON.stringify(pairKeys)}>, "body": "trash-talk angle for this matchup" } ]  // one per current matchup
-  "game_of_week_blurb": "blurb for ${gotwClause}",
-  "hero_dek": "one-sentence hero subhead for the week. Do NOT mention a specific number of days until kickoff; the live day count is added at render time.",
-  "smack_posts": [ "site desk post", ... ]  // 5 to 6, MORE than the ~5 that will ship: over-generate so a diverse subset can be picked
+  "matchup_angles": [ { "pairKey": <one of ${JSON.stringify(pairKeys)}>, "body": "trash-talk angle for this matchup, under ${BODY_MAX} characters" } ]  // one per current matchup
+  "game_of_week_blurb": "blurb for ${gotwClause}, under ${BODY_MAX} characters",
+  "hero_dek": "one-sentence hero subhead for the week, under ${BODY_MAX} characters. Do NOT mention a specific number of days until kickoff; the live day count is added at render time.",
+  "smack_posts": [ "site desk post, under ${BODY_MAX} characters", ... ]  // 5 to 6, MORE than the ~5 that will ship: over-generate so a diverse subset can be picked
 }
 
 GRADED CHECKLIST (violating rows are discarded downstream, so a violation shrinks your output):
@@ -247,8 +292,11 @@ export function buildUserPrompt(ctx: StatsContext): string {
 // No `.slice(0, N)` truncation here: the Zod schema `.max()` above already
 // bounds each array, and the FULL over-generated set is passed through to
 // generateContent's diversity layer (validateRow + selectDiverseSubset),
-// which is what actually trims to the display target.
-function toRowsPreseason(out: PreseasonOut, ctx: StatsContext): HubContentInsert[] {
+// which is what actually trims to the display target. Per-field length is
+// NOT enforced here either: `out` comes from the relaxed wire schema, so an
+// overlong string can reach this function; validateRow (via
+// applyDiversityLayer) is what drops that one row. Exported for unit tests.
+export function toRowsPreseason(out: PreseasonOut, ctx: StatsContext): HubContentInsert[] {
   const validDivisions = new Set(ctx.divisions.map((d) => d.name));
   const validSlugs = new Set(ctx.leagueStandings.map((t) => t.slug));
   const rows: HubContentInsert[] = [];
@@ -556,14 +604,14 @@ export async function generateContent(ctx: StatsContext): Promise<GeneratedConte
 
       if (ctx.seasonType === "regular") {
         const response = await client.messages.parse(
-          { ...baseParams, output_config: { format: zodOutputFormat(RegularSchema) } },
+          { ...baseParams, output_config: { format: zodOutputFormat(RegularWireSchema) } },
           requestOptions,
         );
         lastResponse = response;
         return toRowsRegular(checkParsedOutput(response), ctx);
       }
       const response = await client.messages.parse(
-        { ...baseParams, output_config: { format: zodOutputFormat(PreseasonSchema) } },
+        { ...baseParams, output_config: { format: zodOutputFormat(PreseasonWireSchema) } },
         requestOptions,
       );
       lastResponse = response;
