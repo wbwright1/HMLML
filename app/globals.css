@@ -308,6 +308,28 @@
             inset 0 1px 0 rgba(255, 255, 255, 0.06);
     }
 
+    /* Tint variants: layer a subtle color wash over the neutral card-surface
+       gradient/shadow so award/superlative cards read as the same shell,
+       differing only by tint. Usage: `card-surface card-tint-gold`. */
+    .card-tint-gold {
+        background:
+            linear-gradient(180deg, rgba(226, 184, 88, 0.1), rgba(226, 184, 88, 0.02)),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+        border-color: rgba(226, 184, 88, 0.25);
+    }
+    .card-tint-warm {
+        background:
+            linear-gradient(180deg, rgba(201, 124, 106, 0.1), rgba(201, 124, 106, 0.02)),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+        border-color: rgba(201, 124, 106, 0.25);
+    }
+    .card-tint-green {
+        background:
+            linear-gradient(180deg, rgba(143, 191, 127, 0.1), rgba(143, 191, 127, 0.02)),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.02));
+        border-color: rgba(143, 191, 127, 0.25);
+    }
+
     /* Ambient inner glows: gold blob top-left, sage blob top-right. Sized as a
        fraction of the card so it scales (the mock used fixed 640x480 px tuned to
        the large hub card). Requires a positioned, clipped host. */

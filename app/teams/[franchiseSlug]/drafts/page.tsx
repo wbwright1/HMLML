@@ -93,7 +93,7 @@ export default async function FranchiseDraftsPage({
         />
 
         {draftHistory.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-muted-foreground pt-2 font-mono">
+          <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-text-tertiary pt-2 font-mono">
             <span>
               <span className="font-bold text-text-primary tabular-nums">
                 {totalPicks}
@@ -123,8 +123,8 @@ export default async function FranchiseDraftsPage({
             {draftHistory.map((draft, draftIndex) => (
               <ScrollReveal key={draft.draftId} delay={draftIndex * 60}>
                 <div
-                  className={`rounded-xl border bg-surface p-5 transition-colors hover:border-border-strong ${
-                    draft.isLegacyEra ? "border-border/60 bg-surface/60" : "border-border"
+                  className={`card-surface p-5 transition-colors hover:border-border-strong ${
+                    draft.isLegacyEra ? "opacity-60" : ""
                   }`}
                 >
                   {/* Draft header */}
@@ -144,11 +144,11 @@ export default async function FranchiseDraftsPage({
                       }
                     />
                     {draft.isLegacyEra && (
-                      <span className="text-caption text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                      <span className="text-caption text-text-tertiary bg-surface-muted px-2 py-0.5 rounded-full">
                         Legacy Era
                       </span>
                     )}
-                    <span className="text-sm text-muted-foreground font-mono tabular-nums">
+                    <span className="text-sm text-text-tertiary font-mono tabular-nums">
                       {draft.picks.length} picks
                     </span>
                   </div>

@@ -15,16 +15,16 @@ export default function Error({
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-6 text-center">
       <div className="flex flex-col items-center gap-2">
         <AlertCircle
-          className="size-12 text-muted-foreground/50 mb-2"
+          className="size-12 text-text-tertiary/50 mb-2"
           strokeWidth={1.5}
           aria-hidden="true"
         />
         <h1 className="text-h2">Something went wrong</h1>
-        <p className="text-body text-muted-foreground max-w-md">
+        <p className="text-body text-text-tertiary max-w-md">
           Data is temporarily unavailable. This may be a sync issue. Try
           refreshing in a moment.
         </p>
-        <p className="text-caption text-muted-foreground mt-2">
+        <p className="text-caption text-text-tertiary mt-2">
           We&apos;re showing the last available data.
         </p>
       </div>

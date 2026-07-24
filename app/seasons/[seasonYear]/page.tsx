@@ -111,7 +111,7 @@ export default async function SeasonDetailPage({
         )}
 
         {season.championName && (
-          <div className="mt-6 rounded-lg border border-gold/30 bg-gold/5 p-6 text-center space-y-3">
+          <div className="mt-6 card-surface card-tint-gold p-6 text-center space-y-3">
             {championEntry && (
               <div className="flex justify-center">
                 <FranchiseLogo
@@ -256,9 +256,7 @@ export default async function SeasonDetailPage({
             <div className="md:hidden space-y-3">
               {standings.map((entry) => (
                 <ScrollReveal key={entry.id}>
-                  <div
-                    className="rounded-lg border border-border bg-surface p-4"
-                  >
+                  <div className="card-surface p-4">
                     <div className="flex items-start gap-3">
                       <span
                         className={`font-mono text-lg tabular-nums font-bold mt-0.5 ${

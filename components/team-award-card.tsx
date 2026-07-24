@@ -11,9 +11,9 @@ interface TeamAwardCardProps {
 }
 
 const toneStyles = {
-  positive: "bg-accent-gold-light border-accent-gold/20",
-  sting: "bg-accent-warm-light border-accent-warm/20",
-  neutral: "bg-surface border-border",
+  positive: "card-tint-gold",
+  sting: "card-tint-warm",
+  neutral: "",
 } as const;
 
 const labelStyles = {
@@ -33,15 +33,15 @@ export function TeamAwardCard({
   return (
     <Link
       href={`/teams/${franchiseSlug}`}
-      className={`block rounded-lg border p-5 transition-colors duration-150 hover:border-border-strong ${toneStyles[tone]}`}
+      className={`card-surface ${toneStyles[tone]} block p-5 transition-colors duration-150 hover:border-border-strong`}
     >
-      <p className={`text-caption uppercase mb-2 ${labelStyles[tone]}`}>
+      <p className={`text-kicker mb-2 ${labelStyles[tone]}`}>
         <span className="flex items-center gap-1.5">
           {getAwardIcon(label)}
           {label}
         </span>
       </p>
-      <p className="text-h2 tabular-nums text-text-primary">{stat}</p>
+      <p className="text-stat text-h2 text-text-primary">{stat}</p>
       <p className="text-body-sm text-text-tertiary mt-1">{context}</p>
       <p className="text-body font-bold text-text-primary mt-3">
         {franchiseName}

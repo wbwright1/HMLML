@@ -74,7 +74,7 @@ export async function SyncTimestamp({
 
   if (!syncEntry || !syncEntry.completedAt) {
     return (
-      <span className="text-caption text-muted-foreground">
+      <span className="text-caption text-text-tertiary">
         <ClockIcon /> Data may be outdated
       </span>
     );

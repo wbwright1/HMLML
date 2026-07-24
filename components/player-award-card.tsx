@@ -27,8 +27,8 @@ export function PlayerAwardCard({
   const color = getPositionColor(position ?? null);
 
   return (
-    <div className="rounded-[14px] border border-accent-gold/20 bg-accent-gold-light p-5 text-center">
-      <p className="text-caption text-accent-gold mb-3">
+    <div className="card-surface card-tint-gold p-5 text-center">
+      <p className="text-kicker text-accent-gold mb-3">
         <span className="flex items-center justify-center gap-1.5">
           {getAwardIcon(category)}
           {category}
@@ -55,7 +55,7 @@ export function PlayerAwardCard({
 
       <p className="text-body font-bold text-text-primary">{playerName}</p>
       <p className="text-body-sm text-text-tertiary">{franchiseName}</p>
-      <p className="text-h3 font-mono font-bold tabular-nums text-text-primary mt-2">
+      <p className="text-stat text-h3 text-text-primary mt-2">
         {stat}
       </p>
     </div>
