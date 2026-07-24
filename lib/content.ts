@@ -128,6 +128,86 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
     description: 'Franchise that dodged every other superlative; impressively unremarkable',
     tone: 'neutral',
   },
+  // Coverage-pass pool: per-season awards. See getUncoveredFranchiseAwards.
+  BOOM_GAME: {
+    key: 'BOOM_GAME',
+    displayText: 'Boom Game',
+    description: 'Franchise with the single highest-scoring week of the season',
+    tone: 'positive',
+  },
+  NO_SHOW: {
+    key: 'NO_SHOW',
+    displayText: 'No-Show',
+    description: 'Franchise with the single lowest-scoring week of the season',
+    tone: 'sting',
+  },
+  HEARTBREAKER: {
+    key: 'HEARTBREAKER',
+    displayText: 'Heartbreaker',
+    description: 'Franchise that lost its highest-scoring game of the season (put up points, still lost)',
+    tone: 'neutral',
+  },
+  STICK_UP: {
+    key: 'STICK_UP',
+    displayText: 'The Stick-Up',
+    description: 'Franchise that won its lowest-scoring game of the season (won ugly)',
+    tone: 'neutral',
+  },
+  SWEAT_MERCHANT: {
+    key: 'SWEAT_MERCHANT',
+    displayText: 'Sweat Merchant',
+    description: 'Franchise with the most one-possession games, decided by under five points',
+    tone: 'neutral',
+  },
+  METRONOME: {
+    key: 'METRONOME',
+    displayText: 'The Metronome',
+    description: 'Franchise with the most consistent week-to-week scoring (smallest swings)',
+    tone: 'positive',
+  },
+  WHIPLASH: {
+    key: 'WHIPLASH',
+    displayText: 'Whiplash',
+    description: 'Franchise with the most volatile week-to-week scoring (biggest swings)',
+    tone: 'neutral',
+  },
+  HORSESHOE: {
+    key: 'HORSESHOE',
+    displayText: 'Horseshoe',
+    description: 'Franchise whose record outran its scoring; won more than the box scores earned',
+    tone: 'neutral',
+  },
+  SNAKEBIT: {
+    key: 'SNAKEBIT',
+    displayText: 'Snakebit',
+    description: 'Franchise whose record trailed its scoring; lost more than the box scores deserved',
+    tone: 'sting',
+  },
+  // Coverage-pass pool: all-time awards. See getAllTimeUncoveredFranchiseAwards.
+  WORKHORSE: {
+    key: 'WORKHORSE',
+    displayText: 'The Workhorse',
+    description: 'Most career regular-season wins among franchises without a headline all-time record',
+    tone: 'positive',
+  },
+  SISYPHUS: {
+    key: 'SISYPHUS',
+    displayText: 'Sisyphus',
+    description: 'Most career regular-season losses among franchises without a headline all-time record',
+    tone: 'sting',
+  },
+  ELDER_STATESMAN: {
+    key: 'ELDER_STATESMAN',
+    displayText: 'Elder Statesman',
+    description: 'Franchise with the most seasons logged in league history',
+    tone: 'neutral',
+  },
+  NEARLY_MAN: {
+    key: 'NEARLY_MAN',
+    displayText: 'The Nearly Man',
+    description: 'Best career record that has never won a title',
+    tone: 'sting',
+  },
   // Player-lore labels: league-wide player history callouts, not tied to a
   // single franchise or season. See lib/queries/player-lore.ts and
   // lib/queries/franchise-players.ts.

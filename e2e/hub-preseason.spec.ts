@@ -108,6 +108,15 @@ test.describe("Preseason hub (1a)", () => {
     // At least one verdict is a text chip (LOCK / NO), never color-only.
     const bodyText = await page.locator("main").innerText();
     expect(bodyText).toMatch(/LOCK|NO/);
+
+    // Prediction card count is always even and capped at 6, so the two-column
+    // grid never leaves a lone orphan card on the last row.
+    const section = page.locator("section", {
+      has: page.locator("p.text-kicker", { hasText: /Bold Predictions/i }),
+    });
+    const cardCount = await section.locator("div.card-surface").count();
+    expect(cardCount % 2).toBe(0);
+    expect(cardCount).toBeLessThanOrEqual(6);
   });
 
   test("hub copy contains no em-dashes", async ({ page }) => {
