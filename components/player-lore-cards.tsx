@@ -4,6 +4,7 @@ import { SNARKY_LABELS } from "@/lib/content";
 import { getMostTradedPlayers, getMostChurnedPlayers } from "@/lib/queries/player-lore";
 import { getLeagueCornerstone } from "@/lib/queries/franchise-players";
 import { getFranchiseCrestById } from "@/lib/queries/franchises";
+import { PlayerHeadshot } from "@/components/player-headshot";
 
 function ordinalCount(n: number): string {
   return `${n}x`;
@@ -42,7 +43,15 @@ export async function PlayerLoreCards() {
               {wandererLabel.displayText}
             </span>
           </p>
-          <p className="text-h3 text-text-primary">{wanderer.playerName}</p>
+          <div className="flex items-center gap-3 mb-1">
+            <PlayerHeadshot
+              playerId={wanderer.playerId}
+              name={wanderer.playerName}
+              size={56}
+              showTeamBadge={false}
+            />
+            <p className="text-h3 text-text-primary">{wanderer.playerName}</p>
+          </div>
           <p className="text-body-sm text-text-tertiary mt-1">
             Traded <span className="font-mono tabular-nums">{ordinalCount(wanderer.count)}</span>
             , most in league history
@@ -59,7 +68,15 @@ export async function PlayerLoreCards() {
               {yoyoLabel.displayText}
             </span>
           </p>
-          <p className="text-h3 text-text-primary">{yoyo.playerName}</p>
+          <div className="flex items-center gap-3 mb-1">
+            <PlayerHeadshot
+              playerId={yoyo.playerId}
+              name={yoyo.playerName}
+              size={56}
+              showTeamBadge={false}
+            />
+            <p className="text-h3 text-text-primary">{yoyo.playerName}</p>
+          </div>
           <p className="text-body-sm text-text-tertiary mt-1">
             Added <span className="font-mono tabular-nums">{ordinalCount(yoyo.count)}</span>{" "}
             off waivers and free agency, most in league history
@@ -79,7 +96,24 @@ export async function PlayerLoreCards() {
               {cornerstoneLabel.displayText}
             </span>
           </p>
-          <p className="text-h3 text-text-primary">{cornerstone.playerName}</p>
+          <div className="flex items-center gap-3 mb-1">
+            <PlayerHeadshot
+              playerId={cornerstone.playerId}
+              name={cornerstone.playerName}
+              size={56}
+              franchiseBadge={
+                crest
+                  ? {
+                      slug: crest.slug,
+                      name: crest.name,
+                      abbreviation: crest.abbreviation,
+                      brandingColor: crest.brandingColor,
+                    }
+                  : null
+              }
+            />
+            <p className="text-h3 text-text-primary">{cornerstone.playerName}</p>
+          </div>
           <p className="text-body-sm text-text-tertiary mt-1">
             <span className="font-mono tabular-nums">
               {Math.round(cornerstone.franchisePoints)}
