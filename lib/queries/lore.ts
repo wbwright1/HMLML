@@ -487,8 +487,7 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       statValue: `${row.points.toFixed(1)} pts`,
       story:
         `${row.points.toFixed(1)} pts, Week ${row.week} of ${row.seasonYear}. ` +
-        `The best single game any ${positionWord} has ever posted.` +
-        (crest ? ` ${crest.name} reaped it.` : ""),
+        `The best single game any ${positionWord} has ever posted.`,
       franchiseBadge: crest,
     });
     claimedIds.add(row.playerId);
