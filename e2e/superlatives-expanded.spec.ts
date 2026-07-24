@@ -140,9 +140,8 @@ test.describe("Records: The Superlatives section", () => {
     }
     await expect(label.first()).toBeVisible();
 
-    // Season-scoped superlatives are all-time-drought-free: "Title Drought" is
-    // an all-time-only award now (LONGEST_DROUGHT no longer appears in the
-    // per-season coverage pool).
+    // "Title Drought" (LONGEST_DROUGHT) is retired league-wide (issue #102) and
+    // must never appear on any superlative surface, season-scoped or all-time.
     const heading = page.getByRole("heading", { name: "The Superlatives", level: 2 });
     const section = page.locator("section", { has: heading });
     const sectionText = await section.innerText();
@@ -168,6 +167,11 @@ test.describe("Records: The Superlatives section", () => {
 
     const heading = page.getByRole("heading", { name: "The Superlatives", level: 2 });
     const section = page.locator("section", { has: heading });
+
+    // "Title Drought" is retired (issue #102); it must not appear in the
+    // all-time coverage pool either.
+    expect(await section.innerText()).not.toContain("Title Drought");
+
     const grid = section.locator("div.grid").first();
     const cards = grid.locator("a[href^='/teams/']");
     const cardCount = await cards.count();

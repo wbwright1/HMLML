@@ -1309,20 +1309,17 @@ interface AllTimeCoverageProfile extends CoverageProfile {
   careerLosses: number;
   careerTies: number;
   careerPA: number;
+  careerPF: number;
   seasonsCount: number;
   neverWonTitle: boolean;
-  drought: number;
 }
 
 const ALL_TIME_COVERAGE_DEFS: CoverageAwardDef<AllTimeCoverageProfile>[] = [
   {
-    key: "LONGEST_DROUGHT",
-    score: (p) => p.drought,
-    stat: (p) => `${p.drought} ${p.drought === 1 ? "season" : "seasons"}`,
-    context: (p) =>
-      p.neverWonTitle
-        ? "Seasons in the league, still zero rings"
-        : "Seasons since their last and only glory",
+    key: "EMPTY_CALORIES",
+    score: (p) => (p.neverWonTitle && p.careerPF > 0 ? p.careerPF : null),
+    stat: (p) => `${p.careerPF.toFixed(1)} PF`,
+    context: () => "Career points piled up. Still zero rings.",
   },
   {
     key: "PUNCHING_BAG",
@@ -1378,8 +1375,8 @@ export async function getAllTimeUncoveredFranchiseAwards(
     const uncovered = universe.filter((u) => !covered.has(u.franchiseSlug));
     if (uncovered.length === 0) return [];
 
-    // Career aggregates (record, PA, title history) across every completed
-    // season, for the title-drought, Punching Bag, and Wallflower fallbacks.
+    // Career aggregates (record, PF/PA, title history) across every completed
+    // season, for the Empty Calories, Punching Bag, and Wallflower fallbacks.
     const careerRows = await db
       .select({
         franchiseId: franchiseSeasons.franchiseId,
@@ -1387,6 +1384,7 @@ export async function getAllTimeUncoveredFranchiseAwards(
         wins: franchiseSeasons.wins,
         losses: franchiseSeasons.losses,
         ties: franchiseSeasons.ties,
+        pointsFor: franchiseSeasons.pointsScored,
         pointsAgainst: franchiseSeasons.pointsAgainst,
         playoffResult: franchiseSeasons.playoffResult,
       })
@@ -1394,42 +1392,33 @@ export async function getAllTimeUncoveredFranchiseAwards(
       .innerJoin(seasons, eq(franchiseSeasons.seasonId, seasons.id))
       .where(eq(seasons.status, "complete"));
 
-    let newestCompletedYear = 0;
     const careerByFranchise = new Map<
       string,
-      { wins: number; losses: number; ties: number; pointsAgainst: number; seasonsCount: number }
+      { wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number; seasonsCount: number }
     >();
-    const lastTitleYearByFranchise = new Map<string, number>();
+    const everWonTitle = new Set<string>();
     for (const r of careerRows) {
-      newestCompletedYear = Math.max(newestCompletedYear, r.seasonYear);
       const acc =
         careerByFranchise.get(r.franchiseId) ??
-        { wins: 0, losses: 0, ties: 0, pointsAgainst: 0, seasonsCount: 0 };
+        { wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, seasonsCount: 0 };
       acc.wins += r.wins ?? 0;
       acc.losses += r.losses ?? 0;
       acc.ties += r.ties ?? 0;
+      acc.pointsFor += r.pointsFor ?? 0;
       acc.pointsAgainst += r.pointsAgainst ?? 0;
       acc.seasonsCount += 1;
       careerByFranchise.set(r.franchiseId, acc);
       if (r.playoffResult === "champion") {
-        lastTitleYearByFranchise.set(
-          r.franchiseId,
-          Math.max(lastTitleYearByFranchise.get(r.franchiseId) ?? 0, r.seasonYear),
-        );
+        everWonTitle.add(r.franchiseId);
       }
     }
-
-    const droughtOf = (franchiseId: string): number => {
-      const lastTitle = lastTitleYearByFranchise.get(franchiseId);
-      if (!lastTitle) return careerByFranchise.get(franchiseId)?.seasonsCount ?? 0;
-      return Math.max(0, newestCompletedYear - lastTitle);
-    };
 
     const uncoveredProfiles: AllTimeCoverageProfile[] = uncovered.map((u) => {
       const acc = careerByFranchise.get(u.franchiseId) ?? {
         wins: 0,
         losses: 0,
         ties: 0,
+        pointsFor: 0,
         pointsAgainst: 0,
         seasonsCount: 0,
       };
@@ -1442,9 +1431,9 @@ export async function getAllTimeUncoveredFranchiseAwards(
         careerLosses: acc.losses,
         careerTies: acc.ties,
         careerPA: acc.pointsAgainst,
+        careerPF: acc.pointsFor,
         seasonsCount: acc.seasonsCount,
-        neverWonTitle: !lastTitleYearByFranchise.has(u.franchiseId),
-        drought: droughtOf(u.franchiseId),
+        neverWonTitle: !everWonTitle.has(u.franchiseId),
       };
     });
 
