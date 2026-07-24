@@ -29,6 +29,7 @@ import { computeProjectedPoints } from "@/lib/lineup-slots";
 import { derivePlayoffResults } from "@/lib/sync/derive-playoffs";
 import { buildMemberFranchiseMap } from "@/lib/sync/member-franchise";
 import { resolveDivisionName } from "@/lib/divisions";
+import { runAtomic } from "@/lib/db/atomic";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -887,15 +888,10 @@ async function syncDrafts(leagueId: string): Promise<SyncStepResult> {
       // option). Wrapped in a transaction so a mid-loop insert failure can't
       // leave the draft with its picks wiped and not replaced.
       const batches = chunk(pickRows, 50);
-      await db.transaction(async (tx) => {
-        await tx
-          .delete(draftPicks)
-          .where(eq(draftPicks.draftId, draft.draft_id));
-
-        for (const batch of batches) {
-          await tx.insert(draftPicks).values(batch);
-        }
-      });
+      await runAtomic((tx) => [
+        tx.delete(draftPicks).where(eq(draftPicks.draftId, draft.draft_id)),
+        ...batches.map((batch) => tx.insert(draftPicks).values(batch)),
+      ]);
 
       totalUpserted += pickRows.length;
     }
