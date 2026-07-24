@@ -1,0 +1,32 @@
+name: Weekly Content Generation
+on:
+  schedule:
+    - cron: '0 12 * * 2'  # every Tuesday at 12:00 UTC
+  workflow_dispatch:
+jobs:
+  call-api:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Trigger cron endpoint
+        run: |
+          HTTP=$(curl -sS -w '%{http_code}' -o resp.json --max-time 290 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://hmlml.app/api/generate-content)
+          echo "HTTP $HTTP"; cat resp.json || true
+          if [ "$HTTP" != "200" ]; then echo "Non-2xx from generate-content"; exit 1; fi
+      - name: File issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TITLE="Weekly content generation failing"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          NUMBER=$(gh issue list --search "$TITLE in:title" --state open --json number --jq '.[0].number')
+          if [ -n "$NUMBER" ]; then
+            gh issue comment "$NUMBER" --body "Weekly content generation failed again: $RUN_URL"
+          else
+            gh issue create --title "$TITLE" --body "The weekly content generation cron failed: $RUN_URL"
+          fi
