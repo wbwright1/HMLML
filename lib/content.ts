@@ -229,6 +229,61 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
     description: 'The player with the most points scored in a single uniform, continuous tenure',
     tone: 'positive',
   },
+  // League Lore labels: the 12-card player-story module. See lib/queries/lore.ts.
+  SINGLE_GAME_QB: {
+    key: 'SINGLE_GAME_QB',
+    displayText: 'The Gunslinger',
+    description: 'The best single-game score any started QB has ever posted',
+    tone: 'positive',
+  },
+  SINGLE_GAME_RB: {
+    key: 'SINGLE_GAME_RB',
+    displayText: 'The Bell Cow',
+    description: 'The best single-game score any started RB has ever posted',
+    tone: 'positive',
+  },
+  SINGLE_GAME_WR: {
+    key: 'SINGLE_GAME_WR',
+    displayText: 'The Highlight Reel',
+    description: 'The best single-game score any started WR has ever posted',
+    tone: 'positive',
+  },
+  SINGLE_GAME_TE: {
+    key: 'SINGLE_GAME_TE',
+    displayText: 'The Unicorn',
+    description: 'The best single-game score any started TE has ever posted',
+    tone: 'positive',
+  },
+  THE_DRAFT_STEAL: {
+    key: 'THE_DRAFT_STEAL',
+    displayText: 'The Draft Steal',
+    description: 'The latest-round startup pick with the most career points',
+    tone: 'positive',
+  },
+  THE_WAIVER_MIRACLE: {
+    key: 'THE_WAIVER_MIRACLE',
+    displayText: 'The Waiver Miracle',
+    description: 'The waiver/free-agent add with the most career points',
+    tone: 'positive',
+  },
+  THE_IRON_MAN: {
+    key: 'THE_IRON_MAN',
+    displayText: 'The Iron Man',
+    description: 'The player with the most career starts in league history',
+    tone: 'neutral',
+  },
+  THE_COMET: {
+    key: 'THE_COMET',
+    displayText: 'The Comet',
+    description: 'The largest single-season started-points total in league history',
+    tone: 'positive',
+  },
+  THE_BUST: {
+    key: 'THE_BUST',
+    displayText: 'The Bust',
+    description: 'The startup first-round pick with the fewest career points',
+    tone: 'sting',
+  },
 } as const);
 
 // ===========================================================================
