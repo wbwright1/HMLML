@@ -17,8 +17,7 @@ import {
 } from "@/components/hub/offseason-receipt-card";
 import { BurningQuestionsCard } from "@/components/hub/burning-questions-card";
 import { ReigningHonors } from "@/components/hub/reigning-honors";
-import { TeamAwardCard } from "@/components/team-award-card";
-import { StingCard } from "@/components/sting-card";
+import { SuperlativeCard } from "@/components/superlative-card";
 import { getHubEditorial } from "@/lib/content";
 import { getPreseasonField } from "@/lib/queries/preseason-field";
 import { getNextKickoff } from "@/lib/queries/kickoff";
@@ -333,28 +332,17 @@ export async function PreseasonHub({
             Season Superlatives · Nobody Escapes
           </ModuleLabel>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            {seasonSuperlatives.map((s) =>
-              s.tone === "sting" ? (
-                <StingCard
-                  key={`${s.franchiseSlug}-${s.labelKey}`}
-                  label={s.displayText}
-                  franchiseName={s.franchiseName}
-                  franchiseSlug={s.franchiseSlug}
-                  context={s.context}
-                  stat={s.stat}
-                />
-              ) : (
-                <TeamAwardCard
-                  key={`${s.franchiseSlug}-${s.labelKey}`}
-                  label={s.displayText}
-                  stat={s.stat}
-                  context={s.context}
-                  franchiseName={s.franchiseName}
-                  franchiseSlug={s.franchiseSlug}
-                  tone={s.tone}
-                />
-              ),
-            )}
+            {seasonSuperlatives.map((s) => (
+              <SuperlativeCard
+                key={`${s.franchiseSlug}-${s.labelKey}`}
+                label={s.displayText}
+                stat={s.stat}
+                context={s.context}
+                franchiseName={s.franchiseName}
+                franchiseSlug={s.franchiseSlug}
+                tone={s.tone}
+              />
+            ))}
           </div>
         </section>
       )}

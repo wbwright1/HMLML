@@ -106,6 +106,10 @@ test.describe("Story 4.4: Standings Redesign (Command Center)", () => {
   test("playoff berth text legend is present", async ({ page }) => {
     await page.goto("/records");
 
+    // The legend is hidden on the default All-Time tab (no berth line for
+    // career totals); select a completed season tab first.
+    await page.getByRole("tab", { name: "2024" }).click();
+
     const legend = page.getByText(/playoff berth/i);
     await expect(legend.first()).toBeVisible();
   });

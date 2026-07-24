@@ -23,12 +23,9 @@ interface LeaderboardTableProps {
    */
   projectionSeasonYear?: number | null;
   projectionFieldIds?: string[];
+  activeSeason: number | "all-time";
+  onSeasonSelect: (year: number | "all-time") => void;
 }
-
-// How many teams make the playoffs; determines the berth line in the
-// standings when no real projection applies. Derived purely from
-// already-fetched rows, no new query.
-const PLAYOFF_BERTH_COUNT = 6;
 
 /** Win percentage (ties count as half), for fair mid-season ordering. */
 function winPctOf(e: LeaderboardEntry): number {
@@ -42,10 +39,9 @@ export function LeaderboardTable({
   seasonYears,
   projectionSeasonYear,
   projectionFieldIds,
+  activeSeason,
+  onSeasonSelect,
 }: LeaderboardTableProps) {
-  const [activeSeason, setActiveSeason] = useState<number | "all-time">(
-    "all-time"
-  );
   const [sortKey, setSortKey] = useState<SortKey>("wins");
   const [sortDesc, setSortDesc] = useState(true);
 
@@ -66,11 +62,15 @@ export function LeaderboardTable({
   );
   const leader = standingsOrder[0];
   // Prefer the real projection field (division-winner auto-qualify) when the
-  // selected season is the projected one; this keeps the table's berth line
-  // in agreement with the "Projected Playoff Field" block on the same page.
-  // Otherwise (all-time, historical, or no-division seasons) fall back to the
-  // straight top-6-by-record line.
+  // selected season is the projected (in-progress) one; this keeps the
+  // table's berth line in agreement with the "Projected Playoff Field" block
+  // on the same page. Otherwise, use the real recorded playoff result for
+  // completed seasons. All-time never has a berth line (career totals span
+  // multiple seasons' playoff fields).
   const playoffBerthIds = useMemo(() => {
+    if (activeSeason === "all-time") {
+      return new Set<string>();
+    }
     if (
       projectionSeasonYear != null &&
       activeSeason === projectionSeasonYear &&
@@ -80,9 +80,10 @@ export function LeaderboardTable({
       return new Set(projectionFieldIds);
     }
     return new Set(
-      standingsOrder.slice(0, PLAYOFF_BERTH_COUNT).map((entry) => entry.id)
+      source.filter((entry) => entry.madePlayoffs).map((entry) => entry.id)
     );
-  }, [standingsOrder, activeSeason, projectionSeasonYear, projectionFieldIds]);
+  }, [source, activeSeason, projectionSeasonYear, projectionFieldIds]);
+  const berthsActive = activeSeason !== "all-time" && playoffBerthIds.size > 0;
   const overallRank = useMemo(
     () => new Map(standingsOrder.map((entry, i) => [entry.id, i + 1])),
     [standingsOrder]
@@ -192,10 +193,10 @@ export function LeaderboardTable({
   const PlayoffBerthLegend = (
     <p className="flex items-center gap-2 text-caption text-text-tertiary">
       <span
-        className="inline-block w-2.5 h-2.5 rounded-[3px] bg-text-tertiary/30"
+        className="inline-block w-2.5 h-2.5 rounded-[3px] bg-accent-gold/60"
         aria-hidden="true"
       />
-      Playoff berth &middot; top {PLAYOFF_BERTH_COUNT}
+      Playoff berth
     </p>
   );
 
@@ -204,7 +205,7 @@ export function LeaderboardTable({
       <SeasonSelector
         seasons={seasonYears}
         activeSeason={activeSeason}
-        onSelect={setActiveSeason}
+        onSelect={onSeasonSelect}
         showAllTime
       />
 
@@ -249,6 +250,7 @@ export function LeaderboardTable({
                         group={group}
                         leader={leader}
                         playoffBerthIds={playoffBerthIds}
+                        berthsActive={berthsActive}
                         overallRank={overallRank}
                         gamesBack={gamesBack}
                         record={record}
@@ -261,6 +263,7 @@ export function LeaderboardTable({
                         rank={index + 1}
                         isLeader={leader?.id === entry.id}
                         isBerth={playoffBerthIds.has(entry.id)}
+                        berthsActive={berthsActive}
                         gamesBack={gamesBack}
                         record={record}
                       />
@@ -268,7 +271,9 @@ export function LeaderboardTable({
               </tbody>
             </table>
           </div>
-          <div className="hidden md:block">{PlayoffBerthLegend}</div>
+          {berthsActive && (
+            <div className="hidden md:block">{PlayoffBerthLegend}</div>
+          )}
 
           {/* Mobile card view */}
           <div className="md:hidden space-y-4">
@@ -283,6 +288,7 @@ export function LeaderboardTable({
                         rank={overallRank.get(entry.id) ?? 0}
                         isLeader={leader?.id === entry.id}
                         isBerth={playoffBerthIds.has(entry.id)}
+                        berthsActive={berthsActive}
                         record={record}
                       />
                     ))}
@@ -295,11 +301,14 @@ export function LeaderboardTable({
                     rank={index + 1}
                     isLeader={leader?.id === entry.id}
                     isBerth={playoffBerthIds.has(entry.id)}
+                    berthsActive={berthsActive}
                     record={record}
                   />
                 ))}
           </div>
-          <div className="md:hidden">{PlayoffBerthLegend}</div>
+          {berthsActive && (
+            <div className="md:hidden">{PlayoffBerthLegend}</div>
+          )}
         </>
       )}
     </div>
@@ -334,6 +343,7 @@ function DivisionDesktopRows({
   group,
   leader,
   playoffBerthIds,
+  berthsActive,
   overallRank,
   gamesBack,
   record,
@@ -341,6 +351,7 @@ function DivisionDesktopRows({
   group: DivisionGroupData;
   leader: LeaderboardEntry | undefined;
   playoffBerthIds: Set<string>;
+  berthsActive: boolean;
   overallRank: Map<string, number>;
   gamesBack: (entry: LeaderboardEntry) => string;
   record: (entry: LeaderboardEntry) => string;
@@ -359,6 +370,7 @@ function DivisionDesktopRows({
           rank={overallRank.get(entry.id) ?? 0}
           isLeader={leader?.id === entry.id}
           isBerth={playoffBerthIds.has(entry.id)}
+          berthsActive={berthsActive}
           gamesBack={gamesBack}
           record={record}
         />
@@ -372,6 +384,7 @@ function DesktopRow({
   rank,
   isLeader,
   isBerth,
+  berthsActive,
   gamesBack,
   record,
 }: {
@@ -379,10 +392,15 @@ function DesktopRow({
   rank: number;
   isLeader: boolean;
   isBerth: boolean;
+  berthsActive: boolean;
   gamesBack: (entry: LeaderboardEntry) => string;
   record: (entry: LeaderboardEntry) => string;
 }) {
-  const statText = isBerth ? "text-text-primary" : "text-text-tertiary";
+  const statText = !berthsActive
+    ? "text-text-secondary"
+    : isBerth
+      ? "text-text-primary"
+      : "text-text-tertiary";
 
   return (
     <tr
@@ -394,7 +412,7 @@ function DesktopRow({
       <td
         className={`py-3.5 pl-4 pr-2 font-mono text-sm tabular-nums font-bold ${
           isLeader ? "text-accent-gold" : statText
-        }`}
+        }${isBerth && berthsActive ? " border-l-2 border-l-accent-gold/60" : ""}`}
       >
         {rank}
       </td>
@@ -416,13 +434,13 @@ function DesktopRow({
           />
         </Link>
       </td>
-      <td className={`py-3.5 pr-4 font-mono text-sm tabular-nums font-bold ${statText}`}>
+      <td className={`py-3.5 pr-4 text-right font-mono text-sm tabular-nums font-bold ${statText}`}>
         {record(entry)}
       </td>
-      <td className={`py-3.5 pr-4 font-mono text-sm tabular-nums ${statText}`}>
+      <td className={`py-3.5 pr-4 text-right font-mono text-sm tabular-nums ${statText}`}>
         {entry.pointsScored.toFixed(1)}
       </td>
-      <td className={`py-3.5 pr-4 font-mono text-sm tabular-nums ${statText}`}>
+      <td className={`py-3.5 pr-4 text-right font-mono text-sm tabular-nums ${statText}`}>
         {entry.pointsAgainst.toFixed(1)}
       </td>
       <td className={`py-3.5 pr-4 text-right font-mono text-sm tabular-nums ${statText}`}>
@@ -437,22 +455,28 @@ function MobileCard({
   rank,
   isLeader,
   isBerth,
+  berthsActive,
   record,
 }: {
   entry: LeaderboardEntry;
   rank: number;
   isLeader: boolean;
   isBerth: boolean;
+  berthsActive: boolean;
   record: (entry: LeaderboardEntry) => string;
 }) {
-  const statText = isBerth ? "text-text-primary" : "text-text-tertiary";
+  const statText = !berthsActive
+    ? "text-text-secondary"
+    : isBerth
+      ? "text-text-primary"
+      : "text-text-tertiary";
 
   return (
     <Link
       href={`/teams/${entry.slug}`}
       className={`flex items-center gap-3 rounded-[14px] border border-border p-3 transition-colors hover:border-border-strong ${
         isLeader ? "bg-accent-gold-light" : "bg-surface"
-      }`}
+      }${isBerth && berthsActive && !isLeader ? " border-l-2 border-l-accent-gold/60" : ""}`}
     >
       <span
         className={`font-mono text-sm tabular-nums font-bold w-5 shrink-0 text-center ${

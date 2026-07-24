@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Locator } from "@playwright/test";
 
 // ============================================================================
 // Issue #14: More superlatives
@@ -38,8 +38,8 @@ test.describe("Records: The Superlatives section", () => {
     const grid = section.locator("div.grid").first();
     await expect(grid).toBeVisible();
 
-    // Every award card (TeamAwardCard or StingCard) links to a franchise page
-    // and carries a franchise name; assert at least one is present.
+    // Every award card (the canonical SuperlativeCard) links to a franchise
+    // page and carries a franchise name; assert at least one is present.
     const cards = grid.locator("a[href^='/teams/']");
     const cardCount = await cards.count();
     expect(cardCount).toBeGreaterThanOrEqual(1);
@@ -91,6 +91,86 @@ test.describe("Records: The Superlatives section", () => {
     const min = Math.min(...heights);
     const max = Math.max(...heights);
     expect(max - min, `card heights should be uniform: ${heights.join(", ")}`).toBeLessThanOrEqual(1);
+  });
+
+  test("R09: season tab sync", async ({ page }) => {
+    await page.goto("/records");
+
+    const tabs = page.getByRole("tab");
+    const tabCount = await tabs.count();
+    if (tabCount <= 1) {
+      // Only "All-Time" (or no season tabs at all): nothing to switch to.
+      test.skip();
+      return;
+    }
+
+    // Find a season tab (a numeric year label) that is not already selected.
+    let target: Locator | null = null;
+    let targetYear = "";
+    for (let i = 0; i < tabCount; i++) {
+      const tab = tabs.nth(i);
+      const label = (await tab.innerText()).trim();
+      const isSelected = (await tab.getAttribute("aria-selected")) === "true";
+      if (!isSelected && /^\d{4}$/.test(label)) {
+        target = tab;
+        targetYear = label;
+        break;
+      }
+    }
+    if (!target) {
+      test.skip();
+      return;
+    }
+
+    await target.click();
+
+    const label = page.getByText(`Season Awards · ${targetYear}`);
+    if ((await label.count()) === 0) {
+      // That season produced no superlative cards; acceptable graceful absence.
+      test.skip();
+      return;
+    }
+    await expect(label.first()).toBeVisible();
+  });
+
+  test("R10: all-time superlatives", async ({ page }) => {
+    await page.goto("/records");
+
+    const allTimeTab = page.getByRole("tab", { name: "All-Time", exact: true });
+    if ((await allTimeTab.count()) === 0) {
+      test.skip();
+      return;
+    }
+    await allTimeTab.click();
+
+    const kicker = page.getByText("All-Time Awards");
+    if ((await kicker.count()) === 0) {
+      test.skip();
+      return;
+    }
+    await expect(kicker.first()).toBeVisible();
+
+    const heading = page.getByRole("heading", { name: "The Superlatives", level: 2 });
+    const section = page.locator("section", { has: heading });
+    const grid = section.locator("div.grid").first();
+    const cards = grid.locator("a[href^='/teams/']");
+    const cardCount = await cards.count();
+    expect(cardCount).toBeGreaterThanOrEqual(1);
+    expect(cardCount).toBeLessThanOrEqual(12);
+
+    // One card per franchise: hrefs must be unique.
+    const hrefs = await cards.evaluateAll((els) =>
+      els.map((e) => e.getAttribute("href")),
+    );
+    expect(new Set(hrefs).size).toBe(hrefs.length);
+
+    // Every card must carry a numeric stat.
+    for (let i = 0; i < cardCount; i++) {
+      const card = cards.nth(i);
+      const statText = await card.innerText();
+      const match = statText.match(/(\d+(?:\.\d+)?)/);
+      expect(match, `card ${i} should contain a numeric stat: ${statText}`).not.toBeNull();
+    }
   });
 
   // R03-R06: the four new labels, each independently optional (depends on

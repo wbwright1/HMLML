@@ -32,6 +32,8 @@ export interface LeaderboardEntry {
   // Present only on season-specific rows; null/absent for all-time rows.
   division?: number | null;
   divisionName?: string | null;
+  // Present only on season-specific rows; unset for all-time rows.
+  madePlayoffs?: boolean;
 }
 
 export interface CareerStats {
@@ -190,6 +192,10 @@ export async function getLeaderboard(
           seasonsPlayed: 1,
           division: r.division,
           divisionName: r.divisionName,
+          madePlayoffs:
+            r.playoffResult === "champion" ||
+            r.playoffResult === "runner_up" ||
+            r.playoffResult === "made_playoffs",
         };
       });
     }
@@ -313,6 +319,10 @@ export async function getAllSeasonLeaderboards(): Promise<
         seasonsPlayed: 1,
         division: r.division,
         divisionName: r.divisionName,
+        madePlayoffs:
+          r.playoffResult === "champion" ||
+          r.playoffResult === "runner_up" ||
+          r.playoffResult === "made_playoffs",
       });
     }
 

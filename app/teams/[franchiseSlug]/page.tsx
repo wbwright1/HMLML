@@ -91,6 +91,7 @@ export default async function FranchiseDetailPage({
   let rivalries: Awaited<ReturnType<typeof getRivalries>> = [];
   let extremes: Awaited<ReturnType<typeof getFranchiseExtremes>> = {
     worstBeatdown: null,
+    biggestWin: null,
     longestWinStreak: 0,
   };
   let cornerstones: Awaited<ReturnType<typeof getFranchiseCornerstone>> = [];
@@ -217,6 +218,16 @@ export default async function FranchiseDetailPage({
           ? `Top of the standings in ${bestFinish.year}.`
           : `Peaked in ${bestFinish.year}.`,
       tone: bestFinish.finish <= 3 ? "gold" : "neutral",
+    });
+  }
+
+  if (extremes.biggestWin) {
+    const w = extremes.biggestWin;
+    callouts.push({
+      kicker: "Most Dominant Win",
+      value: `+${w.margin.toFixed(1)}`,
+      subline: `${w.pointsFor.toFixed(1)}–${w.pointsAgainst.toFixed(1)} vs ${w.opponentName}, ${w.seasonYear}.`,
+      tone: "gold",
     });
   }
 
