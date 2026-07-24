@@ -3,7 +3,7 @@ import { franchises, franchiseSeasons, seasons } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 import {
-  selectGoatBlurb,
+  assignGoatBlurbs,
   type GoatArchetype,
 } from "@/lib/goat-content";
 
@@ -256,18 +256,15 @@ export async function getGoatLadder(): Promise<GoatEntry[]> {
     const avatarUrls = await getLatestAvatarUrls(franchiseRows.map((f) => f.id));
     const identityById = new Map(franchiseRows.map((f) => [f.id, f]));
 
-    return scores.map((s) => {
+    // computeGoatScores returns entries already sorted by rank ascending;
+    // assignGoatBlurbs relies on that order to hand out distinct blurbs
+    // within each archetype's pool as it walks the ladder top to bottom.
+    const withBlurbs = assignGoatBlurbs(
+      scores.map((s) => ({ ...s, leagueSize })),
+    );
+
+    return withBlurbs.map(({ leagueSize: _leagueSize, ...s }) => {
       const f = identityById.get(s.franchiseId)!;
-      const { archetype, blurb } = selectGoatBlurb(s.franchiseId, {
-        rank: s.rank,
-        leagueSize,
-        winPct: s.winPct,
-        championships: s.championships,
-        playoffRate: s.playoffRate,
-        recentForm: s.recentForm,
-        seasonsPlayed: s.seasonsPlayed,
-        pointsRank: s.pointsRank,
-      });
       return {
         ...s,
         slug: f.slug,
@@ -275,8 +272,6 @@ export async function getGoatLadder(): Promise<GoatEntry[]> {
         abbreviation: f.abbreviation ?? undefined,
         brandingColor: f.brandingColor ?? undefined,
         avatarUrl: avatarUrls.get(s.franchiseId) ?? null,
-        archetype,
-        blurb,
       };
     });
   } catch (e) {

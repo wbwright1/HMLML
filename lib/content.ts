@@ -128,6 +128,27 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
     description: 'Franchise that dodged every other superlative; impressively unremarkable',
     tone: 'neutral',
   },
+  // Player-lore labels: league-wide player history callouts, not tied to a
+  // single franchise or season. See lib/queries/player-lore.ts and
+  // lib/queries/franchise-players.ts.
+  THE_WANDERER: {
+    key: 'THE_WANDERER',
+    displayText: 'The Wanderer',
+    description: 'The most-traded player in league history',
+    tone: 'neutral',
+  },
+  WAIVER_YO_YO: {
+    key: 'WAIVER_YO_YO',
+    displayText: 'Waiver Yo-Yo',
+    description: 'The player added off waivers/free agency the most times in league history',
+    tone: 'neutral',
+  },
+  LEAGUE_CORNERSTONE: {
+    key: 'LEAGUE_CORNERSTONE',
+    displayText: 'League Cornerstone',
+    description: 'The player with the most points scored in a single uniform, continuous tenure',
+    tone: 'positive',
+  },
 } as const);
 
 // ===========================================================================

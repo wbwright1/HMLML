@@ -38,9 +38,9 @@ export const metadata = {
 
 const subPages = [
   {
-    href: "/records/goat",
-    label: "The GOAT Ladder",
-    description: "All 12 franchises ranked 1 to 12, all-time",
+    href: "/records/hall-of-fame",
+    label: "The Hall of Fame & Shame",
+    description: "The all-time ladder, plus the players who wrote the legend",
   },
   {
     href: "/records/head-to-head",
@@ -340,17 +340,17 @@ export default async function RecordsPage() {
 
       <ScrollReveal>
         <Link
-          href="/records/goat"
+          href="/records/hall-of-fame"
           className="group mb-10 flex items-center justify-between gap-4 rounded-[14px] border border-accent-gold/30 bg-accent-gold-light p-5 md:p-6 transition-colors hover:border-accent-gold/50"
         >
           <div className="min-w-0 space-y-1">
             <p className="text-kicker text-accent-gold">All-Time · New</p>
             <p className="text-h3 text-text-primary group-hover:text-accent-gold transition-colors">
-              The GOAT Ladder
+              The Hall of Fame &amp; Shame
             </p>
             <p className="text-body-sm text-text-secondary">
-              All 12 franchises ranked 1 to 12, all-time, with a blurb nobody
-              asked for. Find out where you really stand.
+              Every franchise ranked 1 to 12, all-time, plus the players who
+              wrote the legend. Find out where you really stand.
             </p>
           </div>
           <span

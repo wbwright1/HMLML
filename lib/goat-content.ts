@@ -4,10 +4,11 @@
 // Centralized snark for the all-time GOAT Ladder, mirroring the SNARKY_LABELS
 // pattern in lib/content.ts: blurbs live here, keyed by an ARCHETYPE derived
 // from a franchise's ladder position and stat shape, never hardcoded to a
-// specific team. goatArchetype() classifies a franchise deterministically; a
-// stable per-franchise index then picks a variant so the ladder does not read
-// like the same three sentences twelve times. Nothing here fabricates a stat:
-// the numbers on the card come from the query layer; this is pure voice.
+// specific team. goatArchetype() classifies a franchise deterministically;
+// assignGoatBlurbs() then walks the whole ladder in rank order and hands out
+// the first unused blurb from that archetype's pool, so no two franchises on
+// the same ladder ever read the same sentence. Nothing here fabricates a
+// stat: the numbers on the card come from the query layer; this is pure voice.
 
 export type GoatArchetype =
   | "goat"
@@ -66,8 +67,12 @@ export const GOAT_ARCHETYPE_LABELS: Readonly<Record<GoatArchetype, string>> =
     basement: "League Doormat",
   });
 
-// 2-3 variants per archetype. Copy is generic to the archetype; the card shows
-// the real record/rings alongside, so no blurb needs to name a team or a number.
+// Per-archetype variant pools. Copy is generic to the archetype; the card
+// shows the real record/rings alongside, so no blurb needs to name a team or
+// a number. Pool sizes are sized to the live league's archetype distribution
+// (12 franchises: 1 goat, up to 2 dynasty/lucky_ring, several mid, etc.) with
+// headroom; "mid" is the largest bucket so it gets the deepest pool, and a
+// GOAT_GENERIC_OVERFLOW pool below catches any archetype that still runs out.
 const GOAT_BLURBS: Readonly<Record<GoatArchetype, readonly string[]>> = Object.freeze({
   goat: [
     "The measuring stick. Everyone else is auditioning for second and they know it.",
@@ -77,54 +82,92 @@ const GOAT_BLURBS: Readonly<Record<GoatArchetype, readonly string[]>> = Object.f
     "A ring and the record to back it up. This is the one nobody wants on the schedule.",
     "Wins in the regular season, wins when it counts. The blueprint, annoyingly.",
     "Hardware plus a winning career says the trophy was not a fluke. It was a warning.",
+    "Built to win, not to entertain. The scoreboard has heard every excuse and stayed unmoved.",
   ],
   ringless_contender: [
     "Great every September, invisible every January. The best team to never lift the thing.",
     "Piles up wins and playoff berths, still shopping for a first ring. Always the bridesmaid.",
     "A resume built for a title and a trophy case built for dust. Cruel game.",
+    "Contends every year, closes none of them. The league's most reliable heartbreak.",
   ],
   lucky_ring: [
     "Owns a ring and reminds the group chat every August. The career record says: enjoy the memory.",
     "One shining month, a lifetime of mediocrity around it. The banner still counts, technically.",
     "Caught fire once and has been coasting on it ever since. Hey, a ring is a ring.",
+    "Peaked on schedule exactly once. The rest of the resume is doing its best to forget.",
   ],
   glass_cannon: [
     "Scores like a champion, finishes like a rerun. All the points, none of the payoff.",
     "Leads the league in style points and loses the games that matter. A gorgeous 8-6.",
     "Puts up numbers to brag about and losses to explain. The definition of empty calories.",
+    "Fireworks on the scoreboard, ash in the standings. Great highlight reel, forgettable record.",
   ],
   upstart: [
     "Fewer seasons, a better win rate than the veterans. The new money is playing to win.",
     "Showed up late and started taking lunch money immediately. Ask about the resume later.",
     "Short history, loud results. The rest of the ladder should be nervous.",
+    "New to the league, already ahead of it. The learning curve was somebody else's problem.",
   ],
   mid: [
     "Perfectly, aggressively fine. Neither the story nor the punchline, which is its own tragedy.",
     "The definition of a coin-flip season, every season. Forgettable in the safest way.",
     "Always in the mix, never in the conversation. The league's beige.",
+    "Not good enough to fear, not bad enough to mock. The most polite kind of irrelevant.",
+    "Splits the difference on every stat that matters. A franchise built entirely out of shrugs.",
+    "Shows up, competes, disappears from the conversation by Tuesday. Reliable, in the dullest sense.",
   ],
   basement: [
     "The floor of the league, and it has been comfortable down there for a while. League doormat.",
     "Somebody has to be twelfth. This franchise has made it a lifestyle.",
-    "The get-well game on everyone's schedule. The receipts are long and unkind.",
   ],
 });
 
+// Catch-all pool for when an archetype's dedicated variants run out. Kept
+// deliberately generic so it can follow any archetype without contradicting
+// its label.
+const GOAT_GENERIC_OVERFLOW: readonly string[] = [
+  "The numbers are on the card. The verdict is up to the group chat.",
+  "Every ladder needs a name here. This is the one occupying it this season.",
+  "Read the record, not the résumé. The record is the only thing that doesn't lie.",
+  "Filed under: also participated. The stats do the rest of the talking.",
+];
+
 /**
- * Pick a deterministic blurb for a franchise: classify, then choose a variant by
- * a stable hash of the franchise id so the same team always reads the same, and
- * two adjacent teams of the same archetype do not repeat verbatim.
+ * Assign every franchise on the ladder a distinct blurb. Walks entries in
+ * RANK ORDER (the caller must pass entries already sorted 1..N) and, for each
+ * one, classifies its archetype and hands out the first unused variant from
+ * that archetype's pool. If a pool runs dry, falls through to the
+ * used-set-guarded overflow pool rather than repeating a line. Rank order
+ * (rather than franchise-id order) means ties for a shared archetype resolve
+ * in ladder position, which is the only ordering a reader can see on the
+ * page.
  */
-export function selectGoatBlurb(
-  franchiseId: string,
-  input: GoatArchetypeInput,
-): { archetype: GoatArchetype; blurb: string } {
-  const archetype = goatArchetype(input);
-  const variants = GOAT_BLURBS[archetype];
-  let hash = 0;
-  for (let i = 0; i < franchiseId.length; i++) {
-    hash = (hash * 31 + franchiseId.charCodeAt(i)) >>> 0;
-  }
-  const blurb = variants[hash % variants.length];
-  return { archetype, blurb };
+export function assignGoatBlurbs<T extends GoatArchetypeInput>(
+  entries: readonly T[],
+): Array<T & { archetype: GoatArchetype; blurb: string }> {
+  const used = new Set<string>();
+  const overflowUsed = new Set<string>();
+
+  return entries.map((entry) => {
+    const archetype = goatArchetype(entry);
+    const pool = GOAT_BLURBS[archetype];
+
+    let blurb = pool.find((candidate) => !used.has(candidate));
+    if (blurb) {
+      used.add(blurb);
+    } else {
+      blurb = GOAT_GENERIC_OVERFLOW.find(
+        (candidate) => !overflowUsed.has(candidate),
+      );
+      if (blurb) {
+        overflowUsed.add(blurb);
+      } else {
+        // Pathological case (more franchises than every pool combined): fall
+        // back to the archetype's first variant rather than throwing.
+        blurb = pool[0];
+      }
+    }
+
+    return { ...entry, archetype, blurb };
+  });
 }
