@@ -137,9 +137,9 @@ function buildRecordBook(data: LeaderboardEntry[]): RecordBookEntry[] {
 
 function RecordBookCard({ label, value, context }: RecordBookEntry) {
   return (
-    <div className="rounded-[14px] border border-border bg-surface p-4">
+    <div className="card-surface p-4">
       <p className="text-caption text-accent-gold mb-2">{label}</p>
-      <p className="text-[28px] leading-none font-mono font-bold tabular-nums text-text-primary">
+      <p className="text-stat text-[28px] leading-none text-text-primary">
         {value}
       </p>
       <p className="text-body-sm text-text-tertiary mt-2 truncate">{context}</p>
@@ -341,7 +341,7 @@ export default async function RecordsPage() {
       <ScrollReveal>
         <Link
           href="/records/hall-of-fame"
-          className="group mb-10 flex items-center justify-between gap-4 rounded-[14px] border border-accent-gold/30 bg-accent-gold-light p-5 md:p-6 transition-colors hover:border-accent-gold/50"
+          className="group card-surface card-tint-gold mb-10 flex items-center justify-between gap-4 p-5 md:p-6 transition-colors hover:border-accent-gold/50"
         >
           <div className="min-w-0 space-y-1">
             <p className="text-kicker text-accent-gold">All-Time · New</p>
@@ -528,7 +528,7 @@ export default async function RecordsPage() {
                   <ScrollReveal key={page.href} delay={index * 60}>
                     <Link
                       href={page.href}
-                      className="block rounded-[14px] border border-border bg-surface p-4 transition-colors hover:border-border-strong hover:bg-surface-muted"
+                      className="card-surface block p-4 transition-colors hover:border-border-strong hover:bg-surface-muted"
                     >
                       <p className="text-body-sm font-semibold text-accent-gold">
                         {page.label}

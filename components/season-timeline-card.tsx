@@ -37,7 +37,7 @@ export function SeasonTimelineCard({
   return (
     <Link
       href={`/seasons/${seasonYear}`}
-      className="group block rounded-lg border border-border bg-surface p-6 transition-colors duration-150 hover:border-border-strong"
+      className="group card-surface block p-6 transition-colors duration-150 hover:border-border-strong"
     >
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         {championSlug && championName && (

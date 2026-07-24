@@ -7,7 +7,7 @@ const variantClasses: Record<string, string> = {
   gold: "bg-accent-gold-light text-accent-gold",
   silver: "bg-surface-muted text-text-secondary",
   green: "bg-accent-green-light text-accent-green",
-  neutral: "bg-muted text-muted-foreground",
+  neutral: "bg-surface-muted text-text-tertiary",
   brown: "bg-accent-warm-light text-accent-warm",
 };
 

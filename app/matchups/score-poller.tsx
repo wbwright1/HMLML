@@ -111,7 +111,7 @@ export function ScorePoller({
     <div aria-live="polite" aria-atomic="true" className="space-y-3">
       <div className="flex items-center gap-2">
         <LiveIndicator />
-        <span className="text-sm text-muted-foreground">Live Scores</span>
+        <span className="text-sm text-text-tertiary">Live Scores</span>
       </div>
       <div className="grid gap-2">
         {scores.map((score) => (
@@ -127,7 +127,7 @@ export function ScorePoller({
                 {score.homeScore.toFixed(1)}
               </span>
             </div>
-            <span className="text-xs text-muted-foreground px-2">vs</span>
+            <span className="text-xs text-text-tertiary px-2">vs</span>
             <div className="flex items-center gap-2 flex-1 min-w-0 justify-end">
               <span className="text-sm font-bold tabular-nums">
                 {score.awayScore.toFixed(1)}

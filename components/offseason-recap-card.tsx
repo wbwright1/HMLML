@@ -16,7 +16,7 @@ export function OffseasonRecapCard({
   items,
 }: OffseasonRecapCardProps) {
   return (
-    <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+    <div className="card-surface p-6 space-y-4">
       <p className="text-kicker">
         {seasonYear} Season Recap
       </p>
@@ -27,7 +27,7 @@ export function OffseasonRecapCard({
             key={item.label}
             className="flex items-center justify-between gap-4"
           >
-            <span className="text-body-sm text-muted-foreground">
+            <span className="text-body-sm text-text-tertiary">
               {item.label}
             </span>
             {item.href ? (

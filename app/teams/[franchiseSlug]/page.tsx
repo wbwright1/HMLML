@@ -17,6 +17,7 @@ import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getRivalries } from "@/lib/queries/records";
 import { getFranchiseExtremes } from "@/lib/queries/franchise-stats";
 import { getFranchiseCornerstone } from "@/lib/queries/franchise-players";
+import { FranchiseCornerstoneCard } from "@/components/franchise-cornerstone-card";
 import { getPlayoffLabel, getPlayoffBadgeVariant } from "@/lib/playoff-labels";
 import { EmptyState } from "@/components/empty-state";
 
@@ -226,42 +227,6 @@ export default async function FranchiseDetailPage({
     });
   }
 
-  // Franchise Cornerstone(s): the player(s) drafted or traded for and never
-  // let go, scored by points in this franchise's colors. See
-  // lib/queries/franchise-players.ts for eligibility/scoring rules.
-  const apYear = (year: number) => `'${String(year).slice(-2)}`;
-  const lastName = (fullName: string) => fullName.trim().split(/\s+/).slice(-1)[0] ?? fullName;
-
-  if (cornerstones.length === 1) {
-    const c = cornerstones[0];
-    const verb =
-      c.via === "draft"
-        ? "Drafted"
-        : c.blockbuster === true
-          ? "Blockbuster trade,"
-          : "Traded for";
-    const seasonsPhrase = `${c.tenureSeasons} season${c.tenureSeasons !== 1 ? "s" : ""} and counting`;
-    callouts.push({
-      kicker: "Franchise Cornerstone",
-      value: c.playerName,
-      subline: `${verb} ${apYear(c.acquiredYear)} · ${Math.round(c.franchisePoints).toLocaleString()} pts · ${c.franchiseStarts} starts · ${seasonsPhrase}.`,
-      tone: "gold",
-    });
-  } else if (cornerstones.length === 2) {
-    const [a, b] = cornerstones;
-    const combinedPts = Math.round(a.franchisePoints + b.franchisePoints);
-    const sameOrigin = a.via === b.via && a.acquiredYear === b.acquiredYear;
-    const subline = sameOrigin
-      ? `Both ${a.via === "draft" ? "drafted" : "traded for"} ${apYear(a.acquiredYear)} · ${combinedPts.toLocaleString()} pts combined.`
-      : `Since ${apYear(a.acquiredYear)} and ${apYear(b.acquiredYear)} · ${combinedPts.toLocaleString()} pts combined.`;
-    callouts.push({
-      kicker: "Franchise Cornerstones",
-      value: `${lastName(a.playerName)} · ${lastName(b.playerName)}`,
-      subline,
-      tone: "gold",
-    });
-  }
-
   return (
     <>
       {/* Hero Section — dark canvas frame; brandingColor survives only as a
@@ -289,6 +254,19 @@ export default async function FranchiseDetailPage({
         {callouts.length > 0 && (
           <ScrollReveal delay={100}>
             <FranchiseSignatureBand callouts={callouts} />
+          </ScrollReveal>
+        )}
+
+        {cornerstones.length > 0 && (
+          <ScrollReveal delay={150}>
+            <FranchiseCornerstoneCard
+              cornerstones={cornerstones}
+              franchiseSlug={franchise.slug}
+              franchiseName={franchise.name}
+              franchiseAbbreviation={franchise.abbreviation}
+              franchiseBrandingColor={franchise.brandingColor}
+              franchiseAvatarUrl={franchise.avatarUrl}
+            />
           </ScrollReveal>
         )}
 
@@ -339,7 +317,7 @@ export default async function FranchiseDetailPage({
                 <Link
                   href={`/teams/${franchise.slug}/schedule?season=${season.seasonYear}`}
                   aria-label={`${season.seasonYear} schedule`}
-                  className="block rounded-xl border border-border bg-surface p-5 transition-colors hover:border-border-strong hover:bg-surface-muted"
+                  className="card-surface block p-5 transition-colors hover:border-border-strong hover:bg-surface-muted"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-1">
@@ -348,13 +326,13 @@ export default async function FranchiseDetailPage({
                           {season.seasonYear}
                         </span>
                         {season.isLegacyEra && (
-                          <span className="text-caption text-muted-foreground bg-muted px-2 py-0.5 rounded-full">
+                          <span className="text-caption text-text-tertiary bg-surface-muted px-2 py-0.5 rounded-full">
                             Legacy Era
                           </span>
                         )}
                       </div>
                       {season.ownerDisplayName && (
-                        <p className="text-body-sm text-muted-foreground">
+                        <p className="text-body-sm text-text-tertiary">
                           {season.ownerDisplayName}{season.coOwnerDisplayName ? ` & ${season.coOwnerDisplayName}` : ""}
                         </p>
                       )}
@@ -364,21 +342,21 @@ export default async function FranchiseDetailPage({
                       {/* Record */}
                       <span className="tabular-nums whitespace-nowrap">
                         <span className="font-bold text-text-primary">{season.wins ?? 0}</span>
-                        <span className="text-xs text-muted-foreground ml-0.5">
+                        <span className="text-xs text-text-tertiary ml-0.5">
                           W
                         </span>
-                        <span className="text-muted-foreground mx-1">-</span>
+                        <span className="text-text-tertiary mx-1">-</span>
                         <span className="text-text-secondary">{season.losses ?? 0}</span>
-                        <span className="text-xs text-muted-foreground ml-0.5">
+                        <span className="text-xs text-text-tertiary ml-0.5">
                           L
                         </span>
                         {(season.ties ?? 0) > 0 && (
                           <>
-                            <span className="text-muted-foreground mx-1">
+                            <span className="text-text-tertiary mx-1">
                               -
                             </span>
                             <span className="text-text-secondary">{season.ties}</span>
-                            <span className="text-xs text-muted-foreground ml-0.5">
+                            <span className="text-xs text-text-tertiary ml-0.5">
                               T
                             </span>
                           </>
@@ -387,20 +365,20 @@ export default async function FranchiseDetailPage({
 
                       {/* Points scored */}
                       {(season.pointsScored ?? 0) > 0 && (
-                        <span className="text-muted-foreground tabular-nums whitespace-nowrap">
+                        <span className="text-text-tertiary tabular-nums whitespace-nowrap">
                           {(season.pointsScored ?? 0).toFixed(1)} pts
                         </span>
                       )}
 
                       {/* Standings finish */}
                       {season.standingsFinish != null && (
-                        <span className="text-muted-foreground tabular-nums whitespace-nowrap">
+                        <span className="text-text-tertiary tabular-nums whitespace-nowrap">
                           #{season.standingsFinish}
                         </span>
                       )}
 
                       {/* Division */}
-                      <span className="text-muted-foreground whitespace-nowrap normal-case tracking-normal">
+                      <span className="text-text-tertiary whitespace-nowrap normal-case tracking-normal">
                         {season.divisionName ?? "—"}
                       </span>
 

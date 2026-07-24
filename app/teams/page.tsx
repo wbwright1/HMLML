@@ -36,7 +36,7 @@ export default async function TeamsPage() {
 
   return (
     <PageSection label="Franchises" title="Teams.">
-      <p className="text-body-lg text-muted-foreground max-w-prose">
+      <p className="text-body-lg text-text-tertiary max-w-prose">
         Every franchise in the Harambe Memorial League Memorial League: rosters, records, and
         dynasty histories.
       </p>

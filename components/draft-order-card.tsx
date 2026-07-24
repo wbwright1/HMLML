@@ -7,8 +7,8 @@ interface DraftOrderCardProps {
 
 export function DraftOrderCard({ picks, seasonYear }: DraftOrderCardProps) {
   return (
-    <div className="rounded-lg border border-border bg-surface p-5">
-      <h3 className="text-caption uppercase text-text-tertiary mb-4">
+    <div className="card-surface p-5">
+      <h3 className="text-kicker mb-4">
         DRAFT ORDER
       </h3>
 
