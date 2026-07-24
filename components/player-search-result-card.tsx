@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { PlayerStatusBadge } from "@/components/player-status-badge";
+import { AwardChipRow, type AwardChipData } from "@/components/award-chip";
 
 interface PlayerSearchResultCardProps {
   playerId: string;
@@ -14,6 +15,8 @@ interface PlayerSearchResultCardProps {
     slug: string;
   } | null;
   pointsPpr?: number | null;
+  /** League-award badges ("MVP '25"). Empty/omitted renders none. */
+  awards?: AwardChipData[];
 }
 
 export function PlayerSearchResultCard({
@@ -25,6 +28,7 @@ export function PlayerSearchResultCard({
   injuryStatus,
   ownerFranchise,
   pointsPpr,
+  awards = [],
 }: PlayerSearchResultCardProps) {
   return (
     <div className="card-surface p-4 transition-colors hover:bg-surface-muted">
@@ -38,7 +42,10 @@ export function PlayerSearchResultCard({
 
         {/* Player info */}
         <div className="flex-1 min-w-0 space-y-1">
-          <p className="text-body font-bold text-text-primary truncate">{playerName}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-body font-bold text-text-primary truncate">{playerName}</p>
+            <AwardChipRow awards={awards} />
+          </div>
           <div className="flex flex-wrap items-center gap-2 text-body-sm text-text-tertiary">
             {position && <span>{position}</span>}
             {nflTeam && (
