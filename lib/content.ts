@@ -110,10 +110,10 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
   // Coverage-pass fallbacks: always-computable superlatives used to guarantee
   // every franchise appears in at least one award. Assigned only to franchises
   // the primary superlatives missed; see getUncoveredFranchiseAwards.
-  LONGEST_DROUGHT: {
-    key: 'LONGEST_DROUGHT',
-    displayText: 'Title Drought',
-    description: 'Franchise that has gone the longest without a championship (or never won one)',
+  EMPTY_CALORIES: {
+    key: 'EMPTY_CALORIES',
+    displayText: 'Empty Calories',
+    description: 'Most career points scored by a franchise that has never won a title (all the offense, none of the hardware)',
     tone: 'sting',
   },
   PUNCHING_BAG: {

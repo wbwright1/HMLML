@@ -61,7 +61,7 @@ const labelExpectations: Array<{
   { testId: 'UT-15', key: 'WHAT_COULDVE_BEEN', displayText: "What Could've Been", tone: 'neutral' },
   { testId: 'UT-16', key: 'COACHING_MALPRACTICE', displayText: 'Coaching Malpractice', tone: 'sting' },
   { testId: 'UT-28', key: 'BLOWOUT_BAIT', displayText: 'Blowout Bait', tone: 'sting' },
-  { testId: 'UT-29', key: 'LONGEST_DROUGHT', displayText: 'Title Drought', tone: 'sting' },
+  { testId: 'UT-29', key: 'EMPTY_CALORIES', displayText: 'Empty Calories', tone: 'sting' },
   { testId: 'UT-30', key: 'PUNCHING_BAG', displayText: 'Punching Bag', tone: 'sting' },
   { testId: 'UT-31', key: 'WALLFLOWER', displayText: 'Wallflower', tone: 'neutral' },
 ];
