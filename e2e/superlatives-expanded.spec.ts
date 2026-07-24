@@ -59,6 +59,40 @@ test.describe("Records: The Superlatives section", () => {
     }
   });
 
+  test("R08: at most 12 cards, one per franchise, uniform height", async ({ page }) => {
+    await page.goto("/records");
+
+    const heading = page.getByRole("heading", { name: "The Superlatives", level: 2 });
+    if ((await heading.count()) === 0) {
+      test.skip();
+      return;
+    }
+
+    const section = page.locator("section", { has: heading });
+    const grid = section.locator("div.grid").first();
+    const cards = grid.locator("a[href^='/teams/']");
+    const cardCount = await cards.count();
+    expect(cardCount).toBeGreaterThanOrEqual(1);
+    expect(cardCount).toBeLessThanOrEqual(12);
+
+    // One card per franchise: hrefs must be unique.
+    const hrefs = await cards.evaluateAll((els) =>
+      els.map((e) => e.getAttribute("href")),
+    );
+    expect(new Set(hrefs).size).toBe(hrefs.length);
+
+    // Uniform card height (within 1px).
+    const heights: number[] = [];
+    for (let i = 0; i < cardCount; i++) {
+      const box = await cards.nth(i).boundingBox();
+      expect(box, `card ${i} should be visible`).not.toBeNull();
+      heights.push(box!.height);
+    }
+    const min = Math.min(...heights);
+    const max = Math.max(...heights);
+    expect(max - min, `card heights should be uniform: ${heights.join(", ")}`).toBeLessThanOrEqual(1);
+  });
+
   // R03-R06: the four new labels, each independently optional (depends on
   // what the latest season's data actually produces: e.g. Rock Bottom needs
   // a losing streak to exist; the lineup awards need player_week_points).
