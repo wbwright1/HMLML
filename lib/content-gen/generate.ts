@@ -47,10 +47,13 @@ const LLM_DEADLINE_MS = 220_000;
 // (PreseasonSchema) worst-cases at roughly: 3 division_notes + 6
 // burning_questions + 6 bold_predictions + 6 offseason_receipts + 1 hero_dek +
 // 6 smack_posts, each body <= 400 chars. That is ~11K chars of JSON, on the
-// order of ~3.5K output tokens. A 6000-token cap leaves comfortable headroom
-// while keeping generation fast (the old 16000 cap invited needlessly long,
+// order of ~3.5K output tokens. Thinking is disabled below (constraint-
+// following generation; quality control happens in the downstream
+// validate/diversity layers), so the entire budget goes to the JSON text
+// itself. 8000 leaves comfortable headroom above the ~3.5K worst case while
+// still keeping generation fast (the old 16000 cap invited needlessly long,
 // budget-eating runs).
-const MAX_OUTPUT_TOKENS = 6000;
+const MAX_OUTPUT_TOKENS = 8000;
 
 const SYSTEM_PROMPT = `You are the Site Desk: the editorial voice of a 12-team dynasty fantasy football league history site. Your voice is confident and snarky, "the friend in the group chat who always has the receipts." You roast losses with the same care you celebrate wins.
 
@@ -89,7 +92,7 @@ const kickerStr = z.string().max(KICKER_MAX);
 // generateContent below) has real room to pick a non-repeating subset
 // instead of just truncating in model-output order. Display targets live in
 // TARGET_COUNTS_BY_KIND further down.
-const PreseasonSchema = z.object({
+export const PreseasonSchema = z.object({
   division_notes: z
     .array(
       z.object({
@@ -119,7 +122,7 @@ const PreseasonSchema = z.object({
   smack_posts: z.array(bodyStr).max(6).default([]),
 });
 
-const RegularSchema = z.object({
+export const RegularSchema = z.object({
   matchup_angles: z
     .array(z.object({ pairKey: z.string().max(KICKER_MAX), body: bodyStr }))
     .max(8)
@@ -313,38 +316,6 @@ function toRowsRegular(out: RegularOut, ctx: StatsContext): HubContentInsert[] {
 }
 
 // ---------------------------------------------------------------------------
-// JSON extraction + parse
-// ---------------------------------------------------------------------------
-
-/**
- * Pulls the JSON object out of the model's text. Belt-and-suspenders: handles
- * both shapes so the parser survives regardless of how the object is delimited.
- *  - Full object somewhere in the text (the normal response): slice from the
- *    first "{" to the last "}".
- *  - An object BODY whose leading "{" is absent (the shape you'd get if the
- *    opening brace were supplied via an assistant prefill): re-add the brace
- *    before parsing.
- * We do not currently send an assistant prefill: it returns a 400 on the
- * Sonnet/Opus 4.6+ family that CONTENT_MODEL defaults to (claude-sonnet-5), so
- * a prefill would break the LLM path outright rather than steady it. Tolerating
- * the prefilled shape anyway is cheap insurance if CONTENT_MODEL is ever
- * pointed at an older model where prefill is reintroduced. Exported for unit tests.
- */
-export function extractJson(text: string): unknown {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (end === -1) {
-    throw new Error("no JSON object in response");
-  }
-  if (start !== -1 && start < end) {
-    return JSON.parse(text.slice(start, end + 1));
-  }
-  // No opening brace before the closing one: treat the text as a prefilled
-  // object body and restore the missing leading brace.
-  return JSON.parse("{" + text.slice(0, end + 1));
-}
-
-// ---------------------------------------------------------------------------
 // Per-kind template fill
 // ---------------------------------------------------------------------------
 
@@ -518,6 +489,7 @@ export async function generateContent(ctx: StatsContext): Promise<GeneratedConte
   try {
     // Import lazily so the SDK is only loaded when the LLM path is actually used.
     const { default: Anthropic } = await import("@anthropic-ai/sdk");
+    const { zodOutputFormat } = await import("@anthropic-ai/sdk/helpers/zod");
     // maxRetries: 1 is explicit so the SDK's default retry backoff can't add
     // hidden minutes to the budget; the deadline below is the real ceiling.
     const client = new Anthropic({ apiKey, maxRetries: 1 });
@@ -525,30 +497,77 @@ export async function generateContent(ctx: StatsContext): Promise<GeneratedConte
     const userPrompt = buildUserPrompt(ctx);
 
     // Bounds the WHOLE LLM attempt. On expiry the signal aborts any in-flight
-    // messages.create so the outer catch can run generateFromTemplates inside
+    // messages.parse so the outer catch can run generateFromTemplates inside
     // the function's 300s budget instead of being killed by a 504.
     const deadline = new AbortController();
     const deadlineTimer = setTimeout(() => deadline.abort(), LLM_DEADLINE_MS);
 
-    const callOnce = async (): Promise<HubContentInsert[]> => {
-      const response = await client.messages.create(
-        {
-          model,
-          max_tokens: MAX_OUTPUT_TOKENS,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: userPrompt }],
-        },
-        // Per-call ceiling + the shared deadline signal.
-        { timeout: PER_CALL_TIMEOUT_MS, signal: deadline.signal },
-      );
-      const text = response.content
-        .map((b) => (b.type === "text" ? b.text : ""))
-        .join("");
-      const parsed = extractJson(text);
-      if (ctx.seasonType === "regular") {
-        return toRowsRegular(RegularSchema.parse(parsed), ctx);
+    // Captures the most recent response object for diagnostics, even when the
+    // response was received but was unusable (early stop, no parsed output).
+    // Reset at the top of every callOnce attempt so a failed attempt never
+    // reports stale data from a prior one; stays undefined for a pure network
+    // failure, where no response was ever received.
+    let lastResponse:
+      | { stop_reason?: string | null; usage?: unknown; content?: Array<{ type: string; text?: string }> }
+      | undefined;
+
+    const logLlmDiagnostics = (note: string): void => {
+      const textBlock = lastResponse?.content?.find((b) => b.type === "text");
+      console.warn("[content-gen] LLM diagnostic:", {
+        model,
+        note,
+        stopReason: lastResponse?.stop_reason ?? null,
+        usage: lastResponse?.usage ?? null,
+        hadTextBlock: Boolean(textBlock),
+        textPreview: textBlock?.text ? textBlock.text.slice(0, 500) : null,
+      });
+    };
+
+    // Truncation/refusal proofing: a response that stopped early or produced
+    // no parsed output must not silently ship partial/undefined content. Both
+    // are treated as hard failures so the existing retry + template fallback
+    // fires, the same as a thrown API error.
+    function checkParsedOutput<T>(response: { stop_reason: string | null; parsed_output: T | null }): T {
+      if (response.stop_reason === "max_tokens" || response.stop_reason === "refusal") {
+        logLlmDiagnostics(`stop_reason=${response.stop_reason}`);
+        throw new Error(`LLM response stopped early with stop_reason="${response.stop_reason}"`);
       }
-      return toRowsPreseason(PreseasonSchema.parse(parsed), ctx);
+      if (response.parsed_output == null) {
+        logLlmDiagnostics("parsed_output missing");
+        throw new Error("LLM response had no parsed_output");
+      }
+      return response.parsed_output;
+    }
+
+    const callOnce = async (): Promise<HubContentInsert[]> => {
+      lastResponse = undefined;
+      const requestOptions = { timeout: PER_CALL_TIMEOUT_MS, signal: deadline.signal };
+      const baseParams = {
+        model,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        system: SYSTEM_PROMPT,
+        // Constraint-following generation: structured outputs already enforce
+        // the shape, and quality control happens in the downstream
+        // validate/diversity layers, so thinking tokens would only eat into
+        // MAX_OUTPUT_TOKENS without buying anything.
+        thinking: { type: "disabled" as const },
+        messages: [{ role: "user" as const, content: userPrompt }],
+      };
+
+      if (ctx.seasonType === "regular") {
+        const response = await client.messages.parse(
+          { ...baseParams, output_config: { format: zodOutputFormat(RegularSchema) } },
+          requestOptions,
+        );
+        lastResponse = response;
+        return toRowsRegular(checkParsedOutput(response), ctx);
+      }
+      const response = await client.messages.parse(
+        { ...baseParams, output_config: { format: zodOutputFormat(PreseasonSchema) } },
+        requestOptions,
+      );
+      lastResponse = response;
+      return toRowsPreseason(checkParsedOutput(response), ctx);
     };
 
     let rows: HubContentInsert[];
@@ -560,6 +579,7 @@ export async function generateContent(ctx: StatsContext): Promise<GeneratedConte
         try {
           rows = await callOnce();
         } catch (secondError) {
+          logLlmDiagnostics("attempt 2 failed");
           console.warn("[content-gen] LLM attempt 2 failed, falling back to templates:", secondError);
           // Rethrow so the outer catch runs generateFromTemplates.
           throw secondError;
