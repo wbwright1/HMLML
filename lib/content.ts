@@ -107,9 +107,9 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
     description: 'Franchise with the worst average margin of defeat in the season (when they lose, they lose big)',
     tone: 'sting',
   },
-  // Coverage-pass fallbacks: always-computable superlatives used to guarantee
-  // every franchise appears in at least one award. Assigned only to franchises
-  // the primary superlatives missed; see getUncoveredFranchiseAwards.
+  // All-time career awards: genuine league-wide claims, truth-gated against
+  // every franchise. If the true leader already holds a higher-priority award
+  // the label simply does not render. See getAllTimeUncoveredFranchiseAwards.
   EMPTY_CALORIES: {
     key: 'EMPTY_CALORIES',
     displayText: 'Empty Calories',
@@ -119,16 +119,11 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
   PUNCHING_BAG: {
     key: 'PUNCHING_BAG',
     displayText: 'Punching Bag',
-    description: 'Uncovered franchise allowing the most points against this season',
+    description: 'Most career points allowed in league history (favorite target of the whole league)',
     tone: 'sting',
   },
-  WALLFLOWER: {
-    key: 'WALLFLOWER',
-    displayText: 'Wallflower',
-    description: 'Franchise that dodged every other superlative; impressively unremarkable',
-    tone: 'neutral',
-  },
-  // Coverage-pass pool: per-season awards. See getUncoveredFranchiseAwards.
+  // Backfill pool: per-season awards, truth-gated so each only renders on
+  // its genuine league-wide leader. See getUncoveredFranchiseAwards.
   BOOM_GAME: {
     key: 'BOOM_GAME',
     displayText: 'Boom Game',
@@ -183,25 +178,7 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
     description: 'Franchise whose record trailed its scoring; lost more than the box scores deserved',
     tone: 'sting',
   },
-  // Coverage-pass pool: all-time awards. See getAllTimeUncoveredFranchiseAwards.
-  WORKHORSE: {
-    key: 'WORKHORSE',
-    displayText: 'The Workhorse',
-    description: 'Most career regular-season wins among franchises without a headline all-time record',
-    tone: 'positive',
-  },
-  SISYPHUS: {
-    key: 'SISYPHUS',
-    displayText: 'Sisyphus',
-    description: 'Most career regular-season losses among franchises without a headline all-time record',
-    tone: 'sting',
-  },
-  ELDER_STATESMAN: {
-    key: 'ELDER_STATESMAN',
-    displayText: 'Elder Statesman',
-    description: 'Franchise with the most seasons logged in league history',
-    tone: 'neutral',
-  },
+  // All-time career award (truth-gated); see getAllTimeUncoveredFranchiseAwards.
   NEARLY_MAN: {
     key: 'NEARLY_MAN',
     displayText: 'The Nearly Man',

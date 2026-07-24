@@ -63,7 +63,6 @@ const labelExpectations: Array<{
   { testId: 'UT-28', key: 'BLOWOUT_BAIT', displayText: 'Blowout Bait', tone: 'sting' },
   { testId: 'UT-29', key: 'EMPTY_CALORIES', displayText: 'Empty Calories', tone: 'sting' },
   { testId: 'UT-30', key: 'PUNCHING_BAG', displayText: 'Punching Bag', tone: 'sting' },
-  { testId: 'UT-31', key: 'WALLFLOWER', displayText: 'Wallflower', tone: 'neutral' },
 ];
 
 describe('UT-03 through UT-16: Per-label field values', () => {

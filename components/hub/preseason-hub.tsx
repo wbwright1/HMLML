@@ -323,17 +323,17 @@ export async function PreseasonHub({
         />
       )}
 
-      {/* Season Superlatives · Nobody Escapes: full-width Wall of Shame. The
-          coverage pass guarantees all 12 franchises appear, so every member
-          finds themselves before Week 1. */}
+      {/* Season Superlatives: last season's top awards, capped at six. Every
+          card is a true within-season claim; a franchise with no genuine
+          award simply is not here. */}
       {seasonSuperlatives.length > 0 && (
         <section className="pt-2 pb-8">
           <ModuleLabel
-            meta={lastCompletedSeasonYear ? `${lastCompletedSeasonYear} · all 12` : "all 12"}
+            meta={lastCompletedSeasonYear ? `${lastCompletedSeasonYear} · top 6` : "top 6"}
           >
-            Season Superlatives · Nobody Escapes
+            Season Superlatives
           </ModuleLabel>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {seasonSuperlatives.map((s) => (
               <SuperlativeCard
                 key={`${s.franchiseSlug}-${s.labelKey}`}
