@@ -1,14 +1,26 @@
 import { describe, it, expect } from "vitest";
 import {
+  buildTradedAwayPairs,
+  bustGroupKey,
+  bustShortfall,
+  classifyBustOutcome,
+  computeBustExpectations,
   dedupePieces,
   franchiseSequenceFor,
+  isBustEligible,
+  isBustEligibleRound,
+  median,
   pickBestFranchiseAndPoints,
   pickSeasonFranchise,
   pickSeasonFranchiseAndPoints,
   pickTopFranchiseByPoints,
   pickTopFranchiseByStarts,
   scopedFranchisePoints,
+  wasTradedAwayByDrafter,
+  type BustBaselineEntry,
   type PlayerFranchiseWeekRow,
+  type RosterFranchiseRow,
+  type TradeDropRow,
 } from "@/lib/queries/lore";
 
 interface Candidate {
@@ -249,5 +261,138 @@ describe("franchiseSequenceFor", () => {
   it("includes benched-only franchises (rostered, not just started)", () => {
     const rows = [weekRow("f1", 2022, 1, false)];
     expect(franchiseSequenceFor(rows)).toEqual(["f1"]);
+  });
+});
+
+describe("isBustEligible", () => {
+  it("is eligible once the latest completed season is at least a year after the draft", () => {
+    expect(isBustEligible(2022, 2023)).toBe(true);
+    expect(isBustEligible(2022, 2024)).toBe(true);
+  });
+
+  it("is not eligible for a draft from the latest completed season or later", () => {
+    expect(isBustEligible(2023, 2023)).toBe(false);
+    expect(isBustEligible(2024, 2023)).toBe(false);
+  });
+});
+
+describe("buildTradedAwayPairs / wasTradedAwayByDrafter", () => {
+  const rosterFranchiseRows: RosterFranchiseRow[] = [
+    { seasonId: 1, rosterId: "5", franchiseId: "f1" },
+    { seasonId: 2, rosterId: "5", franchiseId: "f2" }, // same roster_id, different season/franchise
+  ];
+
+  it("marks a player traded away by the franchise that dropped him that season", () => {
+    const tradeDrops: TradeDropRow[] = [{ playerId: "p1", rosterId: "5", seasonId: 1 }];
+    const pairs = buildTradedAwayPairs(tradeDrops, rosterFranchiseRows);
+    expect(wasTradedAwayByDrafter(pairs, "p1", "f1")).toBe(true);
+    expect(wasTradedAwayByDrafter(pairs, "p1", "f2")).toBe(false);
+  });
+
+  it("scopes roster_id -> franchise resolution by season (same roster_id, different seasons)", () => {
+    const tradeDrops: TradeDropRow[] = [{ playerId: "p1", rosterId: "5", seasonId: 2 }];
+    const pairs = buildTradedAwayPairs(tradeDrops, rosterFranchiseRows);
+    expect(wasTradedAwayByDrafter(pairs, "p1", "f2")).toBe(true);
+    expect(wasTradedAwayByDrafter(pairs, "p1", "f1")).toBe(false);
+  });
+
+  it("drops without a resolvable roster/season pair are ignored", () => {
+    const tradeDrops: TradeDropRow[] = [{ playerId: "p1", rosterId: "99", seasonId: 1 }];
+    const pairs = buildTradedAwayPairs(tradeDrops, rosterFranchiseRows);
+    expect(pairs.size).toBe(0);
+  });
+
+  it("returns an empty set for no trade drops", () => {
+    expect(buildTradedAwayPairs([], rosterFranchiseRows).size).toBe(0);
+  });
+});
+
+describe("classifyBustOutcome", () => {
+  it("classifies a still-rostered player as 'rostered'", () => {
+    expect(classifyBustOutcome(true)).toBe("rostered");
+  });
+
+  it("classifies a dropped player as 'dropped'", () => {
+    expect(classifyBustOutcome(false)).toBe("dropped");
+  });
+});
+
+describe("isBustEligibleRound", () => {
+  it("allows startup rounds 1 through 6", () => {
+    expect(isBustEligibleRound("startup", 1)).toBe(true);
+    expect(isBustEligibleRound("startup", 6)).toBe(true);
+  });
+
+  it("rejects startup rounds outside 1-6 (Draft Steal's territory starts at 8)", () => {
+    expect(isBustEligibleRound("startup", 7)).toBe(false);
+    expect(isBustEligibleRound("startup", 8)).toBe(false);
+  });
+
+  it("allows only round 1 for rookie drafts", () => {
+    expect(isBustEligibleRound("rookie", 1)).toBe(true);
+    expect(isBustEligibleRound("rookie", 2)).toBe(false);
+    expect(isBustEligibleRound("rookie", 6)).toBe(false);
+  });
+});
+
+describe("bustGroupKey", () => {
+  it("buckets startup picks by round", () => {
+    expect(bustGroupKey("startup", 1)).toBe("startup:1");
+    expect(bustGroupKey("startup", 6)).toBe("startup:6");
+  });
+
+  it("buckets all rookie round-1 picks into one group regardless of round passed in", () => {
+    expect(bustGroupKey("rookie", 1)).toBe("rookie:1");
+  });
+});
+
+describe("median", () => {
+  it("returns the middle value for an odd-length list", () => {
+    expect(median([5, 1, 3])).toBe(3);
+  });
+
+  it("averages the two middle values for an even-length list", () => {
+    expect(median([1, 2, 3, 4])).toBe(2.5);
+  });
+
+  it("returns the single value for a one-element list", () => {
+    expect(median([42])).toBe(42);
+  });
+
+  it("returns 0 for an empty list", () => {
+    expect(median([])).toBe(0);
+  });
+});
+
+describe("computeBustExpectations", () => {
+  it("computes the median scoped points per group", () => {
+    const baseline: BustBaselineEntry[] = [
+      { groupKey: "startup:1", scopedPts: 100 },
+      { groupKey: "startup:1", scopedPts: 200 },
+      { groupKey: "startup:1", scopedPts: 300 },
+      { groupKey: "startup:6", scopedPts: 10 },
+      { groupKey: "startup:6", scopedPts: 20 },
+    ];
+    const expectations = computeBustExpectations(baseline);
+    expect(expectations.get("startup:1")).toBe(200);
+    expect(expectations.get("startup:6")).toBe(15);
+  });
+
+  it("returns an empty map for no baseline entries", () => {
+    expect(computeBustExpectations([]).size).toBe(0);
+  });
+});
+
+describe("bustShortfall", () => {
+  it("is positive when actual falls short of expected", () => {
+    expect(bustShortfall(200, 50)).toBe(150);
+  });
+
+  it("is negative when actual exceeds expected", () => {
+    expect(bustShortfall(100, 150)).toBe(-50);
+  });
+
+  it("is zero when actual matches expected exactly", () => {
+    expect(bustShortfall(100, 100)).toBe(0);
   });
 });

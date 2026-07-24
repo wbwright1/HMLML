@@ -281,7 +281,7 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
   THE_BUST: {
     key: 'THE_BUST',
     displayText: 'The Bust',
-    description: 'The startup first-round pick with the fewest career points',
+    description: 'The eligible first-round pick with the fewest points scored for the team that drafted him',
     tone: 'sting',
   },
 } as const);

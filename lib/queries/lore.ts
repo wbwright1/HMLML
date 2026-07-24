@@ -1,12 +1,14 @@
 import { db } from "@/lib/db";
 import {
   draftPicks,
+  franchiseSeasons,
   players,
   playerWeekPoints,
+  rosterPlayers,
   seasons,
   transactions,
 } from "@/lib/db/schema";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { SNARKY_LABELS, type LabelTone } from "@/lib/content";
 import { getMostTradedPlayers, getMostChurnedPlayers } from "@/lib/queries/player-lore";
 import { getLeagueCornerstone } from "@/lib/queries/franchise-players";
@@ -161,7 +163,16 @@ export interface StartupPickRow {
   franchiseId: string | null;
 }
 
-/** Startup-draft picks only (excludes rookie drafts), with the season year. */
+/**
+ * Startup-draft picks only (excludes rookie drafts), with the season year.
+ * Restricted to the Sleeper era (`is_legacy_era = false`, i.e. the 2023
+ * startup): the sole consumer, Draft Steal, is a value award like The Bust,
+ * and the 2021 predecessor-league startup had a longer runway (5 completed
+ * seasons vs 3) to accumulate points, which would give 2021 picks an unfair
+ * edge over 2023 picks in a "most points scored" ranking. Verified against
+ * the live DB (see getBustDraftPickPool) that `is_legacy_era` maps exactly
+ * to 2021/2022 (`true`) vs 2023+ (`false`).
+ */
 export async function getStartupDraftPicks(): Promise<StartupPickRow[]> {
   try {
     const rows = await db
@@ -174,7 +185,7 @@ export async function getStartupDraftPicks(): Promise<StartupPickRow[]> {
       })
       .from(draftPicks)
       .innerJoin(seasons, eq(draftPicks.seasonId, seasons.id))
-      .where(eq(draftPicks.draftType, "startup"));
+      .where(and(eq(draftPicks.draftType, "startup"), eq(draftPicks.isLegacyEra, false)));
 
     return rows
       .filter((r): r is StartupPickRow & { playerId: string } => r.playerId != null)
@@ -188,6 +199,176 @@ export async function getStartupDraftPicks(): Promise<StartupPickRow[]> {
   } catch (error) {
     console.error("[lore] getStartupDraftPicks error:", error);
     return [];
+  }
+}
+
+export interface BustDraftPickRow {
+  playerId: string;
+  round: number;
+  pickNumber: number;
+  seasonYear: number;
+  franchiseId: string | null;
+  draftType: string;
+}
+
+/**
+ * Draft picks from rounds 1-6 of ANY Sleeper-era draft (startup and rookie),
+ * with the season year and draft type. Excludes `is_legacy_era` picks: The
+ * Bust is scoped to 2023+ only, since the 2021/2022 predecessor-league
+ * drafts had a longer runway to accumulate points (5 seasons vs 3) and
+ * mixing eras would inflate the expectation baselines and unfairly punish
+ * older picks. Verified against the live DB that `is_legacy_era` maps
+ * exactly to the 2021 startup and 2022 rookie drafts (`true`) vs. 2023+
+ * (`false`), so the flag is a reliable proxy for the season-year cutoff.
+ * The Bust's eligible-round rule differs by draft type (startup rounds 1-6
+ * count as premium capital; rookie drafts only round 1 does), so this
+ * fetches the superset (round <= 6) and callers narrow with
+ * `isBustEligibleRound`. Draft Steal stays startup-only and round >= 8 via
+ * `getStartupDraftPicks`, so the two awards never compete for the same pick.
+ */
+export async function getBustDraftPickPool(): Promise<BustDraftPickRow[]> {
+  try {
+    const rows = await db
+      .select({
+        playerId: draftPicks.playerId,
+        round: draftPicks.round,
+        pickNumber: draftPicks.pickNumber,
+        seasonYear: seasons.seasonYear,
+        franchiseId: draftPicks.franchiseId,
+        draftType: draftPicks.draftType,
+      })
+      .from(draftPicks)
+      .innerJoin(seasons, eq(draftPicks.seasonId, seasons.id))
+      .where(and(sql`${draftPicks.round} <= 6`, eq(draftPicks.isLegacyEra, false)));
+
+    return rows
+      .filter((r): r is typeof r & { playerId: string } => r.playerId != null)
+      .map((r) => ({
+        playerId: r.playerId,
+        round: r.round,
+        pickNumber: r.pickNumber,
+        seasonYear: r.seasonYear,
+        franchiseId: r.franchiseId,
+        draftType: r.draftType,
+      }));
+  } catch (error) {
+    console.error("[lore] getBustDraftPickPool error:", error);
+    return [];
+  }
+}
+
+/** The most recent season with status = 'complete', or null if none. */
+export async function getLatestCompletedSeasonYear(): Promise<number | null> {
+  try {
+    const [row] = await db
+      .select({ seasonYear: seasons.seasonYear })
+      .from(seasons)
+      .where(eq(seasons.status, "complete"))
+      .orderBy(desc(seasons.seasonYear))
+      .limit(1);
+    return row?.seasonYear ?? null;
+  } catch (error) {
+    console.error("[lore] getLatestCompletedSeasonYear error:", error);
+    return null;
+  }
+}
+
+/** The most recent season's id, regardless of status (used for "is he still rostered" checks). */
+export async function getLatestSeasonId(): Promise<number | null> {
+  try {
+    const [row] = await db
+      .select({ id: seasons.id })
+      .from(seasons)
+      .orderBy(desc(seasons.seasonYear))
+      .limit(1);
+    return row?.id ?? null;
+  } catch (error) {
+    console.error("[lore] getLatestSeasonId error:", error);
+    return null;
+  }
+}
+
+export interface TradeDropRow {
+  playerId: string;
+  rosterId: string;
+  seasonId: number;
+}
+
+/**
+ * Every (player, roster, season) drop attributed to a completed trade
+ * transaction. `transactions.drops` maps player id -> the roster_id that
+ * gave the player up (mirrors `adds`, parsed the same way as
+ * `getMostTradedPlayers` in player-lore.ts). Combined with
+ * `getRosterFranchiseMapRows` this resolves to "which franchise traded this
+ * player away, and when," the direct linkage for exempting a redeemed Bust
+ * pick (rather than a roster-presence proxy).
+ */
+export async function getTradeDrops(): Promise<TradeDropRow[]> {
+  try {
+    const rows = await db
+      .select({ drops: transactions.drops, seasonId: transactions.seasonId })
+      .from(transactions)
+      .where(eq(transactions.type, "trade"));
+
+    const result: TradeDropRow[] = [];
+    for (const row of rows) {
+      const drops = row.drops as Record<string, number> | null;
+      if (!drops) continue;
+      for (const [playerId, rosterId] of Object.entries(drops)) {
+        result.push({ playerId, rosterId: String(rosterId), seasonId: row.seasonId });
+      }
+    }
+    return result;
+  } catch (error) {
+    console.error("[lore] getTradeDrops error:", error);
+    return [];
+  }
+}
+
+export interface RosterFranchiseRow {
+  seasonId: number;
+  rosterId: string;
+  franchiseId: string;
+}
+
+/** Every (season, roster_id) -> franchise_id row across league history. */
+export async function getRosterFranchiseMapRows(): Promise<RosterFranchiseRow[]> {
+  try {
+    return await db
+      .select({
+        seasonId: franchiseSeasons.seasonId,
+        rosterId: franchiseSeasons.rosterId,
+        franchiseId: franchiseSeasons.franchiseId,
+      })
+      .from(franchiseSeasons);
+  } catch (error) {
+    console.error("[lore] getRosterFranchiseMapRows error:", error);
+    return [];
+  }
+}
+
+/** Whether `playerId` is on `franchiseId`'s roster for `seasonId`. */
+export async function isPlayerOnFranchiseRoster(
+  seasonId: number,
+  franchiseId: string,
+  playerId: string,
+): Promise<boolean> {
+  try {
+    const rows = await db
+      .select({ id: rosterPlayers.id })
+      .from(rosterPlayers)
+      .where(
+        and(
+          eq(rosterPlayers.seasonId, seasonId),
+          eq(rosterPlayers.franchiseId, franchiseId),
+          eq(rosterPlayers.playerId, playerId),
+        ),
+      )
+      .limit(1);
+    return rows.length > 0;
+  } catch (error) {
+    console.error("[lore] isPlayerOnFranchiseRoster error:", error);
+    return false;
   }
 }
 
@@ -461,6 +642,114 @@ export function franchiseSequenceFor(rows: readonly PlayerFranchiseWeekRow[]): s
     .map(([franchiseId]) => franchiseId);
 }
 
+/**
+ * A round-1 pick has had time to bust once at least two completed seasons
+ * of runway (including the draft year itself) have passed: drafted in
+ * `seasonYear`, eligible once the latest completed season is `seasonYear + 1`
+ * or later.
+ */
+export function isBustEligible(seasonYear: number, latestCompletedSeasonYear: number): boolean {
+  return seasonYear <= latestCompletedSeasonYear - 1;
+}
+
+/**
+ * Which draft rounds carry Bust-eligible capital. Startup rounds 1-6 all
+ * qualify (premium startup investment); rookie drafts only round 1 does,
+ * since a rookie pick's capital tapers off far faster than a startup pick's.
+ * Startup rounds 8+ are Draft Steal's territory (see `getStartupDraftPicks`
+ * usage), so this deliberately stops at round 6 to avoid double-booking a
+ * pick for both awards.
+ */
+export function isBustEligibleRound(draftType: string, round: number): boolean {
+  return draftType === "startup" ? round >= 1 && round <= 6 : round === 1;
+}
+
+/**
+ * The group a pick's "expected return" is benchmarked against: one bucket
+ * per startup round (1-6), and a single bucket for all rookie round-1 picks.
+ */
+export function bustGroupKey(draftType: string, round: number): string {
+  return draftType === "startup" ? `startup:${round}` : "rookie:1";
+}
+
+/** Standard median: average of the two middle values on an even-length list. 0 for an empty list. */
+export function median(values: readonly number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+}
+
+export interface BustBaselineEntry {
+  groupKey: string;
+  scopedPts: number;
+}
+
+/**
+ * Expected return per Bust group (startup round 1-6, or rookie round 1):
+ * the median points a pick of that group has actually delivered to its
+ * drafting franchise, across every eligible-round pick ever made in that
+ * group (including picks later traded away or too recent to be Bust
+ * candidates themselves, since they still show what the round CAN deliver).
+ */
+export function computeBustExpectations(
+  baseline: readonly BustBaselineEntry[],
+): Map<string, number> {
+  const grouped = new Map<string, number[]>();
+  for (const entry of baseline) {
+    if (!grouped.has(entry.groupKey)) grouped.set(entry.groupKey, []);
+    grouped.get(entry.groupKey)!.push(entry.scopedPts);
+  }
+  const result = new Map<string, number>();
+  for (const [groupKey, points] of grouped) {
+    result.set(groupKey, median(points));
+  }
+  return result;
+}
+
+/** How far below (positive) or above (negative) expectation a pick's actual return fell. */
+export function bustShortfall(expectedPts: number, actualPts: number): number {
+  return expectedPts - actualPts;
+}
+
+/**
+ * Builds the set of "this franchise traded this player away" pairs (as
+ * `${playerId}:${franchiseId}` keys) from raw trade-drop rows and the
+ * roster->franchise map, both scoped by season since roster_id is only
+ * unique within a season.
+ */
+export function buildTradedAwayPairs(
+  tradeDrops: readonly TradeDropRow[],
+  rosterFranchiseRows: readonly RosterFranchiseRow[],
+): Set<string> {
+  const rosterToFranchise = new Map<string, string>();
+  for (const r of rosterFranchiseRows) {
+    rosterToFranchise.set(`${r.seasonId}:${r.rosterId}`, r.franchiseId);
+  }
+  const pairs = new Set<string>();
+  for (const d of tradeDrops) {
+    const franchiseId = rosterToFranchise.get(`${d.seasonId}:${d.rosterId}`);
+    if (franchiseId) pairs.add(`${d.playerId}:${franchiseId}`);
+  }
+  return pairs;
+}
+
+/** Whether `franchiseId` traded `playerId` away at some point (per `buildTradedAwayPairs`). */
+export function wasTradedAwayByDrafter(
+  tradedAwayPairs: ReadonlySet<string>,
+  playerId: string,
+  franchiseId: string,
+): boolean {
+  return tradedAwayPairs.has(`${playerId}:${franchiseId}`);
+}
+
+export type BustOutcome = "rostered" | "dropped";
+
+/** Turns "is he still on the drafting franchise's roster" into the Bust story branch. */
+export function classifyBustOutcome(stillRostered: boolean): BustOutcome {
+  return stillRostered ? "rostered" : "dropped";
+}
+
 // ---------------------------------------------------------------------------
 // Pure dedup: claims fixed-card player ids first, then walks each flexible
 // candidate list in order, picking the first not-yet-claimed player and
@@ -501,6 +790,10 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
     thrones,
     careerRows,
     startupPicks,
+    bustPickPool,
+    latestCompletedSeasonYear,
+    tradeDrops,
+    rosterFranchiseRows,
     waiverAddedSeasons,
     biggestSeasons,
     tradedTop,
@@ -511,6 +804,10 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
     getSingleGameThrones(),
     getCareerPointsAggregate(),
     getStartupDraftPicks(),
+    getBustDraftPickPool(),
+    getLatestCompletedSeasonYear(),
+    getTradeDrops(),
+    getRosterFranchiseMapRows(),
     getWaiverAddedPlayerSeasons(),
     getBiggestSeasons(15),
     getMostTradedPlayers(1),
@@ -518,6 +815,8 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
     getLeagueCornerstone(),
     getAllFranchises(),
   ]);
+
+  const tradedAwayPairs = buildTradedAwayPairs(tradeDrops, rosterFranchiseRows);
 
   const franchiseById = new Map(
     (franchisesList ?? []).map((f) => [
@@ -645,12 +944,22 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
     .sort((a, b) => b.careerPts - a.careerPts)
     .slice(0, 30);
 
-  interface BustCandidate extends StartupPickRow {
-    careerPts: number;
-  }
-  const bustPrefilter: BustCandidate[] = startupPicks
-    .filter((p) => p.round === 1 && p.franchiseId != null)
-    .map((p) => ({ ...p, careerPts: careerByPlayerId.get(p.playerId)?.careerPts ?? 0 }));
+  // The Bust's eligible-round pool: startup rounds 1-6, or rookie round 1
+  // (isBustEligibleRound), already restricted to the Sleeper era (2023+) by
+  // getBustDraftPickPool. This full pool (not yet runway/trade filtered) is
+  // also the baseline population for "what does this round normally
+  // deliver," so traded-away and too-recent picks stay in it; only the
+  // runway + trade-exemption filters below narrow it to picks that can
+  // actually WIN the award.
+  const bustPoolAll: BustDraftPickRow[] = bustPickPool.filter(
+    (p) => p.franchiseId != null && isBustEligibleRound(p.draftType, p.round),
+  );
+  const bustCandidatePool: BustDraftPickRow[] =
+    latestCompletedSeasonYear == null
+      ? []
+      : bustPoolAll
+          .filter((p) => isBustEligible(p.seasonYear, latestCompletedSeasonYear))
+          .filter((p) => !wasTradedAwayByDrafter(tradedAwayPairs, p.playerId, p.franchiseId!));
 
   const cometCandidates: SeasonPointsRow[] = biggestSeasons.slice(0, 15);
 
@@ -668,7 +977,7 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
     new Set(
       [
         ...draftStealPrefilter.map((p) => p.playerId),
-        ...bustPrefilter.map((p) => p.playerId),
+        ...bustPoolAll.map((p) => p.playerId),
         ...waiverAddedSeasons.map((r) => r.playerId),
         wanderer?.playerId,
         yoyo?.playerId,
@@ -694,16 +1003,36 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
     .filter((p) => p.scopedPts > 0)
     .sort((a, b) => b.scopedPts - a.scopedPts);
 
-  interface ScopedBustCandidate extends BustCandidate {
+  // Expected return per Bust group (startup round 1-6 / rookie round 1):
+  // the median points ALL eligible-round picks in that group have actually
+  // delivered to their drafting franchise, computed from the full pool
+  // (bustPoolAll), not just the runway/trade-filtered candidate pool. Higher
+  // rounds cost less capital and are expected to deliver less, so ranking
+  // must be against the round's own baseline, not a flat points floor.
+  const bustExpectations = computeBustExpectations(
+    bustPoolAll.map((p) => ({
+      groupKey: bustGroupKey(p.draftType, p.round),
+      scopedPts: scopedFranchisePoints(weeksFor(p.playerId), p.franchiseId!),
+    })),
+  );
+
+  interface ScopedBustCandidate extends BustDraftPickRow {
     scopedPts: number;
+    expectedPts: number;
+    shortfall: number;
   }
-  // The Bust: lowest points scored for the franchise that spent a first-
-  // rounder on him, even if he balled out for someone else later. A true
-  // zero (the pick never played for that team) is the most bust of all, so
-  // no eligibility floor here.
-  const bustCandidates: ScopedBustCandidate[] = bustPrefilter
-    .map((p) => ({ ...p, scopedPts: scopedFranchisePoints(weeksFor(p.playerId), p.franchiseId!) }))
-    .sort((a, b) => a.scopedPts - b.scopedPts);
+  // The Bust: ranked by shortfall against the round's own expectation
+  // (largest shortfall = biggest bust), not raw fewest points, so a cheap
+  // round-6 pick doesn't trivially "win" just for costing less draft
+  // capital than a round-1 pick. A true zero-point pick still ranks highest
+  // among its peers since its shortfall is the full expected value.
+  const bustCandidates: ScopedBustCandidate[] = bustCandidatePool
+    .map((p) => {
+      const scopedPts = scopedFranchisePoints(weeksFor(p.playerId), p.franchiseId!);
+      const expectedPts = bustExpectations.get(bustGroupKey(p.draftType, p.round)) ?? 0;
+      return { ...p, scopedPts, expectedPts, shortfall: bustShortfall(expectedPts, scopedPts) };
+    })
+    .sort((a, b) => b.shortfall - a.shortfall);
 
   interface ScopedWaiverCandidate {
     playerId: string;
@@ -882,6 +1211,23 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
     const info = careerByPlayerId.get(bustWinner.playerId);
     const pts = Math.round(bustWinner.scopedPts);
     const crest = bustWinner.franchiseId ? franchiseById.get(bustWinner.franchiseId) ?? null : null;
+    const draftLabel = bustWinner.draftType === "startup" ? "startup" : "rookie draft";
+    const expectedPts = Math.round(bustWinner.expectedPts);
+
+    const latestSeasonId = await getLatestSeasonId();
+    const stillRostered =
+      latestSeasonId != null && bustWinner.franchiseId != null
+        ? await isPlayerOnFranchiseRoster(latestSeasonId, bustWinner.franchiseId, bustWinner.playerId)
+        : false;
+    const outcome = classifyBustOutcome(stillRostered);
+
+    const story =
+      outcome === "rostered"
+        ? `Round ${bustWinner.round}, pick ${bustWinner.pickNumber} of the ${bustWinner.seasonYear} ${draftLabel}. ` +
+          `${pts.toLocaleString()} points where the round demands ${expectedPts}. Still on the roster, waiting continues.`
+        : `Round ${bustWinner.round}, pick ${bustWinner.pickNumber} of the ${bustWinner.seasonYear} ${draftLabel}. ` +
+          `${pts.toLocaleString()} points where the round demands ${expectedPts}. Then cut for nothing. Woof.`;
+
     bustPiece = {
       key: label.key,
       title: label.displayText,
@@ -891,9 +1237,7 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       playerName: info?.playerName ?? "Unknown Player",
       position: info?.position ?? null,
       statValue: `${pts.toLocaleString()} pts`,
-      story:
-        `First round, pick ${bustWinner.pickNumber} of the ${bustWinner.seasonYear} startup` +
-        `${crest ? ` by ${crest.name}` : ""}. ${pts.toLocaleString()} points in their colors. Woof.`,
+      story,
       franchiseBadge: crest,
     };
   }
