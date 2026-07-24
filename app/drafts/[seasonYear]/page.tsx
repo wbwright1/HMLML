@@ -14,6 +14,12 @@ import {
   getDraftBySeasonYear,
   type DraftPickWithFranchise,
 } from "@/lib/queries/drafts";
+import {
+  buildDraftBoard,
+  type DraftBoard,
+  type NormalizedPick,
+  type PositionCounts,
+} from "@/lib/draft-board";
 
 export const dynamic = "force-dynamic";
 
@@ -115,52 +121,9 @@ export default async function DraftDetailPage({
 }
 
 // ---------------------------------------------------------------------------
-// Shared board model — normalizes completed picks and upcoming (projected)
-// picks into one shape so the grid/list rendering logic is written once.
-//
-// Column assignment: each pick's ORIGINAL draft-slot owner determines its
-// column (established from round 1's pick order), not the current owner —
-// that's what keeps a team's column stable across rounds in a real snake
-// draft even when a specific round's pick was traded away. The cell then
-// shows who actually made the pick, with a "via" note when that differs
-// from the slot owner. This also means we never hardcode snake vs. linear:
-// whichever order the underlying picks actually happened in is what renders.
+// Normalizers — map completed and upcoming (projected) picks into the shared
+// NormalizedPick shape consumed by buildDraftBoard (see @/lib/draft-board).
 // ---------------------------------------------------------------------------
-
-interface ColumnMeta {
-  key: string;
-  name: string;
-  slug: string | null;
-  abbreviation: string | null;
-  brandingColor: string | null;
-  avatarUrl: string | null;
-}
-
-interface NormalizedPick {
-  pickNumber: number;
-  round: number;
-  playerId: string | null;
-  playerName: string | null;
-  playerPosition: string | null;
-  roster: PositionCounts | null;
-  currentId: string;
-  currentName: string;
-  currentSlug: string | null;
-  currentAbbreviation: string | null;
-  currentBrandingColor: string | null;
-  currentAvatarUrl: string | null;
-  originalName: string | null;
-  originalSlug: string | null;
-  originalAbbreviation: string | null;
-  originalBrandingColor: string | null;
-}
-
-interface DraftBoard {
-  rounds: number[];
-  columns: ColumnMeta[];
-  grid: Map<number, (NormalizedPick | null)[]>;
-  slots: Map<number, number>; // pickNumber -> 1-based slot within its round
-}
 
 function normalizeCompletedPick(pick: DraftPickWithFranchise): NormalizedPick {
   return {
@@ -176,6 +139,7 @@ function normalizeCompletedPick(pick: DraftPickWithFranchise): NormalizedPick {
     currentAbbreviation: pick.franchiseAbbreviation,
     currentBrandingColor: pick.franchiseBrandingColor,
     currentAvatarUrl: pick.franchiseAvatarUrl,
+    originalId: pick.originalFranchiseId,
     originalName: pick.originalFranchiseName,
     originalSlug: pick.originalFranchiseSlug,
     originalAbbreviation: pick.originalFranchiseAbbreviation,
@@ -197,100 +161,12 @@ function normalizeUpcomingPick(pick: UpcomingPick): NormalizedPick {
     currentAbbreviation: null,
     currentBrandingColor: null,
     currentAvatarUrl: pick.avatarUrl,
+    originalId: null,
     originalName: pick.originalFranchiseName,
     originalSlug: null,
     originalAbbreviation: null,
     originalBrandingColor: null,
   };
-}
-
-function buildDraftBoard(picks: NormalizedPick[]): DraftBoard {
-  const rounds = Array.from(new Set(picks.map((p) => p.round))).sort((a, b) => a - b);
-  if (rounds.length === 0) {
-    return { rounds: [], columns: [], grid: new Map(), slots: new Map() };
-  }
-
-  // Identity lookup sourced from wherever full franchise data appears as a
-  // CURRENT pick-maker anywhere in the draft — used to recover crest/slug
-  // info for a slot owner who traded away the specific pick we're looking at.
-  const infoByKey = new Map<string, ColumnMeta>();
-  for (const p of picks) {
-    const info: ColumnMeta = {
-      key: p.currentId,
-      name: p.currentName,
-      slug: p.currentSlug,
-      abbreviation: p.currentAbbreviation,
-      brandingColor: p.currentBrandingColor,
-      avatarUrl: p.currentAvatarUrl,
-    };
-    if (!infoByKey.has(p.currentId)) infoByKey.set(p.currentId, info);
-    if (!infoByKey.has(`name:${p.currentName}`)) infoByKey.set(`name:${p.currentName}`, info);
-  }
-
-  function resolveSlotOwner(p: NormalizedPick): { key: string; info: ColumnMeta } {
-    if (!p.originalName) {
-      return {
-        key: p.currentId,
-        info: infoByKey.get(p.currentId) ?? {
-          key: p.currentId,
-          name: p.currentName,
-          slug: p.currentSlug,
-          abbreviation: p.currentAbbreviation,
-          brandingColor: p.currentBrandingColor,
-          avatarUrl: p.currentAvatarUrl,
-        },
-      };
-    }
-    const key = `name:${p.originalName}`;
-    return {
-      key,
-      info: infoByKey.get(key) ?? {
-        key,
-        name: p.originalName,
-        slug: null,
-        abbreviation: null,
-        brandingColor: null,
-        avatarUrl: null,
-      },
-    };
-  }
-
-  const firstRound = rounds[0];
-  const firstRoundPicks = picks
-    .filter((p) => p.round === firstRound)
-    .sort((a, b) => a.pickNumber - b.pickNumber);
-
-  const columns: ColumnMeta[] = [];
-  const columnIndexByKey = new Map<string, number>();
-  for (const p of firstRoundPicks) {
-    const { key, info } = resolveSlotOwner(p);
-    if (!columnIndexByKey.has(key)) {
-      columnIndexByKey.set(key, columns.length);
-      columns.push(info);
-    }
-  }
-
-  const totalColumns = columns.length || 1;
-  const grid = new Map<number, (NormalizedPick | null)[]>();
-  const slots = new Map<number, number>();
-
-  for (const round of rounds) {
-    const row = new Array<NormalizedPick | null>(totalColumns).fill(null);
-    const roundPicks = picks
-      .filter((p) => p.round === round)
-      .sort((a, b) => a.pickNumber - b.pickNumber);
-
-    roundPicks.forEach((p, idx) => {
-      slots.set(p.pickNumber, idx + 1);
-      const { key } = resolveSlotOwner(p);
-      const col = columnIndexByKey.get(key) ?? Math.min(idx, totalColumns - 1);
-      row[col] = p;
-    });
-
-    grid.set(round, row);
-  }
-
-  return { rounds, columns, grid, slots };
 }
 
 // ---------------------------------------------------------------------------
@@ -630,13 +506,6 @@ function CompletedDraftSection({
 // ---------------------------------------------------------------------------
 // Upcoming Draft Types & Section
 // ---------------------------------------------------------------------------
-
-interface PositionCounts {
-  QB: number;
-  RB: number;
-  WR: number;
-  TE: number;
-}
 
 interface UpcomingPick {
   pickNumber: number;
