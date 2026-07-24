@@ -17,6 +17,7 @@ import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getRivalries } from "@/lib/queries/records";
 import { getFranchiseExtremes } from "@/lib/queries/franchise-stats";
 import { getFranchiseCornerstone } from "@/lib/queries/franchise-players";
+import { FranchiseCornerstoneCard } from "@/components/franchise-cornerstone-card";
 import { getPlayoffLabel, getPlayoffBadgeVariant } from "@/lib/playoff-labels";
 import { EmptyState } from "@/components/empty-state";
 
@@ -226,42 +227,6 @@ export default async function FranchiseDetailPage({
     });
   }
 
-  // Franchise Cornerstone(s): the player(s) drafted or traded for and never
-  // let go, scored by points in this franchise's colors. See
-  // lib/queries/franchise-players.ts for eligibility/scoring rules.
-  const apYear = (year: number) => `'${String(year).slice(-2)}`;
-  const lastName = (fullName: string) => fullName.trim().split(/\s+/).slice(-1)[0] ?? fullName;
-
-  if (cornerstones.length === 1) {
-    const c = cornerstones[0];
-    const verb =
-      c.via === "draft"
-        ? "Drafted"
-        : c.blockbuster === true
-          ? "Blockbuster trade,"
-          : "Traded for";
-    const seasonsPhrase = `${c.tenureSeasons} season${c.tenureSeasons !== 1 ? "s" : ""} and counting`;
-    callouts.push({
-      kicker: "Franchise Cornerstone",
-      value: c.playerName,
-      subline: `${verb} ${apYear(c.acquiredYear)} · ${Math.round(c.franchisePoints).toLocaleString()} pts · ${c.franchiseStarts} starts · ${seasonsPhrase}.`,
-      tone: "gold",
-    });
-  } else if (cornerstones.length === 2) {
-    const [a, b] = cornerstones;
-    const combinedPts = Math.round(a.franchisePoints + b.franchisePoints);
-    const sameOrigin = a.via === b.via && a.acquiredYear === b.acquiredYear;
-    const subline = sameOrigin
-      ? `Both ${a.via === "draft" ? "drafted" : "traded for"} ${apYear(a.acquiredYear)} · ${combinedPts.toLocaleString()} pts combined.`
-      : `Since ${apYear(a.acquiredYear)} and ${apYear(b.acquiredYear)} · ${combinedPts.toLocaleString()} pts combined.`;
-    callouts.push({
-      kicker: "Franchise Cornerstones",
-      value: `${lastName(a.playerName)} · ${lastName(b.playerName)}`,
-      subline,
-      tone: "gold",
-    });
-  }
-
   return (
     <>
       {/* Hero Section — dark canvas frame; brandingColor survives only as a
@@ -289,6 +254,19 @@ export default async function FranchiseDetailPage({
         {callouts.length > 0 && (
           <ScrollReveal delay={100}>
             <FranchiseSignatureBand callouts={callouts} />
+          </ScrollReveal>
+        )}
+
+        {cornerstones.length > 0 && (
+          <ScrollReveal delay={150}>
+            <FranchiseCornerstoneCard
+              cornerstones={cornerstones}
+              franchiseSlug={franchise.slug}
+              franchiseName={franchise.name}
+              franchiseAbbreviation={franchise.abbreviation}
+              franchiseBrandingColor={franchise.brandingColor}
+              franchiseAvatarUrl={franchise.avatarUrl}
+            />
           </ScrollReveal>
         )}
 
