@@ -113,7 +113,7 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
   EMPTY_CALORIES: {
     key: 'EMPTY_CALORIES',
     displayText: 'Empty Calories',
-    description: 'Most career points scored by a franchise that has never won a title (all the offense, none of the hardware)',
+    description: 'Most career points scored without ever winning a title (all the offense, none of the hardware)',
     tone: 'sting',
   },
   PUNCHING_BAG: {

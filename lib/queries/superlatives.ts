@@ -1312,14 +1312,60 @@ interface AllTimeCoverageProfile extends CoverageProfile {
   careerPF: number;
   seasonsCount: number;
   neverWonTitle: boolean;
+  /** True league-wide leader in career PF among never-champion franchises. */
+  isRinglessPFLeader: boolean;
+  /** True league-wide best career record among never-champion franchises. */
+  isRinglessRecordLeader: boolean;
+}
+
+/** Career totals for one franchise, used to truth-gate absolute-claim awards. */
+export interface CareerTotalsForGating {
+  franchiseId: string;
+  wins: number;
+  losses: number;
+  ties: number;
+  pointsFor: number;
+  wonTitle: boolean;
+}
+
+/**
+ * League-wide truth gate for the absolute-claim coverage awards. Computed over
+ * ALL franchises (not just uncovered ones) so Empty Calories and The Nearly
+ * Man can only ever land on the franchise their copy is actually true for.
+ * Ties include every co-leader; the claim holds for each of them.
+ */
+export function ringlessLeaderIds(totals: CareerTotalsForGating[]): {
+  pfLeaderIds: Set<string>;
+  recordLeaderIds: Set<string>;
+} {
+  const ringless = totals.filter((t) => !t.wonTitle);
+  const pfLeaderIds = new Set<string>();
+  const recordLeaderIds = new Set<string>();
+
+  const maxPF = Math.max(0, ...ringless.map((t) => t.pointsFor));
+  if (maxPF > 0) {
+    for (const t of ringless) if (t.pointsFor === maxPF) pfLeaderIds.add(t.franchiseId);
+  }
+
+  const withGames = ringless.filter((t) => t.wins + t.losses + t.ties > 0);
+  const maxPct = Math.max(-1, ...withGames.map((t) => winPctOf(t.wins, t.losses, t.ties)));
+  if (maxPct >= 0) {
+    for (const t of withGames) {
+      if (winPctOf(t.wins, t.losses, t.ties) === maxPct) recordLeaderIds.add(t.franchiseId);
+    }
+  }
+
+  return { pfLeaderIds, recordLeaderIds };
 }
 
 const ALL_TIME_COVERAGE_DEFS: CoverageAwardDef<AllTimeCoverageProfile>[] = [
   {
     key: "EMPTY_CALORIES",
-    score: (p) => (p.neverWonTitle && p.careerPF > 0 ? p.careerPF : null),
+    // Truth-gated: only assignable to the actual league-wide PF-without-a-ring
+    // leader. If that franchise is covered elsewhere, this award sits out.
+    score: (p) => (p.isRinglessPFLeader && p.careerPF > 0 ? p.careerPF : null),
     stat: (p) => `${p.careerPF.toFixed(1)} PF`,
-    context: () => "Career points piled up. Still zero rings.",
+    context: () => "Most points ever banked. Still zero rings.",
   },
   {
     key: "PUNCHING_BAG",
@@ -1329,7 +1375,12 @@ const ALL_TIME_COVERAGE_DEFS: CoverageAwardDef<AllTimeCoverageProfile>[] = [
   },
   {
     key: "NEARLY_MAN",
-    score: (p) => (p.neverWonTitle && p.games > 0 ? winPctOf(p.careerWins, p.careerLosses, p.careerTies) : null),
+    // Truth-gated: the copy is an absolute claim, so only the actual best
+    // career record among never-champions may receive it.
+    score: (p) =>
+      p.isRinglessRecordLeader && p.games > 0
+        ? winPctOf(p.careerWins, p.careerLosses, p.careerTies)
+        : null,
     stat: (p) => `${p.careerWins}-${p.careerLosses}${p.careerTies > 0 ? `-${p.careerTies}` : ""}`,
     context: () => "Best career record never to lift the trophy.",
   },
@@ -1413,6 +1464,19 @@ export async function getAllTimeUncoveredFranchiseAwards(
       }
     }
 
+    // Truth gate: find the actual league-wide leaders among ALL franchises,
+    // not just the uncovered ones, so absolute-claim awards stay honest.
+    const { pfLeaderIds, recordLeaderIds } = ringlessLeaderIds(
+      Array.from(careerByFranchise, ([franchiseId, acc]) => ({
+        franchiseId,
+        wins: acc.wins,
+        losses: acc.losses,
+        ties: acc.ties,
+        pointsFor: acc.pointsFor,
+        wonTitle: everWonTitle.has(franchiseId),
+      })),
+    );
+
     const uncoveredProfiles: AllTimeCoverageProfile[] = uncovered.map((u) => {
       const acc = careerByFranchise.get(u.franchiseId) ?? {
         wins: 0,
@@ -1434,6 +1498,8 @@ export async function getAllTimeUncoveredFranchiseAwards(
         careerPF: acc.pointsFor,
         seasonsCount: acc.seasonsCount,
         neverWonTitle: !everWonTitle.has(u.franchiseId),
+        isRinglessPFLeader: pfLeaderIds.has(u.franchiseId),
+        isRinglessRecordLeader: recordLeaderIds.has(u.franchiseId),
       };
     });
 
