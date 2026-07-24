@@ -301,4 +301,29 @@ describe("validateRow", () => {
     };
     expect(validateRow(row, ctx({ seasonType: "regular" })).valid).toBe(true);
   });
+
+  // Claim/superlative verification lives on the LLM-only path
+  // (lib/content-gen/claims.ts, called from toRows*), NOT in validateRow:
+  // template rows legitimately emit true superlatives and must still pass this
+  // gate. These assert that separation so the #110 fix never accidentally
+  // starts dropping vetted template rows.
+  it("still passes a template-style row framed as 'projects No. 1'", () => {
+    const row = {
+      kind: "smack_post" as const,
+      refKey: null,
+      body: "Foopus projects No. 1 in the league before a single snap has been played.",
+      extras: null,
+    };
+    expect(validateRow(row, ctx()).valid).toBe(true);
+  });
+
+  it("still passes a template-style row framed as 'dead last'", () => {
+    const row = {
+      kind: "smack_post" as const,
+      refKey: null,
+      body: "Olave Garden is stuck dead last in the projections, and the group chat noticed.",
+      extras: null,
+    };
+    expect(validateRow(row, ctx()).valid).toBe(true);
+  });
 });
