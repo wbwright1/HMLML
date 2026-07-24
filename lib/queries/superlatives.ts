@@ -480,34 +480,32 @@ export async function getSeasonSuperlatives(
 }
 
 // ---------------------------------------------------------------------------
-// Coverage pass: guarantee every franchise appears in at least one superlative
+// Truthful backfill: genuine awards only, toward the 6-card view cap
 // ---------------------------------------------------------------------------
 //
-// The primary awards (getSeasonSuperlatives + the lineup-efficiency awards) are
-// competitive, so a quiet, middling franchise can end a season mentioned
-// nowhere. On a surface whose whole promise is "find yourself in one tap", that
-// leaves holes. This pass takes the set of franchise slugs ALREADY covered by
-// those awards and hands every remaining franchise a fallback superlative drawn
-// from a pool of always-computable roasts, each used at most once, followed by
-// a Wallflower sweep for anyone still uncovered. It never touches or overrides
-// an existing winner; it only fills gaps.
+// The primary awards (getSeasonSuperlatives + the lineup-efficiency awards)
+// rarely fill all MAX_SUPERLATIVE_CARDS slots by themselves, so each view
+// backfills from a pool of additional generally-defined awards. Every pool
+// def is a real superlative whose claim is a true league-wide statement; a
+// def renders only when its genuine leader holds no higher-priority award,
+// and is never handed to a runner-up. It is fine for a franchise to have no
+// superlative; no view pads with participation trophies.
 
-/** Minimum shape every coverage-pool candidate needs for assignCoverage. */
-interface CoverageProfile {
+/** Minimum shape every backfill-pool candidate needs for assignBackfillAwards. */
+export interface CoverageProfile {
   franchiseId: string;
   franchiseName: string;
   franchiseSlug: string;
-  /** Games played; powers the Wallflower catch-all stat ("N games"). */
+  /** Games played; gates record-based awards like The Nearly Man. */
   games: number;
 }
 
 /**
- * One entry in a priority-ordered coverage pool. `score` returns null when a
- * candidate is ineligible for this award; assignCoverage skips it. Ties break
- * by the candidates' pre-sort order (franchiseId), so results stay
- * deterministic run to run.
+ * One entry in a priority-ordered backfill pool. `score` returns null when a
+ * candidate is ineligible for this award. Ties break by the candidates'
+ * pre-sort order (franchiseId), so results stay deterministic run to run.
  */
-interface CoverageAwardDef<T extends CoverageProfile> {
+export interface CoverageAwardDef<T extends CoverageProfile> {
   key: keyof typeof SNARKY_LABELS;
   score: (profile: T) => number | null;
   stat: (profile: T) => string;
@@ -515,38 +513,28 @@ interface CoverageAwardDef<T extends CoverageProfile> {
 }
 
 /**
- * Walks a priority-ordered award pool and, for each award, hands it to the
- * highest-scoring still-unassigned eligible candidate (candidates pre-sorted
- * by franchiseId, so the first max found wins ties). Each award is used at
- * most once. Anyone left after the pool is exhausted gets a Wallflower.
+ * Truthful backfill: walks a priority-ordered award pool and, for each award,
+ * finds the genuine leader across ALL candidate profiles (not just the
+ * eligible ones), so every card's claim is a true league-wide statement. The
+ * award renders only when that true leader is still eligible (in the view's
+ * universe and not already holding a higher-priority card); otherwise the def
+ * is skipped entirely, never handed to a runner-up. Each award is used at
+ * most once, each franchise receives at most one. No participation trophies:
+ * franchises left without a genuine award simply get no card.
  */
-function assignCoverage<T extends CoverageProfile>(
+export function assignBackfillAwards<T extends CoverageProfile>(
   profiles: T[],
   defs: CoverageAwardDef<T>[],
+  eligibleSlugs: Set<string>,
 ): SeasonSuperlative[] {
   const sorted = [...profiles].sort((a, b) => a.franchiseId.localeCompare(b.franchiseId));
   const assigned = new Set<string>();
   const result: SeasonSuperlative[] = [];
 
-  const pushAward = (key: keyof typeof SNARKY_LABELS, profile: T, stat: string, context: string) => {
-    const label = SNARKY_LABELS[key];
-    result.push({
-      labelKey: label.key,
-      displayText: label.displayText,
-      franchiseName: profile.franchiseName,
-      franchiseSlug: profile.franchiseSlug,
-      stat,
-      context,
-      tone: label.tone,
-    });
-    assigned.add(profile.franchiseId);
-  };
-
   for (const def of defs) {
     let best: T | null = null;
     let bestScore = -Infinity;
     for (const profile of sorted) {
-      if (assigned.has(profile.franchiseId)) continue;
       const score = def.score(profile);
       if (score === null) continue;
       if (score > bestScore) {
@@ -554,19 +542,23 @@ function assignCoverage<T extends CoverageProfile>(
         best = profile;
       }
     }
-    if (best) {
-      pushAward(def.key, best, def.stat(best), def.context(best));
-    }
-  }
+    if (!best) continue;
+    // The true leader is the only valid recipient. If they already hold a
+    // card (or sit outside the view universe), the claim cannot render
+    // truthfully on anyone else, so the def sits out.
+    if (!eligibleSlugs.has(best.franchiseSlug) || assigned.has(best.franchiseId)) continue;
 
-  for (const profile of sorted) {
-    if (assigned.has(profile.franchiseId)) continue;
-    pushAward(
-      "WALLFLOWER",
-      profile,
-      `${profile.games} games`,
-      "Dodged every superlative. Unremarkable.",
-    );
+    const label = SNARKY_LABELS[def.key];
+    result.push({
+      labelKey: label.key,
+      displayText: label.displayText,
+      franchiseName: best.franchiseName,
+      franchiseSlug: best.franchiseSlug,
+      stat: def.stat(best),
+      context: def.context(best),
+      tone: label.tone,
+    });
+    assigned.add(best.franchiseId);
   }
 
   return result;
@@ -598,7 +590,7 @@ const PER_SEASON_COVERAGE_DEFS: CoverageAwardDef<FranchiseCoverageProfile>[] = [
     key: "HEARTBREAKER",
     score: (p) => p.highestScoringLoss,
     stat: (p) => `${p.highestScoringLoss!.toFixed(1)} pts`,
-    context: () => "Their best game was a loss. Brutal.",
+    context: () => "The highest-scoring loss of the season.",
   },
   {
     key: "STICK_UP",
@@ -670,7 +662,7 @@ const PER_SEASON_COVERAGE_DEFS: CoverageAwardDef<FranchiseCoverageProfile>[] = [
     key: "ALPHA_DOG",
     score: (p) => (p.wins > 0 ? winPctOf(p.wins, p.losses, p.ties) : null),
     stat: (p) => `${p.wins}-${p.losses}${p.ties > 0 ? `-${p.ties}` : ""}`,
-    context: () => "Quietly the best record still on the board.",
+    context: () => "Best record in the league. Simple as that.",
   },
   {
     key: "LEAGUE_DOORMAT",
@@ -680,6 +672,13 @@ const PER_SEASON_COVERAGE_DEFS: CoverageAwardDef<FranchiseCoverageProfile>[] = [
   },
 ];
 
+/**
+ * Truthful per-season backfill toward the MAX_SUPERLATIVE_CARDS cap: each
+ * pool def is a genuine within-season award (highest single week, most
+ * one-possession games, ...) computed across ALL franchises; a def renders
+ * only when its true leader holds no higher-priority award. Never pads with
+ * participation labels.
+ */
 export async function getUncoveredFranchiseAwards(
   seasonId: number,
   coveredSlugs: string[],
@@ -813,10 +812,12 @@ export async function getUncoveredFranchiseAwards(
       };
     });
 
-    const uncovered = profiles.filter((p) => !covered.has(p.franchiseSlug));
-    if (uncovered.length === 0) return [];
+    const eligible = new Set(
+      profiles.map((p) => p.franchiseSlug).filter((slug) => !covered.has(slug)),
+    );
+    if (eligible.size === 0) return [];
 
-    return assignCoverage(uncovered, PER_SEASON_COVERAGE_DEFS);
+    return assignBackfillAwards(profiles, PER_SEASON_COVERAGE_DEFS, eligible);
   } catch (e) {
     console.error("[superlatives] getUncoveredFranchiseAwards error:", e);
     return [];
@@ -824,15 +825,19 @@ export async function getUncoveredFranchiseAwards(
 }
 
 // ---------------------------------------------------------------------------
-// Card assembly helpers: dedupe to one card per franchise, capped at 12
+// Card assembly helpers: dedupe to one card per franchise, capped at 6
 // ---------------------------------------------------------------------------
+
+/** Maximum superlative cards per view (season tab, All-Time, hub module). */
+export const MAX_SUPERLATIVE_CARDS = 6;
 
 /**
  * Flattens award sources in priority order and dedupes by franchiseSlug so
- * each franchise renders exactly one card, capped at 12. Shared by both the
- * season-scoped and all-time card builders below.
+ * each franchise renders at most one card, capped at MAX_SUPERLATIVE_CARDS.
+ * Shared by both the season-scoped and all-time card builders below. Fewer
+ * than the cap is a valid result; no view pads with participation awards.
  */
-export function dedupeToTwelve(sources: SeasonSuperlative[][]): SeasonSuperlative[] {
+export function dedupeToSix(sources: SeasonSuperlative[][]): SeasonSuperlative[] {
   const seenSlugs = new Set<string>();
   const result: SeasonSuperlative[] = [];
   for (const source of sources) {
@@ -842,15 +847,15 @@ export function dedupeToTwelve(sources: SeasonSuperlative[][]): SeasonSuperlativ
       result.push(award);
     }
   }
-  result.splice(12);
+  result.splice(MAX_SUPERLATIVE_CARDS);
   return result;
 }
 
 /**
- * Season-scoped superlative cards for the records page: the competitive
- * awards (getSeasonSuperlatives + both optimal-lineup awards), then the
- * coverage pass for any franchise none of those touched, deduped to one card
- * per franchise and capped at 12.
+ * Season-scoped superlative cards for the records page and hub: the primary
+ * awards (getSeasonSuperlatives + both optimal-lineup awards), then truthful
+ * backfill from the per-season pool, deduped to one card per franchise and
+ * capped at MAX_SUPERLATIVE_CARDS. Every card is a true within-season claim.
  */
 export async function getSeasonSuperlativeCards(
   seasonId: number,
@@ -869,7 +874,7 @@ export async function getSeasonSuperlativeCards(
   ];
   const coverage = await getUncoveredFranchiseAwards(seasonId, coveredSlugs);
 
-  return dedupeToTwelve([base, coaching ? [coaching] : [], couldve ? [couldve] : [], coverage]);
+  return dedupeToSix([base, coaching ? [coaching] : [], couldve ? [couldve] : [], coverage]);
 }
 
 // ---------------------------------------------------------------------------
@@ -881,9 +886,10 @@ export async function getSeasonSuperlativeCards(
  * season, with the year the record was set carried in the context string.
  * Reuses the SNARKY_LABELS already defined for the season-scoped awards
  * (including ALPHA_DOG and LEAGUE_DOORMAT, which the season-scoped builder
- * never uses); no new labels are introduced. Followed by an all-time coverage
- * pass and dedupeToTwelve so exactly one card per franchise renders, capped
- * at 12.
+ * never uses); no new labels are introduced. Followed by the truth-gated
+ * all-time career awards and dedupeToSix so at most one card per franchise
+ * renders, capped at MAX_SUPERLATIVE_CARDS. Franchises with no genuine award
+ * get no card; fewer than the cap is a valid result.
  */
 export async function getAllTimeSuperlativeCards(): Promise<SeasonSuperlative[]> {
   try {
@@ -1287,7 +1293,7 @@ export async function getAllTimeSuperlativeCards(): Promise<SeasonSuperlative[]>
     const coveredSlugs = result.map((s) => s.franchiseSlug);
     const coverage = await getAllTimeUncoveredFranchiseAwards(coveredSlugs);
 
-    return dedupeToTwelve([result, coverage]);
+    return dedupeToSix([result, coverage]);
   } catch (e) {
     console.error("[superlatives] getAllTimeSuperlativeCards error:", e);
     return [];
@@ -1295,14 +1301,15 @@ export async function getAllTimeSuperlativeCards(): Promise<SeasonSuperlative[]>
 }
 
 // ---------------------------------------------------------------------------
-// All-time coverage pass: guarantee every franchise appears in at least one
-// all-time superlative
+// All-time career awards: genuine league-wide claims only
 // ---------------------------------------------------------------------------
 //
-// Mirrors getUncoveredFranchiseAwards, but scored across every completed
-// season rather than one. Franchise universe is the 12 franchises of the
-// latest completed season, so a franchise that folded before the league's
-// most recent season never shows up as an unfilled gap.
+// Every def here is a genuine, generally-defined award whose claim is a true
+// league-wide statement, truth-gated against ALL franchises in league
+// history. If the true leader already holds a higher-priority award (or is a
+// folded franchise), the def simply does not appear; it is never reassigned
+// to a runner-up. No participation trophies; the only hard constraints are
+// one card per franchise and the MAX_SUPERLATIVE_CARDS view cap.
 
 interface AllTimeCoverageProfile extends CoverageProfile {
   careerWins: number;
@@ -1310,46 +1317,36 @@ interface AllTimeCoverageProfile extends CoverageProfile {
   careerTies: number;
   careerPA: number;
   careerPF: number;
-  seasonsCount: number;
   neverWonTitle: boolean;
 }
 
+/** Career totals for one franchise, used to truth-gate absolute-claim awards. */
 const ALL_TIME_COVERAGE_DEFS: CoverageAwardDef<AllTimeCoverageProfile>[] = [
   {
     key: "EMPTY_CALORIES",
+    // assignBackfillAwards truth-gates this: it only ever renders on the
+    // actual league-wide PF-without-a-ring leader.
     score: (p) => (p.neverWonTitle && p.careerPF > 0 ? p.careerPF : null),
     stat: (p) => `${p.careerPF.toFixed(1)} PF`,
-    context: () => "Career points piled up. Still zero rings.",
+    context: () => "Most points ever banked. Still zero rings.",
   },
   {
     key: "PUNCHING_BAG",
+    // Truth-gated by assignBackfillAwards: the actual career PA leader only.
     score: (p) => (p.careerPA > 0 ? p.careerPA : null),
     stat: (p) => `${p.careerPA.toFixed(1)} PA`,
-    context: () => "Career points conceded. Favorite target.",
+    context: () => "Most points ever conceded. Favorite target.",
   },
   {
     key: "NEARLY_MAN",
-    score: (p) => (p.neverWonTitle && p.games > 0 ? winPctOf(p.careerWins, p.careerLosses, p.careerTies) : null),
+    // Truth-gated by assignBackfillAwards: the copy is an absolute claim, so
+    // only the actual best career record among never-champions receives it.
+    score: (p) =>
+      p.neverWonTitle && p.games > 0
+        ? winPctOf(p.careerWins, p.careerLosses, p.careerTies)
+        : null,
     stat: (p) => `${p.careerWins}-${p.careerLosses}${p.careerTies > 0 ? `-${p.careerTies}` : ""}`,
     context: () => "Best career record never to lift the trophy.",
-  },
-  {
-    key: "WORKHORSE",
-    score: (p) => (p.careerWins > 0 ? p.careerWins : null),
-    stat: (p) => `${p.careerWins} W`,
-    context: () => "More career wins than any unsung franchise.",
-  },
-  {
-    key: "SISYPHUS",
-    score: (p) => (p.careerLosses > 0 ? p.careerLosses : null),
-    stat: (p) => `${p.careerLosses} L`,
-    context: () => "More career losses than anyone. Persistent.",
-  },
-  {
-    key: "ELDER_STATESMAN",
-    score: (p) => (p.seasonsCount > 0 ? p.seasonsCount : null),
-    stat: (p) => `${p.seasonsCount} seasons`,
-    context: () => "More seasons logged than any unsung franchise.",
   },
 ];
 
@@ -1372,15 +1369,19 @@ export async function getAllTimeUncoveredFranchiseAwards(
       .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
       .where(eq(franchiseSeasons.seasonId, latestCompleted.id));
 
-    const uncovered = universe.filter((u) => !covered.has(u.franchiseSlug));
-    if (uncovered.length === 0) return [];
+    const eligible = new Set(
+      universe.map((u) => u.franchiseSlug).filter((slug) => !covered.has(slug)),
+    );
+    if (eligible.size === 0) return [];
 
     // Career aggregates (record, PF/PA, title history) across every completed
-    // season, for the Empty Calories, Punching Bag, and Wallflower fallbacks.
+    // season and EVERY franchise, including folded ones: the truth gate must
+    // consider the whole league's history, not just the current 12.
     const careerRows = await db
       .select({
         franchiseId: franchiseSeasons.franchiseId,
-        seasonYear: seasons.seasonYear,
+        franchiseName: franchises.name,
+        franchiseSlug: franchises.slug,
         wins: franchiseSeasons.wins,
         losses: franchiseSeasons.losses,
         ties: franchiseSeasons.ties,
@@ -1389,55 +1390,64 @@ export async function getAllTimeUncoveredFranchiseAwards(
         playoffResult: franchiseSeasons.playoffResult,
       })
       .from(franchiseSeasons)
+      .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
       .innerJoin(seasons, eq(franchiseSeasons.seasonId, seasons.id))
       .where(eq(seasons.status, "complete"));
 
     const careerByFranchise = new Map<
       string,
-      { wins: number; losses: number; ties: number; pointsFor: number; pointsAgainst: number; seasonsCount: number }
+      {
+        franchiseName: string;
+        franchiseSlug: string;
+        wins: number;
+        losses: number;
+        ties: number;
+        pointsFor: number;
+        pointsAgainst: number;
+      }
     >();
     const everWonTitle = new Set<string>();
     for (const r of careerRows) {
-      const acc =
-        careerByFranchise.get(r.franchiseId) ??
-        { wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, seasonsCount: 0 };
+      const acc = careerByFranchise.get(r.franchiseId) ?? {
+        franchiseName: r.franchiseName,
+        franchiseSlug: r.franchiseSlug,
+        wins: 0,
+        losses: 0,
+        ties: 0,
+        pointsFor: 0,
+        pointsAgainst: 0,
+      };
       acc.wins += r.wins ?? 0;
       acc.losses += r.losses ?? 0;
       acc.ties += r.ties ?? 0;
       acc.pointsFor += r.pointsFor ?? 0;
       acc.pointsAgainst += r.pointsAgainst ?? 0;
-      acc.seasonsCount += 1;
       careerByFranchise.set(r.franchiseId, acc);
       if (r.playoffResult === "champion") {
         everWonTitle.add(r.franchiseId);
       }
     }
 
-    const uncoveredProfiles: AllTimeCoverageProfile[] = uncovered.map((u) => {
-      const acc = careerByFranchise.get(u.franchiseId) ?? {
-        wins: 0,
-        losses: 0,
-        ties: 0,
-        pointsFor: 0,
-        pointsAgainst: 0,
-        seasonsCount: 0,
-      };
-      return {
-        franchiseId: u.franchiseId,
-        franchiseName: u.franchiseName,
-        franchiseSlug: u.franchiseSlug,
+    // Profiles cover EVERY franchise with league history so the leader search
+    // is honest; assignBackfillAwards only renders a card when the true
+    // leader is in `eligible` (current universe, no higher-priority award).
+    const profiles: AllTimeCoverageProfile[] = Array.from(
+      careerByFranchise,
+      ([franchiseId, acc]) => ({
+        franchiseId,
+        franchiseName: acc.franchiseName,
+        franchiseSlug: acc.franchiseSlug,
         games: acc.wins + acc.losses + acc.ties,
         careerWins: acc.wins,
         careerLosses: acc.losses,
         careerTies: acc.ties,
         careerPA: acc.pointsAgainst,
         careerPF: acc.pointsFor,
-        seasonsCount: acc.seasonsCount,
-        neverWonTitle: !everWonTitle.has(u.franchiseId),
-      };
-    });
+        neverWonTitle: !everWonTitle.has(franchiseId),
+      }),
+    );
 
-    return assignCoverage(uncoveredProfiles, ALL_TIME_COVERAGE_DEFS);
+    return assignBackfillAwards(profiles, ALL_TIME_COVERAGE_DEFS, eligible);
   } catch (e) {
     console.error("[superlatives] getAllTimeUncoveredFranchiseAwards error:", e);
     return [];

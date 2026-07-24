@@ -59,7 +59,7 @@ test.describe("Records: The Superlatives section", () => {
     }
   });
 
-  test("R08: at most 12 cards, one per franchise, uniform height", async ({ page }) => {
+  test("R08: at most 6 cards, one per franchise, uniform height", async ({ page }) => {
     await page.goto("/records");
 
     const heading = page.getByRole("heading", { name: "The Superlatives", level: 2 });
@@ -73,7 +73,7 @@ test.describe("Records: The Superlatives section", () => {
     const cards = grid.locator("a[href^='/teams/']");
     const cardCount = await cards.count();
     expect(cardCount).toBeGreaterThanOrEqual(1);
-    expect(cardCount).toBeLessThanOrEqual(12);
+    expect(cardCount).toBeLessThanOrEqual(6);
 
     // One card per franchise: hrefs must be unique.
     const hrefs = await cards.evaluateAll((els) =>
@@ -92,9 +92,8 @@ test.describe("Records: The Superlatives section", () => {
     const max = Math.max(...heights);
     expect(max - min, `card heights should be uniform: ${heights.join(", ")}`).toBeLessThanOrEqual(1);
 
-    // Distinct coverage: every card carries a distinct label. A repeated
-    // label (e.g. two "Wallflower"s) means the coverage pass ran out of
-    // distinct roasts before it ran out of franchises.
+    // Every card carries a distinct label: each award is used at most once
+    // per view, so a repeated label means the backfill pass double-assigned.
     const labels = await cards.evaluateAll((els) =>
       els.map((e) => e.querySelector("p")?.textContent ?? ""),
     );
@@ -176,7 +175,7 @@ test.describe("Records: The Superlatives section", () => {
     const cards = grid.locator("a[href^='/teams/']");
     const cardCount = await cards.count();
     expect(cardCount).toBeGreaterThanOrEqual(1);
-    expect(cardCount).toBeLessThanOrEqual(12);
+    expect(cardCount).toBeLessThanOrEqual(6);
 
     // One card per franchise: hrefs must be unique.
     const hrefs = await cards.evaluateAll((els) =>
@@ -184,7 +183,7 @@ test.describe("Records: The Superlatives section", () => {
     );
     expect(new Set(hrefs).size).toBe(hrefs.length);
 
-    // Distinct coverage: every card carries a distinct label.
+    // Every card carries a distinct label.
     const labels = await cards.evaluateAll((els) =>
       els.map((e) => e.querySelector("p")?.textContent ?? ""),
     );
