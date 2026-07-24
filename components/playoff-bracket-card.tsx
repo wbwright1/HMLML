@@ -40,7 +40,7 @@ export function PlayoffBracketCard({
     variant === "compact" ? rounds.slice(-1) : rounds;
 
   return (
-    <div className="rounded-lg border border-border bg-surface p-6 space-y-6">
+    <div className="card-surface p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-h3">
           {variant === "compact" ? "Current Round" : "Playoff Bracket"}

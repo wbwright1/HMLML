@@ -42,13 +42,13 @@ export function EmptyState({
     <div className="flex flex-col items-center justify-center py-16 px-4 text-center max-w-[400px] mx-auto">
       {Icon && (
         <Icon
-          className="size-12 text-muted-foreground/50 mb-4"
+          className="size-12 text-text-tertiary/50 mb-4"
           strokeWidth={1.5}
           aria-hidden="true"
         />
       )}
       <h3 className="text-h3 mb-2">{title}</h3>
-      <p className="text-body text-muted-foreground">{description}</p>
+      <p className="text-body text-text-tertiary">{description}</p>
       {actionLabel && actionHref && (
         <Link
           href={actionHref}

@@ -93,10 +93,8 @@ export default async function SeasonsPage() {
             <ScrollReveal key={season.id} delay={index * 60}>
               <Link
                 href={`/seasons/${season.seasonYear}`}
-                className={`group block rounded-lg border p-6 transition-colors duration-150 ${
-                  isChampion
-                    ? "border-accent-gold/20 bg-accent-gold-light hover:border-accent-gold/40"
-                    : "border-border bg-surface hover:border-border-strong"
+                className={`group card-surface block p-6 transition-colors duration-150 ${
+                  isChampion ? "card-tint-gold hover:border-accent-gold/40" : "hover:border-border-strong"
                 }`}
               >
                 <div className="flex items-start justify-between gap-4">

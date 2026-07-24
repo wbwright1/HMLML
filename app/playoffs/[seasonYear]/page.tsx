@@ -259,7 +259,7 @@ function PodiumEntry({
   badge: { text: string; variant: "gold" | "silver" | "green" | "neutral" | "brown" };
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg border border-border bg-surface px-4 py-3">
+    <div className="card-surface flex items-center gap-3 px-4 py-3">
       <FranchiseIdentity
         franchise={{
           slug: franchise.slug,
@@ -355,8 +355,8 @@ export default async function PlayoffBracketPage({
         {/* Champion hero */}
         {championInfo && (
           <ScrollReveal>
-            <div className="mt-6 rounded-lg border border-gold/30 bg-gold/5 p-8 text-center space-y-3">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gold mb-1">
+            <div className="mt-6 card-surface card-tint-gold p-8 text-center space-y-3">
+              <p className="text-kicker text-gold mb-1">
                 Champion
               </p>
               <div className="flex justify-center">
@@ -445,7 +445,7 @@ export default async function PlayoffBracketPage({
                 </h2>
                 <div className="h-px flex-1 bg-divider" />
               </div>
-              <div className="rounded-lg border border-accent-warm/25 bg-accent-warm-light p-6 text-center space-y-2 max-w-lg">
+              <div className="card-surface card-tint-warm p-6 text-center space-y-2 max-w-lg">
                 <div className="text-3xl mb-1" aria-hidden="true">
                   🚽
                 </div>

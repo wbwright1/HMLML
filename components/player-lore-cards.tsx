@@ -35,8 +35,8 @@ export async function PlayerLoreCards() {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {wanderer && (
-        <div className="card-surface rounded-[14px] border border-border p-5">
-          <p className="text-caption uppercase text-text-tertiary mb-2">
+        <div className="card-surface p-5">
+          <p className="text-kicker text-text-tertiary mb-2">
             <span className="flex items-center gap-1.5">
               {getAwardIcon(wandererLabel.displayText)}
               {wandererLabel.displayText}
@@ -52,8 +52,8 @@ export async function PlayerLoreCards() {
       )}
 
       {yoyo && (
-        <div className="card-surface rounded-[14px] border border-border p-5">
-          <p className="text-caption uppercase text-text-tertiary mb-2">
+        <div className="card-surface p-5">
+          <p className="text-kicker text-text-tertiary mb-2">
             <span className="flex items-center gap-1.5">
               {getAwardIcon(yoyoLabel.displayText)}
               {yoyoLabel.displayText}
@@ -71,9 +71,9 @@ export async function PlayerLoreCards() {
       {cornerstone && (
         <Link
           href={crest ? `/teams/${crest.slug}` : "#"}
-          className="block rounded-[14px] border border-accent-gold/25 bg-accent-gold-light p-5 transition-colors duration-150 hover:border-accent-gold/40"
+          className="card-surface card-tint-gold block p-5 transition-colors duration-150 hover:border-accent-gold/40"
         >
-          <p className="text-caption uppercase text-accent-gold mb-2">
+          <p className="text-kicker text-accent-gold mb-2">
             <span className="flex items-center gap-1.5">
               {getAwardIcon(cornerstoneLabel.displayText)}
               {cornerstoneLabel.displayText}
