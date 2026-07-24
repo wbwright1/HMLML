@@ -303,14 +303,14 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
   if (!pick) {
     return (
       <div
-        className="min-h-[72px] rounded-lg border border-divider bg-surface/40"
+        className="min-h-[128px] rounded-lg border border-divider bg-surface/40"
         aria-hidden="true"
       />
     );
   }
 
   return (
-    <div className="flex min-h-[72px] min-w-0 flex-col justify-between gap-1 rounded-lg border border-divider bg-surface p-2">
+    <div className="flex min-h-[128px] min-w-0 flex-col rounded-lg border border-divider bg-surface px-2 py-2">
       <div className="flex items-center justify-between gap-1">
         <span className="font-mono text-[10px] tabular-nums text-text-tertiary">
           {pick.round}.{slot ?? "-"}
@@ -325,10 +325,10 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
         )}
       </div>
 
-      {pick.playerName && (
-        <div className="flex min-w-0 w-full flex-col items-center gap-1">
+      <div className="flex flex-1 items-center justify-center py-1.5">
+        {pick.playerName ? (
           <PlayerHeadshot
-            size={30}
+            size={48}
             playerId={pick.playerId}
             name={pick.playerName}
             showTeamBadge={false}
@@ -340,29 +340,48 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
               avatarUrl: pick.currentAvatarUrl,
             }}
           />
+        ) : (
+          <TeamCrest
+            slug={pick.currentSlug}
+            name={pick.currentName}
+            abbreviation={pick.currentAbbreviation}
+            brandingColor={pick.currentBrandingColor}
+            avatarUrl={pick.currentAvatarUrl}
+            size="md"
+          />
+        )}
+      </div>
+
+      <div>
+        {pick.playerName && (
           <p
-            className="w-full line-clamp-2 min-h-[2.4em] text-center text-[11px] font-semibold leading-tight text-text-primary"
-            title={pick.playerName ?? undefined}
+            className="line-clamp-2 text-center text-[12px] font-semibold leading-[1.15] text-text-primary"
+            title={pick.playerName}
           >
             {pick.playerName}
           </p>
-        </div>
-      )}
+        )}
 
-      {pick.roster && (
-        <div className="flex flex-wrap gap-x-1.5 font-mono text-[9px] tabular-nums">
-          {(["QB", "RB", "WR", "TE"] as const).map((pos) => (
-            <span key={pos} style={{ color: getPositionColor(pos).badge.text }}>
-              {pick.roster![pos]}
-              {pos[0]}
-            </span>
-          ))}
-        </div>
-      )}
+        {pick.roster && (
+          <div className="flex flex-wrap justify-center gap-x-1.5 font-mono text-[10px] tabular-nums">
+            {(["QB", "RB", "WR", "TE"] as const).map((pos) => (
+              <span key={pos} style={{ color: getPositionColor(pos).badge.text }}>
+                {pick.roster![pos]}
+                {pos[0]}
+              </span>
+            ))}
+          </div>
+        )}
 
-      {pick.originalName && (
-        <p className="truncate text-[9px] text-text-tertiary">via {pick.originalName}</p>
-      )}
+        {pick.originalName && (
+          <p
+            className="mt-0.5 truncate text-center text-[10px] text-text-tertiary"
+            title={`via ${pick.originalName}`}
+          >
+            via {teamAcronym(pick.originalName)}
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -482,7 +501,7 @@ function PositionLegend({ positions }: { positions: string[] }) {
 
 function DesktopBoard({ board }: { board: DraftBoard }) {
   if (board.columns.length === 0) return null;
-  const columnStyle = { gridTemplateColumns: `repeat(${board.columns.length}, minmax(96px, 1fr))` };
+  const columnStyle = { gridTemplateColumns: `repeat(${board.columns.length}, minmax(84px, 1fr))` };
 
   return (
     <div className="hidden md:block card-surface overflow-x-auto p-4 lg:p-[18px]">
