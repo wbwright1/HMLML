@@ -1,3 +1,5 @@
+import { EditorialBody } from "@/components/editorial-emphasis";
+
 interface BurningQuestionsCardProps {
   questions: readonly string[];
 }
@@ -20,7 +22,9 @@ export function BurningQuestionsCard({ questions }: BurningQuestionsCardProps) {
           >
             {i + 1}
           </span>
-          <p className="text-body-sm text-text-secondary">{question}</p>
+          <p className="text-body-sm text-text-secondary">
+            <EditorialBody body={question} />
+          </p>
         </div>
       ))}
     </div>

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EditorialBody } from "@/components/editorial-emphasis";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { EmptyState } from "@/components/empty-state";
@@ -154,7 +155,7 @@ export async function OffseasonHub({
         <h1 className="text-display">The Offseason.</h1>
         {editorial.heroDek && (
           <p className="mt-4 text-body-lg text-text-secondary max-w-xl">
-            {editorial.heroDek}
+            <EditorialBody body={editorial.heroDek} />
           </p>
         )}
       </section>
