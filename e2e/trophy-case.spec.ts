@@ -36,9 +36,15 @@ test.describe("The Trophy Case", () => {
     ).toBeVisible();
 
     // Three award columns (MVP / Championship MVP / Rookie of the Year).
-    await expect(trophyCase.getByText("Regular Season MVP")).toBeVisible();
-    await expect(trophyCase.getByText("Championship MVP")).toBeVisible();
-    await expect(trophyCase.getByText("Rookie of the Year")).toBeVisible();
+    await expect(
+      trophyCase.getByText("Regular Season MVP", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      trophyCase.getByText("Championship MVP", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      trophyCase.getByText("Rookie of the Year", { exact: true }),
+    ).toBeVisible();
 
     // Every award row carries a player headshot (img role, accessible-name =
     // player name), tolerant of the monogram fallback. The full seed is 15
