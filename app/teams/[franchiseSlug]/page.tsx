@@ -17,6 +17,8 @@ import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getRivalries } from "@/lib/queries/records";
 import { getFranchiseExtremes } from "@/lib/queries/franchise-stats";
 import { getFranchiseCornerstone } from "@/lib/queries/franchise-players";
+import { getFranchiseAwards } from "@/lib/queries/awards";
+import { formatAwardChip } from "@/lib/awards";
 import { FranchiseCornerstoneCard } from "@/components/franchise-cornerstone-card";
 import { getPlayoffLabel, getPlayoffBadgeVariant } from "@/lib/playoff-labels";
 import { EmptyState } from "@/components/empty-state";
@@ -92,11 +94,13 @@ export default async function FranchiseDetailPage({
     longestWinStreak: 0,
   };
   let cornerstones: Awaited<ReturnType<typeof getFranchiseCornerstone>> = [];
+  let franchiseAwards: Awaited<ReturnType<typeof getFranchiseAwards>> = [];
   try {
-    [rivalries, extremes, cornerstones] = await Promise.all([
+    [rivalries, extremes, cornerstones, franchiseAwards] = await Promise.all([
       getRivalries(),
       getFranchiseExtremes(franchise.id),
       getFranchiseCornerstone(franchise.id),
+      getFranchiseAwards(franchise.id),
     ]);
   } catch {
     // DB may not be connected in dev
@@ -190,6 +194,19 @@ export default async function FranchiseDetailPage({
           tone: "sting",
         }
   );
+
+  // Player Hardware: league-award winners this franchise rostered. Gold, and
+  // only when they actually own some silverware.
+  if (franchiseAwards.length > 0) {
+    const latest = franchiseAwards[0];
+    const lastName = latest.playerName.trim().split(/\s+/).slice(-1)[0];
+    callouts.push({
+      kicker: "Player Hardware",
+      value: franchiseAwards.length,
+      subline: `${formatAwardChip(latest.awardType, latest.seasonYear)} · ${lastName}. Hardware their roster earned.`,
+      tone: "gold",
+    });
+  }
 
   if (bestFinish) {
     callouts.push({

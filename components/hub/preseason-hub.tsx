@@ -16,6 +16,7 @@ import {
   type ReceiptFranchise,
 } from "@/components/hub/offseason-receipt-card";
 import { BurningQuestionsCard } from "@/components/hub/burning-questions-card";
+import { ReigningHonors } from "@/components/hub/reigning-honors";
 import { TeamAwardCard } from "@/components/team-award-card";
 import { StingCard } from "@/components/sting-card";
 import { getHubEditorial } from "@/lib/content";
@@ -72,9 +73,11 @@ export async function PreseasonHub({
   };
   let kickoffTarget: Date | null = null;
   let lastCompletedSeasonYear: number | null = null;
+  let lastCompletedSeasonId: number | null = null;
   try {
     const completedSeason = await getLastCompletedSeason();
     lastCompletedSeasonYear = completedSeason?.seasonYear ?? null;
+    lastCompletedSeasonId = completedSeason?.id ?? null;
     [field, kickoffTarget] = await Promise.all([
       getPreseasonField(latestSeason?.id, completedSeason?.id),
       latestSeason ? getNextKickoff(displayYear, 1) : Promise.resolve(null),
@@ -307,6 +310,17 @@ export async function PreseasonHub({
           </section>
         </aside>
       </div>
+
+      {/* Player Awards: last season's league-award winners (MVP / Finals MVP /
+          Rookie of the Year), the CLAUDE.md preseason "Player Awards" slot.
+          Self-gating: renders nothing until awards are seeded. */}
+      {lastCompletedSeasonId != null && lastCompletedSeasonYear != null && (
+        <ReigningHonors
+          seasonId={lastCompletedSeasonId}
+          seasonYear={lastCompletedSeasonYear}
+          kicker="Player Awards · Last Season"
+        />
+      )}
 
       {/* Season Superlatives · Nobody Escapes: full-width Wall of Shame. The
           coverage pass guarantees all 12 franchises appear, so every member

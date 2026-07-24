@@ -443,6 +443,44 @@ export const hubContent = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// league_awards
+// ---------------------------------------------------------------------------
+// Commissioner-decided season honors: Regular Season MVP, Championship MVP
+// ("Finals MVP"), and Rookie of the Year. Keyed on seasonId (FK) so legacy /
+// predecessor seasons can carry honors too. playerId is nullable with NO FK
+// (snapshot pattern shared with player_week_points / draft_picks): historical
+// winners may be absent from the daily players snapshot, so playerName (+
+// position) are snapshotted here and queries left-join players only for the
+// photo. franchiseId is the roster that held the winner that season. These
+// awards deliberately do NOT feed the GOAT Index; they are player honors, not
+// franchise-score inputs. One winner per (season, award) via the unique index.
+export const leagueAwards = pgTable(
+  "league_awards",
+  {
+    id: serial("id").primaryKey(),
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id),
+    awardType: text("award_type").notNull(), // 'regular_season_mvp' | 'championship_mvp' | 'rookie_of_year'
+    playerId: text("player_id"), // NO FK — historical winners may be absent from the players snapshot
+    playerName: text("player_name").notNull(), // snapshot at award time
+    position: text("position"), // snapshot
+    franchiseId: text("franchise_id").references(() => franchises.id),
+    note: text("note"), // optional one-line lore
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_league_awards_season_type").on(
+      table.seasonId,
+      table.awardType,
+    ),
+    index("idx_league_awards_player_id").on(table.playerId),
+    index("idx_league_awards_franchise_id").on(table.franchiseId),
+    index("idx_league_awards_award_type").on(table.awardType),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // sync_log
 // ---------------------------------------------------------------------------
 export const syncLog = pgTable(
@@ -511,3 +549,6 @@ export type NewMemberSession = typeof memberSessions.$inferInsert;
 
 export type SmackPostRow = typeof smackPosts.$inferSelect;
 export type NewSmackPostRow = typeof smackPosts.$inferInsert;
+
+export type LeagueAward = typeof leagueAwards.$inferSelect;
+export type NewLeagueAward = typeof leagueAwards.$inferInsert;

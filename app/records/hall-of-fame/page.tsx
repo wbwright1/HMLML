@@ -4,6 +4,7 @@ import { FranchiseLogo } from "@/components/franchise-logo";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { EmptyState } from "@/components/empty-state";
 import { PlayerLoreCards } from "@/components/player-lore-cards";
+import { TrophyCase } from "@/components/trophy-case";
 import { getGoatLadder, GOAT_WEIGHTS, type GoatEntry } from "@/lib/queries/goat";
 import { GOAT_ARCHETYPE_LABELS } from "@/lib/goat-content";
 
@@ -311,6 +312,10 @@ export default async function HallOfFamePage() {
         </div>
         <PlayerLoreCards />
       </section>
+
+      {/* The Trophy Case: commissioner-decided season honors (MVP / Finals MVP
+          / Rookie of the Year). Renders nothing until awards are seeded. */}
+      <TrophyCase />
     </>
   );
 }

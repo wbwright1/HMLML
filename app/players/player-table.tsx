@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { EmptyState } from "@/components/empty-state";
+import { AwardChipRow, type AwardChipData } from "@/components/award-chip";
 import type { RosteredPlayer } from "@/lib/queries/players";
 
 /**
@@ -217,6 +218,8 @@ interface PlayerTableProps {
   showProjColumn?: boolean;
   /** Whether to render the TRD column: false when the trending-adds list is empty. */
   showTrdColumn?: boolean;
+  /** League-award badges ("MVP '25") keyed by player id. Empty pre-seed. */
+  awardsByPlayerId?: Record<string, AwardChipData[]>;
 }
 
 export function PlayerTable({
@@ -226,6 +229,7 @@ export function PlayerTable({
   initialQuery = "",
   showProjColumn = false,
   showTrdColumn = false,
+  awardsByPlayerId = {},
 }: PlayerTableProps) {
   const [search, setSearch] = useState(initialQuery);
   const [posFilter, setPosFilter] = useState<PositionFilter>("ALL");
@@ -430,9 +434,12 @@ export function PlayerTable({
                       nflTeam={player.nflTeam}
                     />
                     <div className="min-w-0">
-                      <p className="text-body font-medium text-text-primary truncate">
-                        {player.fullName ?? "Unknown"}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-body font-medium text-text-primary truncate">
+                          {player.fullName ?? "Unknown"}
+                        </p>
+                        <AwardChipRow awards={awardsByPlayerId[player.id] ?? []} />
+                      </div>
                       <p className="text-body-sm text-text-tertiary">
                         {player.nflTeam ?? "FA"} &middot; {player.position ?? "-"}
                       </p>
@@ -512,9 +519,12 @@ export function PlayerTable({
                   nflTeam={player.nflTeam}
                 />
                 <div className="min-w-0">
-                  <p className="text-body font-medium text-text-primary truncate">
-                    {player.fullName ?? "Unknown"}
-                  </p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-body font-medium text-text-primary truncate">
+                      {player.fullName ?? "Unknown"}
+                    </p>
+                    <AwardChipRow awards={awardsByPlayerId[player.id] ?? []} />
+                  </div>
                   <p className="text-body-sm text-text-tertiary">
                     {player.nflTeam ?? "FA"} &middot; {player.position ?? "-"}
                   </p>

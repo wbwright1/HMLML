@@ -11,6 +11,7 @@ import {
   OffseasonReceiptCard,
   type ReceiptFranchise,
 } from "@/components/hub/offseason-receipt-card";
+import { ReigningHonors } from "@/components/hub/reigning-honors";
 import {
   SmackFeed,
   SmackComposerSlot,
@@ -249,6 +250,17 @@ export async function OffseasonHub({
             />
           </PageSection>
         </ScrollReveal>
+      )}
+
+      {/* Reigning Honors: the just-completed season's league-award winners,
+          linking to the Trophy Case. Self-gating: renders nothing (no header,
+          no shell) until awards are seeded. */}
+      {completedSeason && (
+        <ReigningHonors
+          seasonId={completedSeason.id}
+          seasonYear={completedSeason.seasonYear}
+          kicker="Reigning Honors"
+        />
       )}
 
       {/* Offseason Receipts (generated Site Desk content; hidden when none) */}

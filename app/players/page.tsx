@@ -7,6 +7,8 @@ import {
   getCurrentWeekProjectionsByPlayer,
   getTrendingAddPlayers,
 } from "@/lib/queries/player-points";
+import { getAwardsByPlayerIds } from "@/lib/queries/awards";
+import type { AwardChipData } from "@/components/award-chip";
 import { PlayerTable, type PlayerRow } from "./player-table";
 
 export const dynamic = "force-dynamic";
@@ -50,6 +52,16 @@ export default async function PlayersPage({ searchParams }: PlayersPageProps) {
     trendingPlayers.map((p) => [p.playerId, p.count])
   );
 
+  // League-award badges ("MVP '25") for the players in view. Empty pre-seed.
+  const awardsMap = await getAwardsByPlayerIds(players.map((p) => p.id));
+  const awardsByPlayerId: Record<string, AwardChipData[]> = {};
+  for (const [playerId, badges] of awardsMap) {
+    awardsByPlayerId[playerId] = badges.map((b) => ({
+      awardType: b.awardType,
+      seasonYear: b.seasonYear,
+    }));
+  }
+
   const showProjColumn = projectionsByPlayer.size > 0;
   const showTrdColumn = trendingCountByPlayer.size > 0;
 
@@ -82,6 +94,7 @@ export default async function PlayersPage({ searchParams }: PlayersPageProps) {
           initialQuery={q ?? ""}
           showProjColumn={showProjColumn}
           showTrdColumn={showTrdColumn}
+          awardsByPlayerId={awardsByPlayerId}
         />
       </div>
     </section>
