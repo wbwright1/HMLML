@@ -63,6 +63,38 @@ export function pickLatestAcquisition(events: RosterEvent[]): RosterEvent | null
 }
 
 /**
+ * The start year of the current unbroken presence run: walk back from
+ * currentYear while (year - 1) is also a presence year. Presence-based, not
+ * event-based, so it survives a startup RE-DRAFT (a player drafted in both
+ * 2021 and 2023 with continuous rostering in between reads as acquired 2021,
+ * not 2023).
+ */
+export function computeTenureAnchor(presenceYears: Set<number>, currentYear: number): number {
+  let anchor = currentYear;
+  while (presenceYears.has(anchor - 1)) {
+    anchor -= 1;
+  }
+  return anchor;
+}
+
+/**
+ * How the anchor-year acquisition happened: 'draft' if the franchise drafted
+ * the player that year, else 'trade' if a trade moved the player to the
+ * franchise that year, else 'draft' as the fallback for the 2021 base year
+ * (continuous presence from the league's first tracked season, with no
+ * logged acquisition event to point to).
+ */
+export function resolveVia(
+  anchorYear: number,
+  draftYears: Set<number>,
+  tradeYears: Set<number>
+): "draft" | "trade" {
+  if (draftYears.has(anchorYear)) return "draft";
+  if (tradeYears.has(anchorYear)) return "trade";
+  return "draft";
+}
+
+/**
  * A player fails continuous tenure when the franchise dropped them at any
  * point strictly after their latest draft/trade acquisition. A drop means
  * whatever the franchise currently rosters was re-acquired off waivers, which
@@ -88,6 +120,81 @@ export function computeBlockbuster(event: RosterEvent): boolean | null {
   const totalPlayers = Object.keys(event.tradeAdds).length;
   const totalPicks = event.tradePicksInvolved ?? 0;
   return totalPlayers >= 3 || totalPicks >= 2;
+}
+
+export interface EligibilityResult {
+  via: "draft" | "trade";
+  acquiredYear: number;
+  tenureSeasons: number;
+  blockbuster: boolean | null;
+}
+
+/**
+ * Full eligibility + provenance decision for one (franchise, player) pair,
+ * given its presence years, acquisition events, and drop events. Returns
+ * null when the pair is ineligible. Pure and unit-tested; the query's
+ * eligibility loop delegates here.
+ *
+ * RULE (2023 startup re-draft continuity): tenure and drop-disqualification
+ * anchor to the START of the current unbroken presence run, not the latest
+ * acquisition event. Re-drafting a player the franchise already held (the
+ * 2023 startup RE-DRAFT) must not reset or shorten tenure. This deliberately
+ * widens the drop-disqualification window to the FULL stint: a drop anywhere
+ * after the anchor year disqualifies, even if a later re-acquisition event
+ * exists. Both directions of the resulting eligibility change vs. the old
+ * latest-event logic are intended and pinned by unit tests.
+ */
+export function evaluateEligibility(
+  presenceYears: Set<number>,
+  events: RosterEvent[],
+  drops: RosterEvent[],
+  currentYear: number
+): EligibilityResult | null {
+  if (events.length === 0) return null; // waiver/FA only, not eligible
+
+  const acquiredYear = computeTenureAnchor(presenceYears, currentYear);
+  const tenureSeasons = currentYear - acquiredYear + 1;
+  if (tenureSeasons < 2) return null; // must be acquired before the current season
+
+  const draftYears = new Set(events.filter((e) => e.type === "draft").map((e) => e.seasonYear));
+  const tradeYears = new Set(events.filter((e) => e.type === "trade").map((e) => e.seasonYear));
+  const via = resolveVia(acquiredYear, draftYears, tradeYears);
+
+  // The anchor-year event, used for the drop-continuity check and the
+  // blockbuster heuristic. Falls back to a synthetic placeholder when via
+  // resolved to 'draft' with no logged draft row for that year (the 2021
+  // base-year case).
+  let anchorEvent: RosterEvent;
+  if (via === "trade") {
+    const tradeEventsAtAnchor = events.filter(
+      (e) => e.type === "trade" && e.seasonYear === acquiredYear
+    );
+    anchorEvent = pickLatestAcquisition(tradeEventsAtAnchor) ?? {
+      type: "trade",
+      seasonYear: acquiredYear,
+      week: -1,
+      sleeperMs: -Infinity,
+    };
+  } else {
+    const draftEventAtAnchor = events.find(
+      (e) => e.type === "draft" && e.seasonYear === acquiredYear
+    );
+    anchorEvent = draftEventAtAnchor ?? {
+      type: "draft",
+      seasonYear: acquiredYear,
+      week: -1,
+      sleeperMs: -Infinity,
+    };
+  }
+
+  if (isDisqualifiedByLaterDrop(anchorEvent, drops)) return null;
+
+  return {
+    via,
+    acquiredYear,
+    tenureSeasons,
+    blockbuster: computeBlockbuster(anchorEvent),
+  };
 }
 
 export interface ScoredCandidate {
@@ -239,13 +346,45 @@ export async function getFranchiseCornerstones(): Promise<Map<string, Cornerston
       franchiseBySeasonRoster.set(`${fs.seasonId}:${fs.rosterId}`, fs.franchiseId);
     }
 
-    // Build per-(franchise,player) event lists.
-    const eventsByKey = new Map<string, RosterEvent[]>();
-    const dropsByKey = new Map<string, RosterEvent[]>();
+    // Presence: distinct (franchise, player, season) rows from player_week_points,
+    // across ALL seasons (including bench rows) for the players on current
+    // rosters. This is the source of truth for continuous tenure, not
+    // draft/trade events, so a startup RE-DRAFT (a player drafted in both
+    // 2021 and 2023, continuously rostered in between) doesn't reset tenure.
+    const presenceRows = await db
+      .selectDistinct({
+        franchiseId: playerWeekPoints.franchiseId,
+        playerId: playerWeekPoints.playerId,
+        seasonId: playerWeekPoints.seasonId,
+      })
+      .from(playerWeekPoints)
+      .where(inArray(playerWeekPoints.playerId, Array.from(relevantPlayerIds)));
 
     function key(franchiseId: string, playerId: string) {
       return `${franchiseId}:${playerId}`;
     }
+
+    const presenceByKey = new Map<string, Set<number>>();
+    for (const p of presenceRows) {
+      const seasonYear = seasonYearById.get(p.seasonId);
+      if (seasonYear === undefined) continue;
+      const k = key(p.franchiseId, p.playerId);
+      if (!presenceByKey.has(k)) presenceByKey.set(k, new Set());
+      presenceByKey.get(k)!.add(seasonYear);
+    }
+    // Union in the current season for players on the current roster: the
+    // current season may still be in_season with no completed points rows.
+    for (const [franchiseId, playerIds] of rosterPairs) {
+      for (const playerId of playerIds) {
+        const k = key(franchiseId, playerId);
+        if (!presenceByKey.has(k)) presenceByKey.set(k, new Set());
+        presenceByKey.get(k)!.add(currentSeason.seasonYear);
+      }
+    }
+
+    // Build per-(franchise,player) event lists.
+    const eventsByKey = new Map<string, RosterEvent[]>();
+    const dropsByKey = new Map<string, RosterEvent[]>();
 
     for (const dp of draftRows) {
       if (!dp.franchiseId || !dp.playerId) continue;
@@ -307,9 +446,15 @@ export async function getFranchiseCornerstones(): Promise<Map<string, Cornerston
       }
     }
 
-    // Determine eligible candidates: current roster pairs whose latest
-    // acquisition (draft or trade) has no later drop by the same franchise,
-    // and which was acquired before the current season.
+    // Determine eligible candidates. RULE: tenure and drop-disqualification
+    // anchor to the start of the continuous presence run, NOT the latest
+    // acquisition event, per the 2023 startup re-draft continuity rule
+    // (re-drafting a player the franchise already held must not reset or
+    // shorten tenure). This deliberately widens the drop-disqualification
+    // window to the full stint. Both eligibility gates therefore take
+    // presence-derived inputs; the eligible SET can differ from the old
+    // latest-event logic in both directions, and that change is intended
+    // (semantics pinned by evaluateEligibility unit tests).
     interface EligiblePlayer {
       franchiseId: string;
       playerId: string;
@@ -323,26 +468,19 @@ export async function getFranchiseCornerstones(): Promise<Map<string, Cornerston
     for (const [franchiseId, playerIds] of rosterPairs) {
       for (const playerId of playerIds) {
         const k = key(franchiseId, playerId);
-        const events = eventsByKey.get(k);
-        if (!events || events.length === 0) continue; // waiver/FA only, not eligible
-
-        const latest = pickLatestAcquisition(events);
-        if (!latest) continue;
-
+        const presenceYears = presenceByKey.get(k) ?? new Set<number>([currentSeason.seasonYear]);
+        const events = eventsByKey.get(k) ?? [];
         const drops = dropsByKey.get(k) ?? [];
-        if (isDisqualifiedByLaterDrop(latest, drops)) continue;
 
-        const tenureSeasons = currentSeason.seasonYear - latest.seasonYear + 1;
-        if (tenureSeasons < 2) continue; // must be acquired before the current season
+        const result = evaluateEligibility(
+          presenceYears,
+          events,
+          drops,
+          currentSeason.seasonYear
+        );
+        if (!result) continue;
 
-        eligible.push({
-          franchiseId,
-          playerId,
-          via: latest.type as "draft" | "trade",
-          acquiredYear: latest.seasonYear,
-          tenureSeasons,
-          blockbuster: computeBlockbuster(latest),
-        });
+        eligible.push({ franchiseId, playerId, ...result });
       }
     }
 
