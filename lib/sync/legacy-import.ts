@@ -21,6 +21,7 @@ import {
 } from "@/lib/sleeper";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { derivePlayoffResults } from "@/lib/sync/derive-playoffs";
+import { resolveAvatarUrl } from "@/lib/sync/daily";
 import type { SleeperLeague } from "@/lib/sleeper-schemas";
 
 // ---------------------------------------------------------------------------
@@ -243,12 +244,13 @@ async function importUsersAndRosters(
   // Build user_id → { teamName, displayName } map
   const userMap = new Map<
     string,
-    { teamName: string; displayName: string }
+    { teamName: string; displayName: string; avatarUrl: string | null }
   >();
   for (const u of users) {
     userMap.set(u.user_id, {
       teamName: u.metadata?.team_name?.trim() || u.display_name,
       displayName: u.display_name,
+      avatarUrl: resolveAvatarUrl(u),
     });
   }
 
@@ -270,6 +272,7 @@ async function importUsersAndRosters(
     const userData = userMap.get(ownerId) ?? {
       teamName: "Unknown",
       displayName: "Unknown",
+      avatarUrl: null,
     };
     const franchiseId = ownerId; // Use Sleeper user_id as franchise ID
     const rosterIdStr = String(roster.roster_id);
@@ -316,6 +319,7 @@ async function importUsersAndRosters(
         userId: ownerId,
         ownerDisplayName: userData.displayName,
         coOwnerDisplayName,
+        avatarUrl: userData.avatarUrl,
         wins: roster.settings.wins ?? 0,
         losses: roster.settings.losses ?? 0,
         ties: roster.settings.ties ?? 0,
@@ -331,6 +335,7 @@ async function importUsersAndRosters(
           userId: ownerId,
           ownerDisplayName: userData.displayName,
           coOwnerDisplayName,
+          avatarUrl: sql`COALESCE(EXCLUDED.avatar_url, ${franchiseSeasons.avatarUrl})`,
           wins: roster.settings.wins ?? 0,
           losses: roster.settings.losses ?? 0,
           ties: roster.settings.ties ?? 0,

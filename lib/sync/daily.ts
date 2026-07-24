@@ -99,7 +99,7 @@ async function uniqueSlug(
  * avatar (metadata.avatar, already a full URL), falls back to the account-level
  * avatar id resolved against the Sleeper CDN, else null.
  */
-function resolveAvatarUrl(user: {
+export function resolveAvatarUrl(user: {
   avatar: string | null;
   metadata?: { avatar?: string | null } | null;
 }): string | null {
