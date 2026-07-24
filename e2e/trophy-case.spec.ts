@@ -21,14 +21,10 @@ test.describe("The Trophy Case", () => {
     await page.goto("/records/hall-of-fame");
     await expect(page.locator("h1, h2").first()).toBeVisible();
 
+    // The live DB is seeded with 15 award rows; the module must render.
+    // A missing module means the feature (or its query) regressed.
     const trophyCase = page.getByTestId("trophy-case");
-    if ((await trophyCase.count()) === 0) {
-      test.skip(
-        true,
-        "No league awards seeded; the Trophy Case renders nothing.",
-      );
-      return;
-    }
+    await expect(trophyCase).toBeVisible();
 
     // Titled module present.
     await expect(

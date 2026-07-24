@@ -4,6 +4,19 @@ import { desc, eq, inArray } from "drizzle-orm";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 import { AWARD_TYPE_ORDER, type AwardType, isAwardType } from "@/lib/awards";
 
+/**
+ * League-award queries swallow "relation does not exist" (Postgres 42P01)
+ * silently so pages render before migration 0010 is applied; every other
+ * error is logged before returning empty so a query regression is visible
+ * in server logs instead of silently emptying the Trophy Case.
+ */
+function logUnlessMissingTable(context: string, error: unknown): void {
+  const code = (error as { code?: string } | null)?.code;
+  if (code !== "42P01") {
+    console.error(`[queries/awards] ${context} failed:`, error);
+  }
+}
+
 export interface AwardFranchiseCrest {
   id: string;
   slug: string;
@@ -148,8 +161,9 @@ export async function getAwardsHonorRoll(): Promise<AwardsHonorRoll> {
       mostDecoratedPlayerId,
       total: rows.length,
     };
-  } catch {
+  } catch (error) {
     // Table may not exist yet (pre-migration) or the DB may be unavailable.
+    logUnlessMissingTable("getAwardsHonorRoll", error);
     return { groups: [], awardCountByPlayer: {}, mostDecoratedPlayerId: null, total: 0 };
   }
 }
@@ -183,7 +197,8 @@ export async function getFranchiseAwards(
       .orderBy(desc(seasons.seasonYear));
 
     return rows.map((r) => toEntry(r as RawAwardRow, new Map()));
-  } catch {
+  } catch (error) {
+    logUnlessMissingTable("awards query", error);
     return [];
   }
 }
@@ -226,7 +241,8 @@ export async function getSeasonAwards(seasonId: number): Promise<AwardEntry[]> {
         (a, b) =>
           (order.get(a.awardType) ?? 99) - (order.get(b.awardType) ?? 99),
       );
-  } catch {
+  } catch (error) {
+    logUnlessMissingTable("awards query", error);
     return [];
   }
 }
@@ -267,7 +283,8 @@ export async function getAwardsByPlayerIds(
       result.set(r.playerId, list);
     }
     return result;
-  } catch {
+  } catch (error) {
+    logUnlessMissingTable("getAwardsByPlayerIds", error);
     return result;
   }
 }

@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { PlayerHeadshot } from "@/components/player-headshot";
-import { FranchiseLogo } from "@/components/franchise-logo";
 import { getSeasonAwards, type AwardEntry } from "@/lib/queries/awards";
 import { AWARD_METADATA } from "@/lib/awards";
 import { getAwardTypeIcon } from "@/lib/award-icons";

@@ -53,7 +53,7 @@ async function main() {
   const dryRun = process.argv.includes("--dry-run");
 
   console.log(
-    `[seed-awards] ${dryRun ? "DRY RUN (reads only)" : "LIVE upsert"} — resolving ${"" }league awards...\n`,
+    `[seed-awards] ${dryRun ? "DRY RUN (reads only)" : "LIVE upsert"}: resolving league awards...\n`,
   );
 
   const result = await runAwardsImport(dryRun);
@@ -71,7 +71,7 @@ async function main() {
   }
   if (mismatches.length > 0) {
     console.error(
-      `[seed-awards] ${mismatches.length} CHAMPIONSHIP SANITY MISMATCH(ES) — investigate before writing.`,
+      `[seed-awards] ${mismatches.length} CHAMPIONSHIP SANITY MISMATCH(ES): investigate before writing.`,
     );
   }
 
