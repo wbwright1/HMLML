@@ -10,10 +10,13 @@ jobs:
       issues: write
     steps:
       - name: Trigger cron endpoint
-        run: >
-          curl -f --max-time 55
-          -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}"
-          https://hmlml.app/api/sync-hourly
+        run: |
+          HTTP=$(curl -sS -w '%{http_code}' -o resp.json --max-time 55 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://hmlml.app/api/sync-hourly)
+          echo "HTTP $HTTP"; cat resp.json || true
+          if [ "$HTTP" != "200" ]; then echo "Non-2xx from sync-hourly"; exit 1; fi
+          if [ "$(jq -r '.partial' resp.json)" = "true" ]; then echo "Hourly sync reported partial failure"; exit 1; fi
       - name: File issue on failure
         if: failure()
         env:
