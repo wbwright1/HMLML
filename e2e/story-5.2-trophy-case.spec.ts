@@ -12,15 +12,16 @@ test.describe("Story 5.2: Trophy Case Enhancement", () => {
     await expect(page.getByRole("heading", { name: /championships/i })).toBeVisible();
   });
 
-  test("most recent champion has prominent StatHero display", async ({ page }) => {
-    // The featured champion section uses StatHero with lg variant, which renders
-    // a large season year number and "Reigning Champion" label
-    const reigningLabel = page.getByText("Reigning Champion");
-    // If there are trophies, the featured section should be visible
-    const trophySection = page.locator('[class*="border-gold"]');
-    const count = await trophySection.count();
+  test("first season card shows League Champion", async ({ page }) => {
+    // The season cards render newest-first; the first card should carry the
+    // "League Champion" badge when any season cards exist.
+    const yearLinks = page.locator('a[href^="/seasons/"]');
+    const count = await yearLinks.count();
     if (count > 0) {
-      await expect(reigningLabel).toBeVisible();
+      const leagueChampBadges = page.getByText("League Champion", {
+        exact: true,
+      });
+      await expect(leagueChampBadges.first()).toBeVisible();
     }
   });
 
@@ -110,6 +111,17 @@ test.describe("Story 5.2: Trophy Case Enhancement", () => {
         const nameSpan = firstCard.locator("span.font-serif").first();
         await expect(nameSpan).toBeVisible();
       }
+    }
+  });
+
+  test("season cards show Best Waiver Pickup", async ({ page }) => {
+    const yearLinks = page.locator('a[href^="/seasons/"]');
+    const count = await yearLinks.count();
+    if (count > 0) {
+      const waiverLabels = page.getByText("Best Waiver Pickup");
+      expect(await waiverLabels.count()).toBeGreaterThanOrEqual(1);
+      // 2022's waiver-wire winner is a stable historical fact.
+      await expect(page.getByText("Geno Smith")).toBeVisible();
     }
   });
 });

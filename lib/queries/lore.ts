@@ -191,24 +191,38 @@ export async function getStartupDraftPicks(): Promise<StartupPickRow[]> {
   }
 }
 
-/** Distinct player ids added at least once via a waiver/free-agent transaction. */
-export async function getWaiverAddedPlayerIds(): Promise<Set<string>> {
+export interface WaiverAddedSeason {
+  playerId: string;
+  seasonYear: number;
+}
+
+/**
+ * Every distinct (player, season) pair where the player was added via a
+ * waiver or free-agent transaction that season. `transactions.season_id`
+ * ties each add directly to a season, so this is a straight join, not a
+ * player+season presence inference. Used to scope the Waiver Miracle to a
+ * single season's pickup, not a player's career-wide waiver history.
+ */
+export async function getWaiverAddedPlayerSeasons(): Promise<WaiverAddedSeason[]> {
   try {
     const rows = await db
-      .select({ adds: transactions.adds })
+      .select({ adds: transactions.adds, seasonYear: seasons.seasonYear })
       .from(transactions)
+      .innerJoin(seasons, eq(transactions.seasonId, seasons.id))
       .where(sql`${transactions.type} IN ('waiver', 'free_agent')`);
 
-    const ids = new Set<string>();
+    const pairs = new Map<string, WaiverAddedSeason>();
     for (const row of rows) {
       const adds = row.adds as Record<string, number> | null;
       if (!adds) continue;
-      for (const playerId of Object.keys(adds)) ids.add(playerId);
+      for (const playerId of Object.keys(adds)) {
+        pairs.set(`${playerId}:${row.seasonYear}`, { playerId, seasonYear: row.seasonYear });
+      }
     }
-    return ids;
+    return Array.from(pairs.values());
   } catch (error) {
-    console.error("[lore] getWaiverAddedPlayerIds error:", error);
-    return new Set();
+    console.error("[lore] getWaiverAddedPlayerSeasons error:", error);
+    return [];
   }
 }
 
@@ -339,6 +353,27 @@ export function pickSeasonFranchise(
   return best;
 }
 
+/**
+ * The dominant franchise for this player in the given season (via
+ * `pickSeasonFranchise`), paired with the started points that franchise
+ * actually got out of him that season. Null when the player has no started
+ * rows that season. Used to scope a single-season pickup (Waiver Miracle) to
+ * the one team that rostered him that year, not points he scored for
+ * whoever else had him in other seasons.
+ */
+export function pickSeasonFranchiseAndPoints(
+  rows: readonly PlayerFranchiseWeekRow[],
+  seasonYear: number,
+): { franchiseId: string; points: number } | null {
+  const franchiseId = pickSeasonFranchise(rows, seasonYear);
+  if (!franchiseId) return null;
+  let points = 0;
+  for (const r of rows) {
+    if (r.started && r.seasonYear === seasonYear && r.franchiseId === franchiseId) points += r.points;
+  }
+  return { franchiseId, points };
+}
+
 /** Franchise that reaped the most total started points from this player, career-wide. */
 export function pickTopFranchiseByPoints(rows: readonly PlayerFranchiseWeekRow[]): string | null {
   const totals = new Map<string, number>();
@@ -355,6 +390,39 @@ export function pickTopFranchiseByPoints(rows: readonly PlayerFranchiseWeekRow[]
     }
   }
   return best;
+}
+
+/**
+ * Total started points this player scored while rostered by ONE specific
+ * franchise. Used to scope value-award rankings (Draft Steal, The Bust) to
+ * "points in the drafting team's colors" rather than career-wide totals, so
+ * a player traded away long ago doesn't credit points he scored for whoever
+ * picked him up later.
+ */
+export function scopedFranchisePoints(
+  rows: readonly PlayerFranchiseWeekRow[],
+  franchiseId: string,
+): number {
+  let total = 0;
+  for (const r of rows) {
+    if (r.started && r.franchiseId === franchiseId) total += r.points;
+  }
+  return total;
+}
+
+/**
+ * The single franchise that got the most started points out of this player,
+ * paired with that points total. Unlike career-wide totals, this is what a
+ * franchise can actually brag about (or eat) for one player: the best (or
+ * only) haul any one roster got from him. Null when the player has no
+ * started rows for any franchise.
+ */
+export function pickBestFranchiseAndPoints(
+  rows: readonly PlayerFranchiseWeekRow[],
+): { franchiseId: string; points: number } | null {
+  const franchiseId = pickTopFranchiseByPoints(rows);
+  if (!franchiseId) return null;
+  return { franchiseId, points: scopedFranchisePoints(rows, franchiseId) };
 }
 
 /** Franchise with the most career starts of this player. */
@@ -433,7 +501,7 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
     thrones,
     careerRows,
     startupPicks,
-    waiverAddedIds,
+    waiverAddedSeasons,
     biggestSeasons,
     tradedTop,
     churnedTop,
@@ -443,7 +511,7 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
     getSingleGameThrones(),
     getCareerPointsAggregate(),
     getStartupDraftPicks(),
-    getWaiverAddedPlayerIds(),
+    getWaiverAddedPlayerSeasons(),
     getBiggestSeasons(15),
     getMostTradedPlayers(1),
     getMostChurnedPlayers(1),
@@ -560,19 +628,29 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
   }
 
   // --- Five flexible cards, resolved against ranked candidate lists ------
+  //
+  // Draft Steal, The Bust, and Waiver Miracle rank on points scored WHILE
+  // ON the relevant franchise, not career-wide totals: a value award is
+  // about what one roster got out of a player, not what he did after he
+  // left. Career totals here are only a cheap prefilter to keep the
+  // franchise-week fetch small (a player's franchise-scoped total can never
+  // exceed his career total, so ranking candidates by career points first
+  // is a safe superset before the real, scoped ranking).
   interface DraftCandidate extends StartupPickRow {
     careerPts: number;
   }
-  const draftStealCandidates: DraftCandidate[] = startupPicks
-    .filter((p) => p.round >= 8)
+  const draftStealPrefilter: DraftCandidate[] = startupPicks
+    .filter((p) => p.round >= 8 && p.franchiseId != null)
     .map((p) => ({ ...p, careerPts: careerByPlayerId.get(p.playerId)?.careerPts ?? 0 }))
     .sort((a, b) => b.careerPts - a.careerPts)
-    .slice(0, 15);
+    .slice(0, 30);
 
-  const waiverMiracleCandidates: CareerPointsRow[] = careerRows
-    .filter((r) => waiverAddedIds.has(r.playerId))
-    .sort((a, b) => b.careerPts - a.careerPts)
-    .slice(0, 15);
+  interface BustCandidate extends StartupPickRow {
+    careerPts: number;
+  }
+  const bustPrefilter: BustCandidate[] = startupPicks
+    .filter((p) => p.round === 1 && p.franchiseId != null)
+    .map((p) => ({ ...p, careerPts: careerByPlayerId.get(p.playerId)?.careerPts ?? 0 }));
 
   const cometCandidates: SeasonPointsRow[] = biggestSeasons.slice(0, 15);
 
@@ -580,14 +658,82 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
     .sort((a, b) => b.careerStarts - a.careerStarts)
     .slice(0, 15);
 
-  interface BustCandidate extends StartupPickRow {
-    careerPts: number;
+  // One batched fetch covering every candidate that needs franchise-scoped
+  // attribution: the Draft Steal / Bust / Waiver Miracle prefiltered pools,
+  // plus Wanderer and Waiver Yo-Yo (already-known fixed-card winners) whose
+  // crest strips are resolved below. Comet and Iron Man winners aren't known
+  // yet (they fall out of dedupePieces), so they're picked up in a second,
+  // much smaller fetch after ranking.
+  const scopingCandidateIds = Array.from(
+    new Set(
+      [
+        ...draftStealPrefilter.map((p) => p.playerId),
+        ...bustPrefilter.map((p) => p.playerId),
+        ...waiverAddedSeasons.map((r) => r.playerId),
+        wanderer?.playerId,
+        yoyo?.playerId,
+      ].filter((id): id is string => id != null),
+    ),
+  );
+  const scopingWeeks = await getPlayerFranchiseWeeks(scopingCandidateIds);
+  const franchiseWeeksByPlayer = new Map<string, PlayerFranchiseWeekRow[]>();
+  for (const row of scopingWeeks) {
+    if (!franchiseWeeksByPlayer.has(row.playerId)) franchiseWeeksByPlayer.set(row.playerId, []);
+    franchiseWeeksByPlayer.get(row.playerId)!.push(row);
   }
-  const bustCandidates: BustCandidate[] = startupPicks
-    .filter((p) => p.round === 1)
-    .map((p) => ({ ...p, careerPts: careerByPlayerId.get(p.playerId)?.careerPts ?? 0 }))
-    .sort((a, b) => a.careerPts - b.careerPts)
-    .slice(0, 15);
+  const weeksFor = (playerId: string) => franchiseWeeksByPlayer.get(playerId) ?? [];
+
+  interface ScopedDraftCandidate extends DraftCandidate {
+    scopedPts: number;
+  }
+  // Draft Steal: highest points scored for the drafting franchise. Never
+  // lead the card with a possibly-zero number, so a scoped sum of 0 (pick
+  // never played a snap for the team that drafted him) is ineligible.
+  const draftStealCandidates: ScopedDraftCandidate[] = draftStealPrefilter
+    .map((p) => ({ ...p, scopedPts: scopedFranchisePoints(weeksFor(p.playerId), p.franchiseId!) }))
+    .filter((p) => p.scopedPts > 0)
+    .sort((a, b) => b.scopedPts - a.scopedPts);
+
+  interface ScopedBustCandidate extends BustCandidate {
+    scopedPts: number;
+  }
+  // The Bust: lowest points scored for the franchise that spent a first-
+  // rounder on him, even if he balled out for someone else later. A true
+  // zero (the pick never played for that team) is the most bust of all, so
+  // no eligibility floor here.
+  const bustCandidates: ScopedBustCandidate[] = bustPrefilter
+    .map((p) => ({ ...p, scopedPts: scopedFranchisePoints(weeksFor(p.playerId), p.franchiseId!) }))
+    .sort((a, b) => a.scopedPts - b.scopedPts);
+
+  interface ScopedWaiverCandidate {
+    playerId: string;
+    playerName: string;
+    position: string | null;
+    seasonYear: number;
+    scopedPts: number;
+    scopedFranchiseId: string;
+  }
+  // Waiver Miracle: the single best SEASON a waiver/free-agent pickup ever
+  // gave the franchise that rostered him that year, compared across every
+  // (player, season) waiver-add ever logged. Not a career total: a player
+  // added off waivers in multiple seasons is scored separately per season,
+  // and only his best one competes.
+  const waiverMiracleCandidates: ScopedWaiverCandidate[] = waiverAddedSeasons
+    .map((add) => {
+      const info = careerByPlayerId.get(add.playerId);
+      const seasonBest = pickSeasonFranchiseAndPoints(weeksFor(add.playerId), add.seasonYear);
+      if (!seasonBest) return null;
+      return {
+        playerId: add.playerId,
+        playerName: info?.playerName ?? "Unknown Player",
+        position: info?.position ?? null,
+        seasonYear: add.seasonYear,
+        scopedPts: seasonBest.points,
+        scopedFranchiseId: seasonBest.franchiseId,
+      } satisfies ScopedWaiverCandidate;
+    })
+    .filter((r): r is ScopedWaiverCandidate => r != null && r.scopedPts > 0)
+    .sort((a, b) => b.scopedPts - a.scopedPts);
 
   const [draftStealWinner, waiverMiracleWinner, cometWinner, ironManWinner, bustWinner] =
     dedupePieces(
@@ -599,27 +745,23 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       bustCandidates,
     );
 
-  // --- Franchise attribution for Comet/Waiver Miracle/Iron Man/Wanderer/
-  // Waiver Yo-Yo: one batched query grouping player_week_points by
-  // playerId+franchiseId for this small set of winners, reused across all
-  // five. Draft Steal and Bust don't need it: draft_picks already carries
-  // franchiseId on the startup pick row.
-  const franchiseWeekPlayerIds = Array.from(
+  // --- Franchise attribution for Comet/Iron Man: a second, small batched
+  // query for the two winners not covered by the scoping fetch above (their
+  // candidate pools don't need per-franchise scoping to rank, only their
+  // eventual winner needs a crest resolved).
+  const secondaryFranchiseWeekPlayerIds = Array.from(
     new Set(
-      [
-        cometWinner?.playerId,
-        waiverMiracleWinner?.playerId,
-        ironManWinner?.playerId,
-        wanderer?.playerId,
-        yoyo?.playerId,
-      ].filter((id): id is string => id != null),
+      [cometWinner?.playerId, ironManWinner?.playerId].filter(
+        (id): id is string => id != null && !franchiseWeeksByPlayer.has(id),
+      ),
     ),
   );
-  const franchiseWeeks = await getPlayerFranchiseWeeks(franchiseWeekPlayerIds);
-  const franchiseWeeksByPlayer = new Map<string, PlayerFranchiseWeekRow[]>();
-  for (const row of franchiseWeeks) {
-    if (!franchiseWeeksByPlayer.has(row.playerId)) franchiseWeeksByPlayer.set(row.playerId, []);
-    franchiseWeeksByPlayer.get(row.playerId)!.push(row);
+  if (secondaryFranchiseWeekPlayerIds.length > 0) {
+    const secondaryWeeks = await getPlayerFranchiseWeeks(secondaryFranchiseWeekPlayerIds);
+    for (const row of secondaryWeeks) {
+      if (!franchiseWeeksByPlayer.has(row.playerId)) franchiseWeeksByPlayer.set(row.playerId, []);
+      franchiseWeeksByPlayer.get(row.playerId)!.push(row);
+    }
   }
 
   function franchiseSequenceBadges(playerId: string): LoreFranchiseBadge[] {
@@ -645,7 +787,7 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
   if (draftStealWinner) {
     const label = SNARKY_LABELS.THE_DRAFT_STEAL;
     const info = careerByPlayerId.get(draftStealWinner.playerId);
-    const pts = Math.round(draftStealWinner.careerPts);
+    const pts = Math.round(draftStealWinner.scopedPts);
     const crest = draftStealWinner.franchiseId
       ? franchiseById.get(draftStealWinner.franchiseId) ?? null
       : null;
@@ -661,7 +803,7 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       story:
         `Round ${draftStealWinner.round}, pick ${draftStealWinner.pickNumber} of the ` +
         `${draftStealWinner.seasonYear} startup${crest ? ` by ${crest.name}` : ""}. ` +
-        `${pts.toLocaleString()} career points. Larceny.`,
+        `${pts.toLocaleString()} points in their colors. Larceny.`,
       franchiseBadge: crest,
     };
   }
@@ -669,11 +811,8 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
   let waiverMiraclePiece: LorePiece | null = null;
   if (waiverMiracleWinner) {
     const label = SNARKY_LABELS.THE_WAIVER_MIRACLE;
-    const pts = Math.round(waiverMiracleWinner.careerPts);
-    const topFranchiseId = pickTopFranchiseByPoints(
-      franchiseWeeksByPlayer.get(waiverMiracleWinner.playerId) ?? [],
-    );
-    const crest = topFranchiseId ? franchiseById.get(topFranchiseId) ?? null : null;
+    const pts = Math.round(waiverMiracleWinner.scopedPts);
+    const crest = franchiseById.get(waiverMiracleWinner.scopedFranchiseId) ?? null;
     waiverMiraclePiece = {
       key: label.key,
       title: label.displayText,
@@ -683,7 +822,9 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       playerName: waiverMiracleWinner.playerName,
       position: waiverMiracleWinner.position,
       statValue: `${pts.toLocaleString()} pts`,
-      story: `${pts.toLocaleString()} career points from a guy the league left on waivers. Free money.`,
+      story:
+        `${pts.toLocaleString()} points in ${waiverMiracleWinner.seasonYear} for ` +
+        `${crest ? crest.name : "one franchise"}, straight off the wire. Free money.`,
       franchiseBadge: crest,
     };
   }
@@ -739,7 +880,7 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
   if (bustWinner) {
     const label = SNARKY_LABELS.THE_BUST;
     const info = careerByPlayerId.get(bustWinner.playerId);
-    const pts = Math.round(bustWinner.careerPts);
+    const pts = Math.round(bustWinner.scopedPts);
     const crest = bustWinner.franchiseId ? franchiseById.get(bustWinner.franchiseId) ?? null : null;
     bustPiece = {
       key: label.key,
@@ -752,7 +893,7 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       statValue: `${pts.toLocaleString()} pts`,
       story:
         `First round, pick ${bustWinner.pickNumber} of the ${bustWinner.seasonYear} startup` +
-        `${crest ? ` by ${crest.name}` : ""}. ${pts.toLocaleString()} career points to show for it. Woof.`,
+        `${crest ? ` by ${crest.name}` : ""}. ${pts.toLocaleString()} points in their colors. Woof.`,
       franchiseBadge: crest,
     };
   }

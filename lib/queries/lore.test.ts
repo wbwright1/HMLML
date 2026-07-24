@@ -2,9 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   dedupePieces,
   franchiseSequenceFor,
+  pickBestFranchiseAndPoints,
   pickSeasonFranchise,
+  pickSeasonFranchiseAndPoints,
   pickTopFranchiseByPoints,
   pickTopFranchiseByStarts,
+  scopedFranchisePoints,
   type PlayerFranchiseWeekRow,
 } from "@/lib/queries/lore";
 
@@ -112,6 +115,35 @@ describe("pickSeasonFranchise", () => {
   });
 });
 
+describe("pickSeasonFranchiseAndPoints", () => {
+  it("returns the dominant franchise and its started points for that season only", () => {
+    const rows = [
+      weekRow("f1", 2023, 1, true, 10),
+      weekRow("f1", 2023, 2, true, 15),
+      weekRow("f2", 2024, 1, true, 1000), // different season, must not leak in
+    ];
+    expect(pickSeasonFranchiseAndPoints(rows, 2023)).toEqual({ franchiseId: "f1", points: 25 });
+  });
+
+  it("excludes points scored for a different franchise the same season", () => {
+    const rows = [
+      weekRow("f1", 2023, 1, true, 10),
+      weekRow("f1", 2023, 2, true, 10),
+      weekRow("f2", 2023, 3, true, 5), // same season, not the dominant franchise
+    ];
+    expect(pickSeasonFranchiseAndPoints(rows, 2023)).toEqual({ franchiseId: "f1", points: 20 });
+  });
+
+  it("ignores benched rows when totaling the season", () => {
+    const rows = [weekRow("f1", 2023, 1, false, 1000), weekRow("f1", 2023, 2, true, 5)];
+    expect(pickSeasonFranchiseAndPoints(rows, 2023)).toEqual({ franchiseId: "f1", points: 5 });
+  });
+
+  it("returns null when there are no started rows that season", () => {
+    expect(pickSeasonFranchiseAndPoints([weekRow("f1", 2023, 1, false)], 2023)).toBeNull();
+  });
+});
+
 describe("pickTopFranchiseByPoints", () => {
   it("picks the franchise with the most career started points", () => {
     const rows = [
@@ -147,6 +179,55 @@ describe("pickTopFranchiseByStarts", () => {
 
   it("returns null for an empty list", () => {
     expect(pickTopFranchiseByStarts([])).toBeNull();
+  });
+});
+
+describe("scopedFranchisePoints", () => {
+  it("sums only started points scored for the given franchise", () => {
+    const rows = [
+      weekRow("f1", 2021, 1, true, 10),
+      weekRow("f1", 2021, 2, true, 15),
+      weekRow("f2", 2023, 1, true, 100),
+    ];
+    expect(scopedFranchisePoints(rows, "f1")).toBe(25);
+  });
+
+  it("ignores benched rows even for the matching franchise", () => {
+    const rows = [weekRow("f1", 2021, 1, false, 50), weekRow("f1", 2021, 2, true, 5)];
+    expect(scopedFranchisePoints(rows, "f1")).toBe(5);
+  });
+
+  it("returns 0 when the player never scored for that franchise", () => {
+    const rows = [weekRow("f2", 2021, 1, true, 50)];
+    expect(scopedFranchisePoints(rows, "f1")).toBe(0);
+  });
+
+  it("returns 0 for an empty row set", () => {
+    expect(scopedFranchisePoints([], "f1")).toBe(0);
+  });
+});
+
+describe("pickBestFranchiseAndPoints", () => {
+  it("returns the franchise with the most started points, and its total", () => {
+    const rows = [
+      weekRow("f1", 2021, 1, true, 10),
+      weekRow("f1", 2022, 1, true, 10),
+      weekRow("f2", 2023, 1, true, 15),
+    ];
+    expect(pickBestFranchiseAndPoints(rows)).toEqual({ franchiseId: "f1", points: 20 });
+  });
+
+  it("ignores benched rows when totaling the winning franchise", () => {
+    const rows = [weekRow("f1", 2021, 1, false, 1000), weekRow("f2", 2021, 1, true, 5)];
+    expect(pickBestFranchiseAndPoints(rows)).toEqual({ franchiseId: "f2", points: 5 });
+  });
+
+  it("returns null for an empty row set", () => {
+    expect(pickBestFranchiseAndPoints([])).toBeNull();
+  });
+
+  it("returns null when the player has rows but none started", () => {
+    expect(pickBestFranchiseAndPoints([weekRow("f1", 2021, 1, false, 10)])).toBeNull();
   });
 });
 
