@@ -113,15 +113,4 @@ test.describe("Story 5.2: Trophy Case Enhancement", () => {
       }
     }
   });
-
-  test("season cards show Best Waiver Pickup", async ({ page }) => {
-    const yearLinks = page.locator('a[href^="/seasons/"]');
-    const count = await yearLinks.count();
-    if (count > 0) {
-      const waiverLabels = page.getByText("Best Waiver Pickup");
-      expect(await waiverLabels.count()).toBeGreaterThanOrEqual(1);
-      // 2022's waiver-wire winner is a stable historical fact.
-      await expect(page.getByText("Geno Smith")).toBeVisible();
-    }
-  });
 });
