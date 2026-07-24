@@ -541,17 +541,18 @@ export default async function RecordsPage() {
 
             <div>
               <p className="text-kicker mb-4">Explore</p>
-              <div className="grid grid-cols-2 gap-3 items-stretch">
+              <div className="grid auto-rows-fr grid-cols-2 gap-3 items-stretch">
                 {subPages.map((page, index) => (
                   <ScrollReveal key={page.href} delay={index * 60}>
                     <Link
                       href={page.href}
+                      title={page.label}
                       className="card-surface flex h-full min-h-[104px] flex-col p-4 transition-colors hover:border-border-strong hover:bg-surface-muted"
                     >
-                      <p className="text-body-sm font-semibold text-accent-gold">
+                      <p className="text-body-sm font-semibold text-accent-gold truncate">
                         {page.label}
                       </p>
-                      <p className="text-caption text-text-tertiary mt-1 hidden sm:block normal-case tracking-normal font-normal line-clamp-2">
+                      <p className="text-caption text-text-tertiary mt-1 max-sm:hidden normal-case tracking-normal font-normal line-clamp-2">
                         {page.description}
                       </p>
                     </Link>
