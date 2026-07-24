@@ -84,23 +84,21 @@ function AwardRow({
 }
 
 /**
- * The Trophy Case: a titled Hall of Fame module surfacing every league award
- * (Regular Season MVP, Championship MVP, Rookie of the Year) in three columns.
- * Self-fetching async RSC; renders NOTHING when no awards exist (empty table or
- * pre-migration), so the page never shows an empty shell.
+ * The Trophy Case: the "Yearly Hardware" subsection of the Player Wing
+ * module, surfacing every league award (Regular Season MVP, Championship
+ * MVP, Rookie of the Year) in three columns. Self-fetching async RSC;
+ * renders NOTHING when no awards exist (empty table or pre-migration), so
+ * the page never shows an empty shell.
  */
 export async function TrophyCase() {
   const roll = await getAwardsHonorRoll();
   if (roll.total === 0 || roll.groups.length === 0) return null;
 
   return (
-    <section
-      data-testid="trophy-case"
-      className="pb-12 md:pb-16 space-y-3"
-    >
-      <div className="pb-2">
-        <p className="text-kicker text-accent-gold mb-1.5">Module</p>
-        <h2 className="text-h2 text-text-primary">The Trophy Case</h2>
+    <div data-testid="trophy-case" className="space-y-3">
+      <div className="pb-1">
+        <p className="text-kicker text-accent-gold mb-1.5">Yearly Hardware</p>
+        <h3 className="text-h3 text-text-primary">The Trophy Case</h3>
         <p className="text-body-sm text-text-tertiary mt-1">
           Every MVP, Finals MVP, and Rookie of the Year, and the roster that
           cashed the ticket.
@@ -137,6 +135,6 @@ export async function TrophyCase() {
           );
         })}
       </div>
-    </section>
+    </div>
   );
 }
