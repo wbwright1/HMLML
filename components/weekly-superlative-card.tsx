@@ -33,13 +33,13 @@ export function WeeklySuperlativeCard({
 }: WeeklySuperlativeCardProps) {
   const isPositive = POSITIVE_TYPES.has(type);
 
-  const bgClass = isPositive ? "bg-accent-gold-light" : "bg-accent-warm-light";
+  const tintClass = isPositive ? "card-tint-gold" : "card-tint-warm";
   const accentClass = isPositive ? "text-accent-gold" : "text-accent-warm";
 
   return (
     <Link
       href={`/seasons/${seasonYear}/week/${week}`}
-      className={`block rounded-xl border border-border p-6 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${bgClass}`}
+      className={`card-surface ${tintClass} block p-5 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2`}
     >
       <p className={`text-kicker mb-2 ${accentClass}`}>
         {label}

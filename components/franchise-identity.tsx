@@ -95,7 +95,7 @@ export function FranchiseIdentity({
           <h1 className="text-h1">{franchise.name}</h1>
           <ChampionshipStars count={championships} variant="hero" />
           {ownerName && (
-            <p className="text-body-sm text-muted-foreground">
+            <p className="text-body-sm text-text-tertiary">
               Owned by {ownerName}
               {coOwnerName ? ` & ${coOwnerName}` : ""}
             </p>
@@ -119,7 +119,7 @@ export function FranchiseIdentity({
           </span>
         </div>
         {ownerName && (
-          <p className="text-caption text-muted-foreground">
+          <p className="text-caption text-text-tertiary">
             {ownerName}
             {coOwnerName ? ` & ${coOwnerName}` : ""}
           </p>

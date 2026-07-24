@@ -26,7 +26,7 @@ export function TransactionActivityCard({
   }
 
   return (
-    <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+    <div className="card-surface p-6 space-y-4">
       <div className="flex items-center justify-between gap-2">
         <p className="text-kicker">
           Recent Moves
@@ -47,7 +47,7 @@ export function TransactionActivityCard({
               key={`${txn.date}-${txn.type}-${txn.description}`}
               className="flex items-start gap-3 py-2 border-b border-border/50 last:border-0"
             >
-              <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap mt-0.5">
+              <span className="text-xs text-text-tertiary tabular-nums whitespace-nowrap mt-0.5">
                 {txn.date}
               </span>
               <SuperlativeBadge text={badge.text} variant={badge.variant} />

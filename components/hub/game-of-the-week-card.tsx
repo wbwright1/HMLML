@@ -38,17 +38,7 @@ export function GameOfTheWeekCard({
   blurb,
 }: GameOfTheWeekCardProps) {
   return (
-    <div className="card-surface card-glows relative overflow-hidden p-6 md:p-8">
-      {/* Gold tint over the base card gradient. */}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            "linear-gradient(180deg, rgba(226,184,88,0.10), rgba(226,184,88,0.02))",
-        }}
-      />
-
+    <div className="card-surface card-tint-gold card-glows p-6 md:p-8">
       <div className="relative">
         {/* Header: kicker + all-time series */}
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
