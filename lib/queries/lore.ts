@@ -163,7 +163,16 @@ export interface StartupPickRow {
   franchiseId: string | null;
 }
 
-/** Startup-draft picks only (excludes rookie drafts), with the season year. */
+/**
+ * Startup-draft picks only (excludes rookie drafts), with the season year.
+ * Restricted to the Sleeper era (`is_legacy_era = false`, i.e. the 2023
+ * startup): the sole consumer, Draft Steal, is a value award like The Bust,
+ * and the 2021 predecessor-league startup had a longer runway (5 completed
+ * seasons vs 3) to accumulate points, which would give 2021 picks an unfair
+ * edge over 2023 picks in a "most points scored" ranking. Verified against
+ * the live DB (see getBustDraftPickPool) that `is_legacy_era` maps exactly
+ * to 2021/2022 (`true`) vs 2023+ (`false`).
+ */
 export async function getStartupDraftPicks(): Promise<StartupPickRow[]> {
   try {
     const rows = await db
@@ -176,7 +185,7 @@ export async function getStartupDraftPicks(): Promise<StartupPickRow[]> {
       })
       .from(draftPicks)
       .innerJoin(seasons, eq(draftPicks.seasonId, seasons.id))
-      .where(eq(draftPicks.draftType, "startup"));
+      .where(and(eq(draftPicks.draftType, "startup"), eq(draftPicks.isLegacyEra, false)));
 
     return rows
       .filter((r): r is StartupPickRow & { playerId: string } => r.playerId != null)
@@ -203,13 +212,19 @@ export interface BustDraftPickRow {
 }
 
 /**
- * Draft picks from rounds 1-6 of ANY draft (startup and rookie), with the
- * season year and draft type. The Bust's eligible-round rule differs by
- * draft type (startup rounds 1-6 count as premium capital; rookie drafts
- * only round 1 does), so this fetches the superset (round <= 6) and callers
- * narrow with `isBustEligibleRound`. Draft Steal stays startup-only and
- * round >= 8 via `getStartupDraftPicks`, so the two awards never compete for
- * the same pick.
+ * Draft picks from rounds 1-6 of ANY Sleeper-era draft (startup and rookie),
+ * with the season year and draft type. Excludes `is_legacy_era` picks: The
+ * Bust is scoped to 2023+ only, since the 2021/2022 predecessor-league
+ * drafts had a longer runway to accumulate points (5 seasons vs 3) and
+ * mixing eras would inflate the expectation baselines and unfairly punish
+ * older picks. Verified against the live DB that `is_legacy_era` maps
+ * exactly to the 2021 startup and 2022 rookie drafts (`true`) vs. 2023+
+ * (`false`), so the flag is a reliable proxy for the season-year cutoff.
+ * The Bust's eligible-round rule differs by draft type (startup rounds 1-6
+ * count as premium capital; rookie drafts only round 1 does), so this
+ * fetches the superset (round <= 6) and callers narrow with
+ * `isBustEligibleRound`. Draft Steal stays startup-only and round >= 8 via
+ * `getStartupDraftPicks`, so the two awards never compete for the same pick.
  */
 export async function getBustDraftPickPool(): Promise<BustDraftPickRow[]> {
   try {
@@ -224,7 +239,7 @@ export async function getBustDraftPickPool(): Promise<BustDraftPickRow[]> {
       })
       .from(draftPicks)
       .innerJoin(seasons, eq(draftPicks.seasonId, seasons.id))
-      .where(sql`${draftPicks.round} <= 6`);
+      .where(and(sql`${draftPicks.round} <= 6`, eq(draftPicks.isLegacyEra, false)));
 
     return rows
       .filter((r): r is typeof r & { playerId: string } => r.playerId != null)
@@ -930,8 +945,9 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
     .slice(0, 30);
 
   // The Bust's eligible-round pool: startup rounds 1-6, or rookie round 1
-  // (isBustEligibleRound). This full pool (not yet runway/trade filtered)
-  // is also the baseline population for "what does this round normally
+  // (isBustEligibleRound), already restricted to the Sleeper era (2023+) by
+  // getBustDraftPickPool. This full pool (not yet runway/trade filtered) is
+  // also the baseline population for "what does this round normally
   // deliver," so traded-away and too-recent picks stay in it; only the
   // runway + trade-exemption filters below narrow it to picks that can
   // actually WIN the award.
