@@ -29,6 +29,7 @@ import { alignStarterSlots, computeProjectedPoints } from "@/lib/lineup-slots";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
 import { resolveDivisionName } from "@/lib/divisions";
+import { runAtomic } from "@/lib/db/atomic";
 
 // Shape of the per-season settings blob stored in seasons.settings_json.
 interface SeasonSettingsJson {
@@ -221,18 +222,17 @@ async function syncRostersAndPicks(
       // delete rolls back with the failed insert). Insert errors are NOT
       // swallowed: an id missing from the players table (FK violation) rolls
       // back this roster and propagates to the sync error handler / sync_log.
-      await db.transaction(async (tx) => {
-        await tx
+      await runAtomic((tx) => [
+        tx
           .delete(rosterPlayers)
           .where(
             and(
               eq(rosterPlayers.seasonId, seasonId),
               eq(rosterPlayers.rosterId, rosterIdStr)
             )
-          );
-
-        for (const p of allPlayers) {
-          await tx
+          ),
+        ...allPlayers.map((p) =>
+          tx
             .insert(rosterPlayers)
             .values({
               seasonId,
@@ -253,9 +253,9 @@ async function syncRostersAndPicks(
                 franchiseId,
                 updatedAt: new Date(),
               },
-            });
-        }
-      });
+            })
+        ),
+      ]);
 
       rowCount++;
     }
