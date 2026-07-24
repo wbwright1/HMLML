@@ -46,12 +46,18 @@ const ROSTER_BLEND = 0.5;
 
 // Maps a playoff result to a [0,1] "how did the season end" component. Unknown /
 // null (legacy rows without a result) land at a neutral-ish 0.4.
+// `toilet_bowl` now means either finalist of the losers-bracket final (the two
+// worst teams that dropped all the way through the consolation/Toilet Bowl
+// bracket), not just the single last-place team. `consolation` covers the other
+// losers-bracket teams that escaped the final. Since a Toilet Bowl finalist is
+// still a bottom-two finish, it stays the lowest bucket, just above the old
+// hard 0.0 (it now spans dead-last AND second-to-last), and below consolation.
 const FINISH_COMPONENT: Record<string, number> = {
   champion: 1.0,
   runner_up: 0.75,
   made_playoffs: 0.5,
   consolation: 0.3,
-  toilet_bowl: 0.0,
+  toilet_bowl: 0.15,
 };
 
 function finishComponent(playoffResult: string | null): number {

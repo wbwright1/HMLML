@@ -318,12 +318,14 @@ export default async function PlayoffBracketPage({
   // Find key franchise IDs from playoff results
   let championId: string | null = null;
   let runnerUpId: string | null = null;
-  let toiletBowlId: string | null = null;
+  // The Toilet Bowl is the losers-bracket final; BOTH finalists carry the
+  // `toilet_bowl` result, so collect all of them (not a single team).
+  const toiletBowlIds: string[] = [];
 
   for (const [fId, result] of playoffResults) {
     if (result === "champion") championId = fId;
     if (result === "runner_up") runnerUpId = fId;
-    if (result === "toilet_bowl") toiletBowlId = fId;
+    if (result === "toilet_bowl") toiletBowlIds.push(fId);
   }
 
   // Find the championship matchup
@@ -336,14 +338,16 @@ export default async function PlayoffBracketPage({
   // Resolve franchise info
   const championInfo = championId ? franchiseLookup.get(championId) : null;
   const runnerUpInfo = runnerUpId ? franchiseLookup.get(runnerUpId) : null;
-  const toiletBowlInfo = toiletBowlId ? franchiseLookup.get(toiletBowlId) : null;
+  const toiletBowlInfos = toiletBowlIds
+    .map((id) => franchiseLookup.get(id))
+    .filter((info): info is FranchiseInfo => info != null);
 
   // Find 3rd place from semifinal losers
   const thirdPlaceInfo = findThirdPlace(playoffData, championId, runnerUpId);
 
   const hasData =
-    championshipMatchup || championInfo || runnerUpInfo || toiletBowlInfo ||
-    playoffData.size > 0;
+    championshipMatchup || championInfo || runnerUpInfo ||
+    toiletBowlInfos.length > 0 || playoffData.size > 0;
 
   return (
     <>
@@ -435,8 +439,8 @@ export default async function PlayoffBracketPage({
             </ScrollReveal>
           )}
 
-          {/* Toilet Bowl */}
-          {toiletBowlInfo && (
+          {/* Toilet Bowl (losers-bracket final; both finalists) */}
+          {toiletBowlInfos.length > 0 && (
             <ScrollReveal delay={240}>
               <div className="flex items-center gap-3 mb-4">
                 <div className="h-px flex-1 bg-divider" />
@@ -445,15 +449,23 @@ export default async function PlayoffBracketPage({
                 </h2>
                 <div className="h-px flex-1 bg-divider" />
               </div>
-              <div className="card-surface card-tint-warm p-6 text-center space-y-2 max-w-lg">
-                <div className="text-3xl mb-1" aria-hidden="true">
+              <div className="card-surface card-tint-warm p-6 text-center space-y-3 max-w-lg">
+                <div className="text-3xl" aria-hidden="true">
                   🚽
                 </div>
                 <p className="text-caption text-accent-warm">
-                  Last Place
+                  Losers-Bracket Final
                 </p>
-                <p className="text-h3 text-text-primary">{toiletBowlInfo.name}</p>
-                <SuperlativeBadge text="Toilet Bowl" variant="brown" />
+                <div className="space-y-2">
+                  {toiletBowlInfos.map((info) => (
+                    <p key={info.slug} className="text-h3 text-text-primary">
+                      {info.name}
+                    </p>
+                  ))}
+                </div>
+                <div className="flex justify-center">
+                  <SuperlativeBadge text="Toilet Bowl" variant="brown" />
+                </div>
               </div>
             </ScrollReveal>
           )}
