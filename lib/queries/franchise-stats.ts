@@ -19,6 +19,7 @@ export interface WorstBeatdown {
 
 export interface FranchiseExtremes {
   worstBeatdown: WorstBeatdown | null;
+  biggestWin: WorstBeatdown | null;
   longestWinStreak: number;
 }
 
@@ -61,6 +62,7 @@ export async function getFranchiseExtremes(
     });
 
     let worstBeatdown: WorstBeatdown | null = null;
+    let biggestWin: WorstBeatdown | null = null;
     let longestWinStreak = 0;
     let currentStreak = 0;
 
@@ -71,6 +73,21 @@ export async function getFranchiseExtremes(
       if (g.isWinner === true) {
         currentStreak++;
         if (currentStreak > longestWinStreak) longestWinStreak = currentStreak;
+
+        // Most dominant win = largest winning margin.
+        const winMargin = pf - pa;
+        if (!biggestWin || winMargin > biggestWin.margin) {
+          biggestWin = {
+            seasonYear: g.seasonYear,
+            week: g.week,
+            pointsFor: pf,
+            pointsAgainst: pa,
+            margin: winMargin,
+            opponentName: g.opponentName,
+            opponentSlug: g.opponentSlug,
+            isPlayoff: Boolean(g.isPlayoff),
+          };
+        }
       } else {
         // A loss or tie breaks the win streak.
         currentStreak = 0;
@@ -94,8 +111,8 @@ export async function getFranchiseExtremes(
       }
     }
 
-    return { worstBeatdown, longestWinStreak };
+    return { worstBeatdown, biggestWin, longestWinStreak };
   } catch {
-    return { worstBeatdown: null, longestWinStreak: 0 };
+    return { worstBeatdown: null, biggestWin: null, longestWinStreak: 0 };
   }
 }

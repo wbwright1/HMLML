@@ -89,7 +89,7 @@ export async function ReigningHonors({
         ))}
       </div>
       <p className="mt-2 text-caption text-text-tertiary normal-case tracking-normal">
-        {seasonYear} league honors, commissioner&rsquo;s call.
+        {`${seasonYear} league honors, commissioner’s call.`}
       </p>
     </section>
   );

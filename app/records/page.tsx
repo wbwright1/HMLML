@@ -3,7 +3,6 @@ import { PageSection } from "@/components/page-section";
 import { SectionHeader } from "@/components/section-header";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { ScrollReveal } from "@/components/scroll-reveal";
-import { SuperlativeCard } from "@/components/superlative-card";
 import {
   getLeaderboard,
   getSeasonYears,
@@ -14,16 +13,15 @@ import {
   type PowerRankingsView,
 } from "@/lib/queries/preseason-power";
 import { getLatestSeason } from "@/lib/queries/matchups";
-import { getLastCompletedSeason } from "@/lib/queries/seasons";
+import { getAllSeasons } from "@/lib/queries/seasons";
 import {
-  getSeasonSuperlatives,
-  getUncoveredFranchiseAwards,
+  getSeasonSuperlativeCards,
+  getAllTimeSuperlativeCards,
   type SeasonSuperlative,
 } from "@/lib/queries/superlatives";
-import { getSeasonLineupAwards, type LineupAward } from "@/lib/queries/lineup-efficiency";
 import { getPlayoffProjection } from "@/lib/queries/divisions";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
-import { LeaderboardTable } from "@/app/records/leaderboard-table";
+import { RecordsSeasonView } from "@/app/records/records-season-view";
 import type { LeaderboardEntry } from "@/lib/queries/records";
 import type { PlayoffProjection } from "@/lib/queries/divisions";
 
@@ -196,19 +194,13 @@ export default async function RecordsPage() {
   let seasonYears: number[] = [];
   let powerView: PowerRankingsView = { mode: "regular", entries: [] };
   const seasonDataRecord: Record<string, LeaderboardEntry[]> = {};
-  let seasonSuperlatives: SeasonSuperlative[] = [];
-  let coachingMalpractice: LineupAward | null = null;
-  let whatCouldveBeen: LineupAward | null = null;
   let projection: PlayoffProjection | null = null;
   let projectionSeasonYear: number | null = null;
-  let superlativesSeasonYear: number | null = null;
-  let superlativesSeasonId: number | null = null;
-  let coverageAwards: SeasonSuperlative[] = [];
   let latestSeason: Awaited<ReturnType<typeof getLatestSeason>> = null;
 
   try {
-    // These four are mutually independent; fetch them concurrently rather than
-    // in series so the page waits on one round trip instead of three.
+    // These are mutually independent; fetch them concurrently rather than in
+    // series so the page waits on one round trip instead of several.
     let allSeasonData: Awaited<ReturnType<typeof getAllSeasonLeaderboards>>;
     [allTimeData, seasonYears, powerView, allSeasonData, latestSeason] =
       await Promise.all([
@@ -224,65 +216,12 @@ export default async function RecordsPage() {
       seasonDataRecord[year] = data;
     }
 
-    // The Superlatives: season awards + optimal-lineup awards for the latest
-    // season. Lineup awards return null for legacy (pre-Sleeper) seasons that
-    // never got player_week_points, which the render below hides gracefully.
-    // Also the playoff projection for the current season only; hasDivisions
-    // gates whether that block renders at all (RISK-B: nothing worth showing
-    // for a legacy/no-division season, or when there's no current season).
+    // The playoff projection, for the current season only; hasDivisions gates
+    // whether that block renders at all (RISK-B: nothing worth showing for a
+    // legacy/no-division season, or when there's no current season).
     if (latestSeason) {
-      const [superlatives, lineupAwards, playoffProjection] = await Promise.all([
-        getSeasonSuperlatives(latestSeason.id),
-        getSeasonLineupAwards(latestSeason.id),
-        getPlayoffProjection(latestSeason.id),
-      ]);
-      seasonSuperlatives = superlatives;
-      coachingMalpractice = lineupAwards?.coachingMalpractice ?? null;
-      whatCouldveBeen = lineupAwards?.whatCouldveBeen ?? null;
-      projection = playoffProjection;
+      projection = await getPlayoffProjection(latestSeason.id);
       projectionSeasonYear = latestSeason.seasonYear;
-      superlativesSeasonYear = latestSeason.seasonYear;
-      superlativesSeasonId = latestSeason.id;
-
-      // The latest season row often exists before its games do (e.g. the
-      // whole offseason, once next year's season row is created but before
-      // Week 1). Rather than let "The Superlatives" render as an empty
-      // section for everyone, fall back to the last completed season so the
-      // panel shows real awards until the new season has matchup data of its
-      // own. The playoff projection intentionally does NOT fall back here:
-      // an empty projection for a season with no games yet is correct.
-      const hasLatestSeasonAwards =
-        superlatives.length > 0 || coachingMalpractice != null || whatCouldveBeen != null;
-      if (!hasLatestSeasonAwards) {
-        const completedSeason = await getLastCompletedSeason();
-        if (completedSeason && completedSeason.id !== latestSeason.id) {
-          const [fallbackSuperlatives, fallbackLineupAwards] = await Promise.all([
-            getSeasonSuperlatives(completedSeason.id),
-            getSeasonLineupAwards(completedSeason.id),
-          ]);
-          seasonSuperlatives = fallbackSuperlatives;
-          coachingMalpractice = fallbackLineupAwards?.coachingMalpractice ?? null;
-          whatCouldveBeen = fallbackLineupAwards?.whatCouldveBeen ?? null;
-          superlativesSeasonYear = completedSeason.seasonYear;
-          superlativesSeasonId = completedSeason.id;
-        }
-      }
-
-      // Coverage pass: guarantee every franchise the displayed season touched
-      // shows up in at least one card. Feed it the slugs already covered by the
-      // competitive awards (season superlatives + both lineup awards) so it only
-      // fills the gaps and never overrides a real winner.
-      if (superlativesSeasonId != null) {
-        const coveredSlugs = [
-          ...seasonSuperlatives.map((s) => s.franchiseSlug),
-          ...(coachingMalpractice ? [coachingMalpractice.franchiseSlug] : []),
-          ...(whatCouldveBeen ? [whatCouldveBeen.franchiseSlug] : []),
-        ];
-        coverageAwards = await getUncoveredFranchiseAwards(
-          superlativesSeasonId,
-          coveredSlugs,
-        );
-      }
     }
   } catch {
     // DB may not be connected
@@ -305,6 +244,35 @@ export default async function RecordsPage() {
     }
   }
 
+  // Season-scoped + all-time superlative cards, keyed for the client tab
+  // state to look up by whichever season is selected. Built from the final
+  // (post-filter) seasonYears list, so a hidden all-zero season never gets
+  // fetched. Any failure defaults to an empty map; the section simply does
+  // not render for the scopes that failed.
+  const superlativesByScope: Record<string, SeasonSuperlative[]> = {};
+  try {
+    const allSeasons = await getAllSeasons();
+    const seasonIdByYear = new Map(allSeasons.map((s) => [s.seasonYear, s.id]));
+
+    const [seasonCardsList, allTimeCards] = await Promise.all([
+      Promise.all(
+        seasonYears.map(async (year) => {
+          const seasonId = seasonIdByYear.get(year);
+          if (seasonId == null) return [year, [] as SeasonSuperlative[]] as const;
+          return [year, await getSeasonSuperlativeCards(seasonId)] as const;
+        }),
+      ),
+      getAllTimeSuperlativeCards(),
+    ]);
+
+    for (const [year, cards] of seasonCardsList) {
+      superlativesByScope[String(year)] = cards;
+    }
+    superlativesByScope["all-time"] = allTimeCards;
+  } catch {
+    // DB unavailable; the Superlatives section is omitted for every scope.
+  }
+
   // Crest avatars for the projected playoff field (division projection is
   // owned by another query module, so resolve avatars here via the shared
   // helper rather than threading them through PlayoffProjection).
@@ -322,30 +290,178 @@ export default async function RecordsPage() {
   }
 
   const recordBook = buildRecordBook(allTimeData);
-  const hasSuperlatives =
-    seasonSuperlatives.length > 0 ||
-    coachingMalpractice ||
-    whatCouldveBeen ||
-    coverageAwards.length > 0;
 
-  // Flatten every award source into one priority-ordered list, then dedupe
-  // by franchise so each franchise renders exactly one card (highest-priority
-  // award wins). The coverage pass guarantees all 12 franchises are present,
-  // so after slicing to 12 the grid is exactly one card per franchise.
-  const allAwards: SeasonSuperlative[] = [
-    ...seasonSuperlatives,
-    ...(coachingMalpractice ? [coachingMalpractice] : []),
-    ...(whatCouldveBeen ? [whatCouldveBeen] : []),
-    ...coverageAwards,
-  ];
-  const seenSlugs = new Set<string>();
-  const superlativeCards: SeasonSuperlative[] = [];
-  for (const award of allAwards) {
-    if (seenSlugs.has(award.franchiseSlug)) continue;
-    seenSlugs.add(award.franchiseSlug);
-    superlativeCards.push(award);
-  }
-  superlativeCards.splice(12);
+  const rail = (
+    <>
+      {recordBook.length > 0 && (
+        <div>
+          <p className="text-kicker mb-4">The Record Book</p>
+          <div className="grid grid-cols-2 gap-3">
+            {recordBook.map((entry) => (
+              <RecordBookCard key={entry.label} {...entry} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {projection && projection.hasDivisions && projection.field.length > 0 && (
+        <div>
+          <p className="text-kicker mb-4">Projected Playoff Field</p>
+          <div className="space-y-1">
+            {projection.field.map((team) => (
+              <Link
+                key={team.franchiseId}
+                href={`/teams/${team.slug}`}
+                className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-muted"
+              >
+                <span className="font-mono text-sm tabular-nums text-text-tertiary w-4 shrink-0">
+                  {team.seed}
+                </span>
+                <FranchiseLogo
+                  slug={team.slug}
+                  name={team.name}
+                  abbreviation={team.abbreviation ?? undefined}
+                  brandingColor={team.brandingColor ?? undefined}
+                  avatarUrl={projectionAvatarUrls.get(team.franchiseId) ?? null}
+                  size="sm"
+                  decorative
+                />
+                <span className="text-body-sm font-medium text-text-primary truncate flex-1">
+                  {team.name}
+                </span>
+                {team.isDivisionWinner ? (
+                  <span className="text-caption text-accent-gold shrink-0">
+                    {team.divisionName ?? "Div winner"}
+                  </span>
+                ) : (
+                  <span className="text-caption text-text-tertiary shrink-0">
+                    Wildcard
+                  </span>
+                )}
+              </Link>
+            ))}
+            {projection.firstOut && (
+              <div className="flex items-center gap-3 rounded-lg px-2 py-2 border-t border-divider mt-2 pt-3">
+                <span className="text-caption text-text-tertiary w-4 shrink-0">
+                  &middot;
+                </span>
+                <FranchiseLogo
+                  slug={projection.firstOut.slug}
+                  name={projection.firstOut.name}
+                  abbreviation={projection.firstOut.abbreviation ?? undefined}
+                  brandingColor={projection.firstOut.brandingColor ?? undefined}
+                  avatarUrl={
+                    projectionAvatarUrls.get(projection.firstOut.franchiseId) ?? null
+                  }
+                  size="sm"
+                  decorative
+                />
+                <span className="text-body-sm font-medium text-text-secondary truncate flex-1">
+                  {projection.firstOut.name}
+                </span>
+                <span className="text-caption text-accent-warm shrink-0">
+                  First Out
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {powerView.entries.length > 0 && (
+        <div>
+          <SectionHeader
+            title={
+              powerView.mode === "preseason"
+                ? "Preseason Power"
+                : "Power Ranking"
+            }
+            viewAllHref="/records/power-rankings"
+          />
+          <div className="space-y-1">
+            {/* Preseason: deltas are meaningless (no games yet), so show
+                the power index instead of a trend arrow. */}
+            {powerView.mode === "preseason"
+              ? powerView.entries.slice(0, 4).map((entry) => (
+                  <PowerMiniRow
+                    key={entry.id}
+                    rank={entry.rank}
+                    slug={entry.slug}
+                    name={entry.name}
+                    abbreviation={entry.abbreviation}
+                    brandingColor={entry.brandingColor}
+                    avatarUrl={entry.avatarUrl}
+                    trailing={
+                      <span className="font-mono text-xs font-bold tabular-nums text-accent-gold shrink-0">
+                        {(entry.powerScore * 100).toFixed(1)}
+                      </span>
+                    }
+                  />
+                ))
+              : powerView.entries.slice(0, 4).map((entry) => (
+                  <PowerMiniRow
+                    key={entry.id}
+                    rank={entry.rank}
+                    slug={entry.slug}
+                    name={entry.name}
+                    abbreviation={entry.abbreviation}
+                    brandingColor={entry.brandingColor}
+                    avatarUrl={entry.avatarUrl}
+                    trailing={
+                      entry.formDelta === 0 ? (
+                        <span className="flex items-center gap-0.5 font-mono text-xs tabular-nums text-text-tertiary shrink-0">
+                          <span aria-hidden>–</span>
+                          <span>0</span>
+                        </span>
+                      ) : entry.formDelta > 0 ? (
+                        <span className="flex items-center gap-0.5 font-mono text-xs font-bold tabular-nums text-accent-green shrink-0">
+                          <span aria-hidden>▲</span>
+                          <span>{entry.formDelta}</span>
+                        </span>
+                      ) : (
+                        <span className="flex items-center gap-0.5 font-mono text-xs tabular-nums text-accent-warm shrink-0">
+                          <span aria-hidden>▼</span>
+                          <span>{Math.abs(entry.formDelta)}</span>
+                        </span>
+                      )
+                    }
+                  />
+                ))}
+          </div>
+        </div>
+      )}
+
+      <div>
+        <p className="text-kicker mb-4">Explore</p>
+        <div className="grid grid-cols-1 gap-2">
+          {subPages.map((page, index) => (
+            <ScrollReveal key={page.href} delay={index * 60}>
+              <Link
+                href={page.href}
+                title={page.label}
+                className="card-surface group flex items-center justify-between gap-3 p-3 transition-colors hover:border-border-strong hover:bg-surface-muted"
+              >
+                <div className="min-w-0">
+                  <p className="text-body-sm font-semibold text-accent-gold">
+                    {page.label}
+                  </p>
+                  <p className="text-caption text-text-tertiary mt-0.5 normal-case tracking-normal font-normal">
+                    {page.description}
+                  </p>
+                </div>
+                <span
+                  className="shrink-0 text-text-tertiary transition-transform group-hover:translate-x-0.5"
+                  aria-hidden
+                >
+                  &rarr;
+                </span>
+              </Link>
+            </ScrollReveal>
+          ))}
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <>
@@ -380,214 +496,21 @@ export default async function RecordsPage() {
         </Link>
       </ScrollReveal>
 
-      <section className="pb-12 md:pb-16">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-8 lg:gap-10 items-start">
-          {/* Main: full standings */}
-          <div>
-            <LeaderboardTable
-              allTimeData={allTimeData}
-              seasonData={seasonDataRecord}
-              seasonYears={seasonYears}
-              projectionSeasonYear={
-                projection?.hasDivisions ? projectionSeasonYear : null
-              }
-              projectionFieldIds={
-                projection?.hasDivisions
-                  ? projection.field.map((t) => t.franchiseId)
-                  : undefined
-              }
-            />
-          </div>
-
-          {/* Right rail */}
-          <div className="space-y-8">
-            {recordBook.length > 0 && (
-              <div>
-                <p className="text-kicker mb-4">The Record Book</p>
-                <div className="grid grid-cols-2 gap-3">
-                  {recordBook.map((entry) => (
-                    <RecordBookCard key={entry.label} {...entry} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {projection && projection.hasDivisions && projection.field.length > 0 && (
-              <div>
-                <p className="text-kicker mb-4">Projected Playoff Field</p>
-                <div className="space-y-1">
-                  {projection.field.map((team) => (
-                    <Link
-                      key={team.franchiseId}
-                      href={`/teams/${team.slug}`}
-                      className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-muted"
-                    >
-                      <span className="font-mono text-sm tabular-nums text-text-tertiary w-4 shrink-0">
-                        {team.seed}
-                      </span>
-                      <FranchiseLogo
-                        slug={team.slug}
-                        name={team.name}
-                        abbreviation={team.abbreviation ?? undefined}
-                        brandingColor={team.brandingColor ?? undefined}
-                        avatarUrl={projectionAvatarUrls.get(team.franchiseId) ?? null}
-                        size="sm"
-                        decorative
-                      />
-                      <span className="text-body-sm font-medium text-text-primary truncate flex-1">
-                        {team.name}
-                      </span>
-                      {team.isDivisionWinner ? (
-                        <span className="text-caption text-accent-gold shrink-0">
-                          {team.divisionName ?? "Div winner"}
-                        </span>
-                      ) : (
-                        <span className="text-caption text-text-tertiary shrink-0">
-                          Wildcard
-                        </span>
-                      )}
-                    </Link>
-                  ))}
-                  {projection.firstOut && (
-                    <div className="flex items-center gap-3 rounded-lg px-2 py-2 border-t border-divider mt-2 pt-3">
-                      <span className="text-caption text-text-tertiary w-4 shrink-0">
-                        &middot;
-                      </span>
-                      <FranchiseLogo
-                        slug={projection.firstOut.slug}
-                        name={projection.firstOut.name}
-                        abbreviation={projection.firstOut.abbreviation ?? undefined}
-                        brandingColor={projection.firstOut.brandingColor ?? undefined}
-                        avatarUrl={
-                          projectionAvatarUrls.get(projection.firstOut.franchiseId) ?? null
-                        }
-                        size="sm"
-                        decorative
-                      />
-                      <span className="text-body-sm font-medium text-text-secondary truncate flex-1">
-                        {projection.firstOut.name}
-                      </span>
-                      <span className="text-caption text-accent-warm shrink-0">
-                        First Out
-                      </span>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {powerView.entries.length > 0 && (
-              <div>
-                <SectionHeader
-                  title={
-                    powerView.mode === "preseason"
-                      ? "Preseason Power"
-                      : "Power Ranking"
-                  }
-                  viewAllHref="/records/power-rankings"
-                />
-                <div className="space-y-1">
-                  {/* Preseason: deltas are meaningless (no games yet), so show
-                      the power index instead of a trend arrow. */}
-                  {powerView.mode === "preseason"
-                    ? powerView.entries.slice(0, 4).map((entry) => (
-                        <PowerMiniRow
-                          key={entry.id}
-                          rank={entry.rank}
-                          slug={entry.slug}
-                          name={entry.name}
-                          abbreviation={entry.abbreviation}
-                          brandingColor={entry.brandingColor}
-                          avatarUrl={entry.avatarUrl}
-                          trailing={
-                            <span className="font-mono text-xs font-bold tabular-nums text-accent-gold shrink-0">
-                              {(entry.powerScore * 100).toFixed(1)}
-                            </span>
-                          }
-                        />
-                      ))
-                    : powerView.entries.slice(0, 4).map((entry) => (
-                        <PowerMiniRow
-                          key={entry.id}
-                          rank={entry.rank}
-                          slug={entry.slug}
-                          name={entry.name}
-                          abbreviation={entry.abbreviation}
-                          brandingColor={entry.brandingColor}
-                          avatarUrl={entry.avatarUrl}
-                          trailing={
-                            entry.formDelta === 0 ? (
-                              <span className="flex items-center gap-0.5 font-mono text-xs tabular-nums text-text-tertiary shrink-0">
-                                <span aria-hidden>–</span>
-                                <span>0</span>
-                              </span>
-                            ) : entry.formDelta > 0 ? (
-                              <span className="flex items-center gap-0.5 font-mono text-xs font-bold tabular-nums text-accent-green shrink-0">
-                                <span aria-hidden>▲</span>
-                                <span>{entry.formDelta}</span>
-                              </span>
-                            ) : (
-                              <span className="flex items-center gap-0.5 font-mono text-xs tabular-nums text-accent-warm shrink-0">
-                                <span aria-hidden>▼</span>
-                                <span>{Math.abs(entry.formDelta)}</span>
-                              </span>
-                            )
-                          }
-                        />
-                      ))}
-                </div>
-              </div>
-            )}
-
-            <div>
-              <p className="text-kicker mb-4">Explore</p>
-              <div className="grid auto-rows-fr grid-cols-2 gap-3 items-stretch">
-                {subPages.map((page, index) => (
-                  <ScrollReveal key={page.href} delay={index * 60}>
-                    <Link
-                      href={page.href}
-                      title={page.label}
-                      className="card-surface flex h-full min-h-[104px] flex-col p-4 transition-colors hover:border-border-strong hover:bg-surface-muted"
-                    >
-                      <p className="text-body-sm font-semibold text-accent-gold truncate">
-                        {page.label}
-                      </p>
-                      <p className="text-caption text-text-tertiary mt-1 max-sm:hidden normal-case tracking-normal font-normal line-clamp-2">
-                        {page.description}
-                      </p>
-                    </Link>
-                  </ScrollReveal>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {hasSuperlatives && (
-        <ScrollReveal>
-          <PageSection
-            label={
-              superlativesSeasonYear ? `Season Awards · ${superlativesSeasonYear}` : "Season Awards"
-            }
-            title="The Superlatives"
-          >
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 items-stretch">
-              {superlativeCards.map((s) => (
-                <SuperlativeCard
-                  key={s.franchiseSlug}
-                  label={s.displayText}
-                  stat={s.stat}
-                  context={s.context}
-                  franchiseName={s.franchiseName}
-                  franchiseSlug={s.franchiseSlug}
-                  tone={s.tone}
-                />
-              ))}
-            </div>
-          </PageSection>
-        </ScrollReveal>
-      )}
+      <RecordsSeasonView
+        allTimeData={allTimeData}
+        seasonData={seasonDataRecord}
+        seasonYears={seasonYears}
+        projectionSeasonYear={
+          projection?.hasDivisions ? projectionSeasonYear : null
+        }
+        projectionFieldIds={
+          projection?.hasDivisions
+            ? projection.field.map((t) => t.franchiseId)
+            : undefined
+        }
+        superlativesByScope={superlativesByScope}
+        rail={rail}
+      />
     </>
   );
 }
