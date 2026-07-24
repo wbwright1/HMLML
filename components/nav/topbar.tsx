@@ -13,7 +13,7 @@ interface TopbarProps {
 export function Topbar({ livePill, member }: TopbarProps) {
   return (
     <div className="sticky top-0 z-40 hidden h-16 border-b border-border bg-canvas/85 backdrop-blur-md lg:block">
-      <div className="mx-auto flex h-full w-full max-w-[1200px] items-center gap-4 px-8">
+      <div className="mx-auto flex h-full w-full max-w-[1200px] items-center gap-3 px-8 xl:gap-4">
         <Link
           href="/"
           aria-label="HMLML, Home"
@@ -26,7 +26,7 @@ export function Topbar({ livePill, member }: TopbarProps) {
           <NavPills variant="topbar" />
         </nav>
 
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2 xl:gap-3">
           <SearchCommand variant="desktop" />
           <LivePill {...livePill} />
           <NavCrest member={member} variant="topbar" />

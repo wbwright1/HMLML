@@ -225,12 +225,12 @@ export function SearchCommand({ variant, className = "" }: SearchCommandProps) {
             ref={inputRef}
             type="text"
             value={query}
-            placeholder="Search league…"
+            placeholder="Search…"
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => setOpen(true)}
             onKeyDown={handleKeyNav}
             {...inputAria}
-            className="h-9 w-[230px] rounded-[10px] border border-border bg-surface pl-9 pr-12 text-body-sm text-text-primary outline-none placeholder:text-text-tertiary focus-visible:border-border-strong"
+            className="h-9 w-[150px] rounded-[10px] border border-border bg-surface pl-9 pr-12 text-body-sm text-text-primary outline-none placeholder:text-text-tertiary focus-visible:border-border-strong xl:w-[230px]"
           />
           <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[5px] border border-border px-1.5 py-0.5 text-[9.5px] font-bold text-text-tertiary">
             ⌘K
