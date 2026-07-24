@@ -51,11 +51,11 @@ export interface LorePiece {
   href?: string;
 }
 
-const POSITION_WORDS: Readonly<Record<string, string>> = Object.freeze({
-  QB: "quarterback",
-  RB: "running back",
-  WR: "receiver",
-  TE: "tight end",
+const THRONE_STORIES: Readonly<Record<string, string>> = Object.freeze({
+  QB: "The biggest week any quarterback has ever slung.",
+  RB: "No running back has ever carried a Sunday harder.",
+  WR: "The ceiling every receiver is still chasing.",
+  TE: "Proof a tight end can win you the week by himself.",
 });
 
 // ---------------------------------------------------------------------------
@@ -475,7 +475,9 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
     if (!row) continue;
     const label = SNARKY_LABELS[slot.labelKey];
     const crest = franchiseById.get(row.franchiseId) ?? null;
-    const positionWord = POSITION_WORDS[slot.position] ?? slot.position;
+    const throneStory =
+      THRONE_STORIES[slot.position] ??
+      "The best single game the position has ever posted.";
     pieces.push({
       key: label.key,
       title: label.displayText,
@@ -487,7 +489,7 @@ export async function getLeagueLore(): Promise<LorePiece[]> {
       statValue: `${row.points.toFixed(1)} pts`,
       story:
         `${row.points.toFixed(1)} pts, Week ${row.week} of ${row.seasonYear}. ` +
-        `The best single game any ${positionWord} has ever posted.`,
+        throneStory,
       franchiseBadge: crest,
     });
     claimedIds.add(row.playerId);
