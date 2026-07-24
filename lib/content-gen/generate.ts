@@ -7,6 +7,7 @@ import {
   type GeneratedContent,
 } from "@/lib/content-gen/templates";
 import { validateRow } from "@/lib/content-gen/validate";
+import { verifyClaims, type Claim, type RankableMetric } from "@/lib/content-gen/claims";
 import {
   extractAnchors,
   FRANCHISE_UNIQUE_KINDS,
@@ -76,6 +77,57 @@ Output ONLY a single JSON object matching the requested shape. No prose before o
 const VerdictSchema = z.enum(["LOCK", "NO", "UP", "DOWN"]);
 const CategorySchema = z.enum(["DRAFT", "TRADE", "WAIVERS", "FIRE_SALE"]);
 
+// ---------------------------------------------------------------------------
+// Comparative/superlative claims (issue #110)
+// ---------------------------------------------------------------------------
+// Every row that frames a ranking/superlative must attach a Claim, which the
+// LLM path (toRows*) then re-verifies against the StatsContext via
+// verifyClaims. The STRICT ClaimSchema is the canonical shape (used for the
+// prompt spec and the zodOutputFormat build check); the wire variant loosens
+// metric/extreme to bare strings so a slightly-off claim can't nuke the whole
+// parse (same relaxation rationale as the string .max() wire schemas below).
+// A claim that doesn't check out just drops its one row.
+const RankableMetricSchema = z.enum([
+  "allTimeWinPct",
+  "championships",
+  "playoffAppearances",
+  "projectedStartingPoints",
+  "pointsFor",
+  "wins",
+]);
+const ClaimSchema = z.object({
+  metric: RankableMetricSchema,
+  subject: z.string(),
+  rank: z.number().int().positive().optional(),
+  extreme: z.enum(["best", "worst"]).optional(),
+  value: z.number().optional(),
+});
+const ClaimWireSchema = z.object({
+  metric: z.string().default(""),
+  subject: z.string().default(""),
+  rank: z.number().optional(),
+  extreme: z.string().optional(),
+  value: z.number().optional(),
+});
+
+/** Normalizes wire/strict claim items (loosely typed as unknown) into verifiable Claim objects. */
+function toClaims(raw: readonly unknown[]): Claim[] {
+  const claims: Claim[] = [];
+  for (const item of raw) {
+    if (item == null || typeof item !== "object") continue;
+    const c = item as { metric?: unknown; subject?: unknown; rank?: unknown; extreme?: unknown; value?: unknown };
+    const claim: Claim = {
+      metric: (typeof c.metric === "string" ? c.metric : "") as RankableMetric,
+      subject: typeof c.subject === "string" ? c.subject : "",
+    };
+    if (typeof c.rank === "number" && Number.isFinite(c.rank)) claim.rank = c.rank;
+    if (c.extreme === "best" || c.extreme === "worst") claim.extreme = c.extreme;
+    if (typeof c.value === "number" && Number.isFinite(c.value)) claim.value = c.value;
+    claims.push(claim);
+  }
+  return claims;
+}
+
 // Length caps: generous enough that on-spec output always passes, tight enough
 // to reject a runaway model (which then falls back to templates). Bodies are
 // one or two sentences; kickers are short labels; questions are one sentence.
@@ -115,7 +167,13 @@ const QUESTION_MAX = 200;
 // shape definition: they're what the prompt spec is generated to match, and
 // what the zodOutputFormat-builds-without-throwing test exercises. They are
 // no longer what's sent to messages.parse().
-function preseasonSchemaShape(bodyField: z.ZodString, kickerField: z.ZodString, questionField: z.ZodString) {
+function preseasonSchemaShape(
+  bodyField: z.ZodString,
+  kickerField: z.ZodString,
+  questionField: z.ZodString,
+  claimSchema: z.ZodTypeAny,
+) {
+  const claims = z.array(claimSchema).max(4).default([]);
   return z.object({
     division_notes: z
       .array(
@@ -123,13 +181,14 @@ function preseasonSchemaShape(bodyField: z.ZodString, kickerField: z.ZodString, 
           divisionName: z.string().max(KICKER_MAX),
           characterization: kickerField,
           body: bodyField,
+          claims,
         }),
       )
       .max(3)
       .default([]),
-    burning_questions: z.array(questionField).max(6).default([]),
+    burning_questions: z.array(z.object({ text: questionField, claims })).max(6).default([]),
     bold_predictions: z
-      .array(z.object({ kicker: kickerField, verdict: VerdictSchema, body: bodyField }))
+      .array(z.object({ kicker: kickerField, verdict: VerdictSchema, body: bodyField, claims }))
       .max(6)
       .default([]),
     offseason_receipts: z
@@ -138,24 +197,26 @@ function preseasonSchemaShape(bodyField: z.ZodString, kickerField: z.ZodString, 
           franchiseSlug: z.string().max(KICKER_MAX),
           category: CategorySchema,
           body: bodyField,
+          claims,
         }),
       )
       .max(6)
       .default([]),
     hero_dek: bodyField.default(""),
-    smack_posts: z.array(bodyField).max(6).default([]),
+    smack_posts: z.array(z.object({ text: bodyField, claims })).max(6).default([]),
   });
 }
 
-function regularSchemaShape(bodyField: z.ZodString) {
+function regularSchemaShape(bodyField: z.ZodString, claimSchema: z.ZodTypeAny) {
+  const claims = z.array(claimSchema).max(4).default([]);
   return z.object({
     matchup_angles: z
-      .array(z.object({ pairKey: z.string().max(KICKER_MAX), body: bodyField }))
+      .array(z.object({ pairKey: z.string().max(KICKER_MAX), body: bodyField, claims }))
       .max(8)
       .default([]),
     game_of_week_blurb: bodyField.default(""),
     hero_dek: bodyField.default(""),
-    smack_posts: z.array(bodyField).max(6).default([]),
+    smack_posts: z.array(z.object({ text: bodyField, claims })).max(6).default([]),
   });
 }
 
@@ -169,13 +230,20 @@ export const PreseasonSchema = preseasonSchemaShape(
   z.string().max(BODY_MAX),
   z.string().max(KICKER_MAX),
   z.string().max(QUESTION_MAX),
+  ClaimSchema,
 );
-export const RegularSchema = regularSchemaShape(z.string().max(BODY_MAX));
+export const RegularSchema = regularSchemaShape(z.string().max(BODY_MAX), ClaimSchema);
 
-// Wire (relaxed) variants: identical shape, no per-string .max(). Used only
-// for the actual API request's output_config.format -- see the note above.
-export const PreseasonWireSchema = preseasonSchemaShape(z.string(), z.string(), z.string());
-export const RegularWireSchema = regularSchemaShape(z.string());
+// Wire (relaxed) variants: identical shape, no per-string .max() and a loosened
+// claim schema. Used only for the actual API request's output_config.format --
+// see the note above.
+export const PreseasonWireSchema = preseasonSchemaShape(
+  z.string(),
+  z.string(),
+  z.string(),
+  ClaimWireSchema,
+);
+export const RegularWireSchema = regularSchemaShape(z.string(), ClaimWireSchema);
 
 type PreseasonOut = z.infer<typeof PreseasonWireSchema>;
 type RegularOut = z.infer<typeof RegularWireSchema>;
@@ -228,18 +296,30 @@ export function promptStatsView(ctx: StatsContext): unknown {
   };
 }
 
+// The claims contract, shared by both specs. Backs the automated verifier in
+// lib/content-gen/claims.ts: numbers must be copied verbatim from the STATS
+// JSON, and every ranking/superlative must attach a machine-checkable claim or
+// the row is dropped.
+const CLAIMS_CONTRACT = `CLAIMS CONTRACT (enforced automatically; a violating row is dropped, so a violation shrinks your output):
+- NUMBERS: every number in a body must appear VERBATIM in the STATS JSON. Never compute a new number (no sums, differences, averages, or "combined" totals), even if your arithmetic would be correct. If the exact figure is not in the STATS JSON, do not write it.
+- CLAIMS: any comparative or superlative ("league-worst", "league-high", "highest", "lowest", "most", "fewest", "only", "dead last", "No. 1", "second-worst", "leads the league", "by a wide margin") MUST attach a claim object in that row's "claims" array. A claim is { "metric": one of ["allTimeWinPct","championships","playoffAppearances","projectedStartingPoints","pointsFor","wins"], "subject": the franchise slug, and one of: "extreme": "best"|"worst", OR "rank": 1-based integer, OR "value": the cited number }. The claim is re-verified by recomputing the FULL ordering from the STATS JSON; a false or off-by-one claim (e.g. calling the second-worst win rate "league-worst") drops the row.
+- ALLOWED METRICS ONLY: those six. A superlative about anything the STATS JSON does not let you rank league-wide (a single player's point total, a transaction, a projection you cannot see for every team) is FORBIDDEN: write it without superlative framing, or cut it.
+- BUDGET: do not use superlative wording you cannot back with a claim. Every distinct superlative marker in a body must be covered by a verified claim, or the whole row drops. When in doubt, state the plain fact without the superlative.`;
+
 function preseasonSpec(ctx: StatsContext): string {
   const divisionNames = ctx.divisions.map((d) => d.name);
   const slugs = ctx.leagueStandings.map((t) => t.slug);
   return `This is PRESEASON/OFFSEASON content (season-scoped). Produce this exact JSON shape. Character budgets are HARD limits: a field over its budget gets that entire row discarded downstream (the response is not rejected, but that row is), so stay comfortably under, not right at, the number.
 {
-  "division_notes": [ { "divisionName": <one of ${JSON.stringify(divisionNames)}>, "characterization": "2-3 word vibe, under ${KICKER_MAX} characters", "body": "one snarky line, under ${BODY_MAX} characters" } ]  // one per division, up to 3
-  "burning_questions": [ "question, under ${QUESTION_MAX} characters", ... ]  // 5 to 6, MORE than the ~3 that will ship: over-generate so a diverse subset can be picked
-  "bold_predictions": [ { "kicker": "short label, under ${KICKER_MAX} characters", "verdict": "LOCK|NO|UP|DOWN", "body": "prediction, under ${BODY_MAX} characters" } ]  // 5 to 6, MORE than the ~4 that will ship. Each verdict must map to a real directional call about the upcoming season: LOCK = will happen, NO = will not happen, UP = will outperform its projection/rank, DOWN = will underperform. Never attach a verdict to a neutral observation (a tie, a truism, a scheduling fact); if it is not a genuine yes/no or over/under call, cut the row. The verdict must be falsifiable by a future season result: if the sentence concedes the outcome is already settled or unknowable ("exactly where a champ should sit", "the only question is whether..."), or states an affirmative expectation under a NO verdict, cut or re-verb the row.
-  "offseason_receipts": [ { "franchiseSlug": <one of ${JSON.stringify(slugs)}>, "category": "DRAFT|TRADE|WAIVERS|FIRE_SALE", "body": "teaser, under ${BODY_MAX} characters" } ]  // 5 to 6, MORE than the ~4 that will ship
+  "division_notes": [ { "divisionName": <one of ${JSON.stringify(divisionNames)}>, "characterization": "2-3 word vibe, under ${KICKER_MAX} characters", "body": "one snarky line, under ${BODY_MAX} characters", "claims": [] } ]  // one per division, up to 3
+  "burning_questions": [ { "text": "question, under ${QUESTION_MAX} characters", "claims": [] }, ... ]  // 5 to 6, MORE than the ~3 that will ship: over-generate so a diverse subset can be picked
+  "bold_predictions": [ { "kicker": "short label, under ${KICKER_MAX} characters", "verdict": "LOCK|NO|UP|DOWN", "body": "prediction, under ${BODY_MAX} characters", "claims": [] } ]  // 5 to 6, MORE than the ~4 that will ship. Each verdict must map to a real directional call about the upcoming season: LOCK = will happen, NO = will not happen, UP = will outperform its projection/rank, DOWN = will underperform. Never attach a verdict to a neutral observation (a tie, a truism, a scheduling fact); if it is not a genuine yes/no or over/under call, cut the row. The verdict must be falsifiable by a future season result: if the sentence concedes the outcome is already settled or unknowable ("exactly where a champ should sit", "the only question is whether..."), or states an affirmative expectation under a NO verdict, cut or re-verb the row.
+  "offseason_receipts": [ { "franchiseSlug": <one of ${JSON.stringify(slugs)}>, "category": "DRAFT|TRADE|WAIVERS|FIRE_SALE", "body": "teaser, under ${BODY_MAX} characters", "claims": [] } ]  // 5 to 6, MORE than the ~4 that will ship
   "hero_dek": "one-sentence hero subhead for the preseason hub, under ${BODY_MAX} characters. Do NOT mention a specific number of days until kickoff; the live day count is added at render time.",
-  "smack_posts": [ "site desk post, under ${BODY_MAX} characters", ... ]  // 5 to 6, MORE than the ~5 that will ship
+  "smack_posts": [ { "text": "site desk post, under ${BODY_MAX} characters", "claims": [] }, ... ]  // 5 to 6, MORE than the ~5 that will ship
 }
+
+${CLAIMS_CONTRACT}
 
 DATA SOURCES (what each block is for):
 - franchiseHistory: all-time record, championships, playoff appearances, seasons played, sustainedDoormat/sustainedContender multi-year flags. Use for all-time and multi-year framing; weigh a sustained multi-year slump more heavily than one bad season for doormat framing. If empty, never reference all-time records or trends.
@@ -262,11 +342,13 @@ function regularSpec(ctx: StatsContext): string {
     : "the marquee matchup of the week";
   return `This is REGULAR SEASON content for week ${ctx.week} (week-scoped). Produce this exact JSON shape. Character budgets are HARD limits: a field over its budget gets that entire row discarded downstream (the response is not rejected, but that row is), so stay comfortably under, not right at, the number.
 {
-  "matchup_angles": [ { "pairKey": <one of ${JSON.stringify(pairKeys)}>, "body": "trash-talk angle for this matchup, under ${BODY_MAX} characters" } ]  // one per current matchup
+  "matchup_angles": [ { "pairKey": <one of ${JSON.stringify(pairKeys)}>, "body": "trash-talk angle for this matchup, under ${BODY_MAX} characters", "claims": [] } ]  // one per current matchup
   "game_of_week_blurb": "blurb for ${gotwClause}, under ${BODY_MAX} characters",
   "hero_dek": "one-sentence hero subhead for the week, under ${BODY_MAX} characters. Do NOT mention a specific number of days until kickoff; the live day count is added at render time.",
-  "smack_posts": [ "site desk post, under ${BODY_MAX} characters", ... ]  // 5 to 6, MORE than the ~5 that will ship: over-generate so a diverse subset can be picked
+  "smack_posts": [ { "text": "site desk post, under ${BODY_MAX} characters", "claims": [] }, ... ]  // 5 to 6, MORE than the ~5 that will ship: over-generate so a diverse subset can be picked
 }
+
+${CLAIMS_CONTRACT}
 
 GRADED CHECKLIST (violating rows are discarded downstream, so a violation shrinks your output):
 1. Phase fit: every row obeys the SEASON PHASE rules above.
@@ -299,10 +381,12 @@ export function buildUserPrompt(ctx: StatsContext): string {
 export function toRowsPreseason(out: PreseasonOut, ctx: StatsContext): HubContentInsert[] {
   const validDivisions = new Set(ctx.divisions.map((d) => d.name));
   const validSlugs = new Set(ctx.leagueStandings.map((t) => t.slug));
+  const dropForClaims = makeClaimDropper(ctx);
   const rows: HubContentInsert[] = [];
 
   for (const d of out.division_notes) {
     if (!validDivisions.has(d.divisionName) || !d.body.trim()) continue;
+    if (dropForClaims(d.body, d.claims)) continue;
     rows.push({
       week: null,
       kind: "division_note",
@@ -312,10 +396,13 @@ export function toRowsPreseason(out: PreseasonOut, ctx: StatsContext): HubConten
     });
   }
   for (const q of out.burning_questions) {
-    if (q.trim()) rows.push({ week: null, kind: "burning_question", refKey: null, body: noEmDash(q), extras: null });
+    if (!q.text.trim()) continue;
+    if (dropForClaims(q.text, q.claims)) continue;
+    rows.push({ week: null, kind: "burning_question", refKey: null, body: noEmDash(q.text), extras: null });
   }
   for (const p of out.bold_predictions) {
     if (!p.body.trim() || !p.kicker.trim()) continue;
+    if (dropForClaims(p.body, p.claims)) continue;
     rows.push({
       week: null,
       kind: "bold_prediction",
@@ -326,6 +413,7 @@ export function toRowsPreseason(out: PreseasonOut, ctx: StatsContext): HubConten
   }
   for (const r of out.offseason_receipts) {
     if (!validSlugs.has(r.franchiseSlug) || !r.body.trim()) continue;
+    if (dropForClaims(r.body, r.claims)) continue;
     rows.push({
       week: null,
       kind: "offseason_receipt",
@@ -334,33 +422,58 @@ export function toRowsPreseason(out: PreseasonOut, ctx: StatsContext): HubConten
       extras: { category: r.category },
     });
   }
-  if (out.hero_dek.trim()) {
+  if (out.hero_dek.trim() && !dropForClaims(out.hero_dek, [])) {
     rows.push({ week: null, kind: "hero_dek", refKey: null, body: noEmDash(out.hero_dek), extras: null });
   }
   for (const s of out.smack_posts) {
-    if (s.trim()) rows.push({ week: null, kind: "smack_post", refKey: null, body: noEmDash(s), extras: null });
+    if (!s.text.trim()) continue;
+    if (dropForClaims(s.text, s.claims)) continue;
+    rows.push({ week: null, kind: "smack_post", refKey: null, body: noEmDash(s.text), extras: null });
   }
   return rows;
 }
 
 function toRowsRegular(out: RegularOut, ctx: StatsContext): HubContentInsert[] {
   const validPairs = new Set(ctx.currentMatchups.map((m) => m.pairKey));
+  const dropForClaims = makeClaimDropper(ctx);
   const rows: HubContentInsert[] = [];
 
   for (const a of out.matchup_angles) {
     if (!validPairs.has(a.pairKey) || !a.body.trim()) continue;
+    if (dropForClaims(a.body, a.claims)) continue;
     rows.push({ week: ctx.week, kind: "matchup_angle", refKey: a.pairKey, body: noEmDash(a.body), extras: null });
   }
-  if (out.game_of_week_blurb.trim()) {
+  if (out.game_of_week_blurb.trim() && !dropForClaims(out.game_of_week_blurb, [])) {
     rows.push({ week: ctx.week, kind: "game_of_week_blurb", refKey: null, body: noEmDash(out.game_of_week_blurb), extras: null });
   }
-  if (out.hero_dek.trim()) {
+  if (out.hero_dek.trim() && !dropForClaims(out.hero_dek, [])) {
     rows.push({ week: ctx.week, kind: "hero_dek", refKey: null, body: noEmDash(out.hero_dek), extras: null });
   }
   for (const s of out.smack_posts) {
-    if (s.trim()) rows.push({ week: ctx.week, kind: "smack_post", refKey: null, body: noEmDash(s), extras: null });
+    if (!s.text.trim()) continue;
+    if (dropForClaims(s.text, s.claims)) continue;
+    rows.push({ week: ctx.week, kind: "smack_post", refKey: null, body: noEmDash(s.text), extras: null });
   }
   return rows;
+}
+
+/**
+ * Builds the per-row claim gate for a context: returns true (DROP this row)
+ * when the body's numbers/superlatives don't check out against the STATS via
+ * verifyClaims. Dropping is safe: fillMissingKinds/topUpShortKinds backfill the
+ * hole from the vetted deterministic templates.
+ */
+function makeClaimDropper(
+  ctx: StatsContext,
+): (body: string, rawClaims: readonly unknown[]) => boolean {
+  return (body, rawClaims) => {
+    const check = verifyClaims(body, toClaims(rawClaims ?? []), ctx);
+    if (!check.ok) {
+      console.warn(`[content-gen] dropped row: ${check.reason}`);
+      return true;
+    }
+    return false;
+  };
 }
 
 // ---------------------------------------------------------------------------

@@ -96,6 +96,14 @@ export interface StatsTransaction {
 export interface StatsFranchiseHistory {
   slug: string;
   allTimeWinPct: number;
+  /**
+   * 1 = highest all-time win rate in the league; ties share a rank. A
+   * model-facing convenience so the prompt can attach an explicit rank to an
+   * all-time-win-rate claim. The claim verifier (lib/content-gen/claims.ts)
+   * recomputes rank from the franchiseHistory array itself and never trusts
+   * this field, so a stale value here can never wave a false claim through.
+   */
+  allTimeWinPctRank: number;
   championships: number;
   playoffAppearances: number;
   seasonsPlayed: number;
@@ -436,6 +444,8 @@ export async function buildStatsContext(
     franchiseHistory = longevity.map((l) => ({
       slug: l.slug,
       allTimeWinPct: Math.round(l.allTimeWinPct * 1000) / 1000,
+      // Placeholder; assigned below once every win pct is known.
+      allTimeWinPctRank: 0,
       championships: l.championships,
       playoffAppearances: l.playoffAppearances,
       seasonsPlayed: l.seasonsPlayed,
@@ -443,6 +453,17 @@ export async function buildStatsContext(
       sustainedDoormat: l.sustainedDoormat,
       sustainedContender: l.sustainedContender,
     }));
+    // Competition ranking by descending win pct (ties share a rank: 1,2,2,4).
+    const byPct = [...franchiseHistory].sort((a, b) => b.allTimeWinPct - a.allTimeWinPct);
+    const rankBySlug = new Map<string, number>();
+    byPct.forEach((f, i) => {
+      const prior = i > 0 ? byPct[i - 1] : null;
+      const rank = prior && prior.allTimeWinPct === f.allTimeWinPct ? rankBySlug.get(prior.slug)! : i + 1;
+      rankBySlug.set(f.slug, rank);
+    });
+    for (const f of franchiseHistory) {
+      f.allTimeWinPctRank = rankBySlug.get(f.slug) ?? 0;
+    }
   } catch (e) {
     console.error("[stats-context] franchise longevity unavailable:", e);
   }

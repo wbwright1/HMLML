@@ -307,7 +307,7 @@ describe("lenient wire schema + per-row drop", () => {
       // strict PreseasonSchema's per-item .max(QUESTION_MAX)) but comfortably
       // under BODY_MAX (400), so this specifically exercises the tighter
       // burning_question-only cap, not just the generic body cap.
-      burning_questions: ["x".repeat(250)],
+      burning_questions: [{ text: "x".repeat(250), claims: [] }],
       bold_predictions: [],
       offseason_receipts: [],
       hero_dek: "",
@@ -324,8 +324,8 @@ describe("lenient wire schema + per-row drop", () => {
     const parsed = PreseasonWireSchema.parse({
       division_notes: [],
       burning_questions: [
-        "Is Foopus actually good this year, or is the group chat lying to itself again?", // valid length
-        "x".repeat(250), // over QUESTION_MAX; parses fine under the wire schema
+        { text: "Is Foopus actually good this year, or is the group chat lying to itself again?", claims: [] }, // valid length
+        { text: "x".repeat(250), claims: [] }, // over QUESTION_MAX; parses fine under the wire schema
       ],
       bold_predictions: [],
       offseason_receipts: [],
@@ -343,6 +343,98 @@ describe("lenient wire schema + per-row drop", () => {
     expect(survivors).toHaveLength(1);
     expect(survivors[0].body).toContain("Foopus actually good");
     expect(invalidCount).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Claim verification on the LLM row path (issue #110)
+// ---------------------------------------------------------------------------
+
+describe("toRowsPreseason claim gating", () => {
+  const fh = (slug: string, pct: number) => ({
+    slug,
+    allTimeWinPct: pct,
+    allTimeWinPctRank: 0,
+    championships: 0,
+    playoffAppearances: 0,
+    seasonsPlayed: 5,
+    lastThreeFinishes: [] as (number | null)[],
+    sustainedDoormat: false,
+    sustainedContender: false,
+  });
+  // team-c best (0.68), better-call-hall worst (0.30). foopus mid.
+  const ctx = preseasonContext({
+    franchiseHistory: [fh("team-c", 0.68), fh("foopus", 0.5), fh("better-call-hall", 0.3)],
+  });
+
+  it("drops a bold_prediction whose superlative claim is false, keeps the true one", () => {
+    const parsed = PreseasonWireSchema.parse({
+      division_notes: [],
+      burning_questions: [],
+      bold_predictions: [
+        {
+          kicker: "Cellar dweller",
+          verdict: "DOWN",
+          // FALSE: foopus is not the league-worst win rate; better-call-hall is.
+          body: "Foopus and its league-worst 0.500 all-time win rate stay buried in the basement again.",
+          claims: [{ metric: "allTimeWinPct", subject: "foopus", extreme: "worst" }],
+        },
+        {
+          kicker: "Rock bottom",
+          verdict: "DOWN",
+          // TRUE: better-call-hall genuinely holds the worst win rate (0.300).
+          body: "Better Call Hall and its league-worst 0.300 win rate are going nowhere fast.",
+          claims: [{ metric: "allTimeWinPct", subject: "better-call-hall", extreme: "worst" }],
+        },
+      ],
+      offseason_receipts: [],
+      hero_dek: "",
+      smack_posts: [],
+    });
+    const rows = toRowsPreseason(parsed, ctx);
+    const preds = rows.filter((r) => r.kind === "bold_prediction");
+    expect(preds).toHaveLength(1);
+    expect(preds[0].body).toContain("Better Call Hall");
+  });
+
+  it("drops a row citing a number absent from the context, keeps a clean row", () => {
+    const parsed = PreseasonWireSchema.parse({
+      division_notes: [],
+      burning_questions: [
+        // Cites 0.917, which appears nowhere in the context -> dropped.
+        { text: "Can Foopus really sustain a 0.917 pace after last year's collapse?", claims: [] },
+        // No numbers, no superlatives -> clean.
+        { text: "Is Foopus actually good this year, or is the group chat coping again?", claims: [] },
+      ],
+      bold_predictions: [],
+      offseason_receipts: [],
+      hero_dek: "",
+      smack_posts: [],
+    });
+    const rows = toRowsPreseason(parsed, ctx);
+    const questions = rows.filter((r) => r.kind === "burning_question");
+    expect(questions).toHaveLength(1);
+    expect(questions[0].body).toContain("group chat coping");
+  });
+
+  it("reads smack_posts from .text and drops an unbacked superlative", () => {
+    const parsed = PreseasonWireSchema.parse({
+      division_notes: [],
+      burning_questions: [],
+      bold_predictions: [],
+      offseason_receipts: [],
+      hero_dek: "",
+      smack_posts: [
+        // Unbacked "highest" superlative, zero claims -> dropped by tripwire.
+        { text: "Team C has the highest ceiling in a league that keeps proving it wrong.", claims: [] },
+        // Plain color, no superlative or number -> kept.
+        { text: "Somewhere in the group chat, a rebuild is quietly being rebranded as a plan.", claims: [] },
+      ],
+    });
+    const rows = toRowsPreseason(parsed, ctx);
+    const smacks = rows.filter((r) => r.kind === "smack_post");
+    expect(smacks).toHaveLength(1);
+    expect(smacks[0].body).toContain("quietly being rebranded");
   });
 });
 
@@ -477,6 +569,29 @@ describe("buildUserPrompt", () => {
     expect(prompt).toContain("SEASON PHASE: PRESEASON");
     expect(prompt).toContain("reigning champion is Team C");
     expect(prompt).toContain("PRESEASON/OFFSEASON content"); // the shape spec still follows
+  });
+
+  it("carries the CLAIMS CONTRACT with the six allowed metrics", () => {
+    const prompt = buildUserPrompt(preseasonContext());
+    expect(prompt).toContain("CLAIMS CONTRACT");
+    for (const metric of [
+      "allTimeWinPct",
+      "championships",
+      "playoffAppearances",
+      "projectedStartingPoints",
+      "pointsFor",
+      "wins",
+    ]) {
+      expect(prompt).toContain(metric);
+    }
+    // The two converted kinds now carry {text, claims} in the shape example.
+    expect(prompt).toContain('"text"');
+    expect(prompt).toContain('"claims"');
+  });
+
+  it("carries the CLAIMS CONTRACT for regular-season prompts too", () => {
+    const prompt = buildUserPrompt(preseasonContext({ seasonType: "regular", week: 6 }));
+    expect(prompt).toContain("CLAIMS CONTRACT");
   });
 
   it("subdivides regular-season prompts by week", () => {

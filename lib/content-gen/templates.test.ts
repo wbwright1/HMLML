@@ -302,6 +302,7 @@ describe("generateFromTemplates (preseason, with franchiseHistory + rosterProjec
       {
         slug: "better-call-hall",
         allTimeWinPct: 0.31,
+        allTimeWinPctRank: 2,
         championships: 0,
         playoffAppearances: 1,
         seasonsPlayed: 5,
@@ -312,6 +313,7 @@ describe("generateFromTemplates (preseason, with franchiseHistory + rosterProjec
       {
         slug: "team-c",
         allTimeWinPct: 0.68,
+        allTimeWinPctRank: 1,
         championships: 2,
         playoffAppearances: 5,
         seasonsPlayed: 5,
