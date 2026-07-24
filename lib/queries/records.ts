@@ -134,6 +134,26 @@ export interface TrophyEntry {
   championAvatarUrl: string | null;
   runnerUpName: string | null;
   runnerUpSlug: string | null;
+  waiverPlayerName: string | null;
+  waiverPlayerPosition: string | null;
+  waiverPoints: number | null;
+  waiverFranchiseName: string | null;
+  waiverFranchiseSlug: string | null;
+  waiverFranchiseAbbreviation: string | null;
+  waiverFranchiseBrandingColor: string | null;
+  waiverFranchiseAvatarUrl: string | null;
+}
+
+interface WaiverPickupRow {
+  seasonYear: number;
+  points: number;
+  franchiseId: string | null;
+  playerName: string | null;
+  playerPosition: string | null;
+  franchiseName: string | null;
+  franchiseSlug: string | null;
+  franchiseAbbreviation: string | null;
+  franchiseBrandingColor: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -1089,6 +1109,76 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
 // 4.7 — Trophy Case
 // ---------------------------------------------------------------------------
 
+/**
+ * For each completed season, the single waiver/free-agent pickup that scored
+ * the most total starter points that season. "Pickup" is any player ever
+ * added via a waiver or free-agent transaction that season; points are summed
+ * across every week that player started, for whichever franchise started
+ * them (not necessarily the adding franchise, since the player may have been
+ * traded afterward).
+ */
+async function getBestWaiverPickupsBySeason(): Promise<
+  Map<number, WaiverPickupRow>
+> {
+  try {
+    const rows = await db.execute(sql`
+      WITH waiver_adds AS (
+        SELECT DISTINCT t.season_id, jkey AS player_id
+        FROM transactions t, LATERAL jsonb_object_keys(t.adds) AS jkey
+        WHERE t.type IN ('waiver', 'free_agent') AND t.adds IS NOT NULL
+      ),
+      scoped AS (
+        SELECT pwp.season_id, pwp.player_id, pwp.franchise_id, SUM(pwp.points) AS pts
+        FROM player_week_points pwp
+        JOIN seasons s ON s.id = pwp.season_id
+        JOIN waiver_adds wa ON wa.season_id = pwp.season_id AND wa.player_id = pwp.player_id
+        WHERE pwp.started = true AND s.status = 'complete'
+        GROUP BY 1, 2, 3
+      ),
+      ranked AS (
+        SELECT scoped.*, s.season_year,
+          ROW_NUMBER() OVER (PARTITION BY scoped.season_id ORDER BY scoped.pts DESC) AS rn
+        FROM scoped
+        JOIN seasons s ON s.id = scoped.season_id
+      )
+      SELECT
+        r.season_year,
+        r.pts,
+        r.franchise_id,
+        p.full_name AS player_name,
+        p.position,
+        f.name,
+        f.slug,
+        f.abbreviation,
+        f.branding_color
+      FROM ranked r
+      LEFT JOIN players p ON p.id = r.player_id
+      LEFT JOIN franchises f ON f.id = r.franchise_id
+      WHERE r.rn = 1
+    `);
+
+    const result = new Map<number, WaiverPickupRow>();
+    for (const row of rows.rows as Array<Record<string, unknown>>) {
+      const seasonYear = row.season_year as number;
+      result.set(seasonYear, {
+        seasonYear,
+        points: Number((row.pts as number | null) ?? 0),
+        franchiseId: (row.franchise_id as string | null) ?? null,
+        playerName: (row.player_name as string | null) ?? null,
+        playerPosition: (row.position as string | null) ?? null,
+        franchiseName: (row.name as string | null) ?? null,
+        franchiseSlug: (row.slug as string | null) ?? null,
+        franchiseAbbreviation: (row.abbreviation as string | null) ?? null,
+        franchiseBrandingColor: (row.branding_color as string | null) ?? null,
+      });
+    }
+    return result;
+  } catch (err) {
+    console.error("[records] getBestWaiverPickupsBySeason failed:", err);
+    return new Map();
+  }
+}
+
 export async function getTrophyCase(): Promise<TrophyEntry[]> {
   try {
     // Single query: join seasons -> champion franchise + runner-up franchise_season
@@ -1118,24 +1208,46 @@ export async function getTrophyCase(): Promise<TrophyEntry[]> {
       )
       .orderBy(desc(seasons.seasonYear));
 
+    const waiverBySeason = await getBestWaiverPickupsBySeason();
+
+    const waiverFranchiseIds = Array.from(waiverBySeason.values())
+      .map((w) => w.franchiseId)
+      .filter((id): id is string => id != null);
+
     const championIds = rows
       .map((row) => row.championFranchiseId)
       .filter((id): id is string => id != null);
-    const avatarUrls = await getLatestAvatarUrls(championIds);
+    const avatarUrls = await getLatestAvatarUrls([
+      ...championIds,
+      ...waiverFranchiseIds,
+    ]);
 
-    return rows.map((row) => ({
-      seasonYear: row.seasonYear,
-      championFranchiseId: row.championFranchiseId,
-      championName: row.championName,
-      championSlug: row.championSlug,
-      championAbbreviation: row.championAbbreviation,
-      championBrandingColor: row.championBrandingColor,
-      championAvatarUrl: row.championFranchiseId
-        ? avatarUrls.get(row.championFranchiseId) ?? null
-        : null,
-      runnerUpName: row.runnerUpName,
-      runnerUpSlug: row.runnerUpSlug,
-    }));
+    return rows.map((row) => {
+      const w = waiverBySeason.get(row.seasonYear);
+      return {
+        seasonYear: row.seasonYear,
+        championFranchiseId: row.championFranchiseId,
+        championName: row.championName,
+        championSlug: row.championSlug,
+        championAbbreviation: row.championAbbreviation,
+        championBrandingColor: row.championBrandingColor,
+        championAvatarUrl: row.championFranchiseId
+          ? avatarUrls.get(row.championFranchiseId) ?? null
+          : null,
+        runnerUpName: row.runnerUpName,
+        runnerUpSlug: row.runnerUpSlug,
+        waiverPlayerName: w?.playerName ?? null,
+        waiverPlayerPosition: w?.playerPosition ?? null,
+        waiverPoints: w?.points ?? null,
+        waiverFranchiseName: w?.franchiseName ?? null,
+        waiverFranchiseSlug: w?.franchiseSlug ?? null,
+        waiverFranchiseAbbreviation: w?.franchiseAbbreviation ?? null,
+        waiverFranchiseBrandingColor: w?.franchiseBrandingColor ?? null,
+        waiverFranchiseAvatarUrl: w?.franchiseId
+          ? avatarUrls.get(w.franchiseId) ?? null
+          : null,
+      };
+    });
   } catch {
     return [];
   }

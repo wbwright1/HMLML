@@ -4,8 +4,8 @@ import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
-import { StatHero } from "@/components/stat-hero";
 import { EmptyState } from "@/components/empty-state";
+import { SeasonTrophyCard } from "@/components/season-trophy-card";
 import { getTrophyCase } from "@/lib/queries/records";
 import type { TrophyEntry } from "@/lib/queries/records";
 
@@ -51,6 +51,9 @@ export default async function TrophyCasePage() {
       };
     })
     .sort((a, b) => b.count - a.count);
+
+  // Newest first; excludes the in-season year (no champion crowned yet).
+  const seasonCards = trophies.filter((t) => t.championName);
 
   return (
     <>
@@ -100,7 +103,7 @@ export default async function TrophyCasePage() {
 
       {/* Season-by-Season */}
       <PageSection label="Year by Year" title="Championships">
-        {trophies.length === 0 ? (
+        {seasonCards.length === 0 ? (
           <EmptyState
             icon="trophy"
             title="No Championship Data"
@@ -109,118 +112,30 @@ export default async function TrophyCasePage() {
             actionHref="/seasons"
           />
         ) : (
-          <div className="space-y-3">
-            {/* Most recent champion: featured */}
-            {trophies.length > 0 && trophies[0].championName && (
-              <ScrollReveal>
-                <div className="card-surface card-tint-gold p-8 text-center space-y-4">
-                  <StatHero
-                    value={trophies[0].seasonYear}
-                    label="Reigning Champion"
-                    variant="lg"
-                  />
-                  <div className="flex justify-center">
-                    <Link
-                      href={trophies[0].championSlug ? `/teams/${trophies[0].championSlug}` : "#"}
-                      className="hover:opacity-80 transition-opacity"
-                    >
-                      <FranchiseIdentity
-                        franchise={{
-                          slug: trophies[0].championSlug ?? "",
-                          name: trophies[0].championName,
-                          abbreviation: trophies[0].championAbbreviation ?? undefined,
-                          brandingColor: trophies[0].championBrandingColor ?? undefined,
-                          avatarUrl: trophies[0].championAvatarUrl,
-                        }}
-                        championships={champCounts.get(trophies[0].championName) ?? 1}
-                        variant="hero"
-                      />
-                    </Link>
-                  </div>
-                  <SuperlativeBadge text="League Champion" variant="gold" />
-                  {trophies[0].runnerUpName && (
-                    <p className="text-body-sm text-text-tertiary">
-                      defeated {trophies[0].runnerUpName}
-                    </p>
-                  )}
+          <>
+            <p className="lg:hidden text-caption text-text-tertiary -mt-2 mb-4">
+              {`Swipe for all ${seasonCards.length} seasons`} &rarr;
+            </p>
+            <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 no-scrollbar md:-mx-6 md:px-6 lg:mx-0 lg:grid lg:grid-cols-3 lg:overflow-visible lg:px-0 lg:pb-0">
+              {seasonCards.map((trophy, index) => (
+                <div
+                  key={trophy.seasonYear}
+                  className="snap-center shrink-0 basis-[85%] sm:basis-[60%] lg:basis-auto"
+                >
+                  <ScrollReveal delay={index * 40}>
+                    <SeasonTrophyCard
+                      trophy={trophy}
+                      championships={
+                        trophy.championName
+                          ? (champCounts.get(trophy.championName) ?? 1)
+                          : 1
+                      }
+                    />
+                  </ScrollReveal>
                 </div>
-              </ScrollReveal>
-            )}
-
-            {/* Historical champions: two-up on desktop, newest-first reading
-                left-to-right across the grid. */}
-            <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-              {trophies.slice(1).map((trophy, index) => (
-                <ScrollReveal key={trophy.seasonYear} delay={(index + 1) * 40}>
-                  <div
-                    className={`rounded-[14px] border p-5 transition-colors ${
-                      trophy.championName
-                        ? "border-primary/30 bg-primary/5"
-                        : "border-border bg-surface"
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-4">
-                      <div className="space-y-1">
-                        <Link
-                          href={`/seasons/${trophy.seasonYear}`}
-                          className="text-h3 font-mono tabular-nums hover:text-primary transition-colors"
-                        >
-                          {trophy.seasonYear}
-                        </Link>
-                      </div>
-
-                      <div className="flex flex-wrap items-center gap-4">
-                        {trophy.championName ? (
-                          <div className="flex items-center gap-3">
-                            <Link
-                              href={trophy.championSlug ? `/teams/${trophy.championSlug}` : "#"}
-                              className="hover:opacity-80 transition-opacity"
-                            >
-                              <FranchiseIdentity
-                                franchise={{
-                                  slug: trophy.championSlug ?? "",
-                                  name: trophy.championName,
-                                  abbreviation: trophy.championAbbreviation ?? undefined,
-                                  brandingColor: trophy.championBrandingColor ?? undefined,
-                                  avatarUrl: trophy.championAvatarUrl,
-                                }}
-                                championships={champCounts.get(trophy.championName) ?? 1}
-                                variant="compact"
-                              />
-                            </Link>
-                            <SuperlativeBadge text="League Champion" variant="gold" />
-                          </div>
-                        ) : (
-                          <SuperlativeBadge text="No Champion" variant="neutral" />
-                        )}
-
-                        {trophy.runnerUpName && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-text-tertiary">
-                              vs
-                            </span>
-                            {trophy.runnerUpSlug ? (
-                              <Link
-                                href={`/teams/${trophy.runnerUpSlug}`}
-                                className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
-                              >
-                                {trophy.runnerUpName}
-                              </Link>
-                            ) : (
-                              <span className="text-body-sm text-text-tertiary">
-                                {trophy.runnerUpName}
-                              </span>
-                            )}
-                            <SuperlativeBadge text="Runner-Up" variant="neutral" />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </ScrollReveal>
               ))}
             </div>
-          </div>
+          </>
         )}
       </PageSection>
     </>
