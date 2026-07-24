@@ -1,3 +1,4 @@
+import { EditorialBody } from "@/components/editorial-emphasis";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import type { OffseasonReceipt, ReceiptCategory } from "@/lib/content";
 
@@ -46,7 +47,9 @@ export function OffseasonReceiptCard({ receipt, franchise }: OffseasonReceiptCar
           decorative
         />
       </div>
-      <p className="mt-3 text-body text-text-secondary">{receipt.body}</p>
+      <p className="mt-3 text-body text-text-secondary">
+        <EditorialBody body={receipt.body} />
+      </p>
     </div>
   );
 }

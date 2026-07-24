@@ -1,3 +1,4 @@
+import { EditorialBody } from "@/components/editorial-emphasis";
 import { KickoffCountdown } from "@/components/kickoff-countdown";
 import { DraftCountdown } from "@/components/draft-countdown";
 import {
@@ -183,7 +184,9 @@ export async function PreseasonHub({
           <h1 className="text-display mt-3">
             The season&rsquo;s on the clock<span className="text-accent-gold">.</span>
           </h1>
-          <p className="text-body-lg text-text-secondary mt-4 max-w-xl">{dek}</p>
+          <p className="text-body-lg text-text-secondary mt-4 max-w-xl">
+            <EditorialBody body={dek} />
+          </p>
         </div>
         <div className="lg:justify-self-end">
           {draftUpcoming && draftDate ? (

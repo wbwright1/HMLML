@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { EditorialBody } from "@/components/editorial-emphasis";
 import { KickoffCountdown } from "@/components/kickoff-countdown";
 import {
   SmackFeed,
@@ -183,8 +184,12 @@ export async function BetweenWeeksHub({
           </p>
           <h1 className="text-display">{headline}</h1>
           <p className="mt-3 text-body-lg text-text-secondary">
-            {editorial.heroDek ??
-              "One grudge match at the top, one annual sacrifice at the bottom, and a week of receipts to settle by Thursday night."}
+            <EditorialBody
+              body={
+                editorial.heroDek ??
+                "One grudge match at the top, one annual sacrifice at the bottom, and a week of receipts to settle by Thursday night."
+              }
+            />
           </p>
         </div>
 
