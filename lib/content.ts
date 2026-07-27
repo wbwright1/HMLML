@@ -261,6 +261,39 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
     description: 'The eligible first-round pick with the fewest points scored for the team that drafted him',
     tone: 'sting',
   },
+  // Hindsight trade-grade labels: overall verdict on a 2-team trade at least a
+  // year old, from realized points each side's acquired assets actually scored
+  // for the acquirer. See lib/queries/trade-grades.ts.
+  HIGHWAY_ROBBERY: {
+    key: 'HIGHWAY_ROBBERY',
+    displayText: 'Highway Robbery',
+    description: 'One side realized the overwhelming share of the points in a trade (72%+ of the combined haul)',
+    tone: 'sting',
+  },
+  FLEECE_JOB: {
+    key: 'FLEECE_JOB',
+    displayText: 'Fleece Job',
+    description: 'One side clearly out-realized the other in a trade (60-72% of the combined haul)',
+    tone: 'sting',
+  },
+  SLIGHT_EDGE: {
+    key: 'SLIGHT_EDGE',
+    displayText: 'Slight Edge',
+    description: 'One side modestly out-realized the other in a trade (55-60% of the combined haul)',
+    tone: 'neutral',
+  },
+  WIN_WIN: {
+    key: 'WIN_WIN',
+    displayText: 'Win-Win',
+    description: 'Both sides of a trade realized substantial, near-even production',
+    tone: 'positive',
+  },
+  MUTUAL_MEDIOCRITY: {
+    key: 'MUTUAL_MEDIOCRITY',
+    displayText: 'Mutual Mediocrity',
+    description: 'A near-even trade where neither side realized much production',
+    tone: 'sting',
+  },
 } as const);
 
 // ===========================================================================

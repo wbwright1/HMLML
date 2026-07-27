@@ -7,13 +7,14 @@ import { TradeCard } from "@/components/trade-card";
 import { TradeFilters } from "@/app/trades/trade-filters";
 import { getTrades } from "@/lib/queries/trades";
 import { getTradeVerdicts } from "@/lib/queries/trade-verdicts";
+import { getTradeGrades } from "@/lib/queries/trade-grades";
 import { getAllFranchises } from "@/lib/queries/franchises";
 import { getAllSeasons } from "@/lib/queries/seasons";
 
 export const metadata = {
   title: "Trade History | Harambe Memorial League Memorial League",
   description:
-    "Every completed trade in Harambe Memorial League Memorial League history: who gave up what, and who got fleeced.",
+    "Every completed trade in Harambe Memorial League Memorial League history: who gave up what, who got fleeced, and the hindsight grades to prove it.",
 };
 
 interface TradesPageProps {
@@ -52,6 +53,7 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
     }),
     getTradeVerdicts(),
   ]);
+  const grades = await getTradeGrades(trades);
 
   return (
     <PageSection label="The Receipts" title="Trade History.">
@@ -63,9 +65,10 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
       )}
 
       <p className="text-body-lg text-text-tertiary max-w-prose">
-        Every completed trade in league history. FAAB and cash considerations
-        aren&apos;t tracked here; if a deal looks lopsided in the player
-        columns alone, that&apos;s on the GM who made it.
+        Every completed trade in league history, graded in hindsight once the
+        receipts are a year old: real points scored, no projections, no mercy.
+        FAAB and cash considerations aren&apos;t tracked here, but the grades
+        don&apos;t need them.
       </p>
 
       {selectedFranchise && (
@@ -101,7 +104,11 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
         <div className="space-y-4">
           {trades.map((trade, index) => (
             <ScrollReveal key={trade.id} delay={index * 40}>
-              <TradeCard trade={trade} verdict={verdicts.get(String(trade.id))} />
+              <TradeCard
+                trade={trade}
+                verdict={verdicts.get(String(trade.id))}
+                grade={grades.get(trade.id)}
+              />
             </ScrollReveal>
           ))}
         </div>

@@ -63,6 +63,7 @@ describe("buildOffseasonMoves", () => {
       id: 1,
       seasonYear: 2026,
       date: "Mar 1, 2026",
+      createdAtMs: null,
       week: null,
       sides: [
         {
@@ -99,6 +100,7 @@ describe("buildOffseasonMoves", () => {
       id: 2,
       seasonYear: 2026,
       date: "Mar 2, 2026",
+      createdAtMs: null,
       week: null,
       sides: [
         {
@@ -141,6 +143,7 @@ describe("buildOffseasonMoves", () => {
       id: 3,
       seasonYear: 2026,
       date: "Mar 3, 2026",
+      createdAtMs: null,
       week: null,
       sides: [
         {

@@ -184,6 +184,8 @@ export interface Trade {
   id: number;
   seasonYear: number;
   date: string;
+  /** Raw Sleeper trade timestamp (ms), for age-gating hindsight grades. */
+  createdAtMs: number | null;
   week: number | null;
   sides: TradeSide[];
 }
@@ -480,6 +482,7 @@ export async function getTrades({
         id: row.id,
         seasonYear: row.seasonYear,
         date,
+        createdAtMs: row.createdAtSleeper,
         week: row.week,
         sides,
       };

@@ -6,6 +6,7 @@ import {
   franchiseSeasons,
   transactions,
   players,
+  playerWeekPoints,
 } from "../../lib/db/schema";
 import { eq, inArray } from "drizzle-orm";
 
@@ -23,6 +24,7 @@ const PLAYER_1_ID = `${TEST_PREFIX}-player-1`;
 const PLAYER_2_ID = `${TEST_PREFIX}-player-2`;
 const TRANSACTION_ID = `${TEST_PREFIX}-txn-1`;
 const FLIP_TRANSACTION_ID = `${TEST_PREFIX}-txn-2`;
+const FRESH_TRANSACTION_ID = `${TEST_PREFIX}-txn-3`;
 
 // Roster IDs are NUMBERS inside the transactions jsonb (Sleeper's format), but
 // franchise_seasons.rosterId is TEXT; the query converts with String(n).
@@ -135,6 +137,7 @@ export async function seedTradeData(): Promise<number> {
     .where(eq(seasons.seasonYear, SEASON_YEAR))
     .catch(() => [] as { id: number }[]);
   for (const o of orphans) {
+    await db.delete(playerWeekPoints).where(eq(playerWeekPoints.seasonId, o.id)).catch(() => {});
     await db.delete(transactions).where(eq(transactions.seasonId, o.id)).catch(() => {});
     await db.delete(franchiseSeasons).where(eq(franchiseSeasons.seasonId, o.id)).catch(() => {});
     await db.delete(seasons).where(eq(seasons.id, o.id)).catch(() => {});
@@ -225,6 +228,56 @@ export async function seedTradeData(): Promise<number> {
     createdAtSleeper: Date.UTC(SEASON_YEAR, 9, 22),
   });
 
+  // A FRESH pick-only trade (30 days old) that must render "Hindsight
+  // Pending" instead of a grade regardless of when the suite runs.
+  await db.insert(transactions).values({
+    seasonId,
+    transactionId: FRESH_TRANSACTION_ID,
+    type: "trade",
+    status: "complete",
+    week: 10,
+    rosterIds: [ROSTER_A, ROSTER_B],
+    adds: {},
+    drops: {},
+    draftPicksInvolved: [
+      {
+        season: "2001",
+        round: 3,
+        roster_id: ROSTER_A,
+        previous_owner_id: ROSTER_A,
+        owner_id: ROSTER_B,
+      },
+    ],
+    createdAtSleeper: Date.now() - 30 * 24 * 60 * 60 * 1000,
+  });
+
+  // Realized points for hindsight grading of the ORIGINAL trade (>1 year old):
+  // player 2 produced 150 for franchise A from the trade week on, player 1
+  // managed 40 for franchise B before being flipped back; 150/190 = 79% of
+  // the combined haul, which must grade as Highway Robbery, A+ vs F.
+  await db.insert(playerWeekPoints).values([
+    ...[5, 6, 7, 8, 9].map((week) => ({
+      seasonId,
+      week,
+      rosterId: String(ROSTER_A),
+      franchiseId: FRANCHISE_A_ID,
+      playerId: PLAYER_2_ID,
+      points: 30,
+      started: true,
+      slot: "RB",
+    })),
+    {
+      seasonId,
+      week: 5,
+      rosterId: String(ROSTER_B),
+      franchiseId: FRANCHISE_B_ID,
+      playerId: PLAYER_1_ID,
+      points: 40,
+      started: true,
+      slot: "QB",
+    },
+  ]);
+
   return seasonId;
 }
 
@@ -232,6 +285,10 @@ export async function seedTradeData(): Promise<number> {
 export async function cleanupTradeData(seasonId: number): Promise<void> {
   const db = getTestDb();
 
+  await db
+    .delete(playerWeekPoints)
+    .where(eq(playerWeekPoints.seasonId, seasonId))
+    .catch(() => {});
   await db
     .delete(transactions)
     .where(eq(transactions.seasonId, seasonId))

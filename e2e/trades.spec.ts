@@ -135,6 +135,46 @@ test.describe("Trade history page (seeded fixture)", () => {
       target.getByRole("link", { name: /flipped in a later trade/ })
     ).toHaveCount(0);
   });
+
+  test("year-old trade shows a hindsight grade computed from realized points", async ({
+    page,
+  }) => {
+    const t = TRADE_TEST_DATA;
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+
+    await page.goto(`/trades?season=${t.seasonYear}`);
+
+    // The original trade: 150 realized pts (A) vs 40 (B) seeded in
+    // player_week_points must grade as Highway Robbery with A+/F letters.
+    const card = page
+      .locator(".card-surface", { hasText: "Trade" })
+      .filter({ hasText: t.player2.fullName });
+    await expect(card.getByText("Hindsight Report")).toBeVisible();
+    await expect(card.getByText("Highway Robbery")).toBeVisible();
+    await expect(card.getByText("A+", { exact: true })).toBeVisible();
+    await expect(card.getByText("F", { exact: true })).toBeVisible();
+    await expect(card.getByText(/150\.0 pts realized/)).toBeVisible();
+    await expect(card.getByText(/40\.0 pts realized/)).toBeVisible();
+  });
+
+  test("a trade under a year old shows Hindsight Pending with no grade", async ({
+    page,
+  }) => {
+    const t = TRADE_TEST_DATA;
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+
+    await page.goto(`/trades?season=${t.seasonYear}`);
+
+    // The fresh pick-only trade (seeded 30 days old) is age-gated. (The flip
+    // trade is also ungraded, via the low-points "jury" message, so scope to
+    // the age-gate copy specifically.)
+    const card = page
+      .locator(".card-surface", { hasText: "Trade" })
+      .filter({ hasText: "Too fresh to grade" });
+    await expect(card).toHaveCount(1);
+    await expect(card).toContainText("Hindsight Pending");
+    await expect(card.getByText(/^(A\+|A|B\+|B|C|D|F)$/)).toHaveCount(0);
+  });
 });
 
 test.describe("Trade history page", () => {
