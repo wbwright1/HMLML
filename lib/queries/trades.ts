@@ -46,6 +46,12 @@ interface TradeSide {
   rosterId: string;
   players: Array<{ id: string; name: string; position: string | null; nflTeam: string | null }>;
   picks: PickAsset[];
+  /**
+   * How many assets this side GAVE UP in the deal (players dropped + picks
+   * sent). Used to dilute flip-chain credit in hindsight grading: a pick
+   * flipped into a later trade earns 1/gaveAssetCount of that trade's haul.
+   */
+  gaveAssetCount: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -178,6 +184,27 @@ export function findPickFlip(
   }
 
   return flip?.tradeId ?? null;
+}
+
+/**
+ * Display filter over an already-resolved trade list. Pages that also grade
+ * trades should fetch getTrades() UNFILTERED (grading needs full cross-season
+ * flip-chain context) and narrow the visible list with this.
+ */
+export function filterTrades(
+  trades: Trade[],
+  { seasonYear, franchiseId }: { seasonYear?: number; franchiseId?: string }
+): Trade[] {
+  let result = trades;
+  if (seasonYear !== undefined) {
+    result = result.filter((t) => t.seasonYear === seasonYear);
+  }
+  if (franchiseId !== undefined) {
+    result = result.filter((t) =>
+      t.sides.some((side) => side.franchise?.id === franchiseId)
+    );
+  }
+  return result;
 }
 
 export interface Trade {
@@ -433,9 +460,15 @@ export async function getTrades({
 
       const uniqueRosterIds = Array.from(new Set(rosterIds));
 
+      const drops = (row.drops as Record<string, number> | null) ?? {};
+
       const sides: TradeSide[] = uniqueRosterIds.map((rosterIdNum) => {
         const rosterIdStr = String(rosterIdNum);
         const franchise = rosterMap.get(rosterIdStr) ?? null;
+
+        const gaveAssetCount =
+          Object.values(drops).filter((givingRosterId) => givingRosterId === rosterIdNum)
+            .length + picks.filter((p) => p.previous_owner_id === rosterIdNum).length;
 
         const receivedPlayers = Object.entries(adds)
           .filter(([, receivingRosterId]) => receivingRosterId === rosterIdNum)
@@ -467,6 +500,7 @@ export async function getTrades({
           rosterId: rosterIdStr,
           players: receivedPlayers,
           picks: receivedPicks,
+          gaveAssetCount,
         };
       });
 

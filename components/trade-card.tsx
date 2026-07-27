@@ -206,6 +206,9 @@ export function TradeCard({ trade, verdict, grade }: TradeCardProps) {
                     <span className="text-caption font-mono tabular-nums text-text-tertiary">
                       {s.realizedPoints.toFixed(1)} pts realized &middot;{" "}
                       {s.startedPoints.toFixed(1)} started
+                      {s.flipCreditPoints >= 0.5 && (
+                        <> &middot; {s.flipCreditPoints.toFixed(1)} via flips</>
+                      )}
                     </span>
                   </li>
                 );

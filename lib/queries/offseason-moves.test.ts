@@ -69,12 +69,14 @@ describe("buildOffseasonMoves", () => {
         {
           franchise: { id: "f1", name: "Foopus", slug: "foopus" },
           rosterId: "1",
+          gaveAssetCount: 1,
           players: [{ id: "wr1", name: "Big Receiver", position: "WR", nflTeam: "KC" }],
           picks: [{ season: "2027", round: 1, originalFranchise: null, became: null, flippedToTradeId: null }],
         },
         {
           franchise: { id: "f2", name: "Olave Garden", slug: "olave-garden" },
           rosterId: "2",
+          gaveAssetCount: 1,
           players: [{ id: "rb1", name: "Solid Runner", position: "RB", nflTeam: "SF" }],
           picks: [],
         },
@@ -106,18 +108,21 @@ describe("buildOffseasonMoves", () => {
         {
           franchise: { id: "f1", name: "Foopus", slug: "foopus" },
           rosterId: "1",
+          gaveAssetCount: 1,
           players: [{ id: "a", name: "Player A", position: "QB", nflTeam: null }],
           picks: [],
         },
         {
           franchise: { id: "f2", name: "Olave Garden", slug: "olave-garden" },
           rosterId: "2",
+          gaveAssetCount: 1,
           players: [{ id: "b", name: "Player B", position: "RB", nflTeam: null }],
           picks: [{ season: "2026", round: 2, originalFranchise: null, became: null, flippedToTradeId: null }],
         },
         {
           franchise: { id: "f3", name: "Team C", slug: "team-c" },
           rosterId: "3",
+          gaveAssetCount: 1,
           players: [{ id: "c", name: "Player C", position: "WR", nflTeam: null }],
           picks: [],
         },
@@ -149,12 +154,14 @@ describe("buildOffseasonMoves", () => {
         {
           franchise: null,
           rosterId: "99",
+          gaveAssetCount: 1,
           players: [{ id: "z", name: "Ghost Player", position: "QB", nflTeam: null }],
           picks: [],
         },
         {
           franchise: { id: "f1", name: "Foopus", slug: "foopus" },
           rosterId: "1",
+          gaveAssetCount: 1,
           players: [],
           picks: [],
         },
