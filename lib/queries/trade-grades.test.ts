@@ -504,7 +504,7 @@ describe("computeTradeGrade value lens", () => {
         season: "2024",
         round: 1,
         originalFranchise: null,
-        became: null,
+        became: { id: "rook1", name: "Kept Rookie" },
         flippedToTradeId: null,
       },
     ];
@@ -512,7 +512,7 @@ describe("computeTradeGrade value lens", () => {
       row({ points: 180 }),
       row({ playerId: "rb1", franchiseId: "fb", points: 20 }),
     ];
-    // 3 value slots (wr1, the kept-undrafted pick, rb1); FP_2024_1 unvalued.
+    // 3 value slots (wr1, the kept pick's drafted rookie, rb1); rook1 unvalued.
     const result = computeTradeGrade(
       trade,
       rows,
@@ -536,7 +536,7 @@ describe("computeTradeGrade value lens", () => {
         season: "2024",
         round: 1,
         originalFranchise: null,
-        became: null,
+        became: { id: "rook1", name: "Kept Rookie" },
         flippedToTradeId: null,
       },
     ];
@@ -594,12 +594,15 @@ describe("computeTradeGrade value lens", () => {
     expect(trade1.sides[0].valueNow).toBeCloseTo(5000 / 3, 5);
   });
 
-  it("resolves a kept, undrafted pick's value via its FantasyCalc pseudo-id", () => {
+  it("resolves a kept, undrafted pick's value via its FantasyCalc pseudo-id (blocked from a letter grade by the unseen-rookie gate, but still priced for display)", () => {
     const trade = makeTrade();
     trade.sides[0].players = [];
     trade.sides[0].picks = [
       {
-        season: "2024",
+        // A genuinely not-yet-drafted pick is always for a season later than
+        // the league's most recently played one (the unseen-rookie gate owns
+        // anything else): season 2025 > latestPlayed 2024.
+        season: "2025",
         round: 1,
         originalFranchise: null,
         became: null,
@@ -612,9 +615,94 @@ describe("computeTradeGrade value lens", () => {
       rows,
       NOW_OLD,
       2024,
-      values({ FP_2024_1: 4000 })
+      values({ FP_2025_1: 4000 })
     );
+    expect(result.graded).toBe(false);
     expect(result.sides[0].valueNow).toBeCloseTo(4000, 5);
+  });
+});
+
+describe("computeTradeGrade unresolved past kept pick guard (FIX 2)", () => {
+  it("resolves and grades a previously-unresolvable kept past pick once became is populated (the came-home pick fix)", () => {
+    const trade = makeTrade();
+    trade.sides[0].players = [];
+    trade.sides[0].picks = [
+      {
+        season: "2024",
+        round: 1,
+        originalFranchise: null,
+        became: { id: "rook1", name: "Homegrown Rookie" },
+        flippedToTradeId: null,
+      },
+    ];
+    const rows = [
+      row({ playerId: "rook1", seasonYear: 2024, points: 120 }),
+      row({ playerId: "rb1", franchiseId: "fb", points: 40 }),
+    ];
+    const result = computeTradeGrade(
+      trade,
+      rows,
+      NOW_OLD,
+      2024,
+      values({ rook1: 3000, rb1: 1000 })
+    );
+    expect(result.sides[0].realizedPoints).toBe(120);
+    expect(result.sides[0].valueNow).toBeCloseTo(3000, 5);
+  });
+
+  it("excludes an unresolved past kept pick from the value lens denominator instead of pricing it as a future pick", () => {
+    const trade = makeTrade();
+    trade.sides[0].picks = [
+      {
+        season: "2024",
+        round: 1,
+        originalFranchise: null,
+        // Drafted (season already played, per latestPlayedSeason 2024 below)
+        // but the resulting player is unknown: a resolution gap, not a kept,
+        // not-yet-drafted pick, so it must NOT fall back to a pseudo-id price.
+        became: null,
+        flippedToTradeId: null,
+      },
+    ];
+    const rows = [
+      row({ points: 180 }),
+      row({ playerId: "rb1", franchiseId: "fb", points: 20 }),
+    ];
+    const result = computeTradeGrade(
+      trade,
+      rows,
+      NOW_OLD,
+      2024,
+      values({ wr1: 1000, rb1: 3000 })
+    );
+    expect(result.graded).toBe(true);
+    // Only wr1 counts toward side 0's value; the unresolved pick contributes
+    // no slot at all (not even an uncovered one).
+    expect(result.sides[0].valueNow).toBeCloseTo(1000, 5);
+  });
+
+  it("ungrades the trade with 'Incomplete draft records for this deal.' when a side's ONLY asset is an unresolved past kept pick", () => {
+    const trade = makeTrade();
+    trade.sides[0].players = [];
+    trade.sides[0].picks = [
+      {
+        season: "2024",
+        round: 1,
+        originalFranchise: null,
+        became: null,
+        flippedToTradeId: null,
+      },
+    ];
+    const rows = [row({ playerId: "rb1", franchiseId: "fb", points: 500 })];
+    const result = computeTradeGrade(
+      trade,
+      rows,
+      NOW_OLD,
+      2024,
+      values({ rb1: 5000 })
+    );
+    expect(result.graded).toBe(false);
+    expect(result.message).toBe("Incomplete draft records for this deal.");
   });
 });
 
