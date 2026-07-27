@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/empty-state";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { TradeCard } from "@/components/trade-card";
+import { GradeFormulaNugget } from "@/components/grade-formula-nugget";
 import { TradeFilters } from "@/app/trades/trade-filters";
 import { getTrades, filterTrades } from "@/lib/queries/trades";
 import { getTradeVerdicts } from "@/lib/queries/trade-verdicts";
@@ -69,13 +70,17 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
         />
       )}
 
-      <p className="text-body-lg text-text-tertiary max-w-prose">
-        Every completed trade in league history, graded in hindsight once the
-        receipts have had time to print: real points scored, flipped picks
-        followed down the chain, no projections, no mercy. FAAB and cash
-        considerations aren&apos;t tracked here, but the grades don&apos;t
-        need them.
-      </p>
+      <div className="flex flex-col lg:flex-row lg:items-start gap-6">
+        <p className="text-body-lg text-text-tertiary max-w-prose">
+          Every completed trade in league history, graded in hindsight once the
+          receipts have had time to print: real points scored, flipped picks
+          followed down the chain, no projections, no mercy. FAAB and cash
+          considerations aren&apos;t tracked here, but the grades don&apos;t
+          need them.
+        </p>
+
+        <GradeFormulaNugget />
+      </div>
 
       {selectedFranchise && (
         <ScrollReveal>
