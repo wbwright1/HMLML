@@ -8,6 +8,7 @@ import {
   bigint,
   jsonb,
   timestamp,
+  date,
   uniqueIndex,
   index,
 } from "drizzle-orm/pg-core";
@@ -481,6 +482,43 @@ export const leagueAwards = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// player_values
+// ---------------------------------------------------------------------------
+// Dynasty trade-value snapshots for players and draft picks, sourced from
+// FantasyCalc (daily sync) and backfilled historically from DynastyProcess CSV
+// snapshots. assetId is either a Sleeper player_id or a FantasyCalc pick
+// pseudo-id (e.g. "FP_2026_1"); there is deliberately NO foreign key to
+// players, since pick pseudo-ids don't resolve there. Values never feed trade
+// grades; they power a separate "value-then-vs-now" display on trade cards.
+export const playerValues = pgTable(
+  "player_values",
+  {
+    id: serial("id").primaryKey(),
+    assetId: text("asset_id").notNull(),
+    position: text("position"),
+    name: text("name"),
+    value: real("value").notNull(),
+    overallRank: integer("overall_rank"),
+    positionRank: integer("position_rank"),
+    trend30Day: real("trend_30day"),
+    redraftValue: real("redraft_value"),
+    tier: integer("tier"),
+    source: text("source").notNull(), // 'fantasycalc' | 'dynastyprocess'
+    snapshotDate: date("snapshot_date").notNull(),
+    createdAt: timestamp("created_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_player_values_asset_date_source").on(
+      table.assetId,
+      table.snapshotDate,
+      table.source,
+    ),
+    index("idx_player_values_asset_date").on(table.assetId, table.snapshotDate),
+    index("idx_player_values_snapshot_date").on(table.snapshotDate),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // sync_log
 // ---------------------------------------------------------------------------
 export const syncLog = pgTable(
@@ -552,3 +590,6 @@ export type NewSmackPostRow = typeof smackPosts.$inferInsert;
 
 export type LeagueAward = typeof leagueAwards.$inferSelect;
 export type NewLeagueAward = typeof leagueAwards.$inferInsert;
+
+export type PlayerValue = typeof playerValues.$inferSelect;
+export type NewPlayerValue = typeof playerValues.$inferInsert;

@@ -6,6 +6,7 @@ import {
   members,
   players,
   draftPicks,
+  playerValues,
 } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
 import {
@@ -21,6 +22,7 @@ import {
   getWinnersBracket,
   getLosersBracket,
 } from "@/lib/sleeper";
+import { getCurrentValues } from "@/lib/fantasycalc";
 import type { SleeperLeague } from "@/lib/sleeper-schemas";
 import { resolveNflState } from "@/lib/sync/nfl-state";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
@@ -1046,6 +1048,93 @@ async function syncPlayoffBracket(leagueId: string): Promise<SyncStepResult> {
 }
 
 // ---------------------------------------------------------------------------
+// Step F: Player Values Sync (FantasyCalc)
+// ---------------------------------------------------------------------------
+// Dynasty trade-value snapshots, one row per (asset, day, source). Values
+// never feed trade grades (lib/queries/trade-grades.ts); they power a
+// separate "value-then-vs-now" display on trade cards.
+
+async function syncPlayerValues(): Promise<SyncStepResult> {
+  const startTime = Date.now();
+  const logId = await logSyncStart("daily", "player_values");
+
+  try {
+    const result = await getCurrentValues();
+
+    if ("error" in result) {
+      throw new Error(`FantasyCalc API error: ${result.error.message}`);
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+
+    // Skip entries with no sleeperId (unresolvable assets); keep pick entries
+    // (they carry FantasyCalc pseudo-ids like "FP_2026_1" in sleeperId).
+    const rows = result.data
+      .filter((v) => v.player.sleeperId != null && v.player.sleeperId !== "")
+      .map((v) => ({
+        assetId: v.player.sleeperId as string,
+        position: v.player.position,
+        name: v.player.name,
+        value: v.value,
+        overallRank: v.overallRank,
+        positionRank: v.positionRank ?? null,
+        trend30Day: v.trend30Day ?? null,
+        redraftValue: v.redraftValue ?? null,
+        tier: v.maybeTier ?? null,
+        source: "fantasycalc",
+        snapshotDate: today,
+      }));
+
+    const batches = chunk(rows, 500);
+    let totalUpserted = 0;
+
+    for (const batch of batches) {
+      await db
+        .insert(playerValues)
+        .values(batch)
+        .onConflictDoUpdate({
+          target: [
+            playerValues.assetId,
+            playerValues.snapshotDate,
+            playerValues.source,
+          ],
+          set: {
+            position: sql`excluded.position`,
+            name: sql`excluded.name`,
+            value: sql`excluded.value`,
+            overallRank: sql`excluded.overall_rank`,
+            positionRank: sql`excluded.position_rank`,
+            trend30Day: sql`excluded.trend_30day`,
+            redraftValue: sql`excluded.redraft_value`,
+            tier: sql`excluded.tier`,
+          },
+        });
+      totalUpserted += batch.length;
+    }
+
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "success", totalUpserted);
+    return {
+      dataType: "player_values",
+      status: "success",
+      rowCount: totalUpserted,
+      durationMs,
+    };
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "failure", 0, errorMessage);
+    return {
+      dataType: "player_values",
+      status: "failure",
+      rowCount: 0,
+      durationMs,
+      error: errorMessage,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // League chain auto-advance
 // ---------------------------------------------------------------------------
 
@@ -1163,9 +1252,10 @@ export async function runDailySync(): Promise<DailySyncSummary> {
     syncPlayers(),
     syncDrafts(leagueId),
     syncPlayoffBracket(leagueId),
+    syncPlayerValues(),
   ]);
 
-  const dataTypes = ["rosters", "players", "drafts", "playoffs"];
+  const dataTypes = ["rosters", "players", "drafts", "playoffs", "player_values"];
   const stepResults: SyncStepResult[] = [leagueResult];
   results.forEach((r, i) => {
     if (r.status === "fulfilled") {
