@@ -283,8 +283,9 @@ describe("computeTradeGrade", () => {
 
     expect(result.graded).toBe(true);
     expect(result.label).toBeNull();
-    // shares: .714/.238/.048 -> r (x3): 2.14/.71/.14
-    expect(result.sides.map((s) => s.grade)).toEqual(["A+", "D", "F"]);
+    // shares: .714/.238/.048 -> r (x3): 2.143/.714/.143 -> A+/C/F on the
+    // blended-share curve (r .714 clears the C floor of .7)
+    expect(result.sides.map((s) => s.grade)).toEqual(["A+", "C", "F"]);
   });
 });
 
@@ -640,10 +641,11 @@ describe("computeTradeGrade wins-impact lens", () => {
     expect(withMatchups.sides[1].grade).toBe("B");
 
     const withoutMatchups = computeTradeGrade(makeTrade(), rows, NOW_OLD, undefined, v);
-    // D = .8 (wins lens inactive); blended_A = .3798 -> r .7596 -> D
+    // D = .8 (wins lens inactive); blended_A = .3798 -> r .7596 -> C on the
+    // blended curve (D was the old, unblended-curve letter)
     expect(withoutMatchups.sides[0].blendedShare).toBeCloseTo(0.379735, 4);
-    expect(withoutMatchups.sides[0].grade).toBe("D");
-    expect(withoutMatchups.sides[1].grade).toBe("A"); // r 1.2405
+    expect(withoutMatchups.sides[0].grade).toBe("C");
+    expect(withoutMatchups.sides[1].grade).toBe("B+"); // r 1.2405 -> B+ band [1.1, 1.3)
   });
 
   it("matches the value-only run when matchups are present but nothing swings", () => {

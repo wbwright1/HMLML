@@ -166,15 +166,24 @@ function latestPlayedSeasonYear(rows: RealizedPointsRow[]): number {
   return latest;
 }
 
-/** Letter from a side's share of combined realized points, scaled by side count. */
+/**
+ * Letter from a side's share of the blended pie (points/value/wins), scaled
+ * by side count so 1.0 = exactly the even split. Recalibrated empirically
+ * for BLENDED shares: the old curve was tuned for raw winner-take-all
+ * realized-points shares, which clustered hard at the A+/F extremes because
+ * points alone are frequently winner-take-all. Blending in market value and
+ * wins-impact compresses the distribution toward the middle, so the letter
+ * boundaries had to widen to match: this curve reads (in a 2-side trade) as
+ * A+ = at least 80% of the blended pie, F = under 20%.
+ */
 function letterGrade(share: number, sideCount: number): string {
   const r = share * sideCount; // 1.0 = exactly the even split
-  if (r >= 1.44) return "A+";
-  if (r >= 1.2) return "A";
-  if (r >= 1.08) return "B+";
-  if (r >= 0.92) return "B";
-  if (r >= 0.8) return "C";
-  if (r >= 0.56) return "D";
+  if (r >= 1.6) return "A+";
+  if (r >= 1.3) return "A";
+  if (r >= 1.1) return "B+";
+  if (r >= 0.9) return "B";
+  if (r >= 0.7) return "C";
+  if (r >= 0.4) return "D";
   return "F";
 }
 
