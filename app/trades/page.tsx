@@ -7,6 +7,7 @@ import { TradeCard } from "@/components/trade-card";
 import { TradeFilters } from "@/app/trades/trade-filters";
 import { getTrades } from "@/lib/queries/trades";
 import { getTradeVerdicts } from "@/lib/queries/trade-verdicts";
+import { getTradeGrades } from "@/lib/queries/trade-grades";
 import { getAllFranchises } from "@/lib/queries/franchises";
 import { getAllSeasons } from "@/lib/queries/seasons";
 
@@ -52,6 +53,7 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
     }),
     getTradeVerdicts(),
   ]);
+  const grades = await getTradeGrades(trades);
 
   return (
     <PageSection label="The Receipts" title="Trade History.">
@@ -101,7 +103,11 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
         <div className="space-y-4">
           {trades.map((trade, index) => (
             <ScrollReveal key={trade.id} delay={index * 40}>
-              <TradeCard trade={trade} verdict={verdicts.get(String(trade.id))} />
+              <TradeCard
+                trade={trade}
+                verdict={verdicts.get(String(trade.id))}
+                grade={grades.get(trade.id)}
+              />
             </ScrollReveal>
           ))}
         </div>

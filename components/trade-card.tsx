@@ -4,6 +4,7 @@ import { SuperlativeBadge } from "@/components/superlative-badge";
 import { PositionBadge } from "@/components/position-badge";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import type { Trade } from "@/lib/queries/trades";
+import type { TradeGrade } from "@/lib/queries/trade-grades";
 
 interface TradeCardProps {
   trade: Trade;
@@ -12,9 +13,26 @@ interface TradeCardProps {
    * transaction id upstream. Rendered as a serif italic editorial note.
    */
   verdict?: string | null;
+  /** Optional hindsight grade (realized-points report) for this trade. */
+  grade?: TradeGrade | null;
 }
 
-export function TradeCard({ trade, verdict }: TradeCardProps) {
+function gradeChipClasses(letter: string): string {
+  if (letter.startsWith("A")) return "bg-accent-gold-light text-accent-gold";
+  if (letter === "D" || letter === "F")
+    return "bg-accent-warm-light text-accent-warm";
+  return "bg-surface-muted text-text-secondary";
+}
+
+function labelVariant(
+  tone: TradeGrade["labelTone"]
+): "gold" | "green" | "brown" | "neutral" {
+  if (tone === "positive") return "green";
+  if (tone === "sting") return "brown";
+  return "neutral";
+}
+
+export function TradeCard({ trade, verdict, grade }: TradeCardProps) {
   return (
     <div id={`trade-${trade.id}`} className="card-surface p-5 space-y-4 scroll-mt-24">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -152,6 +170,52 @@ export function TradeCard({ trade, verdict }: TradeCardProps) {
           </div>
         ))}
       </div>
+
+      {grade && (
+        <div className="border-t border-divider pt-3 space-y-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <p
+              className={`text-kicker ${grade.graded ? "text-accent-gold" : "text-text-tertiary"}`}
+            >
+              {grade.graded ? "Hindsight Report" : "Hindsight Pending"}
+            </p>
+            {grade.label && (
+              <SuperlativeBadge
+                text={grade.label}
+                variant={labelVariant(grade.labelTone)}
+              />
+            )}
+          </div>
+          {grade.graded ? (
+            <ul className="space-y-1.5">
+              {grade.sides.map((s) => {
+                const side = trade.sides.find((ts) => ts.rosterId === s.rosterId);
+                return (
+                  <li
+                    key={s.rosterId}
+                    className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-sm"
+                  >
+                    <span
+                      className={`inline-flex w-8 justify-center rounded-md px-1.5 py-0.5 font-mono font-bold tabular-nums ${gradeChipClasses(s.grade ?? "")}`}
+                    >
+                      {s.grade}
+                    </span>
+                    <span className="text-text-secondary font-semibold truncate">
+                      {side?.franchise?.name ?? "Unknown Team"}
+                    </span>
+                    <span className="text-caption font-mono tabular-nums text-text-tertiary">
+                      {s.realizedPoints.toFixed(1)} pts realized &middot;{" "}
+                      {s.startedPoints.toFixed(1)} started
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="text-body-sm text-text-secondary">{grade.message}</p>
+          )}
+        </div>
+      )}
 
       {verdict && (
         <div className="border-t border-divider pt-3">
