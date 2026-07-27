@@ -6,6 +6,9 @@
  * collide because of the (asset_id, snapshot_date, source) unique index.
  *
  * Usage: POSTGRES_DRIVER=pg npx tsx scripts/backfill-player-values.ts
+ *
+ * Set GITHUB_TOKEN to authenticate the commits API (5,000 req/hr vs 60
+ * unauthenticated), e.g. GITHUB_TOKEN=$(gh auth token).
  */
 
 import { config } from "dotenv";
@@ -157,9 +160,13 @@ async function fetchFantasyProsToSleeperMap(): Promise<Map<string, string>> {
  * given date (YYYY-MM-DD), returning its sha, or null if none found. */
 async function findCommitShaForDate(date: string): Promise<string | null> {
   const url = `${COMMITS_API_URL}?path=${encodeURIComponent(VALUES_CSV_PATH)}&until=${date}T23:59:59Z&per_page=1`;
-  const res = await fetch(url, {
-    headers: { Accept: "application/vnd.github+json" },
-  });
+  const headers: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+  };
+  if (process.env.GITHUB_TOKEN) {
+    headers.Authorization = `Bearer ${process.env.GITHUB_TOKEN}`;
+  }
+  const res = await fetch(url, { headers });
   if (!res.ok) {
     console.warn(
       `[backfill-player-values] GitHub commits API returned HTTP ${res.status} for ${date}`
