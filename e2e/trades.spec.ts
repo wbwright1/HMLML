@@ -145,14 +145,18 @@ test.describe("Trade history page (seeded fixture)", () => {
     await page.goto(`/trades?season=${t.seasonYear}`);
 
     // The original trade: 150 realized pts (A) vs 40 (B) seeded in
-    // player_week_points must grade as Highway Robbery with A+/F letters.
+    // player_week_points, with synthetic e2e player ids that carry no
+    // player_values rows, so this stays points-only (value/wins lenses have
+    // zero coverage). Shares .7895/.2105 -> r (x2) 1.5789/.4211 on the
+    // blended-share letter curve -> A/D; winnerShare .7895 still clears the
+    // Highway Robbery threshold of .72.
     const card = page
       .locator(".card-surface", { hasText: "Trade" })
       .filter({ hasText: t.player2.fullName });
     await expect(card.getByText("Hindsight Report")).toBeVisible();
     await expect(card.getByText("Highway Robbery")).toBeVisible();
-    await expect(card.getByText("A+", { exact: true })).toBeVisible();
-    await expect(card.getByText("F", { exact: true })).toBeVisible();
+    await expect(card.getByText("A", { exact: true })).toBeVisible();
+    await expect(card.getByText("D", { exact: true })).toBeVisible();
     await expect(card.getByText(/150\.0 pts realized/)).toBeVisible();
     await expect(card.getByText(/40\.0 pts realized/)).toBeVisible();
   });
