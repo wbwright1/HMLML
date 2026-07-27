@@ -54,11 +54,11 @@ import { getLatestValues, pickAssetToValueId } from "@/lib/queries/player-values
 const GRADE_MIN_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 const MIN_GRADABLE_POINTS = 100;
 const MIN_EVIDENCE_WEEKS = 6;
-const COVERAGE_FLOOR = 0.5;
-const PLAYOFF_WEIGHT = 2;
-const BASE_WEIGHT_POINTS = 0.45;
-const BASE_WEIGHT_VALUE = 0.35;
-const BASE_WEIGHT_WINS = 0.2;
+const VALUE_COVERAGE_FLOOR = 0.5;
+const PLAYOFF_WIN_WEIGHT = 2;
+const BASE_W_POINTS = 0.45;
+const BASE_W_VALUE = 0.35;
+const BASE_W_WINS = 0.2;
 
 /** A post-trade won matchup week for one franchise: margin over the loser. */
 export interface MatchupResult {
@@ -333,7 +333,7 @@ export function computeTradeGrades(
         if (!result || !result.isWinner) continue;
         if (result.margin === null || result.margin <= 0) continue;
         if (startedSum <= result.margin) continue;
-        const impact = result.isPlayoff ? PLAYOFF_WEIGHT : 1;
+        const impact = result.isPlayoff ? PLAYOFF_WIN_WEIGHT : 1;
         weightedWinsImpact += impact;
         winsSwungDirect++;
         if (result.isPlayoff) playoffWinsSwungDirect++;
@@ -556,16 +556,16 @@ function gradeFromSides(
   const coverageFraction =
     valueAssetTotal > 0 ? valueCoveredTotal / valueAssetTotal : 0;
   const valueSum = sideValues.reduce((sum, v) => sum + v.valueAcquired, 0);
-  const a_v = coverageFraction >= COVERAGE_FLOOR && valueSum > 0 ? coverageFraction : 0;
+  const a_v = coverageFraction >= VALUE_COVERAGE_FLOOR && valueSum > 0 ? coverageFraction : 0;
 
   const winsSum = sideValues.reduce((sum, v) => sum + v.weightedWinsImpact, 0);
   const a_w = winsSum > 0 ? 1 : 0;
 
   const weightSum =
-    BASE_WEIGHT_POINTS + BASE_WEIGHT_VALUE * a_v + BASE_WEIGHT_WINS * a_w;
-  const w_p = BASE_WEIGHT_POINTS / weightSum;
-  const w_v = (BASE_WEIGHT_VALUE * a_v) / weightSum;
-  const w_w = (BASE_WEIGHT_WINS * a_w) / weightSum;
+    BASE_W_POINTS + BASE_W_VALUE * a_v + BASE_W_WINS * a_w;
+  const w_p = BASE_W_POINTS / weightSum;
+  const w_v = (BASE_W_VALUE * a_v) / weightSum;
+  const w_w = (BASE_W_WINS * a_w) / weightSum;
 
   sides.forEach((s, i) => {
     const v = sideValues[i];

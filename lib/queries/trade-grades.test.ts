@@ -543,7 +543,7 @@ describe("computeTradeGrade value lens", () => {
       row({ points: 180 }),
       row({ playerId: "rb1", franchiseId: "fb", points: 20 }),
     ];
-    // Only 1 of 3 slots covered: coverageFraction .333 < COVERAGE_FLOOR .5
+    // Only 1 of 3 slots covered: coverageFraction .333 < VALUE_COVERAGE_FLOOR .5
     const partial = computeTradeGrade(trade, rows, NOW_OLD, 2024, values({ wr1: 1000 }));
     const empty = computeTradeGrade(trade, rows, NOW_OLD, 2024, values({}));
     expect(partial.sides.map((s) => ({ grade: s.grade, blendedShare: s.blendedShare }))).toEqual(
