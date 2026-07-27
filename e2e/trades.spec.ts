@@ -211,6 +211,18 @@ test.describe("Trade history page", () => {
     expect(hasPickText + hasPositionBadge).toBeGreaterThan(0);
   });
 
+  test("formula nugget renders alongside the intro with its kicker and lens weights", async ({
+    page,
+  }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await page.goto("/trades");
+
+    const nugget = page.locator('aside[aria-label="How grades are computed"]');
+    await expect(nugget).toBeVisible();
+    await expect(nugget.getByText("The Formula")).toBeVisible();
+    await expect(nugget.getByText("45%")).toBeVisible();
+  });
+
   test("changing the season select updates the URL and the list", async ({ page }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto("/trades");
