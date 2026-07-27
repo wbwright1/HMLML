@@ -138,6 +138,24 @@ describe("resolvePickAsset", () => {
     expect(result.season).toBe("2026");
     expect(result.round).toBe(4);
   });
+
+  it("resolves a 'came home' pick, where the original slot owner and the drafter are the same franchise", () => {
+    // Roster 5's franchise in the pick's own season (2026) is Team B, and the
+    // draft_picks row for that slot ALSO carries originalFranchiseId "fb"
+    // (post-fix, daily.ts's syncDrafts always stores the slot owner, even
+    // when the drafter never traded the pick away). Proves resolvePickAsset
+    // still resolves `became` in this no-longer-null-filtered case.
+    const maps = baseMaps();
+    maps.franchiseBySeasonRoster.set("20:5", FRANCHISE_B);
+    maps.draftPickByKey.set("20:1:fb", { playerId: "p42", playerName: "Homegrown Rookie" });
+    const result = resolvePickAsset(
+      { season: "2026", round: 1, roster_id: 5 },
+      10,
+      maps
+    );
+    expect(result.originalFranchise).toEqual(FRANCHISE_B);
+    expect(result.became).toEqual({ id: "p42", name: "Homegrown Rookie" });
+  });
 });
 
 describe("pickMovementKey", () => {

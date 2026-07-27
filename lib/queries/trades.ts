@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { transactions, franchiseSeasons, franchises, players, seasons, draftPicks } from "@/lib/db/schema";
-import { eq, and, desc, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 
 interface DraftPickInvolved {
   season: string;
@@ -273,9 +273,10 @@ async function getRosterToFranchiseMapForSeasons(
 
 /**
  * Builds the `${seasonId}:${round}:${originalFranchiseId}` -> resulting player
- * index for #58 "pick became player". Only traded picks carry a non-null
- * originalFranchiseId, which is exactly the slot we match a traded pick asset
- * against, so we filter to those rows.
+ * index for #58 "pick became player". originalFranchiseId is populated on
+ * every draft_picks row (including "came home" picks, where the original slot
+ * owner and the drafter are the same franchise), so no non-null filter is
+ * needed here.
  */
 async function getDraftPickIndex(
   seasonIds: number[]
@@ -292,12 +293,7 @@ async function getDraftPickIndex(
       playerName: draftPicks.playerName,
     })
     .from(draftPicks)
-    .where(
-      and(
-        inArray(draftPicks.seasonId, seasonIds),
-        isNotNull(draftPicks.originalFranchiseId)
-      )
-    );
+    .where(inArray(draftPicks.seasonId, seasonIds));
 
   for (const r of rows) {
     map.set(`${r.seasonId}:${r.round}:${r.originalFranchiseId}`, {

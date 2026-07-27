@@ -243,6 +243,20 @@ function keptPickValueId(pick: PickAsset): string | null {
 }
 
 /**
+ * A KEPT pick (never flipped onward) whose draft season has already been
+ * played but whose resulting player is unknown: a pick-resolution gap in the
+ * draft records, NOT a future/undrafted pick. `keptPickValueId` would
+ * otherwise fall through to `pickAssetToValueId`, which is meant for future
+ * picks and would price this one as if it hadn't been drafted yet, so it must
+ * be excluded from the value lens entirely rather than priced or zeroed.
+ */
+function isUnresolvedPastKeptPick(pick: PickAsset, latestPlayed: number): boolean {
+  if (pick.flippedToTradeId !== null) return false;
+  if (!(Number(pick.season) <= latestPlayed)) return false;
+  return pick.became === null || pick.became.id === null || pick.became.id === undefined;
+}
+
+/**
  * Grades every trade at once from realized-points rows, plus optional
  * current-value and post-trade-matchup data for the value and wins-impact
  * lenses. Pure: rows, values, matchups, and the clock are all injected.
@@ -322,6 +336,7 @@ export function computeTradeGrades(
     }
     for (const pick of side.picks) {
       if (pick.flippedToTradeId !== null) continue; // counted as a flip slot below
+      if (isUnresolvedPastKeptPick(pick, latestPlayed)) continue; // resolution gap; excluded, not priced as a future pick
       valueAssetCount++;
       const valueId = keptPickValueId(pick);
       const v = valueId ? values.get(valueId) : undefined;
@@ -508,6 +523,27 @@ function gradeFromSides(
               `${nameOf(trade, s.rosterId)} ${fmt(s.realizedPoints)} pts realized`
           )
           .join(", ")}.`;
+
+  // A side whose only asset is an unresolved past kept pick (FIX 2) has
+  // nothing left to grade once that pick is excluded from the value lens;
+  // grading it would score the other side's full haul against a phantom
+  // zero. Only checked when such a pick actually exists, so trades without
+  // one are byte-identical to the pre-guard behavior.
+  const anyUnresolvedPastKeptPick = trade.sides.some((side) =>
+    side.picks.some((p) => isUnresolvedPastKeptPick(p, latestPlayed))
+  );
+  if (anyUnresolvedPastKeptPick) {
+    const hasZeroAssetSide = trade.sides.some((side) => {
+      const unresolvedCount = side.picks.filter((p) =>
+        isUnresolvedPastKeptPick(p, latestPlayed)
+      ).length;
+      const totalAssets = side.players.length + side.picks.length;
+      return totalAssets - unresolvedCount === 0;
+    });
+    if (hasZeroAssetSide) {
+      return ungraded("Incomplete draft records for this deal.");
+    }
+  }
 
   // A kept pick from a rookie class that hasn't played blocks indefinitely.
   const hasUnseenPick = trade.sides.some((side) =>

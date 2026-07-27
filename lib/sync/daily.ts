@@ -856,12 +856,13 @@ async function syncDrafts(leagueId: string): Promise<SyncStepResult> {
         const originalSlot = isSnake && isEvenRound
           ? totalTeamsInDraft - pickInRound + 1
           : pickInRound;
-        const originalFranchiseId = slotToOriginalFranchise.get(originalSlot) ?? null;
-
-        // Only store originalFranchiseId when it differs from franchiseId (pick was traded)
-        const tradedOriginal = originalFranchiseId && originalFranchiseId !== franchiseId
-          ? originalFranchiseId
-          : null;
+        // Always store the original slot owner, even when it's the same
+        // franchise that drafted the player ("came home" picks): the grader
+        // needs originalFranchiseId populated on every row to resolve what a
+        // kept pick became. Fall back to the drafter's own franchiseId when
+        // the slot can't be mapped (e.g. missing draft_order data).
+        const originalFranchiseId =
+          slotToOriginalFranchise.get(originalSlot) ?? franchiseId;
 
         // Build player name from metadata if available
         const playerName = pick.metadata
@@ -880,7 +881,7 @@ async function syncDrafts(leagueId: string): Promise<SyncStepResult> {
           franchiseId,
           playerId: pick.player_id,
           playerName,
-          originalFranchiseId: tradedOriginal,
+          originalFranchiseId,
           isLegacyEra: false,
         };
       });
