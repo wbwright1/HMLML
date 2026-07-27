@@ -1,5 +1,5 @@
 {
-  "name": "harambe-memorial-league",
+  "name": "hmlml",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -16,9 +16,9 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wbwright1/FantasyWebsite.git"
+    "url": "git+https://github.com/wbwright1/HMLML.git"
   },
-  "homepage": "https://github.com/wbwright1/FantasyWebsite#readme",
+  "homepage": "https://hmlml.app",
   "dependencies": {
     "@anthropic-ai/sdk": "^0.113.0",
     "@base-ui/react": "^1.3.0",

@@ -29,12 +29,16 @@ export interface PickBecame {
  * A draft pick moved in a trade, enriched with (a) the crest of the franchise
  * whose original draft slot it was, and (b) which player the pick became once
  * that draft completed (null for future/incomplete drafts or legacy-era picks).
+ * When the receiving team later traded this same pick onward, `flippedToTradeId`
+ * points at that later trade so the card can link down the chain instead of
+ * implying the "became" player was part of this team's haul.
  */
 export interface PickAsset {
   season: string;
   round: number;
   originalFranchise: FranchiseInfo | null;
   became: PickBecame | null;
+  flippedToTradeId: number | null;
 }
 
 interface TradeSide {
@@ -102,7 +106,78 @@ export function resolvePickAsset(
     }
   }
 
-  return { season: raw.season, round: raw.round, originalFranchise, became };
+  return {
+    season: raw.season,
+    round: raw.round,
+    originalFranchise,
+    became,
+    flippedToTradeId: null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Pure pick-flip detection (unit-tested in trades.test.ts)
+// ---------------------------------------------------------------------------
+
+/** One movement of a pick asset through a completed trade. */
+export interface PickMovement {
+  tradeId: number;
+  /** Sleeper trade timestamp (ms). */
+  timestamp: number;
+  /** The sending side, resolved to a franchise when possible. */
+  fromFranchiseId: string | null;
+  fromRosterId: number;
+}
+
+/**
+ * Identity of a pick asset across trades: Sleeper keys a traded pick by its
+ * draft season, round, and original slot owner, so the same triple appearing
+ * in two trades is the same physical pick moving again.
+ */
+export function pickMovementKey(p: {
+  season: string;
+  round: number;
+  roster_id: number;
+}): string {
+  return `${p.season}:${p.round}:${p.roster_id}`;
+}
+
+/**
+ * Finds the trade in which a received pick was traded onward by its receiver:
+ * the earliest strictly-later movement of the same pick where the sender is
+ * the receiving team. Sides are compared by franchise id when both resolve
+ * (roster ids aren't guaranteed stable across Sleeper league years), falling
+ * back to raw roster ids otherwise. Returns that trade's id, or null if the
+ * receiver kept the pick (or ordering is unknowable because the receiving
+ * trade has no timestamp).
+ */
+export function findPickFlip(
+  movementsByKey: Map<string, PickMovement[]>,
+  received: {
+    pickKey: string;
+    tradeId: number;
+    timestamp: number | null;
+    franchiseId: string | null;
+    rosterId: number;
+  }
+): number | null {
+  if (received.timestamp === null) return null;
+  const movements = movementsByKey.get(received.pickKey);
+  if (!movements) return null;
+
+  let flip: PickMovement | null = null;
+  for (const m of movements) {
+    if (m.tradeId === received.tradeId) continue;
+    if (m.timestamp <= received.timestamp) continue;
+    const senderMatches =
+      m.fromFranchiseId !== null && received.franchiseId !== null
+        ? m.fromFranchiseId === received.franchiseId
+        : m.fromRosterId === received.rosterId;
+    if (!senderMatches) continue;
+    if (flip === null || m.timestamp < flip.timestamp) flip = m;
+  }
+
+  return flip?.tradeId ?? null;
 }
 
 export interface Trade {
@@ -208,8 +283,9 @@ async function getDraftPickIndex(
 /**
  * Returns completed trades (type='trade', status='complete'), newest first,
  * with franchise and player names resolved. Optionally filtered by season
- * and/or franchise (franchise filtering happens in JS after resolution,
- * since a franchise's involvement is only knowable from rosterIds/adds/picks).
+ * and/or franchise; both filters happen in JS after resolution, since a
+ * franchise's involvement is only knowable from rosterIds/adds/picks, and
+ * pick-flip detection needs the full cross-season trade history.
  *
  * Note: Sleeper's `waiver_budget` (FAAB) field is dropped by Zod validation
  * at sync time (lib/sleeper-schemas.ts) and is not stored, so FAAB amounts
@@ -220,14 +296,10 @@ export async function getTrades({
   franchiseId,
 }: GetTradesParams = {}): Promise<Trade[]> {
   try {
-    const whereConditions = [
-      eq(transactions.type, "trade"),
-      eq(transactions.status, "complete"),
-    ];
-    if (seasonId !== undefined) {
-      whereConditions.push(eq(transactions.seasonId, seasonId));
-    }
-
+    // Always fetch ALL completed trades, even when a season filter is set:
+    // pick-flip detection needs the full history (a pick received in 2025 may
+    // be flipped in a 2026 trade). Season filtering happens in JS at the end,
+    // alongside the franchise filter.
     const rows = await db
       .select({
         id: transactions.id,
@@ -242,7 +314,9 @@ export async function getTrades({
       })
       .from(transactions)
       .innerJoin(seasons, eq(transactions.seasonId, seasons.id))
-      .where(and(...whereConditions))
+      .where(
+        and(eq(transactions.type, "trade"), eq(transactions.status, "complete"))
+      )
       .orderBy(desc(transactions.createdAtSleeper));
 
     if (rows.length === 0) return [];
@@ -295,6 +369,28 @@ export async function getTrades({
       franchiseBySeasonRoster,
       draftPickByKey,
     };
+
+    // Every pick movement across all trades, keyed by pick identity, for
+    // "flipped later" detection. Senders resolve to franchises via the
+    // sending trade's own season.
+    const movementsByKey = new Map<string, PickMovement[]>();
+    for (const row of rows) {
+      if (row.createdAtSleeper === null) continue;
+      const picks = (row.draftPicksInvolved as DraftPickInvolved[] | null) ?? [];
+      for (const p of picks) {
+        const key = pickMovementKey(p);
+        const list = movementsByKey.get(key) ?? [];
+        list.push({
+          tradeId: row.id,
+          timestamp: row.createdAtSleeper,
+          fromFranchiseId:
+            franchiseBySeasonRoster.get(`${row.seasonId}:${p.previous_owner_id}`)
+              ?.id ?? null,
+          fromRosterId: p.previous_owner_id,
+        });
+        movementsByKey.set(key, list);
+      }
+    }
 
     // Batch-fetch player names/positions/teams for all players involved.
     const allPlayerIds = new Set<string>();
@@ -353,7 +449,16 @@ export async function getTrades({
 
         const receivedPicks = picks
           .filter((p) => p.owner_id === rosterIdNum)
-          .map((p) => resolvePickAsset(p, row.seasonId, pickMaps));
+          .map((p) => ({
+            ...resolvePickAsset(p, row.seasonId, pickMaps),
+            flippedToTradeId: findPickFlip(movementsByKey, {
+              pickKey: pickMovementKey(p),
+              tradeId: row.id,
+              timestamp: row.createdAtSleeper,
+              franchiseId: franchise?.id ?? null,
+              rosterId: rosterIdNum,
+            }),
+          }));
 
         return {
           franchise,
@@ -380,13 +485,18 @@ export async function getTrades({
       };
     });
 
+    let result = trades;
+    if (seasonId !== undefined) {
+      const seasonIdByTradeId = new Map(rows.map((r) => [r.id, r.seasonId]));
+      result = result.filter((trade) => seasonIdByTradeId.get(trade.id) === seasonId);
+    }
     if (franchiseId !== undefined) {
-      return trades.filter((trade) =>
+      result = result.filter((trade) =>
         trade.sides.some((side) => side.franchise?.id === franchiseId)
       );
     }
 
-    return trades;
+    return result;
   } catch (error) {
     console.error("[trades] getTrades error:", error);
     return [];

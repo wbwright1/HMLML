@@ -22,6 +22,7 @@ const FRANCHISE_B_ID = `${TEST_PREFIX}-franchise-b`;
 const PLAYER_1_ID = `${TEST_PREFIX}-player-1`;
 const PLAYER_2_ID = `${TEST_PREFIX}-player-2`;
 const TRANSACTION_ID = `${TEST_PREFIX}-txn-1`;
+const FLIP_TRANSACTION_ID = `${TEST_PREFIX}-txn-2`;
 
 // Roster IDs are NUMBERS inside the transactions jsonb (Sleeper's format), but
 // franchise_seasons.rosterId is TEXT; the query converts with String(n).
@@ -73,6 +74,10 @@ export const TRADE_TEST_DATA = {
  * franchise B (roster 92); i.e. adds/picks reference the RECEIVING roster,
  * exactly as Sleeper writes them, so the resolved output is only correct if
  * getTrades() actually runs its resolution logic.
+ *
+ * A second, later trade FLIPS the same pick from franchise A back to B (for
+ * player 1), so the first trade's pick line must carry a "flipped in a later
+ * trade" link targeting the second trade's card.
  *
  * Returns the season ID for cleanup.
  */
@@ -189,7 +194,35 @@ export async function seedTradeData(): Promise<number> {
         owner_id: ROSTER_A, // franchise A receives the pick
       },
     ],
-    createdAtSleeper: Date.UTC(SEASON_YEAR, 9, 15), // Oct 15, 1999
+    createdAtSleeper: Date.UTC(SEASON_YEAR, 9, 15),
+  });
+
+  // The flip: one week later, franchise A trades the same pick onward to B
+  // in exchange for player 1. Same (season, round, roster_id) identity, so
+  // getTrades() must flag the FIRST trade's pick as flipped into this one.
+  await db.insert(transactions).values({
+    seasonId,
+    transactionId: FLIP_TRANSACTION_ID,
+    type: "trade",
+    status: "complete",
+    week: 6,
+    rosterIds: [ROSTER_A, ROSTER_B],
+    adds: {
+      [t.player1.id]: ROSTER_A, // franchise A gets player 1 for the pick
+    },
+    drops: {
+      [t.player1.id]: ROSTER_B,
+    },
+    draftPicksInvolved: [
+      {
+        season: t.pick.season,
+        round: t.pick.round,
+        roster_id: ROSTER_A,
+        previous_owner_id: ROSTER_A,
+        owner_id: ROSTER_B, // franchise B receives the pick
+      },
+    ],
+    createdAtSleeper: Date.UTC(SEASON_YEAR, 9, 22),
   });
 
   return seasonId;

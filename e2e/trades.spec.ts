@@ -24,6 +24,10 @@ const DESKTOP_VIEWPORT = { width: 1280, height: 900 };
 const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
 test.describe("Trade history page (seeded fixture)", () => {
+  // One worker, ordered: with fullyParallel, each worker would otherwise run
+  // beforeAll itself and the concurrent seeds collide in the shared database.
+  test.describe.configure({ mode: "serial" });
+
   let seededSeasonId: number;
 
   test.beforeAll(async () => {
@@ -45,9 +49,11 @@ test.describe("Trade history page (seeded fixture)", () => {
     // Filter to the seeded season so the fixture is isolated from real data.
     await page.goto(`/trades?season=${t.seasonYear}`);
 
+    // Two trades are seeded (original + pick flip); player 2 only moves in
+    // the original, so it uniquely identifies that card.
     const card = page
       .locator(".card-surface", { hasText: "Trade" })
-      .filter({ hasText: t.franchiseA.name });
+      .filter({ hasText: t.player2.fullName });
     await expect(card).toHaveCount(1);
 
     // Both franchise names appear (both sides resolved from roster IDs).
@@ -90,11 +96,44 @@ test.describe("Trade history page (seeded fixture)", () => {
     // The seeded trade survives franchise-level filtering with full resolution.
     const card = page
       .locator(".card-surface", { hasText: "Trade" })
-      .filter({ hasText: t.franchiseA.name });
+      .filter({ hasText: t.player2.fullName });
     await expect(card).toHaveCount(1);
     await expect(card).toContainText(t.franchiseB.name);
     await expect(card).toContainText(t.player2.fullName);
     await expect(card).toContainText(`Round ${t.pick.round} pick`);
+  });
+
+  test("a flipped pick links to the later trade it moved on in", async ({ page }) => {
+    const t = TRADE_TEST_DATA;
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+
+    await page.goto(`/trades?season=${t.seasonYear}`);
+
+    // The ORIGINAL trade (identified by player 2) shows the flip link on its
+    // received pick instead of a "became" line.
+    const originalCard = page
+      .locator(".card-surface", { hasText: "Trade" })
+      .filter({ hasText: t.player2.fullName });
+    const flipLink = originalCard.getByRole("link", {
+      name: /flipped in a later trade/,
+    });
+    await expect(flipLink).toBeVisible();
+
+    const href = await flipLink.getAttribute("href");
+    expect(href).toMatch(/^\/trades#trade-\d+$/);
+
+    // Following the link lands on the (unfiltered) trades page with the flip
+    // trade's card present at the anchor target.
+    await flipLink.click();
+    await page.waitForURL(/\/trades#trade-\d+/);
+
+    const target = page.locator(`#${href!.split("#")[1]}`);
+    await expect(target).toBeVisible();
+    await expect(target).toContainText(`Round ${t.pick.round} pick`);
+    // The flip trade's receiver (franchise B) kept the pick: no further link.
+    await expect(
+      target.getByRole("link", { name: /flipped in a later trade/ })
+    ).toHaveCount(0);
   });
 });
 

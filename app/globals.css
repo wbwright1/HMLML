@@ -100,6 +100,11 @@
    dim -> --text-muted, accent -> --accent-gold.
    ========================================================================= */
 :root {
+    /* Dark-only site: without this, browsers render native widgets (select
+       option popups, scrollbars, form controls) with light-mode chrome, which
+       turns the dropdown lists white behind our near-white text. */
+    color-scheme: dark;
+
     /* ---- Named semantic tokens (single source of truth) ---- */
     --canvas: #1A1613;
     --surface: rgba(255, 255, 255, 0.045);
@@ -181,6 +186,14 @@
     }
     html {
         @apply font-sans;
+    }
+
+    /* Native select popups: color-scheme handles the widget chrome, but for
+       browsers that let options be styled, force an opaque dark fill so the
+       list never renders white behind our near-white text. */
+    select option {
+        background-color: #211C18; /* matches --popover (opaque) */
+        color: var(--text-primary);
     }
 
     /* Tabular figures for numeric content in tables */
