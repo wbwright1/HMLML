@@ -228,8 +228,9 @@ export async function seedTradeData(): Promise<number> {
     createdAtSleeper: Date.UTC(SEASON_YEAR, 9, 22),
   });
 
-  // A FRESH pick-only trade (30 days old) that must render "Hindsight
-  // Pending" instead of a grade regardless of when the suite runs.
+  // A FRESH pick-only trade (30 days old) whose pick belongs to a far-future
+  // rookie class: must render the ungraded "waiting on a rookie class"
+  // hindsight state regardless of when the suite runs.
   await db.insert(transactions).values({
     seasonId,
     transactionId: FRESH_TRANSACTION_ID,
@@ -241,7 +242,7 @@ export async function seedTradeData(): Promise<number> {
     drops: {},
     draftPicksInvolved: [
       {
-        season: "2001",
+        season: "2099",
         round: 3,
         roster_id: ROSTER_A,
         previous_owner_id: ROSTER_A,

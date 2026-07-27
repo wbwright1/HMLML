@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { playerWeekPoints, seasons } from "@/lib/db/schema";
-import { inArray } from "drizzle-orm";
+import { eq, inArray, ne, sql } from "drizzle-orm";
 import { SNARKY_LABELS } from "@/lib/content";
 import type { Trade } from "@/lib/queries/trades";
 
@@ -14,25 +14,42 @@ import type { Trade } from "@/lib/queries/trades";
 // is no player value model and no projection anywhere in here.
 //
 // Guardrails (deliberate):
-// - No grade until the trade is a year old; younger trades get an ungraded
-//   "early returns" message instead.
-// - A year-old trade whose combined realized points are still trivial (both
+// - A kept pick whose rookie class hasn't seen the field yet (draft season
+//   later than any season with played games) blocks the grade INDEFINITELY,
+//   even past the year mark; grading an unseen rookie as a zero is a lie.
+// - Otherwise a trade grades at a year old, or EARLIER when every asset has
+//   about six games of evidence: each acquired player has 6+ post-trade
+//   played weeks, and each kept pick's drafted player has 6+ played weeks.
+// - Trades still short of both bars get an ungraded "early returns" message.
+// - A gradable trade whose combined realized points are still trivial (both
 //   sides under MIN_GRADABLE_POINTS) stays ungraded: a letter grade on a
-//   points-less future-picks swap would be noise, not a receipt.
-// - A pick flipped onward before its draft naturally contributes 0 here (its
-//   "became" player never joins the flipper's roster); the flip trade itself
-//   is graded on what THAT return realized.
+//   points-less swap would be noise, not a receipt.
+// - A flipped pick is NOT a dud: it earns diluted flip-chain credit. If a
+//   side flipped a pick into trade T2, that pick contributes 1/k of the
+//   side's realized value IN T2 (k = assets the side gave up in T2), and
+//   that value itself includes T2's own flip credits, so multi-hop chains
+//   (pick -> pick -> Omarion Hampton) flow back proportionally. Flipped
+//   picks never block grading; the full haul is graded on the flip trade.
+// - "Played" means a week with nonzero points: pre-season default lineups
+//   write phantom zero-point rows (e.g. 2026), which must not count as
+//   evidence that a player has seen the field.
 
 const GRADE_MIN_AGE_MS = 365 * 24 * 60 * 60 * 1000;
 const MIN_GRADABLE_POINTS = 100;
+const MIN_EVIDENCE_WEEKS = 6;
 
 export interface TradeSideGrade {
   rosterId: string;
   franchiseId: string | null;
-  /** Points acquired assets scored for the acquirer, post-trade. */
+  /**
+   * Points acquired assets scored for the acquirer, post-trade, INCLUDING
+   * diluted flip-chain credit for picks traded onward.
+   */
   realizedPoints: number;
-  /** The subset of realizedPoints scored in started lineup slots. */
+  /** Direct points scored in started lineup slots (no flip credit). */
   startedPoints: number;
+  /** The flip-chain-credit portion of realizedPoints. */
+  flipCreditPoints: number;
   /** Letter grade (A+ .. F); null when the trade is ungraded. */
   grade: string | null;
 }
@@ -75,6 +92,35 @@ function isPostTrade(
   return trade.week === null || row.week >= trade.week;
 }
 
+/**
+ * Distinct weeks in which a player actually played (nonzero points, any
+ * roster), optionally restricted to weeks after a trade. Zero-point rows are
+ * excluded: preseason default lineups write phantom rows for games that were
+ * never played.
+ */
+function playedWeekCount(
+  rows: RealizedPointsRow[],
+  playerId: string,
+  postTradeOf: Trade | null
+): number {
+  const weeks = new Set<string>();
+  for (const row of rows) {
+    if (row.playerId !== playerId || row.points === 0) continue;
+    if (postTradeOf && !isPostTrade(row, postTradeOf)) continue;
+    weeks.add(`${row.seasonYear}:${row.week}`);
+  }
+  return weeks.size;
+}
+
+/** The most recent season with any actually-played (nonzero) week. */
+function latestPlayedSeasonYear(rows: RealizedPointsRow[]): number {
+  let latest = 0;
+  for (const row of rows) {
+    if (row.points !== 0 && row.seasonYear > latest) latest = row.seasonYear;
+  }
+  return latest;
+}
+
 /** Letter from a side's share of combined realized points, scaled by side count. */
 function letterGrade(share: number, sideCount: number): string {
   const r = share * sideCount; // 1.0 = exactly the even split
@@ -104,74 +150,204 @@ function overallLabel(
   return { label: pick.displayText, tone: pick.tone };
 }
 
+type TradeSideAssets = Trade["sides"][number];
+
+interface SideValue {
+  /** Total realized: direct points + flip-chain credit. */
+  realized: number;
+  /** Direct started-slot points only. */
+  started: number;
+  /** The flip-chain-credit portion of `realized`. */
+  flipCredit: number;
+}
+
 /**
- * Grades one trade from realized-points rows. Pure: rows and the clock are
- * injected. `rows` may span any set of players/franchises; only rows matching
- * a side's acquired asset on the acquiring franchise, post-trade, count.
+ * Grades every trade at once from realized-points rows. Pure: rows and the
+ * clock are injected. Pass the FULL trade list, even when only a subset will
+ * be displayed: flip-chain credit follows `flippedToTradeId` into other
+ * trades, and a missing target silently earns 0 credit.
+ * `latestPlayedSeason` is the league-wide most recent season with played
+ * games (pass it explicitly; deriving it from `rows` alone under-counts when
+ * rows cover only a filtered subset of players), falling back to the rows.
  */
-export function computeTradeGrade(
-  trade: Trade,
+export function computeTradeGrades(
+  trades: Trade[],
   rows: RealizedPointsRow[],
-  nowMs: number
-): TradeGrade {
-  const sides: TradeSideGrade[] = trade.sides.map((side) => {
+  nowMs: number,
+  latestPlayedSeason?: number
+): Map<number, TradeGrade> {
+  const tradeById = new Map(trades.map((t) => [t.id, t]));
+  const latestPlayed = latestPlayedSeason ?? latestPlayedSeasonYear(rows);
+  const memo = new Map<string, SideValue>();
+
+  function directValue(
+    trade: Trade,
+    side: TradeSideAssets
+  ): { realized: number; started: number } {
     const acquiredIds = new Set<string>();
     for (const p of side.players) acquiredIds.add(p.id);
     for (const pick of side.picks) {
-      // Only credit a pick's player when this side held it through the draft;
-      // a flipped pick's return is graded on the later trade instead.
+      // A pick's player counts only when this side held it through the draft;
+      // a flipped pick earns chain credit below instead.
       if (pick.became?.id && pick.flippedToTradeId === null) {
         acquiredIds.add(pick.became.id);
       }
     }
 
-    let realizedPoints = 0;
-    let startedPoints = 0;
+    let realized = 0;
+    let started = 0;
     if (side.franchise) {
       for (const row of rows) {
         if (row.franchiseId !== side.franchise.id) continue;
         if (!acquiredIds.has(row.playerId)) continue;
         if (!isPostTrade(row, trade)) continue;
-        realizedPoints += row.points;
-        if (row.started) startedPoints += row.points;
+        realized += row.points;
+        if (row.started) started += row.points;
       }
     }
+    return { realized, started };
+  }
 
-    return {
-      rosterId: side.rosterId,
-      franchiseId: side.franchise?.id ?? null,
-      realizedPoints,
-      startedPoints,
-      grade: null,
+  function sideValue(
+    trade: Trade,
+    side: TradeSideAssets,
+    stack: Set<string>
+  ): SideValue {
+    const key = `${trade.id}:${side.rosterId}`;
+    const memoized = memo.get(key);
+    if (memoized) return memoized;
+    if (stack.has(key)) return { realized: 0, started: 0, flipCredit: 0 };
+    stack.add(key);
+
+    const direct = directValue(trade, side);
+    let flipCredit = 0;
+    for (const pick of side.picks) {
+      if (pick.flippedToTradeId === null) continue;
+      const flipTrade = tradeById.get(pick.flippedToTradeId);
+      if (!flipTrade) continue;
+      const flipSide = flipTrade.sides.find((s) =>
+        side.franchise && s.franchise
+          ? s.franchise.id === side.franchise.id
+          : s.rosterId === side.rosterId
+      );
+      if (!flipSide) continue;
+      // The flipped pick was one of k assets paid in the flip trade, so it
+      // earns 1/k of that side's total realized value there (which already
+      // includes the flip trade's own downstream flip credits).
+      const v = sideValue(flipTrade, flipSide, stack);
+      flipCredit += v.realized / Math.max(1, flipSide.gaveAssetCount);
+    }
+
+    stack.delete(key);
+    const value: SideValue = {
+      realized: direct.realized + flipCredit,
+      started: direct.started,
+      flipCredit,
     };
-  });
+    memo.set(key, value);
+    return value;
+  }
 
+  const grades = new Map<number, TradeGrade>();
+  for (const trade of trades) {
+    const sides: TradeSideGrade[] = trade.sides.map((side) => {
+      const v = sideValue(trade, side, new Set());
+      return {
+        rosterId: side.rosterId,
+        franchiseId: side.franchise?.id ?? null,
+        realizedPoints: v.realized,
+        startedPoints: v.started,
+        flipCreditPoints: v.flipCredit,
+        grade: null,
+      };
+    });
+    grades.set(trade.id, gradeFromSides(trade, sides, rows, nowMs, latestPlayed));
+  }
+  return grades;
+}
+
+/** Single-trade convenience wrapper: no cross-trade flip credit resolvable. */
+export function computeTradeGrade(
+  trade: Trade,
+  rows: RealizedPointsRow[],
+  nowMs: number,
+  latestPlayedSeason?: number
+): TradeGrade {
+  const grade = computeTradeGrades([trade], rows, nowMs, latestPlayedSeason).get(
+    trade.id
+  );
+  if (!grade) throw new Error(`no grade computed for trade ${trade.id}`);
+  return grade;
+}
+
+function gradeFromSides(
+  trade: Trade,
+  sides: TradeSideGrade[],
+  rows: RealizedPointsRow[],
+  nowMs: number,
+  latestPlayed: number
+): TradeGrade {
   const combined = sides.reduce((sum, s) => sum + s.realizedPoints, 0);
+  const ungraded = (message: string): TradeGrade => ({
+    graded: false,
+    label: null,
+    labelTone: null,
+    message,
+    sides,
+  });
+  const earlyReturns =
+    combined === 0
+      ? ""
+      : ` Early returns: ${sides
+          .map(
+            (s) =>
+              `${nameOf(trade, s.rosterId)} ${fmt(s.realizedPoints)} pts realized`
+          )
+          .join(", ")}.`;
+
+  // A kept pick from a rookie class that hasn't played blocks indefinitely.
+  const hasUnseenPick = trade.sides.some((side) =>
+    side.picks.some(
+      (p) => p.flippedToTradeId === null && Number(p.season) > latestPlayed
+    )
+  );
+  if (hasUnseenPick) {
+    return ungraded(
+      `No grade yet: a pick in this deal is waiting on a rookie class that hasn't seen the field.${earlyReturns}`
+    );
+  }
+
+  // Gradable at a year old, or earlier once every asset has ~6 games of
+  // evidence: acquired players post-trade, kept picks' draftees career-wide.
   const oldEnough =
     trade.createdAtMs !== null && nowMs - trade.createdAtMs >= GRADE_MIN_AGE_MS;
+  const matured =
+    oldEnough ||
+    (trade.createdAtMs !== null &&
+      trade.sides.every(
+        (side) =>
+          side.players.every(
+            (p) => playedWeekCount(rows, p.id, trade) >= MIN_EVIDENCE_WEEKS
+          ) &&
+          side.picks.every(
+            (pick) =>
+              pick.flippedToTradeId !== null ||
+              pick.became?.id === undefined ||
+              pick.became?.id === null ||
+              playedWeekCount(rows, pick.became.id, null) >= MIN_EVIDENCE_WEEKS
+          )
+      ));
 
-  if (!oldEnough) {
-    const withPoints = sides.filter((s) => s.realizedPoints > 0);
-    const message =
-      withPoints.length === 0
-        ? "Too fresh to grade. The receipts need a year to age."
-        : `Too fresh to grade; the receipts need a year to age. Early returns: ${sides
-            .map(
-              (s) =>
-                `${nameOf(trade, s.rosterId)} ${fmt(s.realizedPoints)} pts realized`
-            )
-            .join(", ")}.`;
-    return { graded: false, label: null, labelTone: null, message, sides };
+  if (!matured) {
+    return ungraded(
+      `Too fresh to grade. Grades print once the receipts cover about six games or the deal turns a year old.${earlyReturns}`
+    );
   }
 
   if (combined < MIN_GRADABLE_POINTS) {
-    return {
-      graded: false,
-      label: null,
-      labelTone: null,
-      message: `A year on and barely ${fmt(combined)} combined points realized. The jury is still deliberating this one.`,
-      sides,
-    };
+    return ungraded(
+      `Barely ${fmt(combined)} combined points realized so far. The jury is still deliberating this one.`
+    );
   }
 
   for (const s of sides) {
@@ -196,6 +372,8 @@ function nameOf(trade: Trade, rosterId: string): string {
 /**
  * Computes a hindsight grade for every trade, keyed by trade id. One batched
  * player_week_points fetch covers all acquired assets across all trades.
+ * Pass the UNFILTERED getTrades() result: flip-chain credit needs the later
+ * trades a filtered view would omit (see filterTrades in lib/queries/trades).
  * Never throws: on any DB error it returns an empty map and the trades page
  * renders without grades.
  */
@@ -215,6 +393,15 @@ export async function getTradeGrades(
         }
       }
     }
+
+    // League-wide latest season with actually-played (nonzero) weeks: the
+    // reference point for "this rookie class hasn't seen the field yet".
+    const [latestPlayedRow] = await db
+      .select({ year: sql<number | null>`max(${seasons.seasonYear})` })
+      .from(playerWeekPoints)
+      .innerJoin(seasons, eq(playerWeekPoints.seasonId, seasons.id))
+      .where(ne(playerWeekPoints.points, 0));
+    const latestPlayedSeason = latestPlayedRow?.year ?? 0;
 
     let rows: RealizedPointsRow[] = [];
     if (playerIds.size > 0) {
@@ -251,10 +438,7 @@ export async function getTradeGrades(
       });
     }
 
-    const nowMs = Date.now();
-    for (const trade of trades) {
-      grades.set(trade.id, computeTradeGrade(trade, rows, nowMs));
-    }
+    return computeTradeGrades(trades, rows, Date.now(), latestPlayedSeason);
   } catch (e) {
     console.error("[trade-grades] getTradeGrades error:", e);
   }

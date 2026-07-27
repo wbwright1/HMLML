@@ -157,7 +157,7 @@ test.describe("Trade history page (seeded fixture)", () => {
     await expect(card.getByText(/40\.0 pts realized/)).toBeVisible();
   });
 
-  test("a trade under a year old shows Hindsight Pending with no grade", async ({
+  test("a trade holding an unplayed rookie-class pick shows Hindsight Pending", async ({
     page,
   }) => {
     const t = TRADE_TEST_DATA;
@@ -165,12 +165,12 @@ test.describe("Trade history page (seeded fixture)", () => {
 
     await page.goto(`/trades?season=${t.seasonYear}`);
 
-    // The fresh pick-only trade (seeded 30 days old) is age-gated. (The flip
-    // trade is also ungraded, via the low-points "jury" message, so scope to
-    // the age-gate copy specifically.)
+    // The fresh trade's 2099 pick belongs to a class nobody has seen play,
+    // which blocks grading outright. (The flip trade is also ungraded, via
+    // the low-points "jury" message, so scope to the rookie-class copy.)
     const card = page
       .locator(".card-surface", { hasText: "Trade" })
-      .filter({ hasText: "Too fresh to grade" });
+      .filter({ hasText: "waiting on a rookie class" });
     await expect(card).toHaveCount(1);
     await expect(card).toContainText("Hindsight Pending");
     await expect(card.getByText(/^(A\+|A|B\+|B|C|D|F)$/)).toHaveCount(0);

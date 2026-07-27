@@ -5,7 +5,7 @@ import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { TradeCard } from "@/components/trade-card";
 import { TradeFilters } from "@/app/trades/trade-filters";
-import { getTrades } from "@/lib/queries/trades";
+import { getTrades, filterTrades } from "@/lib/queries/trades";
 import { getTradeVerdicts } from "@/lib/queries/trade-verdicts";
 import { getTradeGrades } from "@/lib/queries/trade-grades";
 import { getAllFranchises } from "@/lib/queries/franchises";
@@ -46,14 +46,17 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
     ? allSeasons.find((s) => String(s.seasonYear) === season)
     : undefined;
 
-  const [trades, verdicts] = await Promise.all([
-    getTrades({
-      seasonId: selectedSeason?.id,
-      franchiseId: selectedFranchise?.id,
-    }),
+  // Fetch ALL trades: grading needs full flip-chain context even on a
+  // filtered view. The visible list narrows afterward.
+  const [allTrades, verdicts] = await Promise.all([
+    getTrades(),
     getTradeVerdicts(),
   ]);
-  const grades = await getTradeGrades(trades);
+  const grades = await getTradeGrades(allTrades);
+  const trades = filterTrades(allTrades, {
+    seasonYear: selectedSeason?.seasonYear,
+    franchiseId: selectedFranchise?.id,
+  });
 
   return (
     <PageSection label="The Receipts" title="Trade History.">
@@ -66,9 +69,10 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
 
       <p className="text-body-lg text-text-tertiary max-w-prose">
         Every completed trade in league history, graded in hindsight once the
-        receipts are a year old: real points scored, no projections, no mercy.
-        FAAB and cash considerations aren&apos;t tracked here, but the grades
-        don&apos;t need them.
+        receipts have had time to print: real points scored, flipped picks
+        followed down the chain, no projections, no mercy. FAAB and cash
+        considerations aren&apos;t tracked here, but the grades don&apos;t
+        need them.
       </p>
 
       {selectedFranchise && (
