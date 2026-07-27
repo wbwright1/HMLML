@@ -8,7 +8,7 @@ import {
   draftPicks,
   playerValues,
 } from "@/lib/db/schema";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, lt, ne, sql } from "drizzle-orm";
 import {
   getLeague,
   getLeagueUsers,
@@ -1112,6 +1112,29 @@ async function syncPlayerValues(): Promise<SyncStepResult> {
       totalUpserted += batch.length;
     }
 
+    // Retention: thin fantasycalc dailies older than 30 days down to weekly
+    // (keep Mondays), matching the weekly cadence of the dynastyprocess
+    // historical rows, which are never touched. The latest snapshot is always
+    // kept even if the sync has been down long enough for it to age past the
+    // cutoff, so "value now" lookups never regress to an older Monday.
+    const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
+      .toISOString()
+      .slice(0, 10);
+    const thinned = await db
+      .delete(playerValues)
+      .where(
+        and(
+          eq(playerValues.source, "fantasycalc"),
+          lt(playerValues.snapshotDate, cutoff),
+          sql`extract(dow from ${playerValues.snapshotDate}) <> 1`,
+          ne(
+            playerValues.snapshotDate,
+            sql`(select max(snapshot_date) from player_values where source = 'fantasycalc')`
+          )
+        )
+      )
+      .returning({ id: playerValues.id });
+
     const durationMs = Date.now() - startTime;
     await logSyncComplete(logId, "success", totalUpserted);
     return {
@@ -1119,6 +1142,7 @@ async function syncPlayerValues(): Promise<SyncStepResult> {
       status: "success",
       rowCount: totalUpserted,
       durationMs,
+      note: thinned.length > 0 ? `thinned ${thinned.length} stale daily rows` : undefined,
     };
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : "Unknown error";
