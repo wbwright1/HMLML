@@ -14,7 +14,7 @@ import { getAllSeasons } from "@/lib/queries/seasons";
 export const metadata = {
   title: "Trade History | Harambe Memorial League Memorial League",
   description:
-    "Every completed trade in Harambe Memorial League Memorial League history: who gave up what, and who got fleeced.",
+    "Every completed trade in Harambe Memorial League Memorial League history: who gave up what, who got fleeced, and the hindsight grades to prove it.",
 };
 
 interface TradesPageProps {
@@ -65,9 +65,10 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
       )}
 
       <p className="text-body-lg text-text-tertiary max-w-prose">
-        Every completed trade in league history. FAAB and cash considerations
-        aren&apos;t tracked here; if a deal looks lopsided in the player
-        columns alone, that&apos;s on the GM who made it.
+        Every completed trade in league history, graded in hindsight once the
+        receipts are a year old: real points scored, no projections, no mercy.
+        FAAB and cash considerations aren&apos;t tracked here, but the grades
+        don&apos;t need them.
       </p>
 
       {selectedFranchise && (
