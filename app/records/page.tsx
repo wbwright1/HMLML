@@ -60,6 +60,11 @@ const subPages = [
     description: "Every champion in league history",
   },
   {
+    href: "/trades",
+    label: "The Receipts",
+    description: "Every trade in league history, graded in hindsight",
+  },
+  {
     href: "/history",
     label: "History",
     description: "The full season-by-season timeline",
