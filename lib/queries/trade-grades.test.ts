@@ -3,6 +3,7 @@ import {
   computeTradeGrade,
   computeTradeGrades,
   type RealizedPointsRow,
+  type MatchupResult,
 } from "./trade-grades";
 import type { Trade } from "./trades";
 
@@ -287,75 +288,77 @@ describe("computeTradeGrade", () => {
   });
 });
 
+// The Omarion Hampton scenario: in trade 1, Team A gives a player to Team B
+// for a pick; A later packages that pick WITH TWO OTHERS (trade 2, gave 3
+// assets) for a star who realizes 300 points. Trade 1 must credit A's side
+// 300/3 = 100 via the flip chain instead of scoring the pick as a dud.
+// Module-scoped (not just describe-local): reused by the value/wins lens
+// flip-credit tests below, not only the points flip-chain tests.
+function hamptonTrades(): Trade[] {
+  const trade1 = makeTrade({
+    id: 1,
+    sides: [
+      {
+        franchise: franchise("fa", "Team A"),
+        rosterId: "1",
+        gaveAssetCount: 1, // gave one player
+        players: [],
+        picks: [
+          {
+            season: "2025",
+            round: 1,
+            originalFranchise: null,
+            became: { id: "someone", name: "Whoever It Became" },
+            flippedToTradeId: 2,
+          },
+        ],
+      },
+      {
+        franchise: franchise("fb", "Team B"),
+        rosterId: "2",
+        gaveAssetCount: 1, // gave the pick
+        players: [{ id: "vet1", name: "Veteran Piece", position: "WR", nflTeam: "KC" }],
+        picks: [],
+      },
+    ],
+  });
+  const trade2 = makeTrade({
+    id: 2,
+    seasonYear: 2025,
+    createdAtMs: TRADE_MS + 90 * 24 * 60 * 60 * 1000,
+    week: 2,
+    sides: [
+      {
+        franchise: franchise("fa", "Team A"),
+        rosterId: "1",
+        gaveAssetCount: 3, // the flipped pick plus two more
+        players: [{ id: "hampton", name: "Omarion Hampton", position: "RB", nflTeam: "LAC" }],
+        picks: [],
+      },
+      {
+        franchise: franchise("fc", "Team C"),
+        rosterId: "3",
+        gaveAssetCount: 1,
+        players: [],
+        picks: [],
+      },
+    ],
+  });
+  return [trade1, trade2];
+}
+
+const hamptonRows = [
+  // Hampton: 300 pts for Team A after trade 2.
+  ...Array.from({ length: 10 }, (_, i) =>
+    row({ playerId: "hampton", franchiseId: "fa", seasonYear: 2025, week: 3 + i, points: 30 })
+  ),
+  // The player Team B got in trade 1: 90 pts.
+  ...Array.from({ length: 9 }, (_, i) =>
+    row({ playerId: "vet1", franchiseId: "fb", week: 7 + i, points: 10 })
+  ),
+];
+
 describe("computeTradeGrades flip-chain credit", () => {
-  // The Omarion Hampton scenario: in trade 1, Team A gives a player to Team B
-  // for a pick; A later packages that pick WITH TWO OTHERS (trade 2, gave 3
-  // assets) for a star who realizes 300 points. Trade 1 must credit A's side
-  // 300/3 = 100 via the flip chain instead of scoring the pick as a dud.
-  function hamptonTrades(): Trade[] {
-    const trade1 = makeTrade({
-      id: 1,
-      sides: [
-        {
-          franchise: franchise("fa", "Team A"),
-          rosterId: "1",
-          gaveAssetCount: 1, // gave one player
-          players: [],
-          picks: [
-            {
-              season: "2025",
-              round: 1,
-              originalFranchise: null,
-              became: { id: "someone", name: "Whoever It Became" },
-              flippedToTradeId: 2,
-            },
-          ],
-        },
-        {
-          franchise: franchise("fb", "Team B"),
-          rosterId: "2",
-          gaveAssetCount: 1, // gave the pick
-          players: [{ id: "vet1", name: "Veteran Piece", position: "WR", nflTeam: "KC" }],
-          picks: [],
-        },
-      ],
-    });
-    const trade2 = makeTrade({
-      id: 2,
-      seasonYear: 2025,
-      createdAtMs: TRADE_MS + 90 * 24 * 60 * 60 * 1000,
-      week: 2,
-      sides: [
-        {
-          franchise: franchise("fa", "Team A"),
-          rosterId: "1",
-          gaveAssetCount: 3, // the flipped pick plus two more
-          players: [{ id: "hampton", name: "Omarion Hampton", position: "RB", nflTeam: "LAC" }],
-          picks: [],
-        },
-        {
-          franchise: franchise("fc", "Team C"),
-          rosterId: "3",
-          gaveAssetCount: 1,
-          players: [],
-          picks: [],
-        },
-      ],
-    });
-    return [trade1, trade2];
-  }
-
-  const hamptonRows = [
-    // Hampton: 300 pts for Team A after trade 2.
-    ...Array.from({ length: 10 }, (_, i) =>
-      row({ playerId: "hampton", franchiseId: "fa", seasonYear: 2025, week: 3 + i, points: 30 })
-    ),
-    // The player Team B got in trade 1: 90 pts.
-    ...Array.from({ length: 9 }, (_, i) =>
-      row({ playerId: "vet1", franchiseId: "fb", week: 7 + i, points: 10 })
-    ),
-  ];
-
   it("credits a flipped pick with a diluted share of the flip trade's haul", () => {
     const grades = computeTradeGrades(hamptonTrades(), hamptonRows, NOW_OLD);
     const trade1 = grades.get(1)!;
@@ -429,5 +432,310 @@ describe("computeTradeGrades flip-chain credit", () => {
 
     expect(grades.get(2)!.sides[0].flipCreditPoints).toBeCloseTo(100, 5); // 200/2
     expect(grades.get(1)!.sides[0].flipCreditPoints).toBeCloseTo(100 / 3, 5);
+  });
+});
+
+function values(map: Record<string, number>): Map<string, number> {
+  return new Map(Object.entries(map));
+}
+
+function matchupMap(map: Record<string, MatchupResult>): Map<string, MatchupResult> {
+  return new Map(Object.entries(map));
+}
+
+describe("computeTradeGrade value lens", () => {
+  it("moderates a lopsided points split when values are near-even and fully covered (variant A)", () => {
+    const rows = [
+      row({ points: 40 }),
+      row({ playerId: "rb1", franchiseId: "fb", points: 160 }),
+    ];
+    const result = computeTradeGrade(
+      makeTrade(),
+      rows,
+      NOW_OLD,
+      undefined,
+      values({ wr1: 6000, rb1: 6000 })
+    );
+    expect(result.sides[0].blendedShare).toBeCloseTo(0.33125, 5);
+    expect(result.sides[0].grade).toBe("D"); // points-only would be F
+    expect(result.sides[1].blendedShare).toBeCloseTo(0.66875, 5);
+    expect(result.sides[1].grade).toBe("A"); // points-only would be A+
+  });
+
+  it("moderates a lopsided points split when values are near-even and fully covered (variant B)", () => {
+    const rows = [row({ playerId: "rb1", franchiseId: "fb", points: 200 })];
+    const result = computeTradeGrade(
+      makeTrade(),
+      rows,
+      NOW_OLD,
+      undefined,
+      values({ wr1: 12000, rb1: 4000 })
+    );
+    expect(result.sides[0].blendedShare).toBeCloseTo(0.328125, 5);
+    expect(result.sides[0].grade).toBe("D"); // escapes F
+    expect(result.sides[1].blendedShare).toBeCloseTo(0.671875, 5);
+    expect(result.sides[1].grade).toBe("A");
+  });
+
+  it("blends an offsetting points/value split to a Win-Win with both sides B", () => {
+    const rows = [
+      row({ points: 300 }),
+      row({ playerId: "rb1", franchiseId: "fb", points: 100 }),
+    ];
+    const result = computeTradeGrade(
+      makeTrade(),
+      rows,
+      NOW_OLD,
+      undefined,
+      values({ wr1: 2000, rb1: 6000 })
+    );
+    expect(result.sides[0].blendedShare).toBeCloseTo(0.53125, 5);
+    expect(result.sides[0].grade).toBe("B");
+    expect(result.sides[1].blendedShare).toBeCloseTo(0.46875, 5);
+    expect(result.sides[1].grade).toBe("B");
+    expect(result.label).toBe("Win-Win");
+  });
+
+  it("weights the value lens by coverage fraction when one of three slots is unvalued", () => {
+    const trade = makeTrade();
+    trade.sides[0].picks = [
+      {
+        season: "2024",
+        round: 1,
+        originalFranchise: null,
+        became: null,
+        flippedToTradeId: null,
+      },
+    ];
+    const rows = [
+      row({ points: 180 }),
+      row({ playerId: "rb1", franchiseId: "fb", points: 20 }),
+    ];
+    // 3 value slots (wr1, the kept-undrafted pick, rb1); FP_2024_1 unvalued.
+    const result = computeTradeGrade(
+      trade,
+      rows,
+      NOW_OLD,
+      2024,
+      values({ wr1: 1000, rb1: 3000 })
+    );
+    // D = .45 + .35*(2/3) = .68333; w_p=.65854, w_v=.34146
+    // blended_A = .65854*.9 + .34146*.25 = .678049 -> r 1.356 -> A
+    expect(result.sides[0].blendedShare).toBeCloseTo(0.678049, 4);
+    expect(result.sides[0].grade).toBe("A");
+    // blended_B = .321951 -> r .6439 -> D
+    expect(result.sides[1].blendedShare).toBeCloseTo(0.321951, 4);
+    expect(result.sides[1].grade).toBe("D");
+  });
+
+  it("drops the value lens entirely (byte-identical to no values) below the coverage floor", () => {
+    const trade = makeTrade();
+    trade.sides[0].picks = [
+      {
+        season: "2024",
+        round: 1,
+        originalFranchise: null,
+        became: null,
+        flippedToTradeId: null,
+      },
+    ];
+    const rows = [
+      row({ points: 180 }),
+      row({ playerId: "rb1", franchiseId: "fb", points: 20 }),
+    ];
+    // Only 1 of 3 slots covered: coverageFraction .333 < COVERAGE_FLOOR .5
+    const partial = computeTradeGrade(trade, rows, NOW_OLD, 2024, values({ wr1: 1000 }));
+    const empty = computeTradeGrade(trade, rows, NOW_OLD, 2024, values({}));
+    expect(partial.sides.map((s) => ({ grade: s.grade, blendedShare: s.blendedShare }))).toEqual(
+      empty.sides.map((s) => ({ grade: s.grade, blendedShare: s.blendedShare }))
+    );
+  });
+
+  it("drops the value lens when the covered values sum to zero", () => {
+    const rows = [
+      row({ points: 150 }),
+      row({ playerId: "rb1", franchiseId: "fb", points: 50 }),
+    ];
+    const zeroValued = computeTradeGrade(
+      makeTrade(),
+      rows,
+      NOW_OLD,
+      undefined,
+      values({ wr1: 0, rb1: 0 })
+    );
+    const noValues = computeTradeGrade(makeTrade(), rows, NOW_OLD, undefined, values({}));
+    expect(zeroValued.sides.map((s) => s.grade)).toEqual(noValues.sides.map((s) => s.grade));
+    expect(zeroValued.sides.map((s) => s.blendedShare)).toEqual(
+      noValues.sides.map((s) => s.blendedShare)
+    );
+  });
+
+  it("grades points-only with an explicit empty values map", () => {
+    const rows = [
+      ...Array.from({ length: 10 }, (_, i) => row({ week: 7 + i, points: 20 })),
+      row({ playerId: "rb1", franchiseId: "fb", points: 30 }),
+    ];
+    const result = computeTradeGrade(makeTrade(), rows, NOW_OLD, undefined, values({}));
+    expect(result.label).toBe("Highway Robbery");
+    expect(result.sides[0].grade).toBe("A+");
+    expect(result.sides[1].grade).toBe("F");
+  });
+
+  it("credits a flipped pick's value via the same diluted flip chain as points", () => {
+    const grades = computeTradeGrades(
+      hamptonTrades(),
+      hamptonRows,
+      NOW_OLD,
+      undefined,
+      values({ hampton: 5000 })
+    );
+    const trade1 = grades.get(1)!;
+    expect(trade1.sides[0].valueNow).toBeCloseTo(5000 / 3, 5);
+  });
+
+  it("resolves a kept, undrafted pick's value via its FantasyCalc pseudo-id", () => {
+    const trade = makeTrade();
+    trade.sides[0].players = [];
+    trade.sides[0].picks = [
+      {
+        season: "2024",
+        round: 1,
+        originalFranchise: null,
+        became: null,
+        flippedToTradeId: null,
+      },
+    ];
+    const rows = [row({ playerId: "rb1", franchiseId: "fb", points: 100 })];
+    const result = computeTradeGrade(
+      trade,
+      rows,
+      NOW_OLD,
+      2024,
+      values({ FP_2024_1: 4000 })
+    );
+    expect(result.sides[0].valueNow).toBeCloseTo(4000, 5);
+  });
+});
+
+describe("computeTradeGrade wins-impact lens", () => {
+  it("lets a swung playoff win rescue the losing side from D to B", () => {
+    const rows = [
+      row({ seasonYear: 2024, week: 10, points: 20, started: true }),
+      row({ seasonYear: 2024, week: 11, points: 100, started: true }),
+      row({ playerId: "rb1", franchiseId: "fb", seasonYear: 2024, week: 12, points: 100, started: true }),
+    ];
+    const v = values({ wr1: 1000, rb1: 5000 });
+    const withMatchups = computeTradeGrade(
+      makeTrade(),
+      rows,
+      NOW_OLD,
+      undefined,
+      v,
+      matchupMap({ "2024:10:fa": { isWinner: true, isPlayoff: true, margin: 3 } })
+    );
+    // D = 1 (all three lenses active); blended_A = .5038 -> r 1.0076 -> B
+    expect(withMatchups.sides[0].blendedShare).toBeCloseTo(0.503788, 4);
+    expect(withMatchups.sides[0].grade).toBe("B");
+    expect(withMatchups.sides[1].blendedShare).toBeCloseTo(0.496212, 4);
+    expect(withMatchups.sides[1].grade).toBe("B");
+
+    const withoutMatchups = computeTradeGrade(makeTrade(), rows, NOW_OLD, undefined, v);
+    // D = .8 (wins lens inactive); blended_A = .3798 -> r .7596 -> D
+    expect(withoutMatchups.sides[0].blendedShare).toBeCloseTo(0.379735, 4);
+    expect(withoutMatchups.sides[0].grade).toBe("D");
+    expect(withoutMatchups.sides[1].grade).toBe("A"); // r 1.2405
+  });
+
+  it("matches the value-only run when matchups are present but nothing swings", () => {
+    const rows = [
+      row({ seasonYear: 2024, week: 10, points: 20, started: true }),
+      row({ seasonYear: 2024, week: 11, points: 100, started: true }),
+      row({ playerId: "rb1", franchiseId: "fb", seasonYear: 2024, week: 12, points: 100, started: true }),
+    ];
+    const v = values({ wr1: 1000, rb1: 5000 });
+    const zeroSwings = computeTradeGrade(
+      makeTrade(),
+      rows,
+      NOW_OLD,
+      undefined,
+      v,
+      matchupMap({ "2024:10:fa": { isWinner: true, isPlayoff: true, margin: 25 } }) // 20 <= 25, no swing
+    );
+    const valueOnly = computeTradeGrade(makeTrade(), rows, NOW_OLD, undefined, v);
+    expect(zeroSwings.sides.map((s) => s.grade)).toEqual(valueOnly.sides.map((s) => s.grade));
+    expect(zeroSwings.sides.map((s) => s.blendedShare)).toEqual(
+      valueOnly.sides.map((s) => s.blendedShare)
+    );
+  });
+
+  it("matches the value-only run with an explicit empty matchups map", () => {
+    const rows = [
+      row({ points: 150 }),
+      row({ playerId: "rb1", franchiseId: "fb", points: 50 }),
+    ];
+    const v = values({ wr1: 1000, rb1: 3000 });
+    const emptyMatchups = computeTradeGrade(makeTrade(), rows, NOW_OLD, undefined, v, matchupMap({}));
+    const noMatchupsArg = computeTradeGrade(makeTrade(), rows, NOW_OLD, undefined, v);
+    expect(emptyMatchups.sides.map((s) => s.grade)).toEqual(
+      noMatchupsArg.sides.map((s) => s.grade)
+    );
+  });
+
+  it("weighs a playoff swing above a regular-season swing when points/value are even", () => {
+    const rows = [
+      row({ seasonYear: 2024, week: 10, points: 100, started: true }),
+      row({ playerId: "rb1", franchiseId: "fb", seasonYear: 2024, week: 11, points: 100, started: true }),
+    ];
+    const v = values({ wr1: 1000, rb1: 1000 });
+    const result = computeTradeGrade(
+      makeTrade(),
+      rows,
+      NOW_OLD,
+      undefined,
+      v,
+      matchupMap({
+        "2024:10:fa": { isWinner: true, isPlayoff: true, margin: 5 }, // A: playoff swing, impact 2
+        "2024:11:fb": { isWinner: true, isPlayoff: false, margin: 5 }, // B: regular swing, impact 1
+      })
+    );
+    expect(result.sides[0].winsShare).toBeCloseTo(2 / 3, 5);
+    expect(result.sides[1].winsShare).toBeCloseTo(1 / 3, 5);
+    expect(result.sides[0].blendedShare!).toBeGreaterThan(result.sides[1].blendedShare!);
+  });
+
+  it("credits a flipped pick's wins-impact via the diluted flip chain, direct count stays zero", () => {
+    const matchupsInput = matchupMap({
+      "2025:5:fa": { isWinner: true, isPlayoff: false, margin: 10 }, // hampton started 30 > 10
+    });
+    const grades = computeTradeGrades(hamptonTrades(), hamptonRows, NOW_OLD, undefined, undefined, matchupsInput);
+    const trade1 = grades.get(1)!;
+    const trade2 = grades.get(2)!;
+    expect(trade2.sides[0].weightedWinsImpact).toBeCloseTo(1, 5);
+    expect(trade1.sides[0].winsSwung).toBe(0);
+    expect(trade1.sides[0].weightedWinsImpact).toBeCloseTo(1 / 3, 5);
+  });
+
+  it("requires the started sum to STRICTLY exceed the margin", () => {
+    const rowsNoSwing = [row({ seasonYear: 2024, week: 10, points: 20, started: true })];
+    const noSwing = computeTradeGrades(
+      [makeTrade()],
+      rowsNoSwing,
+      NOW_OLD,
+      undefined,
+      undefined,
+      matchupMap({ "2024:10:fa": { isWinner: true, isPlayoff: false, margin: 20 } })
+    ).get(1)!;
+    expect(noSwing.sides[0].weightedWinsImpact).toBe(0);
+
+    const rowsSwing = [row({ seasonYear: 2024, week: 10, points: 20.1, started: true })];
+    const swing = computeTradeGrades(
+      [makeTrade()],
+      rowsSwing,
+      NOW_OLD,
+      undefined,
+      undefined,
+      matchupMap({ "2024:10:fa": { isWinner: true, isPlayoff: false, margin: 20 } })
+    ).get(1)!;
+    expect(swing.sides[0].weightedWinsImpact).toBeCloseTo(1, 5);
   });
 });
