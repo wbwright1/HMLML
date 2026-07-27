@@ -8,6 +8,7 @@ import { TradeFilters } from "@/app/trades/trade-filters";
 import { getTrades, filterTrades } from "@/lib/queries/trades";
 import { getTradeVerdicts } from "@/lib/queries/trade-verdicts";
 import { getTradeGrades } from "@/lib/queries/trade-grades";
+import { getTradeValues } from "@/lib/queries/trade-values";
 import { getAllFranchises } from "@/lib/queries/franchises";
 import { getAllSeasons } from "@/lib/queries/seasons";
 
@@ -53,6 +54,7 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
     getTradeVerdicts(),
   ]);
   const grades = await getTradeGrades(allTrades);
+  const tradeValues = await getTradeValues(allTrades);
   const trades = filterTrades(allTrades, {
     seasonYear: selectedSeason?.seasonYear,
     franchiseId: selectedFranchise?.id,
@@ -112,10 +114,17 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
                 trade={trade}
                 verdict={verdicts.get(String(trade.id))}
                 grade={grades.get(trade.id)}
+                values={tradeValues.get(trade.id) ?? null}
               />
             </ScrollReveal>
           ))}
         </div>
+      )}
+
+      {tradeValues.size > 0 && (
+        <p className="text-caption text-text-muted normal-case tracking-normal pt-2">
+          Dynasty values via FantasyCalc; historical snapshots via DynastyProcess.
+        </p>
       )}
     </PageSection>
   );

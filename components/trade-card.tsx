@@ -5,6 +5,7 @@ import { PositionBadge } from "@/components/position-badge";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import type { Trade } from "@/lib/queries/trades";
 import type { TradeGrade } from "@/lib/queries/trade-grades";
+import type { TradeValueSummary } from "@/lib/queries/trade-values";
 
 interface TradeCardProps {
   trade: Trade;
@@ -15,6 +16,8 @@ interface TradeCardProps {
   verdict?: string | null;
   /** Optional hindsight grade (realized-points report) for this trade. */
   grade?: TradeGrade | null;
+  /** Optional dynasty market values per side. Purely presentational; never feeds grades. */
+  values?: TradeValueSummary | null;
 }
 
 function gradeChipClasses(letter: string): string {
@@ -32,7 +35,7 @@ function labelVariant(
   return "neutral";
 }
 
-export function TradeCard({ trade, verdict, grade }: TradeCardProps) {
+export function TradeCard({ trade, verdict, grade, values }: TradeCardProps) {
   return (
     <div id={`trade-${trade.id}`} className="card-surface p-5 space-y-4 scroll-mt-24">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -217,6 +220,71 @@ export function TradeCard({ trade, verdict, grade }: TradeCardProps) {
           ) : (
             <p className="text-body-sm text-text-secondary">{grade.message}</p>
           )}
+        </div>
+      )}
+
+      {values && values.sides.some((s) => s.coverage !== "none") && (
+        <div className="border-t border-divider pt-3 space-y-2">
+          <p className="text-kicker text-text-tertiary">Dynasty Value &middot; Then &rarr; Now</p>
+          <ul className="space-y-1.5">
+            {values.sides.map((s) => {
+              const side = trade.sides.find((ts) => ts.rosterId === s.rosterId);
+              const name = side?.franchise?.name ?? "Unknown Team";
+              const delta =
+                s.coverage === "full" && s.then !== null && s.now !== null
+                  ? s.now - s.then
+                  : null;
+              return (
+                <li
+                  key={s.rosterId}
+                  className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-sm"
+                >
+                  <span className="text-text-secondary font-semibold truncate">
+                    {name}
+                  </span>
+                  {s.coverage === "none" && (
+                    <span className="text-caption text-text-muted">no market data</span>
+                  )}
+                  {s.coverage === "partial" && (
+                    <>
+                      <span className="font-mono tabular-nums text-text-primary">
+                        {s.now!.toLocaleString()}
+                      </span>
+                      <span className="text-caption text-text-tertiary">current value</span>
+                    </>
+                  )}
+                  {s.coverage === "full" && (
+                    <>
+                      <span className="font-mono tabular-nums text-text-tertiary">
+                        {s.then!.toLocaleString()}
+                      </span>
+                      <span className="px-1.5 text-text-muted" aria-hidden>
+                        &rarr;
+                      </span>
+                      <span className="font-mono tabular-nums text-text-primary">
+                        {s.now!.toLocaleString()}
+                      </span>
+                      {delta === 0 ? (
+                        <span className="text-caption text-text-muted">no change</span>
+                      ) : delta !== null && delta > 0 ? (
+                        <span className="flex items-center gap-0.5 font-mono text-xs font-bold tabular-nums text-accent-green shrink-0">
+                          <span className="sr-only">up </span>
+                          <span aria-hidden>▲</span>
+                          <span>{delta.toLocaleString()}</span>
+                        </span>
+                      ) : delta !== null ? (
+                        <span className="flex items-center gap-0.5 font-mono text-xs tabular-nums text-accent-warm shrink-0">
+                          <span className="sr-only">down </span>
+                          <span aria-hidden>▼</span>
+                          <span>{Math.abs(delta).toLocaleString()}</span>
+                        </span>
+                      ) : null}
+                    </>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
         </div>
       )}
 

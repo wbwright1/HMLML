@@ -274,6 +274,106 @@ test.describe("Trade history page", () => {
     await expect(page.locator("h1").first()).toBeVisible();
   });
 
+  test("dynasty value block shows then/now with a correct delta and degrades for missing market data", async ({
+    page,
+  }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await page.goto("/trades");
+
+    const cards = page.locator(".card-surface", { hasText: "Trade" });
+    const cardCount = await cards.count();
+    if (cardCount === 0) return; // No completed trades seeded in this environment.
+
+    const kickerCount = await page.getByText("Dynasty Value", { exact: false }).count();
+    if (kickerCount === 0) return; // No player_values coverage in this environment.
+
+    // Every value row is an <li> inside a "Dynasty Value" section; scan them
+    // all across the page rather than trying to scope per-card (the section
+    // container isn't uniquely selectable from the kicker text alone).
+    const rowItems = page.locator("li").filter({
+      hasText: /no market data|current value|no change|▲|▼/,
+    });
+    const rowCount = await rowItems.count();
+
+    let foundFull = false;
+    let foundDegraded = false;
+
+    for (let j = 0; j < rowCount; j++) {
+      const row = rowItems.nth(j);
+      const text = (await row.textContent()) ?? "";
+
+      if (!foundFull) {
+        const nums = text.match(/[\d,]+/g);
+        const isUp = text.includes("up ");
+        const isDown = text.includes("down ");
+        if ((isUp || isDown) && nums && nums.length >= 3) {
+          const then = Number(nums[0].replace(/,/g, ""));
+          const now = Number(nums[1].replace(/,/g, ""));
+          const delta = Number(nums[2].replace(/,/g, ""));
+          if (isUp) {
+            expect(now - then).toBe(delta);
+            foundFull = true;
+          } else {
+            expect(then - now).toBe(delta);
+            foundFull = true;
+          }
+        }
+      }
+
+      if (!foundDegraded && (text.includes("no market data") || text.includes("current value"))) {
+        foundDegraded = true;
+      }
+
+      if (foundFull && foundDegraded) break;
+    }
+
+    // At least one of the two shapes must be present given real data exists;
+    // both are asserted when available, but the environment's actual mix of
+    // backfilled/unbackfilled assets determines whether both are findable.
+    expect(foundFull || foundDegraded).toBe(true);
+  });
+
+  test("dynasty value block sits after the Hindsight block and before the Site Desk Verdict", async ({
+    page,
+  }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await page.goto("/trades");
+
+    const cards = page.locator(".card-surface", { hasText: "Trade" });
+    const cardCount = await cards.count();
+    for (let i = 0; i < cardCount; i++) {
+      const card = cards.nth(i);
+      const html = await card.innerHTML();
+      const hindsightIdx = html.indexOf("Hindsight Report");
+      const hindsightPendingIdx = html.indexOf("Hindsight Pending");
+      const valueIdx = html.indexOf("Dynasty Value");
+      const verdictIdx = html.indexOf("Site Desk Verdict");
+
+      if (valueIdx === -1) continue;
+
+      const gradeIdx = hindsightIdx !== -1 ? hindsightIdx : hindsightPendingIdx;
+      if (gradeIdx !== -1) {
+        expect(valueIdx).toBeGreaterThan(gradeIdx);
+      }
+      if (verdictIdx !== -1) {
+        expect(valueIdx).toBeLessThan(verdictIdx);
+      }
+      break;
+    }
+  });
+
+  test("attribution line renders exactly once when values are present", async ({ page }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await page.goto("/trades");
+
+    const attribution = page.getByText(
+      "Dynasty values via FantasyCalc; historical snapshots via DynastyProcess."
+    );
+    const count = await attribution.count();
+    if (count === 0) return; // No values in this environment.
+    expect(count).toBe(1);
+  });
+
   test("mobile viewport stacks trade card sides", async ({ page }) => {
     await page.setViewportSize(MOBILE_VIEWPORT);
     await page.goto("/trades");
