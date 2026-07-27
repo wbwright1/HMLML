@@ -16,7 +16,7 @@ interface TradeCardProps {
 
 export function TradeCard({ trade, verdict }: TradeCardProps) {
   return (
-    <div className="card-surface p-5 space-y-4">
+    <div id={`trade-${trade.id}`} className="card-surface p-5 space-y-4 scroll-mt-24">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <SuperlativeBadge text="Trade" variant="gold" />
@@ -114,7 +114,14 @@ export function TradeCard({ trade, verdict }: TradeCardProps) {
                         </span>
                         <span>Round {pick.round} pick</span>
                       </div>
-                      {pick.became && (
+                      {pick.flippedToTradeId != null ? (
+                        <Link
+                          href={`/trades#trade-${pick.flippedToTradeId}`}
+                          className="w-fit pl-1 text-caption text-accent-gold hover:underline"
+                        >
+                          flipped in a later trade &rarr;
+                        </Link>
+                      ) : pick.became && (
                         <div className="flex min-w-0 items-center gap-1.5 pl-1 text-caption text-text-tertiary">
                           <span className="shrink-0">became</span>
                           <PlayerHeadshot

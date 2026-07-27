@@ -1,8 +1,11 @@
 import { describe, it, expect } from "vitest";
 import {
   resolvePickAsset,
+  findPickFlip,
+  pickMovementKey,
   type FranchiseInfo,
   type PickResolutionMaps,
+  type PickMovement,
 } from "./trades";
 
 const FRANCHISE_A: FranchiseInfo = {
@@ -134,5 +137,108 @@ describe("resolvePickAsset", () => {
     );
     expect(result.season).toBe("2026");
     expect(result.round).toBe(4);
+  });
+});
+
+describe("pickMovementKey", () => {
+  it("keys a pick by draft season, round, and original slot owner", () => {
+    expect(pickMovementKey({ season: "2026", round: 1, roster_id: 3 })).toBe(
+      "2026:1:3"
+    );
+  });
+});
+
+describe("findPickFlip", () => {
+  const KEY = "2026:1:3";
+
+  function movements(list: PickMovement[]): Map<string, PickMovement[]> {
+    return new Map([[KEY, list]]);
+  }
+
+  // Team A (franchise "fa", roster 5) received the pick in trade 100 at t=1000.
+  const RECEIVED = {
+    pickKey: KEY,
+    tradeId: 100,
+    timestamp: 1000,
+    franchiseId: "fa",
+    rosterId: 5,
+  };
+
+  it("finds the trade where the receiver sent the same pick onward", () => {
+    const result = findPickFlip(
+      movements([
+        { tradeId: 100, timestamp: 1000, fromFranchiseId: "fb", fromRosterId: 2 },
+        { tradeId: 200, timestamp: 2000, fromFranchiseId: "fa", fromRosterId: 5 },
+      ]),
+      RECEIVED
+    );
+    expect(result).toBe(200);
+  });
+
+  it("returns the EARLIEST later flip when the pick moved multiple times", () => {
+    const result = findPickFlip(
+      movements([
+        { tradeId: 300, timestamp: 3000, fromFranchiseId: "fa", fromRosterId: 5 },
+        { tradeId: 200, timestamp: 2000, fromFranchiseId: "fa", fromRosterId: 5 },
+      ]),
+      RECEIVED
+    );
+    expect(result).toBe(200);
+  });
+
+  it("ignores later movements of the pick sent by a DIFFERENT team", () => {
+    const result = findPickFlip(
+      movements([
+        { tradeId: 200, timestamp: 2000, fromFranchiseId: "fc", fromRosterId: 7 },
+      ]),
+      RECEIVED
+    );
+    expect(result).toBeNull();
+  });
+
+  it("ignores movements at or before the receiving trade's timestamp", () => {
+    const result = findPickFlip(
+      movements([
+        { tradeId: 50, timestamp: 500, fromFranchiseId: "fa", fromRosterId: 5 },
+        { tradeId: 60, timestamp: 1000, fromFranchiseId: "fa", fromRosterId: 5 },
+      ]),
+      RECEIVED
+    );
+    expect(result).toBeNull();
+  });
+
+  it("falls back to roster-id matching when franchises are unresolved", () => {
+    const result = findPickFlip(
+      movements([
+        { tradeId: 200, timestamp: 2000, fromFranchiseId: null, fromRosterId: 5 },
+      ]),
+      { ...RECEIVED, franchiseId: null }
+    );
+    expect(result).toBe(200);
+  });
+
+  it("prefers franchise identity over roster ids when both resolve", () => {
+    // Same roster number, different franchise (roster ids reused across years)
+    const result = findPickFlip(
+      movements([
+        { tradeId: 200, timestamp: 2000, fromFranchiseId: "fz", fromRosterId: 5 },
+      ]),
+      RECEIVED
+    );
+    expect(result).toBeNull();
+  });
+
+  it("returns null when the receiving trade has no timestamp", () => {
+    const result = findPickFlip(
+      movements([
+        { tradeId: 200, timestamp: 2000, fromFranchiseId: "fa", fromRosterId: 5 },
+      ]),
+      { ...RECEIVED, timestamp: null }
+    );
+    expect(result).toBeNull();
+  });
+
+  it("returns null for a pick with no recorded movements", () => {
+    expect(findPickFlip(new Map(), RECEIVED)).toBeNull();
   });
 });
