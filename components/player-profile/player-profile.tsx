@@ -10,6 +10,7 @@ import { ValueStatCallouts } from "./value-stat-callouts";
 import { ValueChart } from "./value-chart";
 import { ProjectedActual } from "./projected-actual";
 import { WeeklyLinesTable } from "./weekly-lines-table";
+import { SeasonSwitcher } from "./season-switcher";
 import { OwnershipFacts } from "./ownership-facts";
 import { CareerTimeline } from "./career-timeline";
 
@@ -64,25 +65,28 @@ export async function PlayerProfile({
         </div>
       </div>
 
-      {selectedSeason && (
-        <ProjectedActual seasonYear={selectedSeason} weeklyPoints={weeklyPoints} />
-      )}
-
-      <div className="space-y-3">
-        <p className="text-kicker text-text-tertiary">Weekly Lines</p>
-        <WeeklyLinesTable
-          playerId={playerId}
-          position={identity.position}
-          seasonsPresent={identity.seasonsPresent}
-          selectedSeason={selectedSeason}
-          weeklyPoints={weeklyPoints}
-          weeklyStats={weeklyStats}
-          variant={variant}
-          nflTeam={identity.nflTeam}
-          teamByeWeeks={scheduleFacts.teamByeWeeks}
-          completeWeeks={scheduleFacts.completeWeeks}
-        />
-      </div>
+      <SeasonSwitcher
+        playerId={playerId}
+        seasonsPresent={identity.seasonsPresent}
+        selectedSeason={selectedSeason}
+        variant={variant}
+        projectedActual={
+          selectedSeason ? (
+            <ProjectedActual seasonYear={selectedSeason} weeklyPoints={weeklyPoints} />
+          ) : null
+        }
+        weeklyLines={
+          <WeeklyLinesTable
+            position={identity.position}
+            selectedSeason={selectedSeason}
+            weeklyPoints={weeklyPoints}
+            weeklyStats={weeklyStats}
+            nflTeam={identity.nflTeam}
+            teamByeWeeks={scheduleFacts.teamByeWeeks}
+            completeWeeks={scheduleFacts.completeWeeks}
+          />
+        }
+      />
 
       <OwnershipFacts
         facts={ownershipFacts}

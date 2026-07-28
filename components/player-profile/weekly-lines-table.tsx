@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import type {
   PlayerWeeklyPointRow,
@@ -11,70 +10,16 @@ import {
 import { StatusChip, WeeklyLineCard } from "./weekly-line-card";
 
 interface WeeklyLinesTableProps {
-  playerId: string;
   position: string | null;
-  seasonsPresent: number[];
   selectedSeason: number | null;
   weeklyPoints: PlayerWeeklyPointRow[];
   weeklyStats: PlayerWeeklyStatRow[];
-  variant: "modal" | "page";
   /** The player's (current) NFL team, for team-bye resolution. Null degrades to no BYE labels. */
   nflTeam: string | null;
   /** key: `${seasonYear}:${normalizedTeam}` -> that team's bye week. From getSeasonScheduleFacts. */
   teamByeWeeks: Map<string, number>;
   /** key: `${seasonYear}:${week}` -> true when that week has actually been played. From getSeasonScheduleFacts. */
   completeWeeks: Set<string>;
-}
-
-function SeasonPicker({
-  playerId,
-  seasonsPresent,
-  selectedSeason,
-  variant,
-}: {
-  playerId: string;
-  seasonsPresent: number[];
-  selectedSeason: number | null;
-  variant: "modal" | "page";
-}) {
-  if (seasonsPresent.length <= 1) return null;
-  return (
-    <nav aria-label="Season" className="flex gap-2 overflow-x-auto pb-1">
-      {seasonsPresent.map((year) => {
-        const isActive = year === selectedSeason;
-        const href = `/players/${playerId}?season=${year}`;
-        const className = `shrink-0 rounded-full border px-3 py-1.5 text-body-sm font-medium tabular-nums transition-colors ${
-          isActive
-            ? "border-accent-gold/30 bg-accent-gold-light text-accent-gold"
-            : "border-border bg-surface text-text-tertiary hover:text-text-primary"
-        }`;
-        // Inside the modal a soft nav keeps the dialog open (the intercepted
-        // route re-renders with the new season). On the canonical full page a
-        // soft nav to the same path would be INTERCEPTED and pop the modal
-        // over the page — a hard navigation stays on the canonical route.
-        return variant === "modal" ? (
-          <Link
-            key={year}
-            href={href}
-            scroll={false}
-            aria-current={isActive ? "page" : undefined}
-            className={className}
-          >
-            {year}
-          </Link>
-        ) : (
-          <a
-            key={year}
-            href={href}
-            aria-current={isActive ? "page" : undefined}
-            className={className}
-          >
-            {year}
-          </a>
-        );
-      })}
-    </nav>
-  );
 }
 
 function DeltaCell({ delta }: { delta: number | null }) {
@@ -100,13 +45,10 @@ function DeltaCell({ delta }: { delta: number | null }) {
  * from the single `buildWeeklyLines` view-model so they can never disagree.
  */
 export function WeeklyLinesTable({
-  playerId,
   position,
-  seasonsPresent,
   selectedSeason,
   weeklyPoints,
   weeklyStats,
-  variant,
   nflTeam,
   teamByeWeeks,
   completeWeeks,
@@ -124,12 +66,6 @@ export function WeeklyLinesTable({
 
   return (
     <div className="space-y-4">
-      <SeasonPicker
-        playerId={playerId}
-        seasonsPresent={seasonsPresent}
-        selectedSeason={selectedSeason}
-        variant={variant}
-      />
       {lines.length === 0 ? (
         <p className="text-body-sm text-text-tertiary">
           No weekly lines recorded for this season.
