@@ -776,9 +776,12 @@ export async function getPlayerSeasonPointsAggregates(
           teamByeWeek: teamBye ?? null,
           weekIsComplete: completeWeeks.has(seasonWeekKey(seasonYear, r.week)),
         });
-        // null (schedule not resolvable / week not yet complete) preserves the
-        // prior unguarded behavior; only an explicit BYE/DNP excludes the week.
-        const playedForPurposesOfBestWorst = availability !== "BYE" && availability !== "DNP";
+        // Only an explicit PLAYED classification counts. `null` means the
+        // week hasn't happened yet (or isn't resolvable) — treating it as
+        // "played" let unplayed future weeks (0 points, started=true because
+        // lineups lock before kickoff) win "worst started week" outright
+        // (#166). BYE/DNP are excluded as before.
+        const playedForPurposesOfBestWorst = availability === "PLAYED";
 
         if (playedForPurposesOfBestWorst) {
           acc.startedPoints += pts;
