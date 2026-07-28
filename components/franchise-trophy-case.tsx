@@ -75,10 +75,6 @@ export function FranchiseTrophyCase({
 
   return (
     <div data-testid="franchise-trophy-case" className="space-y-3">
-      <p className="lg:hidden text-caption text-text-tertiary">
-        Swipe for all {trophies.length} trophies &rarr;
-      </p>
-
       <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 no-scrollbar">
         {trophies.map((trophy, index) => (
           <div

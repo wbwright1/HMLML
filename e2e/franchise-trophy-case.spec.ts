@@ -52,7 +52,6 @@ test.describe("Franchise Trophy Case", () => {
 
     const trophyCase = page.getByTestId("franchise-trophy-case");
     await expect(trophyCase).toBeVisible();
-    await expect(page.getByText(/Swipe for all \d+ ?trophies/)).toBeVisible();
 
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.goto("/teams/foopus");
