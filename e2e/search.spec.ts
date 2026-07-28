@@ -122,7 +122,7 @@ test.describe("Site search — desktop", () => {
 test.describe("Site search — mobile sheet", () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
-  test("dock search bar opens a full-screen sheet and returns focus on close", async ({
+  test("header search icon opens a full-screen sheet and returns focus on close", async ({
     page,
   }) => {
     await page.goto("/");
@@ -144,6 +144,34 @@ test.describe("Site search — mobile sheet", () => {
     await page.getByRole("button", { name: "Close search" }).click();
     await expect(page.getByRole("dialog", { name: "Search" })).toHaveCount(0);
     await expect(trigger).toBeFocused();
+  });
+
+  test("a query in the mobile sheet navigates to a result", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const trigger = page.getByRole("button", {
+      name: "Search teams, players, records",
+    });
+    await trigger.click();
+
+    const dialog = page.getByRole("dialog", { name: "Search" });
+    await expect(dialog).toBeVisible();
+
+    const input = dialog.getByRole("combobox", { name: "Search league" });
+    await input.fill(QUERY);
+
+    const listbox = page.getByRole("listbox", { name: "Search results" });
+    const options = listbox.getByRole("option");
+    await expect(options.first()).toBeVisible();
+    const href = await options.first().getAttribute("href");
+    expect(href).toBeTruthy();
+
+    await options.first().click();
+    await page.waitForURL((url) =>
+      (url.pathname + url.search).includes(href!.split("?")[0])
+    );
+    await expect(page.getByRole("dialog", { name: "Search" })).toHaveCount(0);
   });
 
   test("Escape closes the mobile sheet", async ({ page }) => {

@@ -22,7 +22,7 @@ Harambe Memorial League Memorial League (HMLML) Website: a public-facing Next.js
 
 ## Key Architecture Decisions
 - Full-stack in one Next.js project; API routes handle sync endpoints, React Server Components handle all pages
-- **Server components by default, small enumerated set of client islands** -- pages/layouts stay RSC; `"use client"` is limited to this list: the live score poller, the search command (⌘K / mobile dock search), the nav pills active-state, the season/franchise pickers, the player table (filter/sort), the draft countdown, the kickoff countdown, the smack composer, the commish claim-code reveal, the scroll-reveal wrapper, and the player-profile modal shell. Everything else ships zero client JS.
+- **Server components by default, small enumerated set of client islands** -- pages/layouts stay RSC; `"use client"` is limited to this list: the live score poller, the search command (⌘K / mobile dock search), the nav pills active-state, the season/franchise pickers, the player table (filter/sort), the draft countdown, the kickoff countdown, the smack composer, the commish claim-code reveal, the scroll-reveal wrapper, the player-profile modal shell, and the mobile nav scroll-chrome wrapper. Everything else ships zero client JS.
 - **No caching in Phase 1** -- direct Postgres queries on every request; 12-user scale doesn't warrant caching; ISR available later
 - **Correctness over performance** -- at 12 users, correct data matters more than speed
 - **Forward-compatible schema, not overbuilt code** -- schema accommodates Phase 2+ without gymnastics; application code only builds Phase 1
@@ -202,7 +202,7 @@ Card gradient fill: `linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255
 
 ### Navigation Structure
 - **Desktop topbar (64px):** serif "HMLML" wordmark (left) · centered pill nav [Hub, Teams, Records, Drafts, Players] (active = accent-tint background + gold text) · right cluster: inline search field (~230px, ⌘K hint), a live-games pill (pulsing green dot + "N GAMES LIVE"), and the current user's dynasty crest.
-- **Mobile:** slim top header (56px: wordmark + a "N LIVE · WK n" pill) plus a **fixed bottom dock** for thumb reach: a persistent search bar sitting directly above a 5-icon tab bar [Hub, Teams, Records, Drafts, Players] (icon + 9px label, active = accent-tint + gold). No hamburger; search and nav both live at the bottom by design. (Layout reserves bottom clearance via `pb-[calc(env(safe-area-inset-bottom)+120px)] lg:pb-8` on the main content.)
+- **Mobile:** slim top header (56px: wordmark · right cluster of compact live pill, search icon trigger, and dynasty crest) plus a **fixed bottom dock** for thumb reach: a tab-bar-only 5-icon nav [Hub, Teams, Records, Drafts, Players] (icon + 9px label, active = accent-tint + gold), ~80px + safe-area. No hamburger; search opens a full-screen dialog from the header icon (same shared search UI Sleeper-backed as desktop, just a different trigger). Both the header and the dock hide on scroll-down and reveal on scroll-up (`components/nav/scroll-chrome.tsx`), staying pinned within 8px of the top to absorb iOS rubber-band. Bottom clearance for scrollable content lives on the footer (`pb-[calc(env(safe-area-inset-bottom)+96px)] lg:pb-8` on `SiteFooter`), not on `app/layout.tsx`'s `<main>`.
 - **Live Pill** (replaces the old Seasonal Pill Badge): shows live-game count during game windows, otherwise the seasonal state ("Preseason", "Week 9", "Playoffs", "Offseason").
 - **Matchups are NOT a nav item;** live matchup cards surface on the hub during game windows; tapping goes to matchup detail pages.
 
@@ -223,7 +223,7 @@ The homepage automatically renders different content based on the football calen
 
 ### Animation Philosophy
 - No page transitions, no scroll-triggered animations, no loading spinners on server-rendered pages
-- **Allowed:** live score pulse (`@keyframes live-pulse`, CSS), draft countdown tick (opacity transition), card hover border (150ms), tab content fade (100ms), scroll-reveal on first paint. The `prefers-reduced-motion` block neutralizes all of these.
+- **Allowed:** live score pulse (`@keyframes live-pulse`, CSS), draft countdown tick (opacity transition), card hover border (150ms), tab content fade (100ms), scroll-reveal on first paint, hide-on-scroll mobile nav chrome (`components/nav/scroll-chrome.tsx`, CSS transform). The `prefers-reduced-motion` block neutralizes all of these.
 - Movement is reserved for live data where it conveys real information
 
 ## Acceptance Testing Patterns
