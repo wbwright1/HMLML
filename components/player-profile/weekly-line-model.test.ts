@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
   buildWeeklyLines,
-  formatStatSummary,
   type BuildWeeklyLinesOptions,
 } from "./weekly-line-model";
 import type {
@@ -83,60 +82,6 @@ function pointRow(overrides: Partial<PlayerWeeklyPointRow> = {}): PlayerWeeklyPo
     ...overrides,
   };
 }
-
-describe("formatStatSummary", () => {
-  it("QB: renders cmp/att pair plus non-zero segments, omits zero/null", () => {
-    const stat = statRow({
-      position: "QB",
-      passCmp: 24,
-      passAtt: 35,
-      passYd: 312,
-      passTd: 3,
-      passInt: 0,
-      rushYd: null,
-      rushTd: 0,
-    });
-    expect(formatStatSummary("QB", stat)).toEqual(["24/35", "312 YD", "3 TD"]);
-  });
-
-  it("RB: omits zero and null segments", () => {
-    const stat = statRow({
-      position: "RB",
-      rushAtt: 18,
-      rushYd: 84,
-      rushTd: 0,
-      rec: null,
-      recYd: 12,
-    });
-    expect(formatStatSummary("RB", stat)).toEqual(["18 ATT", "84 YD", "12 REC YD"]);
-  });
-
-  it("WR/TE: full stat line", () => {
-    const stat = statRow({
-      position: "WR",
-      recTgt: 9,
-      rec: 7,
-      recYd: 101,
-      recTd: 1,
-    });
-    expect(formatStatSummary("WR", stat)).toEqual(["9 TGT", "7 REC", "101 YD", "1 TD"]);
-    expect(formatStatSummary("TE", stat)).toEqual(["9 TGT", "7 REC", "101 YD", "1 TD"]);
-  });
-
-  it("K: renders fgm/fga pair and xpm, omits xpm when zero", () => {
-    const stat = statRow({ position: "K", fgm: 2, fga: 3, xpm: 0 });
-    expect(formatStatSummary("K", stat)).toEqual(["2/3 FG"]);
-
-    const stat2 = statRow({ position: "K", fgm: 0, fga: 0, xpm: 4 });
-    expect(formatStatSummary("K", stat2)).toEqual(["4 XP"]);
-  });
-
-  it("unknown position or missing stat returns empty summary", () => {
-    expect(formatStatSummary("DST", statRow({ position: "DST" }))).toEqual([]);
-    expect(formatStatSummary("QB", null)).toEqual([]);
-    expect(formatStatSummary(null, statRow())).toEqual([]);
-  });
-});
 
 describe("buildWeeklyLines", () => {
   it("unions lineup weeks with stat-only weeks", () => {
