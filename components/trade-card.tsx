@@ -3,6 +3,7 @@ import { FranchiseLogo } from "@/components/franchise-logo";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { PositionBadge } from "@/components/position-badge";
 import { PlayerHeadshot } from "@/components/player-headshot";
+import { PlayerLink } from "@/components/player-link";
 import type { Trade } from "@/lib/queries/trades";
 import type { TradeGrade } from "@/lib/queries/trade-grades";
 import type { TradeValueSummary } from "@/lib/queries/trade-values";
@@ -97,15 +98,17 @@ export function TradeCard({ trade, verdict, grade, values }: TradeCardProps) {
                       key={player.id}
                       className="flex items-center gap-2 text-body-sm text-text-secondary"
                     >
-                      <PlayerHeadshot
-                        size={34}
-                        playerId={player.id}
-                        name={player.name}
-                        nflTeam={player.nflTeam}
-                        showTeamBadge={false}
-                      />
-                      <PositionBadge position={player.position} />
-                      <span className="truncate">{player.name}</span>
+                      <PlayerLink playerId={player.id} className="flex items-center gap-2 min-w-0">
+                        <PlayerHeadshot
+                          size={34}
+                          playerId={player.id}
+                          name={player.name}
+                          nflTeam={player.nflTeam}
+                          showTeamBadge={false}
+                        />
+                        <PositionBadge position={player.position} />
+                        <span className="truncate">{player.name}</span>
+                      </PlayerLink>
                       {player.nflTeam && (
                         <span className="text-caption font-mono text-text-tertiary">
                           {player.nflTeam}
@@ -145,15 +148,20 @@ export function TradeCard({ trade, verdict, grade, values }: TradeCardProps) {
                       ) : pick.became && (
                         <div className="flex min-w-0 items-center gap-1.5 pl-1 text-caption text-text-tertiary">
                           <span className="shrink-0">became</span>
-                          <PlayerHeadshot
-                            size={22}
+                          <PlayerLink
                             playerId={pick.became.id}
-                            name={pick.became.name}
-                            showTeamBadge={false}
-                          />
-                          <span className="truncate text-text-secondary">
-                            {pick.became.name}
-                          </span>
+                            className="flex min-w-0 items-center gap-1.5"
+                          >
+                            <PlayerHeadshot
+                              size={22}
+                              playerId={pick.became.id}
+                              name={pick.became.name}
+                              showTeamBadge={false}
+                            />
+                            <span className="truncate text-text-secondary">
+                              {pick.became.name}
+                            </span>
+                          </PlayerLink>
                         </div>
                       )}
                     </li>

@@ -1,4 +1,5 @@
 import { PlayerHeadshot } from "@/components/player-headshot";
+import { PlayerLink } from "@/components/player-link";
 import { NflTeamLogo } from "@/components/nfl-team-logo";
 import { PositionBadge } from "@/components/position-badge";
 import type { MatchupTeam } from "@/lib/queries/matchups";
@@ -179,20 +180,26 @@ function LineupPlayerCell({
   muted?: boolean;
 }) {
   const name = row.name ?? "Unknown Player";
+  const isDefense = isDefenseRow(row);
   return (
     <div className={`flex items-center gap-2.5 ${className}`}>
-      {isDefenseRow(row) ? (
-        <NflTeamLogo teamAbbrev={row.nflTeam} size={44} />
-      ) : (
-        <PlayerHeadshot playerId={row.playerId} name={name} size={44} nflTeam={row.nflTeam} />
-      )}
-      <span
-        className={`truncate text-body-sm ${
-          muted ? "text-text-tertiary" : "font-medium text-text-primary"
-        }`}
+      <PlayerLink
+        playerId={isDefense ? null : row.playerId}
+        className="flex min-w-0 items-center gap-2.5"
       >
-        {name}
-      </span>
+        {isDefense ? (
+          <NflTeamLogo teamAbbrev={row.nflTeam} size={44} />
+        ) : (
+          <PlayerHeadshot playerId={row.playerId} name={name} size={44} nflTeam={row.nflTeam} />
+        )}
+        <span
+          className={`truncate text-body-sm ${
+            muted ? "text-text-tertiary" : "font-medium text-text-primary"
+          }`}
+        >
+          {name}
+        </span>
+      </PlayerLink>
     </div>
   );
 }

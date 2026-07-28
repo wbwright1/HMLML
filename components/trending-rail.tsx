@@ -1,5 +1,6 @@
 import { ArrowUp } from "lucide-react";
 import { PlayerHeadshot } from "@/components/player-headshot";
+import { PlayerLink } from "@/components/player-link";
 import { PositionBadge } from "@/components/position-badge";
 import type { TrendingAddPlayer } from "@/lib/queries/player-points";
 
@@ -25,23 +26,25 @@ export function TrendingRail({ players }: TrendingRailProps) {
             key={player.playerId}
             className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0"
           >
-            <PlayerHeadshot
-              playerId={player.playerId}
-              name={player.name ?? "Unknown"}
-              size={48}
-              nflTeam={player.nflTeam}
-            />
-            <div className="min-w-0 flex-1">
-              <p className="text-body-sm font-medium text-text-primary truncate">
-                {player.name ?? "Unknown"}
-              </p>
-              <div className="mt-0.5 flex items-center gap-1.5">
-                <PositionBadge position={player.position} />
-                <span className="text-caption text-text-tertiary">
-                  {player.nflTeam ?? "FA"}
-                </span>
+            <PlayerLink playerId={player.playerId} className="flex min-w-0 flex-1 items-center gap-3">
+              <PlayerHeadshot
+                playerId={player.playerId}
+                name={player.name ?? "Unknown"}
+                size={48}
+                nflTeam={player.nflTeam}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="text-body-sm font-medium text-text-primary truncate">
+                  {player.name ?? "Unknown"}
+                </p>
+                <div className="mt-0.5 flex items-center gap-1.5">
+                  <PositionBadge position={player.position} />
+                  <span className="text-caption text-text-tertiary">
+                    {player.nflTeam ?? "FA"}
+                  </span>
+                </div>
               </div>
-            </div>
+            </PlayerLink>
             <span
               className="inline-flex shrink-0 items-center gap-1 text-caption font-mono font-semibold text-accent-green"
               title={`${player.count} adds in the last 24 hours`}

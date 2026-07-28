@@ -39,8 +39,8 @@ export function teamHref(slug: string): string {
   return `/teams/${slug}`;
 }
 
-export function playerHref(name: string): string {
-  return `/players?q=${encodeURIComponent(name)}`;
+export function playerHref(id: string): string {
+  return `/players/${id}`;
 }
 
 /**
@@ -56,7 +56,7 @@ export function flattenOptions(data: SearchData): SearchOption[] {
     })),
     ...data.players.map((p) => ({
       id: playerOptionId(p.id),
-      href: playerHref(p.name),
+      href: playerHref(p.id),
     })),
   ];
 }
@@ -171,7 +171,7 @@ export function SearchResults({
               <OptionRow
                 key={id}
                 id={id}
-                href={playerHref(p.name)}
+                href={playerHref(p.id)}
                 active={activeId === id}
                 onSelect={onSelect}
                 onHover={onHover}
