@@ -3,6 +3,7 @@ import {
   players,
   rosterPlayers,
   franchises,
+  franchiseSeasons,
   seasons,
 } from "@/lib/db/schema";
 import { eq, like, desc, and, sql, or, isNotNull, gt, inArray } from "drizzle-orm";
@@ -21,6 +22,9 @@ export type RosteredPlayer = {
   ownerFranchiseId: string | null;
   ownerFranchiseName: string | null;
   ownerFranchiseSlug: string | null;
+  ownerFranchiseAbbrev: string | null;
+  ownerFranchiseBrandingColor: string | null;
+  ownerFranchiseAvatarUrl: string | null;
   pointsPpr: number | null;
   statsSeason: number | null;
 };
@@ -85,6 +89,9 @@ export async function getAllRosteredPlayers(): Promise<RosteredPlayer[]> {
       id: r.id ?? r.rosterPlayerId,
       fullName: r.fullName ?? `Unknown Player (${r.rosterPlayerId})`,
       position: r.position ?? "N/A",
+      ownerFranchiseAbbrev: null,
+      ownerFranchiseBrandingColor: null,
+      ownerFranchiseAvatarUrl: null,
     }));
   } catch {
     return [];
@@ -225,6 +232,9 @@ export async function getAllPlayersWithStats(): Promise<RosteredPlayer[]> {
         ownerFranchiseId: franchises.id,
         ownerFranchiseName: franchises.name,
         ownerFranchiseSlug: franchises.slug,
+        ownerFranchiseAbbrev: franchises.abbreviation,
+        ownerFranchiseBrandingColor: franchises.brandingColor,
+        ownerFranchiseAvatarUrl: franchiseSeasons.avatarUrl,
         pointsPpr: players.pointsPpr,
         statsSeason: players.statsSeason,
       })
@@ -237,6 +247,13 @@ export async function getAllPlayersWithStats(): Promise<RosteredPlayer[]> {
         )
       )
       .leftJoin(franchises, eq(rosterPlayers.franchiseId, franchises.id))
+      .leftJoin(
+        franchiseSeasons,
+        and(
+          eq(franchiseSeasons.franchiseId, franchises.id),
+          eq(franchiseSeasons.seasonId, latestSeason.id)
+        )
+      )
       .where(
         and(
           isNotNull(players.fullName),
