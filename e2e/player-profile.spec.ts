@@ -199,4 +199,33 @@ test.describe("Player profile", () => {
     await expect(page.locator("h1#player-profile-title")).toBeVisible();
     expect(await page.locator("a a").count()).toBe(0);
   });
+
+  test("CeeDee Lamb (6786): Ownership Ledger shows honest non-contiguous stints, not a collapsed range", async ({ page }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await page.goto("/players/6786");
+    await expect(page.locator("h1#player-profile-title")).toBeVisible();
+
+    const ledger = page.getByText("Ownership Ledger").locator("..");
+    // Two Tokyo Thunderbirds pills (2021-22 and 2024-26), not one collapsed
+    // 2021-26 pill, plus Latter Day Lamb Special 2023-24 in between.
+    await expect(ledger.getByTitle(/The Tokyo Thunderbirds \(2021–22\)/)).toBeVisible();
+    await expect(ledger.getByTitle(/Latter Day Lamb Special \(2023–24\)/)).toBeVisible();
+    await expect(ledger.getByTitle(/The Tokyo Thunderbirds \(2024–26\)/)).toBeVisible();
+    await expect(ledger.getByTitle(/The Tokyo Thunderbirds \(2021–26\)/)).toHaveCount(0);
+  });
+
+  test("CeeDee Lamb (6786): career timeline shows in-round draft pick and a single condensed trade event", async ({ page }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await page.goto("/players/6786");
+    await expect(page.getByText("Career Timeline")).toBeVisible();
+
+    // 2021 startup: overall pick 36 was pick 6 of round 4 in the 10-team draft.
+    await expect(page.getByText(/Drafted Round 4, Pick 6/)).toBeVisible();
+
+    // The single DB trade (transaction 444) condenses to one event, not a
+    // separate "traded away" + "acquired" pair.
+    await expect(page.getByText(/Traded from Latter Day Lamb Special to The Tokyo Thunderbirds/)).toBeVisible();
+    await expect(page.getByText(/Acquired by The Tokyo Thunderbirds via trade/)).toHaveCount(0);
+    await expect(page.getByText(/Traded away from Latter Day Lamb Special/)).toHaveCount(0);
+  });
 });
