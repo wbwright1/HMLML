@@ -92,48 +92,11 @@ test.describe("Story 6.3: Responsive Edge-Case Fixes", () => {
   });
 
   // AC3: MobileTableView breakpoint consistency
-  test("T05: MobileTableView shows cards below md and table at md+", async ({
-    page,
-  }) => {
-    // Check a page that uses MobileTableView
-    await page.setViewportSize({ width: 767, height: 1024 });
-    await page.goto("/records/head-to-head");
-
-    // MobileTableView renders role="list" inside md:hidden div
-    // Find the specific card container (md:hidden with role="list")
-    const cardView = page.locator('.md\\:hidden[role="list"]');
-    const tableView = page.locator('main .hidden.md\\:block');
-
-    const cardCount = await cardView.count();
-    const tableCount = await tableView.count();
-
-    if (cardCount > 0) {
-      await expect(cardView.first()).toBeVisible();
-    }
-    if (tableCount > 0) {
-      await expect(tableView.first()).toBeHidden();
-    }
-  });
-
-  test("T06: MobileTableView cards use label-left value-right layout", async ({
-    page,
-  }) => {
-    await page.setViewportSize({ width: 375, height: 812 });
-    await page.goto("/records/head-to-head");
-
-    // Each card row should use flex + justify-between for label/value pairs
-    const cardRows = page.locator('[role="listitem"] .flex.items-center.justify-between');
-    const count = await cardRows.count();
-
-    if (count > 0) {
-      for (let i = 0; i < Math.min(count, 3); i++) {
-        const justifyContent = await cardRows.nth(i).evaluate((el) =>
-          window.getComputedStyle(el).justifyContent
-        );
-        expect(justifyContent).toBe("space-between");
-      }
-    }
-  });
+  // T05/T06 retired: MobileTableView (components/mobile-table-view.tsx) was
+  // deleted in #164 (roster page moved to a single horizontally-scrolling
+  // table at all breakpoints, its only consumer). These tests targeted
+  // /records/head-to-head, which never used MobileTableView, so both were
+  // already dead no-ops (locator count 0) before the deletion.
 
   // AC4: SeasonSelector overflow handling
   test("T07: SeasonSelector has fade indicator elements when overflowing", async ({
