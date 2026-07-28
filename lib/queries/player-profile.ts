@@ -10,7 +10,7 @@ import {
   matchups,
   seasons,
 } from "@/lib/db/schema";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray } from "drizzle-orm";
 import { getPlayerById, type PlayerSearchResult } from "@/lib/queries/players";
 import { compareEventKeys } from "@/lib/queries/franchise-players";
 import {
@@ -29,6 +29,13 @@ export interface PlayerProfileIdentity extends PlayerSearchResult {
   yearsInLeague: number;
   /** Season YEARS the player has any player_week_points row, sorted desc (for the season picker). */
   seasonsPresent: number[];
+  /**
+   * Latest season year with actual scoring (points > 0), falling back to the
+   * latest present season. Preseason projection rows make the current season
+   * "present" before any games are played; defaulting the picker there would
+   * open every profile on an empty table until week 1.
+   */
+  defaultSeason: number | null;
 }
 
 /**
@@ -49,7 +56,15 @@ export async function getPlayerProfileIdentity(
       .from(playerWeekPoints)
       .where(eq(playerWeekPoints.playerId, playerId));
 
+    const scoredRows = await db
+      .selectDistinct({ seasonId: playerWeekPoints.seasonId })
+      .from(playerWeekPoints)
+      .where(
+        and(eq(playerWeekPoints.playerId, playerId), gt(playerWeekPoints.points, 0)),
+      );
+
     let seasonsPresent: number[] = [];
+    let seasonsScored: number[] = [];
     if (rows.length > 0) {
       const seasonRows = await db
         .select({ id: seasons.id, seasonYear: seasons.seasonYear })
@@ -60,8 +75,13 @@ export async function getPlayerProfileIdentity(
             rows.map((r) => r.seasonId),
           ),
         );
+      const yearBySeasonId = new Map(seasonRows.map((s) => [s.id, s.seasonYear]));
       seasonsPresent = seasonRows
         .map((s) => s.seasonYear)
+        .sort((a, b) => b - a);
+      seasonsScored = scoredRows
+        .map((r) => yearBySeasonId.get(r.seasonId))
+        .filter((y): y is number => y != null)
         .sort((a, b) => b - a);
     }
 
@@ -69,6 +89,7 @@ export async function getPlayerProfileIdentity(
       ...base,
       yearsInLeague: seasonsPresent.length,
       seasonsPresent,
+      defaultSeason: seasonsScored[0] ?? seasonsPresent[0] ?? null,
     };
   } catch {
     return null;

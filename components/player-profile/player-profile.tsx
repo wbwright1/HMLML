@@ -39,7 +39,7 @@ export async function PlayerProfile({
   const requestedSeason = season ? Number(season) : NaN;
   const selectedSeason = identity.seasonsPresent.includes(requestedSeason)
     ? requestedSeason
-    : (identity.seasonsPresent[0] ?? null);
+    : (identity.defaultSeason ?? null);
 
   const [weeklyPoints, weeklyStats] = selectedSeason
     ? await Promise.all([
