@@ -252,4 +252,80 @@ test.describe("Player profile", () => {
     await expect(page.getByText(/Acquired by The Tokyo Thunderbirds via trade/)).toHaveCount(0);
     await expect(page.getByText(/Traded away from Latter Day Lamb Special/)).toHaveCount(0);
   });
+
+  test("weekly game log: one horizontally-scrolling table at mobile viewport, no card stack (#167)", async ({ page }) => {
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    await page.goto(`/players/${MULTI_SEASON_PLAYER_ID}`);
+
+    const table = page.locator("table").first();
+    await expect(table).toBeVisible();
+    await expect(page.locator('[role="list"]')).toHaveCount(0);
+  });
+
+  test("weekly game log: the table wrapper scrolls horizontally on mobile, the page body does not (#167)", async ({ page }) => {
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    await page.goto(`/players/${MULTI_SEASON_PLAYER_ID}`);
+
+    const table = page.locator("table").first();
+    await expect(table).toBeVisible();
+
+    // The table's overflow-x-auto ancestor is the horizontal-scroll surface.
+    const scroller = table.locator("xpath=ancestor::div[1]");
+    const { scrollWidth, clientWidth } = await scroller.evaluate((el) => ({
+      scrollWidth: el.scrollWidth,
+      clientWidth: el.clientWidth,
+    }));
+    expect(scrollWidth).toBeGreaterThan(clientWidth);
+
+    const bodyOverflow = await page.evaluate(() => {
+      const el = document.scrollingElement!;
+      return { scrollWidth: el.scrollWidth, innerWidth: window.innerWidth };
+    });
+    expect(bodyOverflow.scrollWidth).toBeLessThanOrEqual(bodyOverflow.innerWidth + 1);
+  });
+
+  test("weekly game log: header acronyms carry matching title/aria-label full text (#167)", async ({ page }) => {
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    await page.goto(`/players/${MULTI_SEASON_PLAYER_ID}`);
+
+    const table = page.locator("table").first();
+    await expect(table).toBeVisible();
+
+    const expectations: Record<string, string> = {
+      WK: "Week",
+      OWN: "Fantasy manager that week",
+      OPP: "Opponent",
+      PROJ: "Projected points",
+      ACT: "Actual points scored",
+    };
+
+    for (const [acronym, fullText] of Object.entries(expectations)) {
+      const header = table.locator("thead th", { hasText: acronym }).first();
+      await expect(header).toBeVisible();
+      await expect(header).toHaveAttribute("title", fullText);
+      await expect(header).toHaveAttribute("aria-label", fullText);
+    }
+  });
+
+  test("weekly game log: modal variant on mobile renders the table with no page-body horizontal scroll (#167)", async ({ page }) => {
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    const slug = await findOwnerSlug(page, MULTI_SEASON_PLAYER_ID);
+    test.skip(!slug, "Known multi-season player is currently unowned.");
+
+    await page.goto(`/teams/${slug}/roster`);
+    const link = page.locator(`a[href="/players/${MULTI_SEASON_PLAYER_ID}"]:visible`).first();
+    test.skip((await link.count()) === 0, "Roster has no visible link to this player at mobile viewport.");
+    await link.click();
+
+    const dialog = await awaitModalReady(page);
+    const table = dialog.locator("table").first();
+    await expect(table).toBeVisible();
+    await expect(dialog.locator('[role="list"]')).toHaveCount(0);
+
+    const bodyOverflow = await page.evaluate(() => {
+      const el = document.scrollingElement!;
+      return { scrollWidth: el.scrollWidth, innerWidth: window.innerWidth };
+    });
+    expect(bodyOverflow.scrollWidth).toBeLessThanOrEqual(bodyOverflow.innerWidth + 1);
+  });
 });
