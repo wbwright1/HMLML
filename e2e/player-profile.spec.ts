@@ -170,20 +170,21 @@ test.describe("Player profile", () => {
     await expect(page).toHaveURL(/\/players$/);
   });
 
-  test("dynasty value chart: dashed + solid segments for a player with history, empty copy for one without", async ({ page }) => {
+  test("dynasty value chart: one continuous gold line at both breakpoints, empty copy for a player without history", async ({ page }) => {
     // Patrick Mahomes (id 4046) has full value history spanning both sources.
     await page.goto("/players/4046");
-    const svg = page.locator("svg[aria-label*='Dynasty value']");
-    await expect(svg).toBeVisible();
-    const paths = svg.locator("path[stroke='var(--accent-gold)']");
-    const dashedCount = await paths.evaluateAll((els) =>
-      els.filter((el) => el.getAttribute("stroke-dasharray")).length
-    );
-    const solidCount = await paths.evaluateAll(
-      (els) => els.filter((el) => !el.getAttribute("stroke-dasharray")).length
-    );
-    expect(dashedCount).toBeGreaterThan(0);
-    expect(solidCount).toBeGreaterThan(0);
+    // The chart renders twice (mobile + desktop variants, CSS-switched); both
+    // live in the DOM, one visible per viewport.
+    const svgs = page.locator("svg[aria-label*='Dynasty value']");
+    await expect(svgs).toHaveCount(2);
+    await expect(svgs.locator("visible=true")).toHaveCount(1);
+    // Each variant draws exactly one continuous solid gold value line.
+    for (const svg of await svgs.all()) {
+      const paths = svg.locator("path[stroke='var(--accent-gold)']");
+      await expect(paths).toHaveCount(1);
+      const dashed = await paths.first().getAttribute("stroke-dasharray");
+      expect(dashed).toBeNull();
+    }
 
     // A player absent from player_values shows the empty-state copy, never a
     // bare axis frame.

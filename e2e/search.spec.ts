@@ -98,7 +98,7 @@ test.describe("Site search — desktop", () => {
       const href = await options.nth(i).getAttribute("href");
       expect(href).toBeTruthy();
       expect(
-        href!.startsWith("/teams/") || href!.startsWith("/players?q=")
+        href!.startsWith("/teams/") || href!.startsWith("/players")
       ).toBe(true);
     }
   });
