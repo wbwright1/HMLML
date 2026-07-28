@@ -16,6 +16,7 @@ const DESKTOP_VIEWPORT = { width: 1280, height: 900 };
 async function findFranchiseSlug(page: import("@playwright/test").Page): Promise<string | null> {
   await page.goto("/teams");
   const rows = page.locator('a[href^="/teams/"]');
+  await rows.first().waitFor({ timeout: 10_000 }).catch(() => {});
   const count = await rows.count();
   for (let i = 0; i < count; i++) {
     const href = await rows.nth(i).getAttribute("href");
@@ -32,9 +33,38 @@ async function findRosteredPlayerId(page: import("@playwright/test").Page): Prom
   if (!slug) return null;
   await page.goto(`/teams/${slug}/roster`);
   const playerLink = page.locator('a[href^="/players/"]:visible').first();
+  await playerLink.waitFor({ timeout: 10_000 }).catch(() => {});
   if ((await playerLink.count()) === 0) return null;
   const href = await playerLink.getAttribute("href");
   return href ? href.replace("/players/", "") : null;
+}
+
+/**
+ * A known multi-season, rostered veteran (Patrick Mahomes) — in the league
+ * since 2021 with full value history, so the season picker always renders.
+ */
+const MULTI_SEASON_PLAYER_ID = "4046";
+
+/** Resolves the franchise slug that currently rosters a player, from the
+ * profile page's owner link. */
+async function findOwnerSlug(page: import("@playwright/test").Page, playerId: string): Promise<string | null> {
+  await page.goto(`/players/${playerId}`);
+  const ownerLink = page.locator('a[href^="/teams/"]').first();
+  await ownerLink.waitFor({ timeout: 10_000 }).catch(() => {});
+  if ((await ownerLink.count()) === 0) return null;
+  const href = await ownerLink.getAttribute("href");
+  const match = href?.match(/^\/teams\/([^/]+)/);
+  return match ? match[1] : null;
+}
+
+/** Waits until the freshly opened modal is interactive (entrance settled,
+ * event listeners attached) before dismissal actions. */
+async function awaitModalReady(page: import("@playwright/test").Page) {
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("button", { name: "Close" })).toBeVisible();
+  await page.waitForTimeout(250);
+  return dialog;
 }
 
 test.describe("Player profile", () => {
@@ -68,8 +98,7 @@ test.describe("Player profile", () => {
     const slug = await findFranchiseSlug(page);
     await page.goto(`/teams/${slug}/roster`);
     await page.locator(`a[href="/players/${playerId}"]:visible`).first().click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
+    let dialog = await awaitModalReady(page);
 
     // Escape closes.
     await page.keyboard.press("Escape");
@@ -78,13 +107,13 @@ test.describe("Player profile", () => {
 
     // Re-open, backdrop click closes.
     await page.locator(`a[href="/players/${playerId}"]:visible`).first().click();
-    await expect(dialog).toBeVisible();
+    dialog = await awaitModalReady(page);
     await page.mouse.click(5, 5);
     await expect(dialog).not.toBeVisible();
 
     // Re-open, browser back closes.
     await page.locator(`a[href="/players/${playerId}"]:visible`).first().click();
-    await expect(dialog).toBeVisible();
+    dialog = await awaitModalReady(page);
     await page.goBack();
     await expect(dialog).not.toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/teams/${slug}/roster$`));
@@ -102,12 +131,10 @@ test.describe("Player profile", () => {
 
   test("season pill navigation updates the URL and table on the full page", async ({ page }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
-    const playerId = await findRosteredPlayerId(page);
-    test.skip(!playerId, "No rostered player found in this environment.");
 
-    await page.goto(`/players/${playerId}`);
+    await page.goto(`/players/${MULTI_SEASON_PLAYER_ID}`);
     const seasonNav = page.getByRole("navigation", { name: "Season" });
-    test.skip((await seasonNav.count()) === 0, "Player has only one season on file.");
+    await expect(seasonNav).toBeVisible();
 
     const pills = seasonNav.locator("a");
     const secondPill = pills.nth(1);
@@ -119,17 +146,15 @@ test.describe("Player profile", () => {
 
   test("season pill navigation inside the modal keeps the dialog open", async ({ page }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
-    const playerId = await findRosteredPlayerId(page);
-    test.skip(!playerId, "No rostered player found in this environment.");
+    const slug = await findOwnerSlug(page, MULTI_SEASON_PLAYER_ID);
+    test.skip(!slug, "Known multi-season player is currently unowned.");
 
-    const slug = await findFranchiseSlug(page);
     await page.goto(`/teams/${slug}/roster`);
-    await page.locator(`a[href="/players/${playerId}"]:visible`).first().click();
-    const dialog = page.getByRole("dialog");
-    await expect(dialog).toBeVisible();
+    await page.locator(`a[href="/players/${MULTI_SEASON_PLAYER_ID}"]:visible`).first().click();
+    const dialog = await awaitModalReady(page);
 
     const seasonNav = dialog.getByRole("navigation", { name: "Season" });
-    test.skip((await seasonNav.count()) === 0, "Player has only one season on file.");
+    await expect(seasonNav).toBeVisible();
 
     const pills = seasonNav.locator("a");
     await pills.nth(1).click();
@@ -149,17 +174,16 @@ test.describe("Player profile", () => {
     // Patrick Mahomes (id 4046) has full value history spanning both sources.
     await page.goto("/players/4046");
     const svg = page.locator("svg[aria-label*='Dynasty value']");
-    if ((await svg.count()) > 0) {
-      const paths = svg.locator("path[stroke='var(--accent-gold)']");
-      const dashedCount = await paths.evaluateAll((els) =>
-        els.filter((el) => el.getAttribute("stroke-dasharray")).length
-      );
-      const solidCount = await paths.evaluateAll(
-        (els) => els.filter((el) => !el.getAttribute("stroke-dasharray")).length
-      );
-      expect(dashedCount).toBeGreaterThan(0);
-      expect(solidCount).toBeGreaterThan(0);
-    }
+    await expect(svg).toBeVisible();
+    const paths = svg.locator("path[stroke='var(--accent-gold)']");
+    const dashedCount = await paths.evaluateAll((els) =>
+      els.filter((el) => el.getAttribute("stroke-dasharray")).length
+    );
+    const solidCount = await paths.evaluateAll(
+      (els) => els.filter((el) => !el.getAttribute("stroke-dasharray")).length
+    );
+    expect(dashedCount).toBeGreaterThan(0);
+    expect(solidCount).toBeGreaterThan(0);
 
     // A player absent from player_values shows the empty-state copy, never a
     // bare axis frame.
@@ -170,10 +194,9 @@ test.describe("Player profile", () => {
   });
 
   test("no nested anchors on the full player-profile page", async ({ page }) => {
-    const playerId = await findRosteredPlayerId(page);
-    test.skip(!playerId, "No rostered player found in this environment.");
-
-    await page.goto(`/players/${playerId}`);
+    // Mahomes (4046): richest profile (timeline, awards, chart, owner link).
+    await page.goto("/players/4046");
+    await expect(page.locator("h1#player-profile-title")).toBeVisible();
     expect(await page.locator("a a").count()).toBe(0);
   });
 });
