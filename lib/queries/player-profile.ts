@@ -24,6 +24,7 @@ import {
   computeOwnershipStints,
   type OwnershipPresence,
 } from "@/lib/player-ownership-stints";
+import { dedupeTimelineStints } from "@/lib/player-timeline-dedup";
 import {
   classifyPlayerWeekAvailability,
   getSeasonScheduleFacts,
@@ -580,9 +581,11 @@ export async function getPlayerTimeline(
       });
     }
 
+    // Drop stints that merely restate a draft / trade-in / waiver acquisition.
+    const deduped = dedupeTimelineStints(events);
     // Most recent first.
-    events.sort((a, b) => compareEventKeys(orderKey(b), orderKey(a)));
-    return events;
+    deduped.sort((a, b) => compareEventKeys(orderKey(b), orderKey(a)));
+    return deduped;
   } catch (error) {
     console.error("[player-profile] getPlayerTimeline error:", error);
     return [];
