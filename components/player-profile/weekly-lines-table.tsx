@@ -122,7 +122,8 @@ export function WeeklyLinesTable({
 
   const headers = [
     "Week",
-    "Opponent",
+    "Owner",
+    "Opp",
     "Slot",
     "Status",
     "Proj",
@@ -132,18 +133,37 @@ export function WeeklyLinesTable({
   ];
 
   const rows = weeklyPoints.map((w) => {
-    const delta = w.projectedPoints != null ? w.points - w.projectedPoints : null;
+    // Unplayed weeks (projection-only rows) show no actual and no delta —
+    // a 0.0 actual would otherwise read as a fake negative delta.
+    const delta =
+      w.played && w.projectedPoints != null ? w.points - w.projectedPoints : null;
     const stat = statsByWeek.get(w.week);
 
+    const ownerCell = w.ownerFranchiseName ? (
+      <span className="inline-flex" title={w.ownerFranchiseName}>
+        <FranchiseLogo
+          slug={w.ownerFranchiseSlug ?? ""}
+          name={w.ownerFranchiseName}
+          avatarUrl={w.ownerAvatarUrl}
+          size={24}
+          decorative
+        />
+        <span className="sr-only">{w.ownerFranchiseName}</span>
+      </span>
+    ) : (
+      <span className="text-text-tertiary">&ndash;</span>
+    );
+
     const opponentCell = w.opponentFranchiseName ? (
-      <span className="inline-flex items-center gap-1.5">
+      <span className="inline-flex" title={w.opponentFranchiseName}>
         <FranchiseLogo
           slug={w.opponentFranchiseSlug ?? ""}
           name={w.opponentFranchiseName}
-          size={20}
+          avatarUrl={w.opponentAvatarUrl}
+          size={24}
           decorative
         />
-        {w.opponentFranchiseName}
+        <span className="sr-only">{w.opponentFranchiseName}</span>
       </span>
     ) : (
       <span className="text-text-tertiary">&ndash;</span>
@@ -157,11 +177,12 @@ export function WeeklyLinesTable({
 
     const row: (string | number | React.ReactNode)[] = [
       w.week,
+      ownerCell,
       opponentCell,
       w.slot ?? "–",
       statusCell,
       w.projectedPoints != null ? w.projectedPoints.toFixed(1) : "–",
-      w.points.toFixed(1),
+      w.played ? w.points.toFixed(1) : "–",
       <DeltaCell key="delta" delta={delta} />,
     ];
 

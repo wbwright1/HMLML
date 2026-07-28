@@ -87,7 +87,7 @@ export function ProfileModalShell({ children }: ProfileModalShellProps) {
         role="dialog"
         aria-modal="true"
         aria-labelledby="player-profile-title"
-        className={`card-surface fixed overflow-y-auto transition-transform duration-150 ease-out
+        className={`card-surface bg-canvas fixed overflow-y-auto transition-transform duration-150 ease-out
           inset-x-0 bottom-0 top-[env(safe-area-inset-top)] rounded-t-[14px] rounded-b-none
           pb-[calc(env(safe-area-inset-bottom)+16px)]
           ${mounted ? "translate-y-0" : "translate-y-full"}

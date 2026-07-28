@@ -12,7 +12,7 @@ import { getAwardMeta } from "@/lib/awards";
 import type { TimelineEvent } from "@/lib/queries/player-profile";
 
 interface CareerTimelineProps {
-  /** Newest-first, as returned by getPlayerTimeline — reversed internally for chronological display. */
+  /** Newest-first, as returned by getPlayerTimeline; rendered newest at top. */
   timeline: TimelineEvent[];
 }
 
@@ -128,13 +128,13 @@ function eventCopy(event: TimelineEvent): React.ReactNode {
 /** Vertical career timeline, chronological (oldest first). Empty timeline renders nothing. */
 export function CareerTimeline({ timeline }: CareerTimelineProps) {
   if (timeline.length === 0) return null;
-  const chronological = [...timeline].reverse();
+  const newestFirst = timeline;
 
   return (
     <div className="space-y-4">
       <p className="text-kicker text-text-tertiary">Career Timeline</p>
       <ol className="space-y-3">
-        {chronological.map((event, i) => {
+        {newestFirst.map((event, i) => {
           const Icon = eventIcon(event.type);
           const isAward = event.type === "award";
           return (
