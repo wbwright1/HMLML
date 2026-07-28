@@ -12,6 +12,7 @@ import {
   SleeperPlayerSchema,
   SleeperBracketMatchSchema,
   SleeperPlayerStatsSchema,
+  SleeperWeekStatsSchema,
   SleeperProjectionsSchema,
   SleeperTrendingAddSchema,
   SleeperScheduleGameSchema,
@@ -28,6 +29,7 @@ import {
   type SleeperPlayer,
   type SleeperBracketMatch,
   type SleeperPlayerStats,
+  type SleeperWeekStats,
   type SleeperProjections,
   type SleeperTrendingAdd,
   type SleeperScheduleGame,
@@ -236,6 +238,22 @@ export async function getPlayerStats(
   return fetchSleeper(
     `https://api.sleeper.app/v1/stats/nfl/regular/${season}`,
     SleeperPlayerStatsSchema
+  );
+}
+
+/**
+ * Fetch per-player weekly box-score stats for a given NFL season and week.
+ * Returns a record keyed by player_id with a stat map (pass_yd, rush_td, rec,
+ * pts_ppr, gp, and many advanced metrics). Historical stats are served for past
+ * seasons. One call covers every player for the week.
+ */
+export async function getWeekStats(
+  season: string | number,
+  week: number
+): Promise<SleeperResult<SleeperWeekStats>> {
+  return fetchSleeper(
+    `https://api.sleeper.app/v1/stats/nfl/regular/${season}/${week}`,
+    SleeperWeekStatsSchema
   );
 }
 

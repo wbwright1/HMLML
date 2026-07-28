@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { playerValues } from "@/lib/db/schema";
-import { inArray, and, lte, asc, desc } from "drizzle-orm";
+import { inArray, and, eq, lte, asc, desc } from "drizzle-orm";
 
 export interface AssetValue {
   assetId: string;
@@ -109,6 +109,44 @@ export async function getValuesForAssets(
     }
   }
   return map;
+}
+
+export interface ValueSeriesPoint {
+  snapshotDate: string;
+  value: number;
+  overallRank: number | null;
+  positionRank: number | null;
+  trend30Day: number | null;
+  source: string;
+}
+
+/**
+ * The full dynasty-value time series for a single asset (player_id or FP_* pick
+ * pseudo-id), every row ascending by snapshot date. Spans both sources
+ * (fantasycalc daily + dynastyprocess backfill); callers can plot or segment by
+ * source. Empty array when the asset has no rows or on error.
+ */
+export async function getValueSeriesForAsset(
+  assetId: string
+): Promise<ValueSeriesPoint[]> {
+  try {
+    const rows = await db
+      .select({
+        snapshotDate: playerValues.snapshotDate,
+        value: playerValues.value,
+        overallRank: playerValues.overallRank,
+        positionRank: playerValues.positionRank,
+        trend30Day: playerValues.trend30Day,
+        source: playerValues.source,
+      })
+      .from(playerValues)
+      .where(eq(playerValues.assetId, assetId))
+      .orderBy(asc(playerValues.snapshotDate));
+
+    return rows;
+  } catch {
+    return [];
+  }
 }
 
 /**
