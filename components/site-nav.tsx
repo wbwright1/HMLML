@@ -11,6 +11,7 @@ import type { LivePillProps } from "@/components/live-pill";
 import { Topbar } from "@/components/nav/topbar";
 import { MobileHeader } from "@/components/nav/mobile-header";
 import { MobileDock } from "@/components/nav/mobile-dock";
+import { ScrollChrome } from "@/components/nav/scroll-chrome";
 import { getSessionMember } from "@/lib/auth";
 import type { NavCrestMember } from "@/components/nav/nav-crest";
 
@@ -135,9 +136,13 @@ export async function SiteNav() {
           their sticky context against <body>, not a height-limited wrapper. */}
       <header className="contents">
         <Topbar livePill={livePill} member={member} />
-        <MobileHeader livePill={livePill} member={member} />
+        <ScrollChrome className="sticky top-0 z-40 backdrop-blur-md lg:hidden chrome-top">
+          <MobileHeader livePill={livePill} member={member} />
+        </ScrollChrome>
       </header>
-      <MobileDock />
+      <ScrollChrome className="fixed inset-x-0 bottom-0 z-40 lg:hidden chrome-bottom">
+        <MobileDock />
+      </ScrollChrome>
     </>
   );
 }
