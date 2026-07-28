@@ -137,6 +137,15 @@ const icons: Record<string, ReactNode> = {
       <path d="M8 2l1.7 3.5 3.8.5-2.8 2.7.7 3.8L8 10.8 4.6 12.5l.7-3.8L2.5 6l3.8-.5L8 2z" />
     </svg>
   ),
+
+  // Franchise Trophy Case: championship trophy-cup glyph
+  "league champion": (
+    <svg {...iconProps}>
+      <path d="M4.5 2.5h7v2a3.5 3.5 0 01-7 0v-2z" />
+      <path d="M4.5 3.5H2.5v1a2 2 0 002 2M11.5 3.5h2v1a2 2 0 01-2 2" />
+      <path d="M8 8v2.5M6 13.5h4M6.5 13.5l.5-3h2l.5 3" />
+    </svg>
+  ),
 };
 
 export function getAwardIcon(label: string): ReactNode | null {
