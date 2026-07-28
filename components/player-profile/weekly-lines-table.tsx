@@ -18,6 +18,12 @@ interface WeeklyLinesTableProps {
   weeklyPoints: PlayerWeeklyPointRow[];
   weeklyStats: PlayerWeeklyStatRow[];
   variant: "modal" | "page";
+  /** The player's (current) NFL team, for team-bye resolution. Null degrades to no BYE labels. */
+  nflTeam: string | null;
+  /** key: `${seasonYear}:${normalizedTeam}` -> that team's bye week. From getSeasonScheduleFacts. */
+  teamByeWeeks: Map<string, number>;
+  /** key: `${seasonYear}:${week}` -> true when that week has actually been played. From getSeasonScheduleFacts. */
+  completeWeeks: Set<string>;
 }
 
 function SeasonPicker({
@@ -101,10 +107,20 @@ export function WeeklyLinesTable({
   weeklyPoints,
   weeklyStats,
   variant,
+  nflTeam,
+  teamByeWeeks,
+  completeWeeks,
 }: WeeklyLinesTableProps) {
   const statColumns = position ? (STAT_COLUMNS_BY_POSITION[position] ?? []) : [];
   const showStats = weeklyStats.length > 0;
-  const lines = buildWeeklyLines(weeklyPoints, weeklyStats);
+  const lines = selectedSeason
+    ? buildWeeklyLines(weeklyPoints, weeklyStats, {
+        seasonYear: selectedSeason,
+        nflTeam,
+        teamByeWeeks,
+        completeWeeks,
+      })
+    : [];
 
   return (
     <div className="space-y-4">
@@ -202,8 +218,8 @@ export function WeeklyLinesTable({
                       {line.slot ?? "–"}
                     </td>
                     <td className="py-4 pr-4 text-sm text-text-secondary tabular-nums">
-                      {line.rostered ? (
-                        <StatusChip status={line.status} />
+                      {line.status !== "NOT_ROSTERED" ? (
+                        <StatusChip status={line.status} started={line.started} />
                       ) : (
                         <span className="text-text-tertiary">&ndash;</span>
                       )}

@@ -7,6 +7,8 @@ import {
 } from "./weekly-line-model";
 
 const STATUS_LABEL: Record<WeeklyLineStatus, string> = {
+  BYE: "BYE",
+  DNP: "DNP",
   START: "START",
   BENCH: "BENCH",
   UPCOMING: "UPCOMING",
@@ -18,8 +20,38 @@ const STATUS_LABEL: Record<WeeklyLineStatus, string> = {
  * table's Status column. START is bold/primary (the honest "this counted"
  * signal); BENCH, UPCOMING, and NOT ROSTERED are all muted tertiary text —
  * none of them are wins or losses, so none get the win/loss accent colors.
+ * BYE and DNP render as small neutral pill chips (BYE is always neutral; DNP
+ * gets the warm "coaching malpractice" tint when the manager had the player
+ * started that week, and stays neutral otherwise).
  */
-export function StatusChip({ status }: { status: WeeklyLineStatus }) {
+export function StatusChip({
+  status,
+  started = false,
+}: {
+  status: WeeklyLineStatus;
+  /** Whether the player was in a starting slot that week (flavors DNP). */
+  started?: boolean;
+}) {
+  if (status === "BYE") {
+    return (
+      <span className="inline-flex items-center rounded-full border border-border bg-surface px-2 py-0.5 text-caption text-text-tertiary">
+        {STATUS_LABEL[status]}
+      </span>
+    );
+  }
+  if (status === "DNP") {
+    return (
+      <span
+        className={`inline-flex items-center rounded-full border px-2 py-0.5 text-caption ${
+          started
+            ? "border-accent-warm/30 bg-accent-warm-light text-accent-warm"
+            : "border-border bg-surface text-text-tertiary"
+        }`}
+      >
+        {STATUS_LABEL[status]}
+      </span>
+    );
+  }
   if (status === "START") {
     return (
       <span className="text-body-sm font-semibold text-text-primary">
@@ -80,7 +112,7 @@ export function WeeklyLineCard({ line, statColumns, showStats }: WeeklyLineCardP
           <span className="text-kicker shrink-0">WK {line.week}</span>
           {line.owner && <FranchiseCrest franchise={line.owner} size={20} />}
         </div>
-        <StatusChip status={line.status} />
+        <StatusChip status={line.status} started={line.started} />
       </div>
 
       {line.opponent && (
