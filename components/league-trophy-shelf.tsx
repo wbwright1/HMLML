@@ -22,14 +22,14 @@ function LeagueChampionPlate({ trophy }: { trophy: TrophyEntry }) {
         abbreviation={trophy.championAbbreviation ?? undefined}
         brandingColor={trophy.championBrandingColor ?? undefined}
         avatarUrl={trophy.championAvatarUrl}
-        size={28}
+        size={40}
         decorative
       />
       <span className="min-w-0">
-        <span className="block truncate text-[12px] font-bold text-text-primary">
+        <span className="block truncate text-[13px] font-bold text-text-primary">
           {trophy.championName}
         </span>
-        <span className="block text-[9.5px] text-text-tertiary">
+        <span className="block whitespace-nowrap text-[10px] text-text-tertiary">
           <span className="font-mono text-accent-gold">{trophy.seasonYear}</span>
         </span>
       </span>
@@ -53,7 +53,7 @@ function AwardPlate({ award }: { award: AwardEntry }) {
         seasonYear={award.seasonYear}
       />
       {award.franchise && (
-        <div className="flex min-w-0 items-center gap-1.5 pl-[34px]">
+        <div className="flex min-w-0 items-center gap-1.5 pl-[50px]">
           <FranchiseLogo
             slug={award.franchise.slug}
             name={award.franchise.name}

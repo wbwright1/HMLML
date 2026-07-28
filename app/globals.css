@@ -407,7 +407,7 @@
     .medallion-item {
         position: relative;
         flex: none;
-        width: 150px;
+        width: 164px;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -451,8 +451,8 @@
 
     .medallion-podium {
         position: relative;
-        width: 34px;
-        height: 9px;
+        width: 38px;
+        height: 10px;
         background: linear-gradient(180deg, #8e6e2a, #4a3a12);
         clip-path: polygon(12% 0, 88% 0, 100% 100%, 0 100%);
         margin-top: -3px;
@@ -460,7 +460,9 @@
 
     .medallion-plate {
         position: relative;
-        width: 138px;
+        min-width: 150px;
+        width: max-content;
+        max-width: 100%;
         background: linear-gradient(180deg, #2e2820, #1d1813);
         border: 1px solid rgba(226, 184, 88, 0.3);
         border-bottom-width: 3px;
@@ -472,8 +474,8 @@
 
     .medallion-plate-headshot {
         display: inline-flex;
-        width: 28px;
-        height: 28px;
+        width: 40px;
+        height: 40px;
         border-radius: 9999px;
         overflow: hidden;
         background: radial-gradient(
@@ -505,7 +507,7 @@
 
     @media (min-width: 768px) {
         .medallion-item {
-            width: 190px;
+            width: 204px;
         }
         .medallion-coin {
             width: 88px;
@@ -516,11 +518,11 @@
             height: 42px;
         }
         .medallion-podium {
-            width: 44px;
-            height: 11px;
+            width: 50px;
+            height: 12px;
         }
         .medallion-plate {
-            width: 168px;
+            min-width: 184px;
         }
         .medallion-strip {
             gap: 34px;

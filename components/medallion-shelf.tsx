@@ -92,13 +92,13 @@ export function PlayerAwardPlate({
   return (
     <div className="flex w-full items-center gap-2.5">
       <span className="medallion-plate-headshot shrink-0">
-        <PlayerHeadshot playerId={playerId} name={playerName} size={28} showTeamBadge={false} />
+        <PlayerHeadshot playerId={playerId} name={playerName} size={40} showTeamBadge={false} />
       </span>
       <span className="min-w-0">
-        <span className="block truncate text-[12px] font-bold text-text-primary">
+        <span className="block truncate text-[13px] font-bold text-text-primary">
           {playerName}
         </span>
-        <span className="block text-[9.5px] text-text-tertiary">
+        <span className="block whitespace-nowrap text-[10px] text-text-tertiary">
           {position && <span>{position} · </span>}
           <span className="font-mono text-accent-gold">{seasonYear}</span>
         </span>

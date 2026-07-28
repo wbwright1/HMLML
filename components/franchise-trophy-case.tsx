@@ -20,12 +20,14 @@ function ChampionshipPlate({ trophy }: { trophy: ChampionshipTrophy }) {
   const subline = [record, bowlName].filter(Boolean).join(" · ");
 
   return (
-    <div className="flex w-full items-center justify-center gap-2.5">
-      <span className="font-mono text-[17px] font-bold text-accent-gold">
+    <div className="flex w-full flex-col items-center justify-center gap-0.5 text-center">
+      <span className="whitespace-nowrap font-mono text-[17px] font-bold text-accent-gold">
         {trophy.seasonYear}
       </span>
       {subline && (
-        <span className="text-[10.5px] text-text-tertiary">{subline}</span>
+        <span className="whitespace-nowrap text-[10.5px] text-text-tertiary">
+          {subline}
+        </span>
       )}
     </div>
   );
