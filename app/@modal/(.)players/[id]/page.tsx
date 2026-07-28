@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { ProfileModalShell } from "@/components/player-profile/profile-modal-shell";
+import { ProfileSkeleton } from "@/components/player-profile/profile-skeleton";
 import { PlayerProfile } from "@/components/player-profile/player-profile";
 
 interface InterceptedPlayerModalProps {
@@ -12,28 +14,39 @@ interface InterceptedPlayerModalProps {
  * handles hard loads via app/@modal/default.tsx returning null). Never calls
  * notFound() — an unknown player renders the site's snarky 404 copy INSIDE
  * the shell so the close button and backdrop dismiss still work.
+ *
+ * This default export is synchronous and renders ProfileModalShell exactly
+ * once, with an inner Suspense swapping the skeleton for resolved content
+ * in place. (Previously a separate loading.tsx rendered its own shell as
+ * the segment-level Suspense fallback, so the shell mounted and slid up
+ * twice per tap: once with a skeleton, then again once the RSC resolved.)
  */
-export default async function InterceptedPlayerModal({
+export default function InterceptedPlayerModal({
   params,
   searchParams,
 }: InterceptedPlayerModalProps) {
-  const { id } = await params;
-  const { season } = await searchParams;
-
   return (
     <ProfileModalShell>
-      <PlayerProfileOrNotFound playerId={id} season={season} />
+      <Suspense fallback={<ProfileSkeleton />}>
+        <PlayerProfileOrNotFound
+          paramsPromise={params}
+          searchParamsPromise={searchParams}
+        />
+      </Suspense>
     </ProfileModalShell>
   );
 }
 
 async function PlayerProfileOrNotFound({
-  playerId,
-  season,
+  paramsPromise,
+  searchParamsPromise,
 }: {
-  playerId: string;
-  season?: string;
+  paramsPromise: Promise<{ id: string }>;
+  searchParamsPromise: Promise<{ season?: string }>;
 }) {
+  const { id: playerId } = await paramsPromise;
+  const { season } = await searchParamsPromise;
+
   // Calling the async server component directly (not as JSX) gets its return
   // value in hand — PlayerProfile returns null for an unknown player — without
   // querying getPlayerProfile a second time just to check existence.
