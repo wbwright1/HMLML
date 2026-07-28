@@ -1,5 +1,6 @@
 import { getAwardIcon } from "@/lib/award-icons";
 import { PlayerHeadshot } from "@/components/player-headshot";
+import { PlayerLink } from "@/components/player-link";
 import type { CornerstonePlayer } from "@/lib/queries/franchise-players";
 
 interface FranchiseCornerstoneCardProps {
@@ -61,7 +62,7 @@ export function FranchiseCornerstoneCard({
             Franchise Cornerstone
           </span>
         </p>
-        <div className="flex items-center gap-3">
+        <PlayerLink playerId={c.playerId} className="flex items-center gap-3">
           <PlayerHeadshot playerId={c.playerId} name={c.playerName} size={72} franchiseBadge={crest} />
           <div>
             <p className="text-h3 text-text-primary">{c.playerName}</p>
@@ -75,7 +76,7 @@ export function FranchiseCornerstoneCard({
               {seasonsPhrase}.
             </p>
           </div>
-        </div>
+        </PlayerLink>
       </div>
     );
   }
@@ -97,12 +98,18 @@ export function FranchiseCornerstoneCard({
       </p>
       <div className="flex items-center gap-3">
         <div className="flex -space-x-3">
-          <PlayerHeadshot playerId={a.playerId} name={a.playerName} size={64} franchiseBadge={crest} />
-          <PlayerHeadshot playerId={b.playerId} name={b.playerName} size={64} franchiseBadge={crest} />
+          <PlayerLink playerId={a.playerId} className="contents">
+            <PlayerHeadshot playerId={a.playerId} name={a.playerName} size={64} franchiseBadge={crest} />
+          </PlayerLink>
+          <PlayerLink playerId={b.playerId} className="contents">
+            <PlayerHeadshot playerId={b.playerId} name={b.playerName} size={64} franchiseBadge={crest} />
+          </PlayerLink>
         </div>
         <div>
           <p className="text-h3 text-text-primary">
-            {lastName(a.playerName)} · {lastName(b.playerName)}
+            <PlayerLink playerId={a.playerId}>{lastName(a.playerName)}</PlayerLink>
+            {" · "}
+            <PlayerLink playerId={b.playerId}>{lastName(b.playerName)}</PlayerLink>
           </p>
           <p className="text-body-sm text-text-tertiary mt-1">{subline}</p>
         </div>

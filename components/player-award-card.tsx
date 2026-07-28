@@ -1,6 +1,7 @@
 import { getAwardIcon } from "@/lib/award-icons";
 import { getPositionColor } from "@/lib/position-colors";
 import { PlayerHeadshot } from "@/components/player-headshot";
+import { PlayerLink } from "@/components/player-link";
 
 interface PlayerAwardCardProps {
   category: string;
@@ -53,7 +54,9 @@ export function PlayerAwardCard({
         )}
       </div>
 
-      <p className="text-body font-bold text-text-primary">{playerName}</p>
+      <PlayerLink playerId={playerId} className="block">
+        <p className="text-body font-bold text-text-primary">{playerName}</p>
+      </PlayerLink>
       <p className="text-body-sm text-text-tertiary">{franchiseName}</p>
       <p className="text-stat text-h3 text-text-primary mt-2">
         {stat}
