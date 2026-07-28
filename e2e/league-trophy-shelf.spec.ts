@@ -1,7 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
-import { eq } from "drizzle-orm";
+import { eq, isNotNull } from "drizzle-orm";
 import { leagueAwards, franchises, seasons } from "../lib/db/schema";
 import { AWARD_METADATA, type AwardType } from "../lib/awards";
 
@@ -141,26 +141,36 @@ test.describe("League Trophy Case (/records/trophies)", () => {
     }
   });
 
-  test("the League Champion shelf's ×N count matches the seasons table", async ({
+  test("the League Champion shelf's ×N count matches seasons.championFranchiseId", async ({
     page,
   }) => {
+    // getTrophyCase (lib/queries/records.ts) derives champions from
+    // seasons.championFranchiseId, not playoff results, so that is the count
+    // the page actually renders.
     const db = getTestDb();
     const seasonsWithChampion = await db
-      .select({ championFranchiseId: franchises.id })
-      .from(franchises);
+      .select({ seasonYear: seasons.seasonYear })
+      .from(seasons)
+      .where(isNotNull(seasons.championFranchiseId));
 
     await page.goto("/records/trophies");
     const shelf = page.getByTestId("league-trophy-shelf");
+
+    if (seasonsWithChampion.length === 0) {
+      // No champions in the DB: the shelf either doesn't render at all, or
+      // renders without a League Champion row -- nothing to assert further.
+      return;
+    }
+
     await expect(shelf).toBeVisible();
 
     const labelRow = shelf
       .locator("div")
       .filter({ hasText: "League Champion" })
-      .filter({ hasText: /×\d+/ })
+      .filter({ hasText: `×${seasonsWithChampion.length}` })
       .first();
 
     await expect(labelRow).toBeVisible();
-    expect(seasonsWithChampion.length).toBeGreaterThanOrEqual(0);
   });
 
   test("an award's franchise crest shows the franchise name as plain text (no nested link)", async ({
