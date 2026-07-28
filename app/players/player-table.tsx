@@ -16,6 +16,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PlayerHeadshot } from "@/components/player-headshot";
+import { FranchiseLogo } from "@/components/franchise-logo";
 import { EmptyState } from "@/components/empty-state";
 import { AwardChipRow, type AwardChipData } from "@/components/award-chip";
 import { cn } from "@/lib/utils";
@@ -185,6 +186,11 @@ function TrendingSignal({ count }: { count: number | null }) {
   );
 }
 
+// Compact base paddings so ~390px screens can render every column at a
+// readable touch size; desktop relaxes back to the original spacing via `md:`.
+const TH_PADDING = "px-2.5 py-2.5 md:px-0 md:pr-4 md:py-3";
+const TD_PADDING = "px-2.5 py-2.5 md:px-0 md:pr-4 md:py-3";
+
 interface SortHeaderProps {
   label: string;
   sortKey: SortKey;
@@ -192,6 +198,8 @@ interface SortHeaderProps {
   activeDir: SortDir;
   onSort: (key: SortKey) => void;
   align?: "left" | "right";
+  /** Full text for the acronym label, exposed via aria-label + title. */
+  fullText: string;
 }
 
 function SortHeader({
@@ -201,6 +209,7 @@ function SortHeader({
   activeDir,
   onSort,
   align = "left",
+  fullText,
 }: SortHeaderProps) {
   const isActive = activeKey === sortKey;
 
@@ -217,7 +226,9 @@ function SortHeader({
       tabIndex={0}
       onClick={() => onSort(sortKey)}
       onKeyDown={handleKeyDown}
-      className={`pb-3 pr-4 text-caption text-text-tertiary cursor-pointer select-none hover:text-text-primary transition-colors ${align === "right" ? "text-right" : "text-left"}`}
+      aria-label={fullText}
+      title={fullText}
+      className={`${TH_PADDING} text-caption text-text-tertiary cursor-pointer select-none hover:text-text-primary transition-colors ${align === "right" ? "text-right" : "text-left"}`}
       aria-sort={
         isActive ? (activeDir === "asc" ? "ascending" : "descending") : "none"
       }
@@ -388,20 +399,55 @@ export function PlayerTable({
         players
       </p>
 
-      {/* Desktop table */}
-      <div className="hidden md:block overflow-x-auto">
-        <table className="w-full text-left">
+      {/*
+        Always-visible, horizontally-scrolling table. This div is the sole
+        horizontal scroll boundary (overflow-x-auto); the page body must
+        never scroll horizontally. min-w on the table forces the overflow
+        on narrow (~390px) screens rather than crushing columns.
+        No will-change / transform anywhere in this subtree — a transformed
+        ancestor silently breaks `position: sticky` (see PRs #150/#155/#156).
+      */}
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[680px] text-left">
           <thead>
             <tr className="border-b border-divider">
+              <th
+                className={`sticky left-0 z-[1] bg-canvas border-r border-divider ${TH_PADDING} text-caption text-text-tertiary cursor-pointer select-none hover:text-text-primary transition-colors text-left`}
+                role="button"
+                tabIndex={0}
+                onClick={() => handleSort("name")}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    handleSort("name");
+                  }
+                }}
+                aria-sort={
+                  sortKey === "name"
+                    ? sortDir === "asc"
+                      ? "ascending"
+                      : "descending"
+                    : "none"
+                }
+                aria-label="Player"
+                title="Player"
+              >
+                <span className="inline-flex items-center gap-1">
+                  Player
+                  {sortKey === "name" ? (
+                    sortDir === "asc" ? (
+                      <ChevronUp className="size-3" />
+                    ) : (
+                      <ChevronDown className="size-3" />
+                    )
+                  ) : (
+                    <span className="size-3" aria-hidden="true" />
+                  )}
+                </span>
+              </th>
               <SortHeader
-                label="Player"
-                sortKey="name"
-                activeKey={sortKey}
-                activeDir={sortDir}
-                onSort={handleSort}
-              />
-              <SortHeader
-                label={ptsLabel}
+                label="PTS"
+                fullText={statsSeason ? `${statsSeason} fantasy points` : "Fantasy points"}
                 sortKey="points"
                 activeKey={sortKey}
                 activeDir={sortDir}
@@ -409,12 +455,17 @@ export function PlayerTable({
                 align="right"
               />
               {showProjColumn && (
-                <th className="pb-3 pr-4 text-right text-caption text-text-tertiary">
-                  Proj
+                <th
+                  className={`${TH_PADDING} text-right text-caption text-text-tertiary`}
+                  aria-label="Projected points, current week"
+                  title="Projected points, current week"
+                >
+                  PROJ
                 </th>
               )}
               <SortHeader
-                label="Age"
+                label="AGE"
+                fullText="Player age"
                 sortKey="age"
                 activeKey={sortKey}
                 activeDir={sortDir}
@@ -422,7 +473,8 @@ export function PlayerTable({
                 align="right"
               />
               <SortHeader
-                label="Exp"
+                label="EXP"
+                fullText="Years of NFL experience"
                 sortKey="yearsExp"
                 activeKey={sortKey}
                 activeDir={sortDir}
@@ -430,22 +482,28 @@ export function PlayerTable({
                 align="right"
               />
               <SortHeader
-                label="HMLML Team"
+                label="TM"
+                fullText="HMLML team"
                 sortKey="hmlTeam"
                 activeKey={sortKey}
                 activeDir={sortDir}
                 onSort={handleSort}
               />
               <SortHeader
-                label="Status"
+                label="INJ"
+                fullText="Injury / roster status"
                 sortKey="status"
                 activeKey={sortKey}
                 activeDir={sortDir}
                 onSort={handleSort}
               />
               {showTrdColumn && (
-                <th className="pb-3 pr-4 text-right text-caption text-text-tertiary">
-                  Trd
+                <th
+                  className={`${TH_PADDING} text-right text-caption text-text-tertiary`}
+                  aria-label="Trending adds, last 24h"
+                  title="Trending adds, last 24h"
+                >
+                  TRD
                 </th>
               )}
             </tr>
@@ -456,12 +514,14 @@ export function PlayerTable({
                 key={player.id}
                 className="border-b border-divider last:border-0 hover:bg-surface transition-colors"
               >
-                <td className="py-3 pr-4">
+                <td
+                  className={`sticky left-0 z-[1] bg-canvas border-r border-divider ${TD_PADDING}`}
+                >
                   <PlayerLink playerId={player.id} className="flex items-center gap-3">
                     <PlayerHeadshot
                       playerId={player.id}
                       name={player.fullName ?? "Unknown"}
-                      size={44}
+                      size={32}
                       nflTeam={player.nflTeam}
                     />
                     <div className="min-w-0">
@@ -477,7 +537,7 @@ export function PlayerTable({
                     </div>
                   </PlayerLink>
                 </td>
-                <td className="py-3 pr-4 text-right">
+                <td className={`${TD_PADDING} text-right`}>
                   <span className="text-stat text-text-primary">
                     {player.pointsPpr != null
                       ? player.pointsPpr.toFixed(1)
@@ -485,7 +545,7 @@ export function PlayerTable({
                   </span>
                 </td>
                 {showProjColumn && (
-                  <td className="py-3 pr-4 text-right">
+                  <td className={`${TD_PADDING} text-right`}>
                     <span className="text-stat font-mono text-text-tertiary">
                       {player.projPoints != null
                         ? player.projPoints.toFixed(1)
@@ -493,38 +553,46 @@ export function PlayerTable({
                     </span>
                   </td>
                 )}
-                <td className="py-3 pr-4 text-right">
+                <td className={`${TD_PADDING} text-right`}>
                   <span className="text-stat text-text-secondary">
                     {player.age ?? "-"}
                   </span>
                 </td>
-                <td className="py-3 pr-4 text-right">
+                <td className={`${TD_PADDING} text-right`}>
                   <span className="text-stat text-text-secondary">
                     {player.yearsExp != null ? player.yearsExp : "-"}
                   </span>
                 </td>
-                <td className="py-3 pr-4">
+                <td className={TD_PADDING}>
                   {player.ownerFranchiseSlug && player.ownerFranchiseName ? (
                     <Link
                       href={`/teams/${player.ownerFranchiseSlug}`}
-                      className="text-body-sm font-medium text-accent-gold hover:brightness-110"
+                      title={player.ownerFranchiseName}
+                      className="inline-flex items-center hover:brightness-110"
                     >
-                      {player.ownerFranchiseName}
+                      <FranchiseLogo
+                        slug={player.ownerFranchiseSlug}
+                        name={player.ownerFranchiseName}
+                        abbreviation={player.ownerFranchiseAbbrev ?? undefined}
+                        brandingColor={player.ownerFranchiseBrandingColor ?? undefined}
+                        avatarUrl={player.ownerFranchiseAvatarUrl}
+                        size={28}
+                      />
                     </Link>
                   ) : (
-                    <span className="text-body-sm text-text-tertiary italic">
-                      Free Agent
+                    <span className="text-caption text-text-tertiary italic">
+                      FA
                     </span>
                   )}
                 </td>
-                <td className="py-3">
+                <td className={TD_PADDING}>
                   <StatusIndicator
                     status={player.status}
                     injuryStatus={player.injuryStatus}
                   />
                 </td>
                 {showTrdColumn && (
-                  <td className="py-3 pr-4 text-right">
+                  <td className={`${TD_PADDING} text-right`}>
                     <TrendingSignal count={player.trendingCount} />
                   </td>
                 )}
@@ -532,77 +600,6 @@ export function PlayerTable({
             ))}
           </tbody>
         </table>
-      </div>
-
-      {/* Mobile cards */}
-      <div className="md:hidden space-y-3">
-        {filtered.map((player) => (
-          <div
-            key={player.id}
-            className="card-surface p-4 space-y-3"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <PlayerLink playerId={player.id} className="flex min-w-0 items-center gap-3">
-                <PlayerHeadshot
-                  playerId={player.id}
-                  name={player.fullName ?? "Unknown"}
-                  size={48}
-                  nflTeam={player.nflTeam}
-                />
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-body font-medium text-text-primary truncate">
-                      {player.fullName ?? "Unknown"}
-                    </p>
-                    <AwardChipRow awards={awardsByPlayerId[player.id] ?? []} />
-                  </div>
-                  <p className="text-body-sm text-text-tertiary">
-                    {player.nflTeam ?? "FA"} &middot; {player.position ?? "-"}
-                  </p>
-                </div>
-              </PlayerLink>
-              <div className="shrink-0 text-right">
-                <p className="text-stat text-text-primary">
-                  {player.pointsPpr != null ? player.pointsPpr.toFixed(1) : "-"}
-                </p>
-                <StatusIndicator
-                  status={player.status}
-                  injuryStatus={player.injuryStatus}
-                />
-              </div>
-            </div>
-            {(showProjColumn || (showTrdColumn && player.trendingCount != null)) && (
-              <div className="flex items-center gap-4 text-body-sm">
-                {showProjColumn && (
-                  <span className="text-text-tertiary">
-                    PROJ{" "}
-                    <span className="text-stat font-mono text-text-tertiary">
-                      {player.projPoints != null
-                        ? player.projPoints.toFixed(1)
-                        : "-"}
-                    </span>
-                  </span>
-                )}
-                {showTrdColumn && player.trendingCount != null && (
-                  <TrendingSignal count={player.trendingCount} />
-                )}
-              </div>
-            )}
-            <div className="flex items-center justify-between border-t border-divider pt-2 text-body-sm">
-              <span className="text-text-tertiary">HMLML Team</span>
-              {player.ownerFranchiseSlug && player.ownerFranchiseName ? (
-                <Link
-                  href={`/teams/${player.ownerFranchiseSlug}`}
-                  className="font-medium text-accent-gold hover:brightness-110"
-                >
-                  {player.ownerFranchiseName}
-                </Link>
-              ) : (
-                <span className="text-text-tertiary italic">Free Agent</span>
-              )}
-            </div>
-          </div>
-        ))}
       </div>
 
       {/* Empty filtered state */}
