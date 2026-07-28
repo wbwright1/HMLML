@@ -1,6 +1,13 @@
 import { ProfileModalShell } from "@/components/player-profile/profile-modal-shell";
 import { PlayerProfile } from "@/components/player-profile/player-profile";
 
+// Without this, Next.js can serve a cached render of this segment when only
+// searchParams change (a known limitation with parallel/intercepted routes:
+// vercel/next.js#62451) — a season-pill click inside the modal would update
+// the URL but never re-fetch. Forcing dynamic rendering makes every
+// searchParams change (the ?season= pill) actually re-render this segment.
+export const dynamic = "force-dynamic";
+
 interface InterceptedPlayerModalProps {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ season?: string }>;

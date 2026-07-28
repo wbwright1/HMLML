@@ -43,17 +43,12 @@ export function ProfileModalShell({ children }: ProfileModalShellProps) {
   // Focus the close button on mount, then trap Tab within the dialog.
   useEffect(() => {
     closeButtonRef.current?.focus();
-    const dialog = dialogRef.current;
-    if (!dialog) return;
     function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        close();
-        return;
-      }
       if (e.key !== "Tab") return;
+      const dialog = dialogRef.current;
+      if (!dialog) return;
       const focusable = Array.from(
-        dialog!.querySelectorAll<HTMLElement>(
+        dialog.querySelectorAll<HTMLElement>(
           'a[href], button, input, [tabindex]:not([tabindex="-1"])'
         )
       ).filter((el) => !el.hasAttribute("disabled"));
@@ -68,8 +63,29 @@ export function ProfileModalShell({ children }: ProfileModalShellProps) {
         first.focus();
       }
     }
+    const dialog = dialogRef.current;
+    if (!dialog) return;
     dialog.addEventListener("keydown", onKeyDown);
     return () => dialog.removeEventListener("keydown", onKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Escape-to-close listens on `document` (not scoped to the dialog
+  // element) so it keeps working across an in-place season switch inside
+  // the modal: that switch re-renders the intercepted route's segment,
+  // which replaces the dialog's DOM subtree — a scoped listener attached in
+  // a mount-only effect would go stale once its original node is gone. A
+  // document-level listener is re-attached fresh on every mount/remount and
+  // has no dependency on which DOM node currently holds focus.
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        close();
+      }
+    }
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
