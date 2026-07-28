@@ -3,7 +3,6 @@ import { BackLink } from "@/components/back-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { FranchisePicker } from "@/components/franchise-picker";
-import { MobileTableView } from "@/components/mobile-table-view";
 import { PositionBadge } from "@/components/position-badge";
 import { PlayerStatusBadge } from "@/components/player-status-badge";
 import { PlayerHeadshot } from "@/components/player-headshot";
@@ -74,6 +73,17 @@ type RosterPlayer = NonNullable<
   Awaited<ReturnType<typeof getFranchiseRoster>>
 >[number];
 
+// Shared cell padding, matching app/players/player-table.tsx's desktop
+// table so roster tables and the players table read as one system.
+const TH_CLASS =
+  "px-2.5 py-2.5 md:px-0 md:pr-4 md:py-3 text-caption text-text-tertiary text-left";
+const TD_CLASS = "px-2.5 py-2.5 md:px-0 md:pr-4 md:py-3";
+
+// Sticky-left "Player" column: no transform/will-change anywhere in this
+// subtree (see the ScrollReveal note in RosterPage below) so position:sticky
+// keeps working across the horizontal scroll container.
+const STICKY_CLASS = "sticky left-0 z-[1] bg-canvas border-r border-divider";
+
 function RosterSection({
   label,
   players,
@@ -87,11 +97,6 @@ function RosterSection({
 }) {
   if (players.length === 0) return null;
 
-  const headers = showProjColumn
-    ? ["Slot", "Player", "Team", "Status", "Age", "Exp", "Proj"]
-    : ["Slot", "Player", "Team", "Status", "Age", "Exp"];
-  const keyColumns = showProjColumn ? [0, 1, 2, 3, 6] : [0, 1, 2, 3];
-
   return (
     <div className="space-y-3">
       <h2 className="text-kicker">
@@ -101,65 +106,125 @@ function RosterSection({
         </span>
       </h2>
       <div className="card-surface p-4 md:p-5">
-        <MobileTableView
-          headers={headers}
-          keyColumns={keyColumns}
-          primaryColumn={1}
-          rows={players.map((player) => {
-            const name = getPlayerName(player);
-            const row = [
-              <PositionBadge key="slot" position={player.position} />,
-              <div key="player" className="flex items-center gap-2.5">
-                <PlayerLink
-                  playerId={player.position === "DEF" ? null : player.playerId}
-                  className="flex min-w-0 items-center gap-2.5"
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[560px] text-left">
+            <thead>
+              <tr className="border-b border-divider">
+                <th className={`${TH_CLASS} ${STICKY_CLASS}`} title="Player">
+                  Player
+                </th>
+                <th
+                  className={TH_CLASS}
+                  title="Roster position"
+                  aria-label="Roster position"
                 >
-                  {player.position === "DEF" ? (
-                    <NflTeamLogo teamAbbrev={player.nflTeam} size={44} />
-                  ) : (
-                    <PlayerHeadshot
-                      playerId={player.playerId}
-                      name={name}
-                      size={44}
-                      nflTeam={player.nflTeam}
-                    />
-                  )}
-                  <span className="font-medium text-text-primary truncate">
-                    {name}
-                  </span>
-                </PlayerLink>
-              </div>,
-              <span key="team" className="text-text-secondary">
-                {player.nflTeam ?? "FA"}
-              </span>,
-              <PlayerStatusBadge
-                key="status"
-                status={player.status}
-                injuryStatus={player.injuryStatus}
-              />,
-              <span key="age" className="font-mono tabular-nums text-text-secondary">
-                {player.age ?? "—"}
-              </span>,
-              <span key="exp" className="font-mono tabular-nums text-text-secondary">
-                {player.yearsExp ?? "—"}
-              </span>,
-            ];
-
-            if (showProjColumn) {
-              const projection = projectionsByPlayer.get(player.playerId);
-              row.push(
-                <div
-                  key="proj"
-                  className="text-right font-mono tabular-nums text-text-tertiary"
+                  POS
+                </th>
+                {showProjColumn && (
+                  <th
+                    className={`${TH_CLASS} text-right`}
+                    title="Projected points, current week"
+                    aria-label="Projected points, current week"
+                  >
+                    PROJ
+                  </th>
+                )}
+                <th
+                  className={`${TH_CLASS} text-right`}
+                  title="Player age"
+                  aria-label="Player age"
                 >
-                  {projection != null ? projection.toFixed(1) : "—"}
-                </div>
-              );
-            }
+                  AGE
+                </th>
+                <th
+                  className={`${TH_CLASS} text-right`}
+                  title="Years of NFL experience"
+                  aria-label="Years of NFL experience"
+                >
+                  EXP
+                </th>
+                <th
+                  className={TH_CLASS}
+                  title="NFL team"
+                  aria-label="NFL team"
+                >
+                  TM
+                </th>
+                <th
+                  className={TH_CLASS}
+                  title="Injury / roster status"
+                  aria-label="Injury / roster status"
+                >
+                  INJ
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {players.map((player) => {
+                const name = getPlayerName(player);
+                const isDef = player.position === "DEF";
+                const projection = projectionsByPlayer.get(player.playerId);
 
-            return row;
-          })}
-        />
+                return (
+                  <tr
+                    key={player.playerId}
+                    className="border-b border-divider last:border-0 hover:bg-surface transition-colors"
+                  >
+                    <td className={`${TD_CLASS} ${STICKY_CLASS}`}>
+                      <PlayerLink
+                        playerId={isDef ? null : player.playerId}
+                        className="flex min-w-0 items-center gap-2.5"
+                      >
+                        {isDef ? (
+                          <NflTeamLogo teamAbbrev={player.nflTeam} size={32} />
+                        ) : (
+                          <PlayerHeadshot
+                            playerId={player.playerId}
+                            name={name}
+                            size={32}
+                            nflTeam={player.nflTeam}
+                          />
+                        )}
+                        <span className="font-medium text-text-primary truncate">
+                          {name}
+                        </span>
+                      </PlayerLink>
+                    </td>
+                    <td className={TD_CLASS}>
+                      <PositionBadge position={player.position} />
+                    </td>
+                    {showProjColumn && (
+                      <td className={`${TD_CLASS} text-right`}>
+                        <span className="text-stat font-mono text-text-tertiary">
+                          {projection != null ? projection.toFixed(1) : "-"}
+                        </span>
+                      </td>
+                    )}
+                    <td className={`${TD_CLASS} text-right`}>
+                      <span className="text-stat text-text-secondary">
+                        {player.age ?? "-"}
+                      </span>
+                    </td>
+                    <td className={`${TD_CLASS} text-right`}>
+                      <span className="text-stat text-text-secondary">
+                        {player.yearsExp ?? "-"}
+                      </span>
+                    </td>
+                    <td className={TD_CLASS}>
+                      <NflTeamLogo teamAbbrev={player.nflTeam} size={28} />
+                    </td>
+                    <td className={TD_CLASS}>
+                      <PlayerStatusBadge
+                        status={player.status}
+                        injuryStatus={player.injuryStatus}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   );
@@ -320,22 +385,27 @@ export default async function RosterPage({ params }: RosterPageProps) {
         />
       ) : (
         <div className="grid gap-8 lg:grid-cols-[1fr_300px]">
-          <ScrollReveal delay={80}>
-            <div className="space-y-8">
-              <RosterSection
-                label="Starting Lineup"
-                players={starters}
-                projectionsByPlayer={projectionsByPlayer}
-                showProjColumn={showProjColumn}
-              />
-              <RosterSection
-                label="Bench & IR"
-                players={benchAndIr}
-                projectionsByPlayer={projectionsByPlayer}
-                showProjColumn={showProjColumn}
-              />
-            </div>
-          </ScrollReveal>
+          {/*
+            Plain div, not ScrollReveal: ScrollReveal's reveal-on-load
+            animation lands on translate-y-0 with a `both` fill-mode,
+            leaving a permanent `transform` on this wrapper. A transformed
+            ancestor breaks `position: sticky` on the Player column inside
+            the tables below, so this subtree stays untransformed.
+          */}
+          <div className="min-w-0 space-y-8">
+            <RosterSection
+              label="Starting Lineup"
+              players={starters}
+              projectionsByPlayer={projectionsByPlayer}
+              showProjColumn={showProjColumn}
+            />
+            <RosterSection
+              label="Bench & IR"
+              players={benchAndIr}
+              projectionsByPlayer={projectionsByPlayer}
+              showProjColumn={showProjColumn}
+            />
+          </div>
 
           <ScrollReveal delay={140}>
             <aside className="card-surface p-4 md:p-5">
