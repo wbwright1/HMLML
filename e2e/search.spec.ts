@@ -103,6 +103,37 @@ test.describe("Site search — desktop", () => {
     }
   });
 
+  test("result rows carry imagery: player headshots and franchise logos", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const input = desktopInput(page);
+    await input.click();
+    await input.fill(QUERY);
+
+    const listbox = page.getByRole("listbox", { name: "Search results" });
+    await expect(listbox).toBeVisible();
+
+    // Player rows lead with a headshot: either the loaded <img> or the
+    // synchronous initials monogram ([role="img"]), wrapped aria-hidden so
+    // the option's accessible name stays text-only.
+    const playersGroup = listbox.getByRole("group", { name: "Players" });
+    const firstPlayer = playersGroup.getByRole("option").first();
+    await expect(firstPlayer).toBeVisible();
+    await expect(
+      firstPlayer.locator('img, [role="img"]').first()
+    ).toBeVisible();
+
+    // Franchise rows render the FranchiseLogo box (image or monogram) if any
+    // team matches the query; tolerate zero team matches for a player query.
+    const teamsGroup = listbox.getByRole("group", { name: "Teams" });
+    if ((await teamsGroup.count()) > 0) {
+      const firstTeam = teamsGroup.getByRole("option").first();
+      const logoBox = firstTeam.locator("span, img").first();
+      await expect(logoBox).toBeVisible();
+    }
+  });
+
   test("Escape closes the results listbox", async ({ page }) => {
     await page.goto("/");
     const input = desktopInput(page);
