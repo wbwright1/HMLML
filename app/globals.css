@@ -374,6 +374,19 @@
     }
 }
 
+/* Mobile bottom-dock scroll chrome: hides on scroll-down, reveals on
+   scroll-up (the top header stays pinned by design). State is toggled via
+   data-hidden by components/nav/scroll-chrome.tsx; the hidden transform
+   slides the dock down past the safe-area inset. Neutralized by the
+   prefers-reduced-motion block above. */
+[data-scroll-chrome] {
+    transition: transform 220ms ease;
+    will-change: transform;
+}
+[data-scroll-chrome][data-hidden="true"].chrome-bottom {
+    transform: translateY(calc(100% + env(safe-area-inset-bottom)));
+}
+
 /* Live indicator pulse ring (used by the score poller / live pills).
    Neutralized by the prefers-reduced-motion block above. */
 @keyframes live-pulse {

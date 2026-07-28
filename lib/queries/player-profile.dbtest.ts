@@ -103,9 +103,16 @@ describe("getPlayerSeasonPointsAggregates", () => {
     for (const a of aggs) {
       // totalPoints == startedPoints + benchPoints.
       expect(a.totalPoints).toBeCloseTo(a.startedPoints + a.benchPoints, 3);
-      // avgWhenStarted == startedPoints / startedWeeks (or null).
-      if (a.startedWeeks > 0) {
-        expect(a.avgWhenStarted).toBeCloseTo(a.startedPoints / a.startedWeeks, 3);
+      // startedPlayedWeeks (started AND actually PLAYED, excluding BYE/DNP)
+      // never exceeds the raw started count.
+      expect(a.startedPlayedWeeks).toBeLessThanOrEqual(a.startedWeeks);
+      // avgWhenStarted == startedPoints / startedPlayedWeeks (or null) — the
+      // denominator excludes bye/DNP weeks, which never contribute points.
+      if (a.startedPlayedWeeks > 0) {
+        expect(a.avgWhenStarted).toBeCloseTo(
+          a.startedPoints / a.startedPlayedWeeks,
+          3,
+        );
         expect(a.bestWeek).not.toBeNull();
         expect(a.worstStartedWeek).not.toBeNull();
         expect(a.bestWeek!.points).toBeGreaterThanOrEqual(
@@ -127,6 +134,25 @@ describe("getPlayerSeasonPointsAggregates", () => {
     expect(target.startedWeeks).toBe(handStarted);
     const handBench = weekly.filter((w) => !w.started).length;
     expect(target.benchedWeeks).toBe(handBench);
+  });
+
+  // Regression coverage for the honest BYE/DNP exclusion (#132): Patrick
+  // Mahomes' 2024 season is a real, fully-played, non-mock case where the
+  // OLD unguarded logic (min points among ANY started week) picked week 18 —
+  // a meaningless season-finale rest week where Mahomes was left started at
+  // 0.0 (a DNP, not a performance). The 2024 season's actual worst STARTED
+  // week that Mahomes really played was week 4 (14.0 pts). This was verified
+  // directly against the live DB before this fix landed (OLD week=18 pts=0,
+  // NEW week=4 pts=14) — see the PR description for the raw query output.
+  it("excludes a real DNP week from the worst-started-week pick (Mahomes 2024, #132)", async () => {
+    const aggs = await getPlayerSeasonPointsAggregates("4046");
+    const season2024 = aggs.find((a) => a.seasonYear === 2024);
+    // Skip gracefully if this environment's data differs (e.g. a fresh/partial sync).
+    if (!season2024) return;
+    expect(season2024.worstStartedWeek?.week).not.toBe(18);
+    if (season2024.worstStartedWeek) {
+      expect(season2024.worstStartedWeek.points).toBeGreaterThan(0);
+    }
   });
 });
 

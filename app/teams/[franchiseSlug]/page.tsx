@@ -18,8 +18,9 @@ import { getRivalries } from "@/lib/queries/records";
 import { getFranchiseExtremes } from "@/lib/queries/franchise-stats";
 import { getFranchiseCornerstone } from "@/lib/queries/franchise-players";
 import { getFranchiseAwards } from "@/lib/queries/awards";
-import { formatAwardChip } from "@/lib/awards";
 import { FranchiseCornerstoneCard } from "@/components/franchise-cornerstone-card";
+import { FranchiseTrophyCase } from "@/components/franchise-trophy-case";
+import { buildFranchiseTrophies } from "@/lib/franchise-trophies";
 import { getPlayoffLabel, getPlayoffBadgeVariant } from "@/lib/playoff-labels";
 import { EmptyState } from "@/components/empty-state";
 
@@ -132,6 +133,11 @@ export default async function FranchiseDetailPage({
 
   const primaryRival = myRivalries[0];
 
+  const trophies = buildFranchiseTrophies(
+    franchise.seasonHistory,
+    franchiseAwards,
+  );
+
   // Best-to-worst grid, tagging only the genuinely lopsided extremes.
   const gridRows: H2HGridRow[] = [...myRivalries]
     .sort((a, b) => {
@@ -195,19 +201,6 @@ export default async function FranchiseDetailPage({
           tone: "sting",
         }
   );
-
-  // Player Hardware: league-award winners this franchise rostered. Gold, and
-  // only when they actually own some silverware.
-  if (franchiseAwards.length > 0) {
-    const latest = franchiseAwards[0];
-    const lastName = latest.playerName.trim().split(/\s+/).slice(-1)[0];
-    callouts.push({
-      kicker: "Player Hardware",
-      value: franchiseAwards.length,
-      subline: `${formatAwardChip(latest.awardType, latest.seasonYear)} · ${lastName}. Hardware their roster earned.`,
-      tone: "gold",
-    });
-  }
 
   if (bestFinish) {
     callouts.push({
@@ -420,6 +413,18 @@ export default async function FranchiseDetailPage({
           </div>
         )}
       </PageSection>
+
+      {/* Trophy Case — merged championships + player-level league awards */}
+      {trophies.length > 0 && (
+        <PageSection label="Hardware" title="Trophy Case">
+          <ScrollReveal>
+            <FranchiseTrophyCase
+              trophies={trophies}
+              franchiseName={franchise.name}
+            />
+          </ScrollReveal>
+        </PageSection>
+      )}
 
       {/* Who Owns Who — lifetime H2H vs the rest of the league */}
       {gridRows.length > 0 && (
