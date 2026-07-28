@@ -5,7 +5,12 @@
 // filler.
 
 import type { AwardEntry } from "@/lib/queries/awards";
-import { isAwardType, type AwardType } from "@/lib/awards";
+import {
+  AWARD_METADATA,
+  AWARD_TYPE_ORDER,
+  isAwardType,
+  type AwardType,
+} from "@/lib/awards";
 
 export interface FranchiseTrophySeason {
   seasonYear: number;
@@ -51,4 +56,47 @@ export function buildFranchiseTrophies(
     }));
 
   return [...championships, ...playerAwards];
+}
+
+export type FranchiseTrophyGroupKey = "championship" | AwardType;
+
+export interface FranchiseTrophyGroup {
+  key: FranchiseTrophyGroupKey;
+  label: string;
+  trophies: FranchiseTrophy[]; // all same kind/awardType, season-descending
+}
+
+/**
+ * Groups a flat trophy list into one row per award type (championships
+ * first, then AWARD_TYPE_ORDER). Award types with zero wins are omitted
+ * entirely; trophies within a group keep their season-descending order.
+ */
+export function groupFranchiseTrophies(
+  trophies: FranchiseTrophy[],
+): FranchiseTrophyGroup[] {
+  const groups: FranchiseTrophyGroup[] = [];
+
+  const championships = trophies.filter((t) => t.kind === "championship");
+  if (championships.length > 0) {
+    groups.push({
+      key: "championship",
+      label: "Championship",
+      trophies: championships,
+    });
+  }
+
+  for (const awardType of AWARD_TYPE_ORDER) {
+    const matches = trophies.filter(
+      (t) => t.kind === "award" && t.awardType === awardType,
+    );
+    if (matches.length > 0) {
+      groups.push({
+        key: awardType,
+        label: AWARD_METADATA[awardType].label,
+        trophies: matches,
+      });
+    }
+  }
+
+  return groups;
 }
