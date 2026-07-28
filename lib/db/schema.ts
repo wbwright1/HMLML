@@ -385,6 +385,64 @@ export const playerWeekPoints = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// player_week_stats
+// ---------------------------------------------------------------------------
+// Per-player, per-week NFL box-score stats (passing/rushing/receiving/kicking),
+// keyed by (season, week, player) and NOT roster-scoped: these are league-
+// neutral facts about a player's real NFL game, distinct from
+// player_week_points which is per-roster fantasy scoring. Powers player-profile
+// stat lines. A curated set of typed columns covers the common stat questions;
+// the full Sleeper stat map (including pts_ppr and every advanced metric) is
+// kept verbatim in the stats jsonb catch-all so nothing is lost. No FK to
+// players (historical players may be absent from the daily snapshot), matching
+// player_week_points.
+export const playerWeekStats = pgTable(
+  "player_week_stats",
+  {
+    id: serial("id").primaryKey(),
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id),
+    week: integer("week").notNull(),
+    playerId: text("player_id").notNull(), // NO FK — historical players may be absent
+    position: text("position"),
+    gamesPlayed: integer("games_played"),
+    // Curated stat columns (real, nullable — a stat absent for a player/week is
+    // null, not zero). Sourced from the Sleeper stat map keys of the same name.
+    passYd: real("pass_yd"),
+    passTd: real("pass_td"),
+    passInt: real("pass_int"),
+    passAtt: real("pass_att"),
+    passCmp: real("pass_cmp"),
+    rushYd: real("rush_yd"),
+    rushTd: real("rush_td"),
+    rushAtt: real("rush_att"),
+    rec: real("rec"),
+    recYd: real("rec_yd"),
+    recTd: real("rec_td"),
+    recTgt: real("rec_tgt"),
+    fumLost: real("fum_lost"),
+    fgm: real("fgm"),
+    fga: real("fga"),
+    xpm: real("xpm"),
+    // Full Sleeper stat map for this player/week, verbatim (pts_ppr, advanced
+    // metrics, everything). The curated columns above are extracted from here.
+    stats: jsonb("stats"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_player_week_stats_season_week_player").on(
+      table.seasonId,
+      table.week,
+      table.playerId,
+    ),
+    index("idx_player_week_stats_player_id").on(table.playerId),
+    index("idx_player_week_stats_season_week").on(table.seasonId, table.week),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // nfl_games
 // ---------------------------------------------------------------------------
 // NFL schedule rows from Sleeper's schedule endpoint, keyed by game_id. Powers
@@ -569,6 +627,9 @@ export type NewRosterPlayer = typeof rosterPlayers.$inferInsert;
 
 export type PlayerWeekPoints = typeof playerWeekPoints.$inferSelect;
 export type NewPlayerWeekPoints = typeof playerWeekPoints.$inferInsert;
+
+export type PlayerWeekStats = typeof playerWeekStats.$inferSelect;
+export type NewPlayerWeekStats = typeof playerWeekStats.$inferInsert;
 
 export type NflGame = typeof nflGames.$inferSelect;
 export type NewNflGame = typeof nflGames.$inferInsert;

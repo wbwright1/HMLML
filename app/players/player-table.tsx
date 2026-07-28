@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, type KeyboardEvent } from "react";
 import Link from "next/link";
+
 import { Search, ChevronUp, ChevronDown, ArrowUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,7 +18,37 @@ import {
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { EmptyState } from "@/components/empty-state";
 import { AwardChipRow, type AwardChipData } from "@/components/award-chip";
+import { cn } from "@/lib/utils";
 import type { RosteredPlayer } from "@/lib/queries/players";
+
+/**
+ * Inlined equivalent of components/player-link.tsx (a server component) for
+ * use inside this client component. Same falsy-playerId fallback + hover
+ * treatment; kept in lockstep by hand since it can't be imported here.
+ */
+function PlayerLink({
+  playerId,
+  children,
+  className,
+}: {
+  playerId: string | null | undefined;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  if (!playerId) {
+    return <>{children}</>;
+  }
+
+  return (
+    <Link
+      href={`/players/${playerId}`}
+      prefetch={false}
+      className={cn("transition-colors hover:text-accent-gold", className)}
+    >
+      {children}
+    </Link>
+  );
+}
 
 /**
  * A RosteredPlayer enriched with the current-week PROJ signal and the
@@ -426,7 +457,7 @@ export function PlayerTable({
                 className="border-b border-divider last:border-0 hover:bg-surface transition-colors"
               >
                 <td className="py-3 pr-4">
-                  <div className="flex items-center gap-3">
+                  <PlayerLink playerId={player.id} className="flex items-center gap-3">
                     <PlayerHeadshot
                       playerId={player.id}
                       name={player.fullName ?? "Unknown"}
@@ -444,7 +475,7 @@ export function PlayerTable({
                         {player.nflTeam ?? "FA"} &middot; {player.position ?? "-"}
                       </p>
                     </div>
-                  </div>
+                  </PlayerLink>
                 </td>
                 <td className="py-3 pr-4 text-right">
                   <span className="text-stat text-text-primary">
@@ -511,7 +542,7 @@ export function PlayerTable({
             className="card-surface p-4 space-y-3"
           >
             <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-3">
+              <PlayerLink playerId={player.id} className="flex min-w-0 items-center gap-3">
                 <PlayerHeadshot
                   playerId={player.id}
                   name={player.fullName ?? "Unknown"}
@@ -529,7 +560,7 @@ export function PlayerTable({
                     {player.nflTeam ?? "FA"} &middot; {player.position ?? "-"}
                   </p>
                 </div>
-              </div>
+              </PlayerLink>
               <div className="shrink-0 text-right">
                 <p className="text-stat text-text-primary">
                   {player.pointsPpr != null ? player.pointsPpr.toFixed(1) : "-"}

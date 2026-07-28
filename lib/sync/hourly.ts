@@ -6,8 +6,12 @@ import {
   franchiseSeasons,
   rosterPlayers,
   playerWeekPoints,
+  playerWeekStats,
+  players,
+  draftPicks,
   nflGames,
   type NewPlayerWeekPoints,
+  type NewPlayerWeekStats,
   type NewNflGame,
 } from "@/lib/db/schema";
 import { eq, and, sql } from "drizzle-orm";
@@ -17,14 +21,17 @@ import {
   getLeagueTransactions,
   getLeagueRosters,
   getWeekProjections,
+  getWeekStats,
   getNflSchedule,
 } from "@/lib/sleeper";
 import { resolveNflState } from "@/lib/sync/nfl-state";
 import type {
   SleeperMatchup,
   SleeperProjections,
+  SleeperWeekStats,
   SleeperScheduleGame,
 } from "@/lib/sleeper-schemas";
+import { mapWeekStatRow } from "@/lib/player-stats-map";
 import { alignStarterSlots, computeProjectedPoints } from "@/lib/lineup-slots";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
@@ -750,6 +757,185 @@ async function syncPlayerWeekPoints(
 }
 
 // ---------------------------------------------------------------------------
+// Step D2: Sync Per-Player Weekly Stats (box scores)
+// ---------------------------------------------------------------------------
+
+/**
+ * The "relevant" player universe for a season: every player that has ever been
+ * scored (player_week_points), currently rostered (roster_players), or drafted
+ * (draft_picks) in that season. player_week_stats is fetched for the whole NFL
+ * (~2,300 players/week) but we only persist rows for players connected to this
+ * league, keeping the table lean. Also returns a position lookup Map from the
+ * players snapshot (Sleeper's stat map carries no position). Team-defense rows
+ * never appear here (no DEF slots in this league), so they are excluded
+ * naturally; FP_* pick pseudo-ids live only in player_values and never reach
+ * here either.
+ */
+export async function getRelevantPlayerIds(seasonId: number): Promise<{
+  playerIds: Set<string>;
+  positionByPlayerId: Map<string, string | null>;
+}> {
+  const [pwpRows, rosterRows, draftRows] = await Promise.all([
+    db
+      .selectDistinct({ playerId: playerWeekPoints.playerId })
+      .from(playerWeekPoints)
+      .where(eq(playerWeekPoints.seasonId, seasonId)),
+    db
+      .selectDistinct({ playerId: rosterPlayers.playerId })
+      .from(rosterPlayers)
+      .where(eq(rosterPlayers.seasonId, seasonId)),
+    db
+      .selectDistinct({ playerId: draftPicks.playerId })
+      .from(draftPicks)
+      .where(eq(draftPicks.seasonId, seasonId)),
+  ]);
+
+  const playerIds = new Set<string>();
+  for (const r of pwpRows) if (r.playerId) playerIds.add(r.playerId);
+  for (const r of rosterRows) if (r.playerId) playerIds.add(r.playerId);
+  for (const r of draftRows) if (r.playerId) playerIds.add(r.playerId);
+
+  // Position lookup for the relevant set (small; the whole players snapshot is
+  // large so restrict to the ids we care about).
+  const positionByPlayerId = new Map<string, string | null>();
+  if (playerIds.size > 0) {
+    const posRows = await db
+      .select({ id: players.id, position: players.position })
+      .from(players);
+    for (const p of posRows) {
+      if (playerIds.has(p.id)) positionByPlayerId.set(p.id, p.position ?? null);
+    }
+  }
+
+  return { playerIds, positionByPlayerId };
+}
+
+export interface PlayerWeekStatsWriteInput {
+  seasonId: number;
+  week: number;
+  stats: SleeperWeekStats;
+  relevantPlayerIds: Set<string>;
+  positionByPlayerId: Map<string, string | null>;
+}
+
+/**
+ * Core write logic for player_week_stats, shared by the hourly sync and the
+ * historical backfill. Filters the full-league Sleeper stat map down to the
+ * relevant player universe, maps each to a curated + jsonb row, dedupes by
+ * playerId, and batch-upserts (chunks of 100) on the (season, week, player)
+ * unique index. Returns the number of rows written.
+ */
+export async function upsertPlayerWeekStats(
+  input: PlayerWeekStatsWriteInput
+): Promise<number> {
+  const { seasonId, week, stats, relevantPlayerIds, positionByPlayerId } = input;
+
+  const now = new Date();
+  const rowMap = new Map<string, NewPlayerWeekStats>();
+
+  for (const [playerId, statMap] of Object.entries(stats)) {
+    if (!relevantPlayerIds.has(playerId)) continue;
+    if (!statMap) continue;
+    const row = mapWeekStatRow({
+      seasonId,
+      week,
+      playerId,
+      position: positionByPlayerId.get(playerId) ?? null,
+      statMap,
+    });
+    row.updatedAt = now;
+    rowMap.set(playerId, row);
+  }
+
+  const rows = [...rowMap.values()];
+  if (rows.length === 0) return 0;
+
+  for (const batch of chunk(rows, 100)) {
+    await db
+      .insert(playerWeekStats)
+      .values(batch)
+      .onConflictDoUpdate({
+        target: [
+          playerWeekStats.seasonId,
+          playerWeekStats.week,
+          playerWeekStats.playerId,
+        ],
+        set: {
+          position: sql`excluded.position`,
+          gamesPlayed: sql`excluded.games_played`,
+          passYd: sql`excluded.pass_yd`,
+          passTd: sql`excluded.pass_td`,
+          passInt: sql`excluded.pass_int`,
+          passAtt: sql`excluded.pass_att`,
+          passCmp: sql`excluded.pass_cmp`,
+          rushYd: sql`excluded.rush_yd`,
+          rushTd: sql`excluded.rush_td`,
+          rushAtt: sql`excluded.rush_att`,
+          rec: sql`excluded.rec`,
+          recYd: sql`excluded.rec_yd`,
+          recTd: sql`excluded.rec_td`,
+          recTgt: sql`excluded.rec_tgt`,
+          fumLost: sql`excluded.fum_lost`,
+          fgm: sql`excluded.fgm`,
+          fga: sql`excluded.fga`,
+          xpm: sql`excluded.xpm`,
+          stats: sql`excluded.stats`,
+          updatedAt: sql`excluded.updated_at`,
+        },
+      });
+  }
+
+  return rows.length;
+}
+
+async function syncPlayerWeekStats(
+  seasonId: number,
+  seasonYear: number,
+  week: number
+): Promise<SyncStepResult> {
+  const startTime = Date.now();
+  const logId = await logSyncStart("hourly", "player_week_stats");
+
+  try {
+    const result = await getWeekStats(seasonYear, week);
+    if ("error" in result) {
+      throw new Error(`Sleeper week stats API error: ${result.error.message}`);
+    }
+
+    const { playerIds, positionByPlayerId } =
+      await getRelevantPlayerIds(seasonId);
+
+    const rowCount = await upsertPlayerWeekStats({
+      seasonId,
+      week,
+      stats: result.data,
+      relevantPlayerIds: playerIds,
+      positionByPlayerId,
+    });
+
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "success", rowCount);
+    return {
+      dataType: "player_week_stats",
+      status: "success",
+      rowCount,
+      durationMs,
+    };
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "failure", 0, errorMessage);
+    return {
+      dataType: "player_week_stats",
+      status: "failure",
+      rowCount: 0,
+      durationMs,
+      error: errorMessage,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Step E: Sync NFL Schedule (game statuses)
 // ---------------------------------------------------------------------------
 
@@ -967,6 +1153,7 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
     syncRostersAndPicks(leagueId, seasonId),
     syncMatchupScores(leagueId, seasonId, seasonYear, currentWeek),
     syncPlayerWeekPoints(leagueId, seasonId, seasonYear, currentWeek),
+    syncPlayerWeekStats(seasonId, seasonYear, currentWeek),
   ]);
 
   const dataTypes = [
@@ -974,6 +1161,7 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
     "rosters",
     "matchups",
     "player_week_points",
+    "player_week_stats",
   ];
   const stepResults: SyncStepResult[] = results.map((r, i) => {
     if (r.status === "fulfilled") {

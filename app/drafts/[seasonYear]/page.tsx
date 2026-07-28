@@ -8,6 +8,7 @@ import { ScrollReveal } from "@/components/scroll-reveal";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { PlayerHeadshot } from "@/components/player-headshot";
+import { PlayerLink } from "@/components/player-link";
 import { getPositionColor } from "@/lib/position-colors";
 import { teamAcronym } from "@/lib/team-acronym";
 import {
@@ -203,19 +204,21 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
 
       <div className="flex flex-1 items-center justify-center py-1.5">
         {pick.playerName ? (
-          <PlayerHeadshot
-            size={48}
-            playerId={pick.playerId}
-            name={pick.playerName}
-            showTeamBadge={false}
-            franchiseBadge={{
-              slug: pick.currentSlug,
-              name: pick.currentName,
-              abbreviation: pick.currentAbbreviation,
-              brandingColor: pick.currentBrandingColor,
-              avatarUrl: pick.currentAvatarUrl,
-            }}
-          />
+          <PlayerLink playerId={pick.playerId} className="contents">
+            <PlayerHeadshot
+              size={48}
+              playerId={pick.playerId}
+              name={pick.playerName}
+              showTeamBadge={false}
+              franchiseBadge={{
+                slug: pick.currentSlug,
+                name: pick.currentName,
+                abbreviation: pick.currentAbbreviation,
+                brandingColor: pick.currentBrandingColor,
+                avatarUrl: pick.currentAvatarUrl,
+              }}
+            />
+          </PlayerLink>
         ) : (
           <TeamCrest
             slug={pick.currentSlug}
@@ -230,12 +233,14 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
 
       <div>
         {pick.playerName && (
-          <p
-            className="line-clamp-2 text-center text-[12px] font-semibold leading-[1.15] text-text-primary"
-            title={pick.playerName}
-          >
-            {pick.playerName}
-          </p>
+          <PlayerLink playerId={pick.playerId} className="block">
+            <p
+              className="line-clamp-2 text-center text-[12px] font-semibold leading-[1.15] text-text-primary"
+              title={pick.playerName}
+            >
+              {pick.playerName}
+            </p>
+          </PlayerLink>
         )}
 
         {pick.roster && (
@@ -307,41 +312,48 @@ function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
         {pick.round}.{slot}
       </span>
       {pick.playerName ? (
-        <PlayerHeadshot
-          size={44}
-          playerId={pick.playerId}
-          name={pick.playerName}
-          showTeamBadge={false}
-          franchiseBadge={{
-            slug: pick.currentSlug,
-            name: pick.currentName,
-            abbreviation: pick.currentAbbreviation,
-            brandingColor: pick.currentBrandingColor,
-            avatarUrl: pick.currentAvatarUrl,
-          }}
-        />
+        <PlayerLink playerId={pick.playerId} className="flex min-w-0 flex-1 items-center gap-3">
+          <PlayerHeadshot
+            size={44}
+            playerId={pick.playerId}
+            name={pick.playerName}
+            showTeamBadge={false}
+            franchiseBadge={{
+              slug: pick.currentSlug,
+              name: pick.currentName,
+              abbreviation: pick.currentAbbreviation,
+              brandingColor: pick.currentBrandingColor,
+              avatarUrl: pick.currentAvatarUrl,
+            }}
+          />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-body font-semibold text-text-primary">{pick.playerName}</p>
+            {pick.originalName && (
+              <p className="truncate text-body-sm text-text-tertiary">via {pick.originalName}</p>
+            )}
+          </div>
+        </PlayerLink>
       ) : (
-        <TeamCrest
-          slug={pick.currentSlug}
-          name={pick.currentName}
-          abbreviation={pick.currentAbbreviation}
-          brandingColor={pick.currentBrandingColor}
-          avatarUrl={pick.currentAvatarUrl}
-        />
+        <>
+          <TeamCrest
+            slug={pick.currentSlug}
+            name={pick.currentName}
+            abbreviation={pick.currentAbbreviation}
+            brandingColor={pick.currentBrandingColor}
+            avatarUrl={pick.currentAvatarUrl}
+          />
+          <div className="min-w-0 flex-1">
+            {pick.roster && (
+              <p className="truncate font-mono text-body-sm tabular-nums text-text-secondary">
+                {pick.roster.QB} QB, {pick.roster.RB} RB, {pick.roster.WR} WR, {pick.roster.TE} TE
+              </p>
+            )}
+            {pick.originalName && (
+              <p className="truncate text-body-sm text-text-tertiary">via {pick.originalName}</p>
+            )}
+          </div>
+        </>
       )}
-      <div className="min-w-0 flex-1">
-        {pick.playerName && (
-          <p className="truncate text-body font-semibold text-text-primary">{pick.playerName}</p>
-        )}
-        {pick.roster && (
-          <p className="truncate font-mono text-body-sm tabular-nums text-text-secondary">
-            {pick.roster.QB} QB, {pick.roster.RB} RB, {pick.roster.WR} WR, {pick.roster.TE} TE
-          </p>
-        )}
-        {pick.originalName && (
-          <p className="truncate text-body-sm text-text-tertiary">via {pick.originalName}</p>
-        )}
-      </div>
       {pick.playerPosition && (
         <span
           className="shrink-0 rounded-full px-2 py-0.5 text-[12px] font-medium uppercase tracking-[0.06em]"

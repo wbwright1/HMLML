@@ -85,6 +85,13 @@
       "when": 1785170494838,
       "tag": "0011_slim_wolverine",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785200485822,
+      "tag": "0012_medical_veda",
+      "breakpoints": true
     }
   ]
 }

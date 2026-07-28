@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getAwardIcon } from "@/lib/award-icons";
 import { getLeagueLore, type LoreFranchiseBadge, type LorePiece } from "@/lib/queries/lore";
 import { PlayerHeadshot } from "@/components/player-headshot";
+import { PlayerLink } from "@/components/player-link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 
 // Matches any numeral (with an optional decimal point) so a story sentence's
@@ -100,6 +101,23 @@ function FranchiseCrestStrip({ franchises }: { franchises: LoreFranchiseBadge[] 
 }
 
 function LoreCard({ piece }: { piece: LorePiece }) {
+  // The card body already links to /teams/[slug] via piece.href for pieces
+  // with a franchise crest (see lib/queries/lore.ts); nesting a second anchor
+  // around the player name there would nest <a> tags, so the name link is
+  // only added when the card itself is NOT already a link.
+  const nameBlock = (
+    <div className="flex items-center gap-3 mb-1">
+      <PlayerHeadshot
+        playerId={piece.playerId}
+        name={piece.playerName}
+        size={56}
+        showTeamBadge={false}
+        franchiseBadge={piece.franchiseBadge ?? null}
+      />
+      <p className="text-h3 text-text-primary">{piece.playerName}</p>
+    </div>
+  );
+
   const content = (
     <>
       <p className={`text-kicker mb-2 ${kickerClass(piece)}`}>
@@ -108,16 +126,13 @@ function LoreCard({ piece }: { piece: LorePiece }) {
           {piece.title}
         </span>
       </p>
-      <div className="flex items-center gap-3 mb-1">
-        <PlayerHeadshot
-          playerId={piece.playerId}
-          name={piece.playerName}
-          size={56}
-          showTeamBadge={false}
-          franchiseBadge={piece.franchiseBadge ?? null}
-        />
-        <p className="text-h3 text-text-primary">{piece.playerName}</p>
-      </div>
+      {piece.href ? (
+        nameBlock
+      ) : (
+        <PlayerLink playerId={piece.playerId} className="contents">
+          {nameBlock}
+        </PlayerLink>
+      )}
       <p className="text-body-sm text-text-tertiary mt-1">
         {renderStory(piece.story, numeralClass(piece))}
       </p>

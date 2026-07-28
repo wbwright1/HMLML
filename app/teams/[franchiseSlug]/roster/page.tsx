@@ -7,6 +7,7 @@ import { MobileTableView } from "@/components/mobile-table-view";
 import { PositionBadge } from "@/components/position-badge";
 import { PlayerStatusBadge } from "@/components/player-status-badge";
 import { PlayerHeadshot } from "@/components/player-headshot";
+import { PlayerLink } from "@/components/player-link";
 import { NflTeamLogo } from "@/components/nfl-team-logo";
 import { EmptyState } from "@/components/empty-state";
 import {
@@ -109,19 +110,24 @@ function RosterSection({
             const row = [
               <PositionBadge key="slot" position={player.position} />,
               <div key="player" className="flex items-center gap-2.5">
-                {player.position === "DEF" ? (
-                  <NflTeamLogo teamAbbrev={player.nflTeam} size={44} />
-                ) : (
-                  <PlayerHeadshot
-                    playerId={player.playerId}
-                    name={name}
-                    size={44}
-                    nflTeam={player.nflTeam}
-                  />
-                )}
-                <span className="font-medium text-text-primary truncate">
-                  {name}
-                </span>
+                <PlayerLink
+                  playerId={player.position === "DEF" ? null : player.playerId}
+                  className="flex min-w-0 items-center gap-2.5"
+                >
+                  {player.position === "DEF" ? (
+                    <NflTeamLogo teamAbbrev={player.nflTeam} size={44} />
+                  ) : (
+                    <PlayerHeadshot
+                      playerId={player.playerId}
+                      name={name}
+                      size={44}
+                      nflTeam={player.nflTeam}
+                    />
+                  )}
+                  <span className="font-medium text-text-primary truncate">
+                    {name}
+                  </span>
+                </PlayerLink>
               </div>,
               <span key="team" className="text-text-secondary">
                 {player.nflTeam ?? "FA"}

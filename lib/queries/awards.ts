@@ -247,6 +247,48 @@ export async function getSeasonAwards(seasonId: number): Promise<AwardEntry[]> {
   }
 }
 
+/**
+ * Every league award held by a single player, season-descending, with franchise
+ * crest info (and avatar). Uses the same row shape/toEntry mapping as the Trophy
+ * Case. Empty on missing table / error. Powers the player-profile award rail.
+ */
+export async function getAwardsForPlayer(
+  playerId: string,
+): Promise<AwardEntry[]> {
+  try {
+    const rows = await db
+      .select({
+        id: leagueAwards.id,
+        awardType: leagueAwards.awardType,
+        seasonYear: seasons.seasonYear,
+        playerId: leagueAwards.playerId,
+        playerName: leagueAwards.playerName,
+        position: leagueAwards.position,
+        note: leagueAwards.note,
+        franchiseId: leagueAwards.franchiseId,
+        franchiseSlug: franchises.slug,
+        franchiseName: franchises.name,
+        franchiseAbbreviation: franchises.abbreviation,
+        franchiseBrandingColor: franchises.brandingColor,
+      })
+      .from(leagueAwards)
+      .innerJoin(seasons, eq(leagueAwards.seasonId, seasons.id))
+      .leftJoin(franchises, eq(leagueAwards.franchiseId, franchises.id))
+      .where(eq(leagueAwards.playerId, playerId))
+      .orderBy(desc(seasons.seasonYear));
+
+    const franchiseIds = [
+      ...new Set(rows.map((r) => r.franchiseId).filter((v): v is string => !!v)),
+    ];
+    const avatarUrls = await getLatestAvatarUrls(franchiseIds);
+
+    return rows.map((r) => toEntry(r as RawAwardRow, avatarUrls));
+  } catch (error) {
+    logUnlessMissingTable("getAwardsForPlayer", error);
+    return [];
+  }
+}
+
 export interface PlayerAwardBadge {
   awardType: AwardType;
   seasonYear: number;

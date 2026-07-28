@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PlayerHeadshot } from "@/components/player-headshot";
+import { PlayerLink } from "@/components/player-link";
 import { PlayerStatusBadge } from "@/components/player-status-badge";
 import { AwardChipRow, type AwardChipData } from "@/components/award-chip";
 
@@ -33,17 +34,21 @@ export function PlayerSearchResultCard({
   return (
     <div className="card-surface p-4 transition-colors hover:bg-surface-muted">
       <div className="flex items-center gap-4">
-        <PlayerHeadshot
-          playerId={playerId}
-          name={playerName}
-          size={72}
-          nflTeam={nflTeam}
-        />
+        <PlayerLink playerId={playerId} className="flex shrink-0 items-center">
+          <PlayerHeadshot
+            playerId={playerId}
+            name={playerName}
+            size={72}
+            nflTeam={nflTeam}
+          />
+        </PlayerLink>
 
         {/* Player info */}
         <div className="flex-1 min-w-0 space-y-1">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="text-body font-bold text-text-primary truncate">{playerName}</p>
+            <PlayerLink playerId={playerId}>
+              <p className="text-body font-bold text-text-primary truncate">{playerName}</p>
+            </PlayerLink>
             <AwardChipRow awards={awards} />
           </div>
           <div className="flex flex-wrap items-center gap-2 text-body-sm text-text-tertiary">

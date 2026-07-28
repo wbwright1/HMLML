@@ -237,6 +237,17 @@ export const SleeperPlayerStatsSchema = z.record(
 );
 export type SleeperPlayerStats = z.infer<typeof SleeperPlayerStatsSchema>;
 
+// ─── Week Stats ───────────────────────────────────────────────────────────────
+// From api.sleeper.app/v1/stats/nfl/regular/{season}/{week}: a record keyed by
+// player_id, each value a stat map (pass_yd, rush_td, rec, pts_ppr, gp, plus
+// many advanced metrics). Inner values are numbers; some can be null, so the
+// inner record is nullable-valued (mirrors SleeperProjectionsSchema).
+export const SleeperWeekStatsSchema = z.record(
+  z.string(), // player_id
+  z.record(z.string(), z.number().nullable())
+);
+export type SleeperWeekStats = z.infer<typeof SleeperWeekStatsSchema>;
+
 // ─── Projections ──────────────────────────────────────────────────────────────
 // Keyed by player_id; each value is a stat map (pass_yd, rush_td, pts_ppr, etc.).
 // Some stat values can be null, so inner values are nullable.

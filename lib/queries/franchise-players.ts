@@ -43,11 +43,11 @@ export interface RosterEvent {
   tradePicksInvolved?: number;
 }
 
-function eventOrderKey(e: RosterEvent): [number, number, number] {
+export function eventOrderKey(e: RosterEvent): [number, number, number] {
   return [e.seasonYear, e.week, e.sleeperMs];
 }
 
-function compareEventKeys(a: [number, number, number], b: [number, number, number]): number {
+export function compareEventKeys(a: [number, number, number], b: [number, number, number]): number {
   for (let i = 0; i < 3; i++) {
     if (a[i] !== b[i]) return a[i] - b[i];
   }
