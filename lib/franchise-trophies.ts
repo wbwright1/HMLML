@@ -7,18 +7,27 @@
 import type { AwardEntry } from "@/lib/queries/awards";
 import {
   AWARD_METADATA,
-  AWARD_TYPE_ORDER,
   isAwardType,
+  TROPHY_CASE_AWARD_ORDER,
   type AwardType,
 } from "@/lib/awards";
 
 export interface FranchiseTrophySeason {
   seasonYear: number;
   playoffResult: string | null;
+  wins: number | null;
+  losses: number | null;
+  ties: number | null;
 }
 
 export type FranchiseTrophy =
-  | { kind: "championship"; seasonYear: number }
+  | {
+      kind: "championship";
+      seasonYear: number;
+      wins: number | null;
+      losses: number | null;
+      ties: number | null;
+    }
   | {
       kind: "award";
       seasonYear: number;
@@ -30,10 +39,11 @@ export type FranchiseTrophy =
 
 /**
  * Builds the trophy list for a franchise: championships first (season-year
- * descending), then player awards (already season-descending as returned by
- * getFranchiseAwards). Repeat winners each get their own card. Unknown award
- * types (defensive, in case the awards table ever grows beyond the three
- * canonical types) are dropped rather than shown unlabeled.
+ * descending), then player awards grouped by TROPHY_CASE_AWARD_ORDER (each
+ * group already season-descending as returned by getFranchiseAwards). Repeat
+ * winners each get their own card. Unknown award types (defensive, in case
+ * the awards table ever grows beyond the three canonical types) are dropped
+ * rather than shown unlabeled.
  */
 export function buildFranchiseTrophies(
   seasonHistory: FranchiseTrophySeason[],
@@ -42,18 +52,31 @@ export function buildFranchiseTrophies(
   const championships: FranchiseTrophy[] = seasonHistory
     .filter((s) => s.playoffResult === "champion")
     .sort((a, b) => b.seasonYear - a.seasonYear)
-    .map((s) => ({ kind: "championship", seasonYear: s.seasonYear }));
-
-  const playerAwards: FranchiseTrophy[] = awards
-    .filter((a) => isAwardType(a.awardType))
-    .map((a) => ({
-      kind: "award",
-      seasonYear: a.seasonYear,
-      awardType: a.awardType,
-      playerId: a.playerId,
-      playerName: a.playerName,
-      position: a.position,
+    .map((s) => ({
+      kind: "championship",
+      seasonYear: s.seasonYear,
+      wins: s.wins,
+      losses: s.losses,
+      ties: s.ties,
     }));
+
+  const validAwards = awards.filter((a) => isAwardType(a.awardType));
+
+  const playerAwards: FranchiseTrophy[] = TROPHY_CASE_AWARD_ORDER.flatMap(
+    (awardType) =>
+      validAwards
+        .filter((a) => a.awardType === awardType)
+        .map(
+          (a): FranchiseTrophy => ({
+            kind: "award",
+            seasonYear: a.seasonYear,
+            awardType: a.awardType,
+            playerId: a.playerId,
+            playerName: a.playerName,
+            position: a.position,
+          }),
+        ),
+  );
 
   return [...championships, ...playerAwards];
 }
@@ -68,8 +91,9 @@ export interface FranchiseTrophyGroup {
 
 /**
  * Groups a flat trophy list into one row per award type (championships
- * first, then AWARD_TYPE_ORDER). Award types with zero wins are omitted
- * entirely; trophies within a group keep their season-descending order.
+ * first, then TROPHY_CASE_AWARD_ORDER). Award types with zero wins are
+ * omitted entirely; trophies within a group keep their season-descending
+ * order.
  */
 export function groupFranchiseTrophies(
   trophies: FranchiseTrophy[],
@@ -85,7 +109,7 @@ export function groupFranchiseTrophies(
     });
   }
 
-  for (const awardType of AWARD_TYPE_ORDER) {
+  for (const awardType of TROPHY_CASE_AWARD_ORDER) {
     const matches = trophies.filter(
       (t) => t.kind === "award" && t.awardType === awardType,
     );

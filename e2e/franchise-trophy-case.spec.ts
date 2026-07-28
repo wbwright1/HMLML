@@ -35,6 +35,32 @@ test.describe("Franchise Trophy Case", () => {
     await expect(trophyCase.getByText("Puka Nacua")).toBeVisible();
   });
 
+  test("the champion medallion shows the bowl name, a W-L record, and links to that season's playoffs", async ({
+    page,
+  }) => {
+    await page.goto("/teams/foopus");
+
+    const trophyCase = page.getByTestId("franchise-trophy-case");
+    await expect(trophyCase).toBeVisible();
+    await expect(trophyCase.getByText("HMLML Bowl III")).toBeVisible();
+    await expect(trophyCase.getByText(/\d+–\d+/).first()).toBeVisible();
+
+    const championLink = trophyCase.locator('a[href="/playoffs/2023"]');
+    await expect(championLink).toHaveCount(1);
+  });
+
+  test("a player award medallion links to the player profile route", async ({
+    page,
+  }) => {
+    await page.goto("/teams/foopus");
+
+    const trophyCase = page.getByTestId("franchise-trophy-case");
+    await expect(trophyCase).toBeVisible();
+
+    const playerLink = trophyCase.locator('a[href^="/players/"]').first();
+    await expect(playerLink).toBeVisible();
+  });
+
   test("a hardware-less franchise renders no Trophy Case section", async ({
     page,
   }) => {

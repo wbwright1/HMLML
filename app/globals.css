@@ -396,9 +396,145 @@
     }
 }
 
+/* =========================================================================
+   Medallion Podium trophy shelf — franchise/league Trophy Case
+   A minted-coin medallion raised on a small podium under a soft spotlight,
+   with an engraved plate carrying the data below. Mobile-first values with
+   a min-width:768px bump to the desktop mock's sizes. Values lifted from
+   docs/design_handoff_trophy_case/trophy-case-2a.html.
+   ========================================================================= */
+@layer components {
+    .medallion-item {
+        position: relative;
+        flex: none;
+        width: 150px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        transition: transform 150ms ease;
+    }
+    .medallion-item:hover {
+        transform: translateY(-4px);
+    }
+
+    .medallion-spotlight {
+        position: absolute;
+        inset-inline: 0;
+        top: 0;
+        height: 100%;
+        background: radial-gradient(
+            ellipse 50% 55% at 50% 26%,
+            rgba(226, 184, 88, 0.17),
+            transparent 70%
+        );
+        pointer-events: none;
+    }
+
+    .medallion-coin {
+        position: relative;
+        width: 66px;
+        height: 66px;
+        border-radius: 50%;
+        background: radial-gradient(circle at 35% 28%, #f1d392, #c89a3f 52%, #7a5e24);
+        box-shadow:
+            inset 0 0 0 3px rgba(0, 0, 0, 0.22),
+            inset 0 0 0 6px rgba(255, 244, 214, 0.35),
+            0 10px 24px rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .medallion-coin svg {
+        width: 32px;
+        height: 32px;
+    }
+
+    .medallion-podium {
+        position: relative;
+        width: 34px;
+        height: 9px;
+        background: linear-gradient(180deg, #8e6e2a, #4a3a12);
+        clip-path: polygon(12% 0, 88% 0, 100% 100%, 0 100%);
+        margin-top: -3px;
+    }
+
+    .medallion-plate {
+        position: relative;
+        width: 138px;
+        background: linear-gradient(180deg, #2e2820, #1d1813);
+        border: 1px solid rgba(226, 184, 88, 0.3);
+        border-bottom-width: 3px;
+        border-radius: 6px;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        margin-top: 10px;
+        padding: 8px 10px;
+    }
+
+    .medallion-plate-headshot {
+        display: inline-flex;
+        width: 28px;
+        height: 28px;
+        border-radius: 9999px;
+        overflow: hidden;
+        background: radial-gradient(
+            circle at 50% 34%,
+            rgba(255, 255, 255, 0.18),
+            rgba(255, 255, 255, 0.05)
+        );
+        box-shadow: 0 0 0 1.5px rgba(226, 184, 88, 0.5);
+    }
+
+    .medallion-strip {
+        display: flex;
+        gap: 20px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        padding: 12px 6px 2px;
+    }
+
+    .medallion-shelf-line {
+        height: 2px;
+        margin-top: 10px;
+        background: linear-gradient(
+            90deg,
+            rgba(226, 184, 88, 0.45),
+            rgba(226, 184, 88, 0.1) 70%,
+            transparent
+        );
+    }
+
+    @media (min-width: 768px) {
+        .medallion-item {
+            width: 190px;
+        }
+        .medallion-coin {
+            width: 88px;
+            height: 88px;
+        }
+        .medallion-coin svg {
+            width: 42px;
+            height: 42px;
+        }
+        .medallion-podium {
+            width: 44px;
+            height: 11px;
+        }
+        .medallion-plate {
+            width: 168px;
+        }
+        .medallion-strip {
+            gap: 34px;
+            padding: 14px 10px 4px;
+        }
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .reveal-on-load {
         animation: none;
+    }
+    .medallion-item:hover {
+        transform: none;
     }
 }
 

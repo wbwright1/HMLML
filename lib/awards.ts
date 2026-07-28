@@ -18,6 +18,18 @@ export const AWARD_TYPE_ORDER: AwardType[] = [
   AWARD_TYPES.ROOKIE_OF_YEAR,
 ];
 
+/**
+ * Trophy Case shelf order (franchise/league Medallion Podium): Championship
+ * MVP, then Regular Season MVP, then Rookie of the Year. Distinct from
+ * AWARD_TYPE_ORDER (MVP-first) — the Trophy Case leads with the
+ * championship-adjacent honor to sit right after the champion shelf.
+ */
+export const TROPHY_CASE_AWARD_ORDER: AwardType[] = [
+  AWARD_TYPES.CHAMPIONSHIP_MVP,
+  AWARD_TYPES.REGULAR_SEASON_MVP,
+  AWARD_TYPES.ROOKIE_OF_YEAR,
+];
+
 export interface AwardMeta {
   type: AwardType;
   /** Full column/title label, e.g. "Regular Season MVP". */
