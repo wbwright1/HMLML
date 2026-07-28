@@ -105,6 +105,12 @@ export interface TimelineEvent {
   franchise: TimelineFranchiseRef | null;
   /** Transaction id for deep links (trade_in/out, waiver_add, drop). */
   transactionId: string | null;
+  /**
+   * The transactions table's serial PK, distinct from transactionId (Sleeper's
+   * text id) — this is what /trades#trade-{id} anchors on (see trade-card.tsx).
+   * Only set for trade_in/trade_out events; null otherwise.
+   */
+  tradeDbId: number | null;
   // draft specifics
   draftType: string | null;
   draftRound: number | null;
@@ -131,6 +137,7 @@ function orderKey(e: TimelineEvent): [number, number, number] {
 }
 
 interface TransactionTimelineRow {
+  id: number;
   transactionId: string;
   seasonId: number;
   seasonYear: number;
@@ -211,6 +218,7 @@ export async function getPlayerTimeline(
           ? franchiseById.get(d.franchiseId) ?? null
           : null,
         transactionId: null,
+        tradeDbId: null,
         draftType: d.draftType,
         draftRound: d.round,
         draftPickNumber: d.pickNumber,
@@ -223,6 +231,7 @@ export async function getPlayerTimeline(
     // --- Transaction events (trade in/out, waiver add, drop) ---
     const txRows = (await db
       .select({
+        id: transactions.id,
         transactionId: transactions.transactionId,
         seasonId: transactions.seasonId,
         seasonYear: seasons.seasonYear,
@@ -253,6 +262,7 @@ export async function getPlayerTimeline(
             ? franchiseById.get(franchiseId) ?? null
             : null,
           transactionId: tx.transactionId,
+          tradeDbId: tx.type === "trade" ? tx.id : null,
           draftType: null,
           draftRound: null,
           draftPickNumber: null,
@@ -276,6 +286,7 @@ export async function getPlayerTimeline(
             ? franchiseById.get(franchiseId) ?? null
             : null,
           transactionId: tx.transactionId,
+          tradeDbId: tx.type === "trade" ? tx.id : null,
           draftType: null,
           draftRound: null,
           draftPickNumber: null,
@@ -298,6 +309,7 @@ export async function getPlayerTimeline(
           ? { id: a.franchise.id, name: a.franchise.name, slug: a.franchise.slug }
           : null,
         transactionId: null,
+        tradeDbId: null,
         draftType: null,
         draftRound: null,
         draftPickNumber: null,
@@ -337,6 +349,7 @@ export async function getPlayerTimeline(
           sleeperMs: null,
           franchise: franchiseById.get(franchiseId) ?? null,
           transactionId: null,
+          tradeDbId: null,
           draftType: null,
           draftRound: null,
           draftPickNumber: null,
