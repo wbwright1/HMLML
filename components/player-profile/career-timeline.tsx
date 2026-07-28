@@ -20,8 +20,7 @@ function eventIcon(type: TimelineEvent["type"]) {
   switch (type) {
     case "drafted":
       return ClipboardList;
-    case "trade_in":
-    case "trade_out":
+    case "traded":
       return ArrowLeftRight;
     case "waiver_add":
       return UserPlus;
@@ -48,56 +47,68 @@ function eventDate(event: TimelineEvent): string {
 function eventCopy(event: TimelineEvent): React.ReactNode {
   const franchiseName = event.franchise?.name ?? "an unknown team";
   switch (event.type) {
-    case "drafted":
+    case "drafted": {
+      let draftCopy = "";
+      if (event.draftRound != null && event.draftPickInRound != null) {
+        draftCopy = `Round ${event.draftRound}, Pick ${event.draftPickInRound}`;
+        if (
+          event.draftPickNumber != null &&
+          event.draftPickNumber !== event.draftPickInRound
+        ) {
+          draftCopy += ` · ${event.draftPickNumber} overall`;
+        }
+      } else if (event.draftRound != null && event.draftPickNumber != null) {
+        // Legacy picks without a resolvable per-round count: fall back to overall only.
+        draftCopy = `Round ${event.draftRound}, Pick ${event.draftPickNumber} overall`;
+      }
       return (
         <>
-          Drafted{" "}
-          {event.draftRound != null && event.draftPickNumber != null
-            ? `Round ${event.draftRound}, Pick ${event.draftPickNumber}`
-            : ""}{" "}
-          by {franchiseName}.
+          Drafted {draftCopy} by {franchiseName}.
         </>
       );
-    case "trade_in":
-      return (
+    }
+    case "traded": {
+      const dealLink = event.tradeDbId != null && (
         <>
-          Acquired by {franchiseName} via trade
-          {event.tradeDbId != null && (
-            <>
-              {" "}
-              (
-              <Link
-                href={`/trades#trade-${event.tradeDbId}`}
-                className="text-accent-gold hover:underline"
-              >
-                see the deal
-              </Link>
-              )
-            </>
-          )}
-          .
+          {" "}
+          (
+          <Link
+            href={`/trades#trade-${event.tradeDbId}`}
+            className="text-accent-gold hover:underline"
+          >
+            see the deal
+          </Link>
+          )
         </>
       );
-    case "trade_out":
-      return (
-        <>
-          Traded away from {franchiseName}
-          {event.tradeDbId != null && (
-            <>
-              {" "}
-              (
-              <Link
-                href={`/trades#trade-${event.tradeDbId}`}
-                className="text-accent-gold hover:underline"
-              >
-                see the deal
-              </Link>
-              )
-            </>
-          )}
-          .
-        </>
-      );
+      const fromName = event.tradeFromFranchise?.name;
+      const toName = event.tradeToFranchise?.name;
+      if (fromName && toName) {
+        return (
+          <>
+            Traded from {fromName} to {toName}
+            {dealLink}.
+          </>
+        );
+      }
+      if (toName) {
+        return (
+          <>
+            Acquired by {toName} via trade
+            {dealLink}.
+          </>
+        );
+      }
+      if (fromName) {
+        return (
+          <>
+            Traded away from {fromName}
+            {dealLink}.
+          </>
+        );
+      }
+      return <>Involved in a trade{dealLink}.</>;
+    }
     case "waiver_add":
       return <>Picked up off waivers by {franchiseName}.</>;
     case "drop":

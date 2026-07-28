@@ -11,7 +11,7 @@ import {
   rosterPlayers,
   seasons,
 } from "@/lib/db/schema";
-import { and, eq, gt, inArray } from "drizzle-orm";
+import { and, eq, gt, inArray, max } from "drizzle-orm";
 import { getPlayerById, type PlayerSearchResult } from "@/lib/queries/players";
 import { compareEventKeys } from "@/lib/queries/franchise-players";
 import {
@@ -20,6 +20,10 @@ import {
 } from "@/lib/queries/player-values";
 import { getAwardsForPlayer } from "@/lib/queries/awards";
 import type { AwardEntry } from "@/lib/queries/awards";
+import {
+  computeOwnershipStints,
+  type OwnershipPresence,
+} from "@/lib/player-ownership-stints";
 import {
   classifyPlayerWeekAvailability,
   getSeasonScheduleFacts,
@@ -165,8 +169,7 @@ export interface TimelineFranchiseRef {
 
 export type TimelineEventType =
   | "drafted"
-  | "trade_in"
-  | "trade_out"
+  | "traded"
   | "waiver_add"
   | "drop"
   | "award"
@@ -179,20 +182,32 @@ export interface TimelineEvent {
   week: number | null;
   /** Sleeper created-at ms, when known (transactions only) — for date display. */
   sleeperMs: number | null;
-  /** Franchise involved (null when unresolvable, e.g. a roster with no franchise mapping). */
+  /**
+   * Franchise involved. For "traded" events, this is the gaining franchise
+   * (falling back to the losing franchise when the gaining side is
+   * unresolvable) — see tradeFromFranchise/tradeToFranchise for both sides.
+   * Null when unresolvable, e.g. a roster with no franchise mapping.
+   */
   franchise: TimelineFranchiseRef | null;
-  /** Transaction id for deep links (trade_in/out, waiver_add, drop). */
+  /** Transaction id for deep links (traded, waiver_add, drop). */
   transactionId: string | null;
   /**
    * The transactions table's serial PK, distinct from transactionId (Sleeper's
    * text id) — this is what /trades#trade-{id} anchors on (see trade-card.tsx).
-   * Only set for trade_in/trade_out events; null otherwise.
+   * Only set for "traded" events; null otherwise.
    */
   tradeDbId: number | null;
+  /** The franchise the player was traded AWAY from (traded events only, null otherwise). */
+  tradeFromFranchise: TimelineFranchiseRef | null;
+  /** The franchise the player was traded TO (traded events only, null otherwise). */
+  tradeToFranchise: TimelineFranchiseRef | null;
   // draft specifics
   draftType: string | null;
   draftRound: number | null;
+  /** Overall pick number (draft_picks.pick_number, which IS overall). */
   draftPickNumber: number | null;
+  /** Pick number within the round (1-based), null when the draft's per-round pick count can't be determined (e.g. legacy picks). */
+  draftPickInRound: number | null;
   // award specifics
   awardType: string | null;
   awardNote: string | null;
@@ -289,6 +304,7 @@ export async function getPlayerTimeline(
     const draftRows = await db
       .select({
         seasonId: draftPicks.seasonId,
+        draftId: draftPicks.draftId,
         draftType: draftPicks.draftType,
         round: draftPicks.round,
         pickNumber: draftPicks.pickNumber,
@@ -297,9 +313,33 @@ export async function getPlayerTimeline(
       .from(draftPicks)
       .where(eq(draftPicks.playerId, playerId));
 
+    // Picks-per-round for each distinct draft this player was picked in
+    // (MAX(pick_number) WHERE round = 1), so the overall pick number can be
+    // converted to "pick N of the round". One batched query, not N.
+    const draftIds = [...new Set(draftRows.map((d) => d.draftId))];
+    const picksPerRoundByDraftId = new Map<string, number>();
+    if (draftIds.length > 0) {
+      const perRoundRows = await db
+        .select({
+          draftId: draftPicks.draftId,
+          maxPick: max(draftPicks.pickNumber),
+        })
+        .from(draftPicks)
+        .where(and(inArray(draftPicks.draftId, draftIds), eq(draftPicks.round, 1)))
+        .groupBy(draftPicks.draftId);
+      for (const r of perRoundRows) {
+        if (r.maxPick != null) picksPerRoundByDraftId.set(r.draftId, r.maxPick);
+      }
+    }
+
     for (const d of draftRows) {
       const year = yearBySeasonId.get(d.seasonId);
       if (year === undefined) continue;
+      const perRound = picksPerRoundByDraftId.get(d.draftId);
+      const draftPickInRound =
+        perRound != null && perRound > 0
+          ? d.pickNumber - (d.round - 1) * perRound
+          : null;
       events.push({
         type: "drafted",
         seasonYear: year,
@@ -310,16 +350,22 @@ export async function getPlayerTimeline(
           : null,
         transactionId: null,
         tradeDbId: null,
+        tradeFromFranchise: null,
+        tradeToFranchise: null,
         draftType: d.draftType,
         draftRound: d.round,
         draftPickNumber: d.pickNumber,
+        draftPickInRound,
         awardType: null,
         awardNote: null,
         stintEndSeasonYear: null,
       });
     }
 
-    // --- Transaction events (trade in/out, waiver add, drop) ---
+    // --- Transaction events (traded, waiver add, drop) ---
+    // A trade transaction touching this player produces ONE "traded" event
+    // (not a separate trade_in + trade_out pair) — the add side and drop side
+    // of the same transaction are the same deal, so they're merged here.
     const txRows = (await db
       .select({
         id: transactions.id,
@@ -340,12 +386,51 @@ export async function getPlayerTimeline(
 
     for (const tx of txRows) {
       const addRoster = tx.adds?.[playerId];
+      const dropRoster = tx.drops?.[playerId];
+      if (addRoster === undefined && dropRoster === undefined) continue;
+
+      if (tx.type === "trade") {
+        const toFranchiseId =
+          addRoster !== undefined
+            ? franchiseBySeasonRoster.get(`${tx.seasonId}:${addRoster}`)
+            : undefined;
+        const fromFranchiseId =
+          dropRoster !== undefined
+            ? franchiseBySeasonRoster.get(`${tx.seasonId}:${dropRoster}`)
+            : undefined;
+        const toFranchise = toFranchiseId
+          ? franchiseById.get(toFranchiseId) ?? null
+          : null;
+        const fromFranchise = fromFranchiseId
+          ? franchiseById.get(fromFranchiseId) ?? null
+          : null;
+        events.push({
+          type: "traded",
+          seasonYear: tx.seasonYear,
+          week: tx.week ?? null,
+          sleeperMs: tx.createdAtSleeper ?? null,
+          franchise: toFranchise ?? fromFranchise,
+          transactionId: tx.transactionId,
+          tradeDbId: tx.id,
+          tradeFromFranchise: fromFranchise,
+          tradeToFranchise: toFranchise,
+          draftType: null,
+          draftRound: null,
+          draftPickNumber: null,
+          draftPickInRound: null,
+          awardType: null,
+          awardNote: null,
+          stintEndSeasonYear: null,
+        });
+        continue;
+      }
+
       if (addRoster !== undefined) {
         const franchiseId = franchiseBySeasonRoster.get(
           `${tx.seasonId}:${addRoster}`,
         );
         events.push({
-          type: tx.type === "trade" ? "trade_in" : "waiver_add",
+          type: "waiver_add",
           seasonYear: tx.seasonYear,
           week: tx.week ?? null,
           sleeperMs: tx.createdAtSleeper ?? null,
@@ -353,23 +438,25 @@ export async function getPlayerTimeline(
             ? franchiseById.get(franchiseId) ?? null
             : null,
           transactionId: tx.transactionId,
-          tradeDbId: tx.type === "trade" ? tx.id : null,
+          tradeDbId: null,
+          tradeFromFranchise: null,
+          tradeToFranchise: null,
           draftType: null,
           draftRound: null,
           draftPickNumber: null,
+          draftPickInRound: null,
           awardType: null,
           awardNote: null,
           stintEndSeasonYear: null,
         });
       }
 
-      const dropRoster = tx.drops?.[playerId];
       if (dropRoster !== undefined) {
         const franchiseId = franchiseBySeasonRoster.get(
           `${tx.seasonId}:${dropRoster}`,
         );
         events.push({
-          type: tx.type === "trade" ? "trade_out" : "drop",
+          type: "drop",
           seasonYear: tx.seasonYear,
           week: tx.week ?? null,
           sleeperMs: tx.createdAtSleeper ?? null,
@@ -377,10 +464,13 @@ export async function getPlayerTimeline(
             ? franchiseById.get(franchiseId) ?? null
             : null,
           transactionId: tx.transactionId,
-          tradeDbId: tx.type === "trade" ? tx.id : null,
+          tradeDbId: null,
+          tradeFromFranchise: null,
+          tradeToFranchise: null,
           draftType: null,
           draftRound: null,
           draftPickNumber: null,
+          draftPickInRound: null,
           awardType: null,
           awardNote: null,
           stintEndSeasonYear: null,
@@ -409,64 +499,85 @@ export async function getPlayerTimeline(
           : null,
         transactionId: null,
         tradeDbId: null,
+        tradeFromFranchise: null,
+        tradeToFranchise: null,
         draftType: null,
         draftRound: null,
         draftPickNumber: null,
+        draftPickInRound: null,
         awardType: a.awardType,
         awardNote: a.note,
         stintEndSeasonYear: null,
       });
     }
 
-    // --- Stint events: contiguous runs of presence with one franchise ---
-    const presenceRows = await db
-      .selectDistinct({
+    // --- Stint events: honest ownership stints (see lib/player-ownership-stints.ts) ---
+    // Uses the same presence + stint-merging logic as the Ownership Ledger
+    // (getPlayerFranchiseHistory) so the timeline and the ledger never
+    // disagree: re-acquisitions produce separate stints, and a mid-season
+    // trade splits the season between the two adjacent stints.
+    const pwpPresenceRows = await db
+      .select({
         franchiseId: playerWeekPoints.franchiseId,
         seasonId: playerWeekPoints.seasonId,
+        week: playerWeekPoints.week,
       })
       .from(playerWeekPoints)
       .where(eq(playerWeekPoints.playerId, playerId));
 
-    const yearsByFranchise = new Map<string, number[]>();
-    for (const p of presenceRows) {
-      const year = yearBySeasonId.get(p.seasonId);
-      if (year === undefined) continue;
-      const list = yearsByFranchise.get(p.franchiseId) ?? [];
-      list.push(year);
-      yearsByFranchise.set(p.franchiseId, list);
+    const rosterPresenceRows = await db
+      .selectDistinct({
+        franchiseId: rosterPlayers.franchiseId,
+        seasonId: rosterPlayers.seasonId,
+      })
+      .from(rosterPlayers)
+      .where(eq(rosterPlayers.playerId, playerId));
+
+    const minWeekByKey = new Map<string, number>();
+    for (const p of pwpPresenceRows) {
+      const key = `${p.seasonId}:${p.franchiseId}`;
+      const existing = minWeekByKey.get(key);
+      if (existing === undefined || p.week < existing) {
+        minWeekByKey.set(key, p.week);
+      }
+    }
+    const stintPresence: OwnershipPresence[] = [];
+    const stintSeenKeys = new Set<string>();
+    for (const [key, week] of minWeekByKey) {
+      const [seasonIdStr, franchiseId] = key.split(":");
+      const year = yearBySeasonId.get(Number(seasonIdStr));
+      if (year == null) continue;
+      stintPresence.push({ franchiseId, seasonYear: year, minWeek: week });
+      stintSeenKeys.add(key);
+    }
+    for (const r of rosterPresenceRows) {
+      const key = `${r.seasonId}:${r.franchiseId}`;
+      if (stintSeenKeys.has(key)) continue;
+      const year = yearBySeasonId.get(r.seasonId);
+      if (year == null) continue;
+      stintPresence.push({ franchiseId: r.franchiseId, seasonYear: year, minWeek: null });
+      stintSeenKeys.add(key);
     }
 
-    for (const [franchiseId, years] of yearsByFranchise) {
-      const sorted = [...new Set(years)].sort((a, b) => a - b);
-      let runStart = sorted[0];
-      let prev = sorted[0];
-      const flush = (endYear: number) => {
-        events.push({
-          type: "stint",
-          seasonYear: runStart,
-          week: null,
-          sleeperMs: null,
-          franchise: franchiseById.get(franchiseId) ?? null,
-          transactionId: null,
-          tradeDbId: null,
-          draftType: null,
-          draftRound: null,
-          draftPickNumber: null,
-          awardType: null,
-          awardNote: null,
-          stintEndSeasonYear: endYear,
-        });
-      };
-      for (let i = 1; i < sorted.length; i++) {
-        if (sorted[i] === prev + 1) {
-          prev = sorted[i];
-          continue;
-        }
-        flush(prev);
-        runStart = sorted[i];
-        prev = sorted[i];
-      }
-      flush(prev);
+    for (const s of computeOwnershipStints(stintPresence)) {
+      events.push({
+        type: "stint",
+        seasonYear: s.firstSeasonYear,
+        week: null,
+        sleeperMs: null,
+        franchise: franchiseById.get(s.franchiseId) ?? null,
+        transactionId: null,
+        tradeDbId: null,
+        tradeFromFranchise: null,
+        tradeToFranchise: null,
+        draftType: null,
+        draftRound: null,
+        draftPickNumber: null,
+        draftPickInRound: null,
+        awardType: null,
+        awardNote: null,
+        stintEndSeasonYear: s.lastSeasonYear,
+      });
     }
 
     // Most recent first.
@@ -1116,9 +1227,14 @@ export interface FranchiseStint {
 }
 
 /**
- * Every franchise that has ever rostered the player, newest-last-season first.
- * Union of player_week_points (lineup history) and roster_players (covers
- * taxi/IR players who never hit a lineup).
+ * Every franchise stint the player has ever had, chronological (oldest
+ * first). A stint is a contiguous run of presence with one franchise —
+ * re-acquisitions after a gap (or after a trade away and back) produce
+ * SEPARATE stints, so a franchise can appear more than once in the returned
+ * array. Presence is the union of player_week_points (lineup history, with
+ * week granularity so a mid-season trade splits the season correctly between
+ * the two stints) and roster_players (covers taxi/IR players who never hit a
+ * lineup; contributes week=null presence).
  */
 export async function getPlayerFranchiseHistory(
   playerId: string,
@@ -1126,9 +1242,10 @@ export async function getPlayerFranchiseHistory(
   try {
     const [pwpRows, rosterRows] = await Promise.all([
       db
-        .selectDistinct({
+        .select({
           franchiseId: playerWeekPoints.franchiseId,
           seasonId: playerWeekPoints.seasonId,
+          week: playerWeekPoints.week,
         })
         .from(playerWeekPoints)
         .where(eq(playerWeekPoints.playerId, playerId)),
@@ -1141,15 +1258,44 @@ export async function getPlayerFranchiseHistory(
         .where(eq(rosterPlayers.playerId, playerId)),
     ]);
 
-    const pairs = [...pwpRows, ...rosterRows];
-    if (pairs.length === 0) return [];
+    if (pwpRows.length === 0 && rosterRows.length === 0) return [];
 
     const seasonRows = await db
       .select({ id: seasons.id, seasonYear: seasons.seasonYear })
       .from(seasons);
     const yearBySeasonId = new Map(seasonRows.map((s) => [s.id, s.seasonYear]));
 
-    const franchiseIds = [...new Set(pairs.map((p) => p.franchiseId))];
+    // Presence rows: min week per (franchise, season) from player_week_points,
+    // plus roster-only presence (week unknown) from roster_players.
+    const minWeekByKey = new Map<string, number>();
+    for (const p of pwpRows) {
+      const key = `${p.seasonId}:${p.franchiseId}`;
+      const existing = minWeekByKey.get(key);
+      if (existing === undefined || p.week < existing) {
+        minWeekByKey.set(key, p.week);
+      }
+    }
+    const presence: OwnershipPresence[] = [];
+    const seenKeys = new Set<string>();
+    for (const [key, week] of minWeekByKey) {
+      const [seasonIdStr, franchiseId] = key.split(":");
+      const year = yearBySeasonId.get(Number(seasonIdStr));
+      if (year == null) continue;
+      presence.push({ franchiseId, seasonYear: year, minWeek: week });
+      seenKeys.add(key);
+    }
+    for (const r of rosterRows) {
+      const key = `${r.seasonId}:${r.franchiseId}`;
+      if (seenKeys.has(key)) continue; // already have a real week from lineups
+      const year = yearBySeasonId.get(r.seasonId);
+      if (year == null) continue;
+      presence.push({ franchiseId: r.franchiseId, seasonYear: year, minWeek: null });
+      seenKeys.add(key);
+    }
+
+    if (presence.length === 0) return [];
+
+    const franchiseIds = [...new Set(presence.map((p) => p.franchiseId))];
     const franchiseRows = await db
       .select({ id: franchises.id, name: franchises.name, slug: franchises.slug })
       .from(franchises)
@@ -1165,27 +1311,6 @@ export async function getPlayerFranchiseHistory(
       .from(franchiseSeasons)
       .where(inArray(franchiseSeasons.franchiseId, franchiseIds));
 
-    const stints = new Map<string, FranchiseStint>();
-    for (const p of pairs) {
-      const year = yearBySeasonId.get(p.seasonId);
-      const franchise = franchiseById.get(p.franchiseId);
-      if (year == null || !franchise) continue;
-      const existing = stints.get(p.franchiseId);
-      if (existing) {
-        existing.firstSeasonYear = Math.min(existing.firstSeasonYear, year);
-        existing.lastSeasonYear = Math.max(existing.lastSeasonYear, year);
-      } else {
-        stints.set(p.franchiseId, {
-          franchiseId: p.franchiseId,
-          name: franchise.name,
-          slug: franchise.slug,
-          avatarUrl: null,
-          firstSeasonYear: year,
-          lastSeasonYear: year,
-        });
-      }
-    }
-
     // Latest-season avatar per franchise.
     const avatarByFranchise = new Map<string, { year: number; url: string }>();
     for (const a of avatarRows) {
@@ -1197,13 +1322,23 @@ export async function getPlayerFranchiseHistory(
         avatarByFranchise.set(a.franchiseId, { year, url: a.avatarUrl });
       }
     }
-    for (const stint of stints.values()) {
-      stint.avatarUrl = avatarByFranchise.get(stint.franchiseId)?.url ?? null;
-    }
 
-    return [...stints.values()].sort(
-      (a, b) => b.lastSeasonYear - a.lastSeasonYear || b.firstSeasonYear - a.firstSeasonYear,
-    );
+    const stints = computeOwnershipStints(presence);
+
+    return stints
+      .map((s) => {
+        const franchise = franchiseById.get(s.franchiseId);
+        if (!franchise) return null;
+        return {
+          franchiseId: s.franchiseId,
+          name: franchise.name,
+          slug: franchise.slug,
+          avatarUrl: avatarByFranchise.get(s.franchiseId)?.url ?? null,
+          firstSeasonYear: s.firstSeasonYear,
+          lastSeasonYear: s.lastSeasonYear,
+        } satisfies FranchiseStint;
+      })
+      .filter((s): s is FranchiseStint => s !== null);
   } catch (error) {
     console.error("[player-profile] getPlayerFranchiseHistory error:", error);
     return [];
