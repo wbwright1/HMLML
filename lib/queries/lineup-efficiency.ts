@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { db } from "@/lib/db";
 import {
   playerWeekPoints,
@@ -9,6 +10,19 @@ import {
 import { eq, and } from "drizzle-orm";
 import { deriveStartingSlots } from "@/lib/lineup-slots";
 import { SNARKY_LABELS, type LabelTone } from "@/lib/content";
+
+/**
+ * Lightweight id/name/slug lookup for every franchise, no filter. Called once
+ * per season by getSeasonLineupAwards (the records page fans this out across
+ * every season in Promise.all), so without dedup this identical unfiltered
+ * query runs once per season in a single request. Wrapped in React `cache()`
+ * so it executes at most once per request.
+ */
+const getAllFranchiseNames = cache(async function getAllFranchiseNames() {
+  return db
+    .select({ id: franchises.id, name: franchises.name, slug: franchises.slug })
+    .from(franchises);
+});
 
 // ---------------------------------------------------------------------------
 // Types
@@ -206,9 +220,7 @@ export async function getSeasonLineupAwards(
       );
     }
 
-    const franchiseRows = await db
-      .select({ id: franchises.id, name: franchises.name, slug: franchises.slug })
-      .from(franchises);
+    const franchiseRows = await getAllFranchiseNames();
     const franchiseLookup = new Map(franchiseRows.map((f) => [f.id, f]));
 
     const buildAward = (

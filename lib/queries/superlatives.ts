@@ -686,37 +686,41 @@ export async function getUncoveredFranchiseAwards(
   try {
     const covered = new Set(coveredSlugs);
 
-    const standings = await db
-      .select({
-        franchiseId: franchiseSeasons.franchiseId,
-        franchiseName: franchises.name,
-        franchiseSlug: franchises.slug,
-        wins: franchiseSeasons.wins,
-        losses: franchiseSeasons.losses,
-        ties: franchiseSeasons.ties,
-      })
-      .from(franchiseSeasons)
-      .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
-      .where(eq(franchiseSeasons.seasonId, seasonId));
+    // standings and matchupRows are independent queries (both scoped to
+    // seasonId, neither depends on the other's result), so they run
+    // concurrently.
+    const [standings, matchupRows] = await Promise.all([
+      db
+        .select({
+          franchiseId: franchiseSeasons.franchiseId,
+          franchiseName: franchises.name,
+          franchiseSlug: franchises.slug,
+          wins: franchiseSeasons.wins,
+          losses: franchiseSeasons.losses,
+          ties: franchiseSeasons.ties,
+        })
+        .from(franchiseSeasons)
+        .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
+        .where(eq(franchiseSeasons.seasonId, seasonId)),
+      db
+        .select({
+          matchupId: matchups.matchupId,
+          franchiseId: matchups.franchiseId,
+          week: matchups.week,
+          points: matchups.points,
+          isWinner: matchups.isWinner,
+        })
+        .from(matchups)
+        .where(
+          and(
+            eq(matchups.seasonId, seasonId),
+            eq(matchups.status, "complete"),
+            eq(matchups.isPlayoff, false),
+          ),
+        ),
+    ]);
 
     if (standings.length === 0) return [];
-
-    const matchupRows = await db
-      .select({
-        matchupId: matchups.matchupId,
-        franchiseId: matchups.franchiseId,
-        week: matchups.week,
-        points: matchups.points,
-        isWinner: matchups.isWinner,
-      })
-      .from(matchups)
-      .where(
-        and(
-          eq(matchups.seasonId, seasonId),
-          eq(matchups.status, "complete"),
-          eq(matchups.isPlayoff, false),
-        ),
-      );
 
     const byFranchise = new Map<string, typeof matchupRows>();
     for (const row of matchupRows) {
@@ -1044,24 +1048,47 @@ export async function getAllTimeSuperlativeCards(): Promise<SeasonSuperlative[]>
     }
 
     // On Fire / Rock Bottom: longest win/loss streak ever, per franchise per
-    // season, then the max across every completed season.
-    const gameRows = await db
-      .select({
-        franchiseId: matchups.franchiseId,
-        seasonId: matchups.seasonId,
-        week: matchups.week,
-        isWinner: matchups.isWinner,
-      })
-      .from(matchups)
-      .innerJoin(seasons, eq(matchups.seasonId, seasons.id))
-      .where(
-        and(
-          eq(seasons.status, "complete"),
-          eq(matchups.status, "complete"),
-          eq(matchups.isPlayoff, false),
+    // season, then the max across every completed season. gameRows and
+    // marginRows below are independent full-history matchup queries (neither
+    // depends on the other's result, nor on standingsRows/franchiseLookup
+    // already in hand), so both run concurrently.
+    const [gameRows, marginRows] = await Promise.all([
+      db
+        .select({
+          franchiseId: matchups.franchiseId,
+          seasonId: matchups.seasonId,
+          week: matchups.week,
+          isWinner: matchups.isWinner,
+        })
+        .from(matchups)
+        .innerJoin(seasons, eq(matchups.seasonId, seasons.id))
+        .where(
+          and(
+            eq(seasons.status, "complete"),
+            eq(matchups.status, "complete"),
+            eq(matchups.isPlayoff, false),
+          ),
+        )
+        .orderBy(asc(matchups.week)),
+      db
+        .select({
+          matchupId: matchups.matchupId,
+          franchiseId: matchups.franchiseId,
+          seasonId: matchups.seasonId,
+          week: matchups.week,
+          points: matchups.points,
+          isWinner: matchups.isWinner,
+        })
+        .from(matchups)
+        .innerJoin(seasons, eq(matchups.seasonId, seasons.id))
+        .where(
+          and(
+            eq(seasons.status, "complete"),
+            eq(matchups.status, "complete"),
+            eq(matchups.isPlayoff, false),
+          ),
         ),
-      )
-      .orderBy(asc(matchups.week));
+    ]);
 
     const byFranchiseSeason = new Map<
       string,
@@ -1137,26 +1164,7 @@ export async function getAllTimeSuperlativeCards(): Promise<SeasonSuperlative[]>
 
     // Mercy Rule / Cardiac Crew / Blowout Bait: margin awards computed from
     // every regular-season matchup ever played, paired by (season, week,
-    // matchup).
-    const marginRows = await db
-      .select({
-        matchupId: matchups.matchupId,
-        franchiseId: matchups.franchiseId,
-        seasonId: matchups.seasonId,
-        week: matchups.week,
-        points: matchups.points,
-        isWinner: matchups.isWinner,
-      })
-      .from(matchups)
-      .innerJoin(seasons, eq(matchups.seasonId, seasons.id))
-      .where(
-        and(
-          eq(seasons.status, "complete"),
-          eq(matchups.status, "complete"),
-          eq(matchups.isPlayoff, false),
-        ),
-      );
-
+    // matchup). marginRows was already fetched above alongside gameRows.
     const marginGroups = new Map<string, typeof marginRows>();
     for (const row of marginRows) {
       const key = `${row.seasonId}:${row.week}:${row.matchupId}`;

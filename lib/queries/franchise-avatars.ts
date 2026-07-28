@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { db } from "@/lib/db";
 import { franchiseSeasons, seasons } from "@/lib/db/schema";
 import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
@@ -12,12 +13,28 @@ import { and, desc, eq, inArray, isNotNull } from "drizzle-orm";
  * unavailable (e.g. a DB where migration 0008's member tables exist but its
  * franchise_seasons.avatar_url column has not landed), this degrades to an
  * empty map so callers fall back to monogram crests instead of throwing.
+ *
+ * Wrapped in React `cache()` for per-request dedup. `cache()` keys on
+ * SameValueZero equality of each argument, so two calls with different array
+ * *references* (the common case: separate query modules each building their
+ * own franchiseIds array from the same underlying rows) would not hit the
+ * same cache entry even with identical contents. This thin wrapper normalizes
+ * the id list into a sorted, deduped, comma-joined string key before handing
+ * off to the cached implementation, so calls with the same *set* of ids
+ * (regardless of array identity or order) dedupe to a single query.
  */
 export async function getLatestAvatarUrls(
   franchiseIds: readonly string[],
 ): Promise<Map<string, string>> {
+  const ids = [...new Set(franchiseIds)].sort();
+  return getLatestAvatarUrlsCached(ids.join(","));
+}
+
+const getLatestAvatarUrlsCached = cache(async function getLatestAvatarUrlsCached(
+  idsKey: string,
+): Promise<Map<string, string>> {
   const map = new Map<string, string>();
-  const ids = [...new Set(franchiseIds)];
+  const ids = idsKey.length > 0 ? idsKey.split(",") : [];
   if (ids.length === 0) return map;
 
   try {
@@ -46,4 +63,4 @@ export async function getLatestAvatarUrls(
   }
 
   return map;
-}
+});
