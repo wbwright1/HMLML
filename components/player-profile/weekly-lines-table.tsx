@@ -1,49 +1,14 @@
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
-import { MobileTableView } from "@/components/mobile-table-view";
 import type {
-  CuratedStatKey,
   PlayerWeeklyPointRow,
   PlayerWeeklyStatRow,
 } from "@/lib/queries/player-profile";
-
-interface StatColumn {
-  key: CuratedStatKey;
-  label: string;
-}
-
-const STAT_COLUMNS_BY_POSITION: Record<string, StatColumn[]> = {
-  QB: [
-    { key: "passYd", label: "Pass Yd" },
-    { key: "passTd", label: "Pass TD" },
-    { key: "passInt", label: "INT" },
-    { key: "rushYd", label: "Rush Yd" },
-    { key: "rushTd", label: "Rush TD" },
-  ],
-  RB: [
-    { key: "rushAtt", label: "Att" },
-    { key: "rushYd", label: "Rush Yd" },
-    { key: "rushTd", label: "Rush TD" },
-    { key: "rec", label: "Rec" },
-  ],
-  WR: [
-    { key: "recTgt", label: "Tgt" },
-    { key: "rec", label: "Rec" },
-    { key: "recYd", label: "Rec Yd" },
-    { key: "recTd", label: "Rec TD" },
-  ],
-  TE: [
-    { key: "recTgt", label: "Tgt" },
-    { key: "rec", label: "Rec" },
-    { key: "recYd", label: "Rec Yd" },
-    { key: "recTd", label: "Rec TD" },
-  ],
-  K: [
-    { key: "fgm", label: "FGM" },
-    { key: "fga", label: "FGA" },
-    { key: "xpm", label: "XPM" },
-  ],
-};
+import {
+  buildWeeklyLines,
+  STAT_COLUMNS_BY_POSITION,
+} from "./weekly-line-model";
+import { StatusChip, WeeklyLineCard } from "./weekly-line-card";
 
 interface WeeklyLinesTableProps {
   playerId: string;
@@ -124,8 +89,9 @@ function DeltaCell({ delta }: { delta: number | null }) {
 
 /**
  * The season's week-by-week line: points + slot + (once player_week_stats is
- * backfilled) position-appropriate stat columns. Renders points-only columns
- * gracefully when weeklyStats is empty (pre-backfill).
+ * backfilled) position-appropriate stat columns. Mobile renders purpose-built
+ * cards (WeeklyLineCard); desktop keeps the original table markup. Both read
+ * from the single `buildWeeklyLines` view-model so they can never disagree.
  */
 export function WeeklyLinesTable({
   playerId,
@@ -137,96 +103,8 @@ export function WeeklyLinesTable({
   variant,
 }: WeeklyLinesTableProps) {
   const statColumns = position ? (STAT_COLUMNS_BY_POSITION[position] ?? []) : [];
-  const statsByWeek = new Map(weeklyStats.map((s) => [s.week, s]));
-
-  const headers = [
-    "Week",
-    "Owner",
-    "Opp",
-    "Slot",
-    "Status",
-    "Proj",
-    "Actual",
-    "Δ",
-    ...(weeklyStats.length > 0 ? statColumns.map((c) => c.label) : []),
-  ];
-
-  // Union of lineup weeks and NFL-stat weeks: a season nobody in the league
-  // rostered the player still shows his real stat lines, with the league
-  // columns (owner/opponent/slot/status/points) blanked.
-  const pointsByWeek = new Map(weeklyPoints.map((w) => [w.week, w]));
-  const allWeeks = [
-    ...new Set([...pointsByWeek.keys(), ...statsByWeek.keys()]),
-  ].sort((a, b) => a - b);
-
-  const rows = allWeeks.map((week) => {
-    const w = pointsByWeek.get(week) ?? null;
-    // Unplayed weeks (projection-only rows) show no actual and no delta —
-    // a 0.0 actual would otherwise read as a fake negative delta.
-    const delta =
-      w && w.played && w.projectedPoints != null
-        ? w.points - w.projectedPoints
-        : null;
-    const stat = statsByWeek.get(week);
-
-    const ownerCell = w?.ownerFranchiseName ? (
-      <span className="inline-flex" title={w.ownerFranchiseName}>
-        <FranchiseLogo
-          slug={w.ownerFranchiseSlug ?? ""}
-          name={w.ownerFranchiseName}
-          avatarUrl={w.ownerAvatarUrl}
-          size={24}
-          decorative
-        />
-        <span className="sr-only">{w.ownerFranchiseName}</span>
-      </span>
-    ) : (
-      <span className="text-text-tertiary">&ndash;</span>
-    );
-
-    const opponentCell = w?.opponentFranchiseName ? (
-      <span className="inline-flex" title={w.opponentFranchiseName}>
-        <FranchiseLogo
-          slug={w.opponentFranchiseSlug ?? ""}
-          name={w.opponentFranchiseName}
-          avatarUrl={w.opponentAvatarUrl}
-          size={24}
-          decorative
-        />
-        <span className="sr-only">{w.opponentFranchiseName}</span>
-      </span>
-    ) : (
-      <span className="text-text-tertiary">&ndash;</span>
-    );
-
-    const statusCell = !w ? (
-      <span className="text-text-tertiary">&ndash;</span>
-    ) : w.started ? (
-      <span className="font-medium text-text-primary">START</span>
-    ) : (
-      <span className="text-text-tertiary">BENCH</span>
-    );
-
-    const row: (string | number | React.ReactNode)[] = [
-      week,
-      ownerCell,
-      opponentCell,
-      w?.slot ?? "–",
-      statusCell,
-      w?.projectedPoints != null ? w.projectedPoints.toFixed(1) : "–",
-      w && w.played ? w.points.toFixed(1) : "–",
-      <DeltaCell key="delta" delta={delta} />,
-    ];
-
-    if (weeklyStats.length > 0) {
-      for (const col of statColumns) {
-        const value = stat ? stat[col.key] : null;
-        row.push(value != null ? value.toString() : "–");
-      }
-    }
-
-    return row;
-  });
+  const showStats = weeklyStats.length > 0;
+  const lines = buildWeeklyLines(weeklyPoints, weeklyStats);
 
   return (
     <div className="space-y-4">
@@ -236,12 +114,127 @@ export function WeeklyLinesTable({
         selectedSeason={selectedSeason}
         variant={variant}
       />
-      {rows.length === 0 ? (
+      {lines.length === 0 ? (
         <p className="text-body-sm text-text-tertiary">
           No weekly lines recorded for this season.
         </p>
       ) : (
-        <MobileTableView headers={headers} rows={rows} primaryColumn={0} />
+        <>
+          {/* Mobile: purpose-built stat cards (hidden on md+) */}
+          <div className="md:hidden space-y-3" role="list">
+            {lines.map((line) => (
+              <WeeklyLineCard
+                key={line.week}
+                line={line}
+                statColumns={statColumns}
+                showStats={showStats}
+              />
+            ))}
+          </div>
+
+          {/* Desktop: full HTML table (hidden below md), visually unchanged */}
+          <div className="hidden md:block overflow-x-auto">
+            <table className="w-full text-left">
+              <thead>
+                <tr className="border-b border-border">
+                  {[
+                    "Week",
+                    "Owner",
+                    "Opp",
+                    "Slot",
+                    "Status",
+                    "Proj",
+                    "Actual",
+                    "Δ",
+                    ...(showStats ? statColumns.map((c) => c.label) : []),
+                  ].map((header) => (
+                    <th
+                      key={header}
+                      className="pb-3 pr-4 last:pr-0 text-left text-kicker"
+                    >
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {lines.map((line) => (
+                  <tr
+                    key={line.week}
+                    className="border-b border-divider last:border-0"
+                  >
+                    <td className="py-4 pr-4 text-sm text-text-secondary tabular-nums">
+                      {line.week}
+                    </td>
+                    <td className="py-4 pr-4 text-sm text-text-secondary tabular-nums">
+                      {line.owner ? (
+                        <span className="inline-flex" title={line.owner.name}>
+                          <FranchiseLogo
+                            slug={line.owner.slug ?? ""}
+                            name={line.owner.name}
+                            avatarUrl={line.owner.avatarUrl}
+                            size={24}
+                            decorative
+                          />
+                          <span className="sr-only">{line.owner.name}</span>
+                        </span>
+                      ) : (
+                        <span className="text-text-tertiary">&ndash;</span>
+                      )}
+                    </td>
+                    <td className="py-4 pr-4 text-sm text-text-secondary tabular-nums">
+                      {line.opponent ? (
+                        <span className="inline-flex" title={line.opponent.name}>
+                          <FranchiseLogo
+                            slug={line.opponent.slug ?? ""}
+                            name={line.opponent.name}
+                            avatarUrl={line.opponent.avatarUrl}
+                            size={24}
+                            decorative
+                          />
+                          <span className="sr-only">{line.opponent.name}</span>
+                        </span>
+                      ) : (
+                        <span className="text-text-tertiary">&ndash;</span>
+                      )}
+                    </td>
+                    <td className="py-4 pr-4 text-sm text-text-secondary tabular-nums">
+                      {line.slot ?? "–"}
+                    </td>
+                    <td className="py-4 pr-4 text-sm text-text-secondary tabular-nums">
+                      {line.rostered ? (
+                        <StatusChip status={line.status} />
+                      ) : (
+                        <span className="text-text-tertiary">&ndash;</span>
+                      )}
+                    </td>
+                    <td className="py-4 pr-4 text-sm text-text-secondary tabular-nums">
+                      {line.projected != null ? line.projected.toFixed(1) : "–"}
+                    </td>
+                    <td className="py-4 pr-4 text-sm text-text-secondary tabular-nums">
+                      {line.actual != null ? line.actual.toFixed(1) : "–"}
+                    </td>
+                    <td className="py-4 pr-4 text-sm text-text-secondary tabular-nums">
+                      <DeltaCell delta={line.delta} />
+                    </td>
+                    {showStats &&
+                      statColumns.map((col) => {
+                        const value = line.stat ? line.stat[col.key] : null;
+                        return (
+                          <td
+                            key={col.key}
+                            className="py-4 pr-4 last:pr-0 text-sm text-text-secondary tabular-nums"
+                          >
+                            {value != null ? value.toString() : "–"}
+                          </td>
+                        );
+                      })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
