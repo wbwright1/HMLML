@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { smackPosts, members, franchises } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
+import { resolveOwnerName } from "@/lib/owner-names";
 
 /**
  * The most recent member smack posts INCLUDING hidden ones, newest first, with
@@ -19,6 +20,7 @@ export async function getAllSmackPostsForModeration(limit: number) {
       createdAt: smackPosts.createdAt,
       memberId: smackPosts.memberId,
       memberDisplayName: members.displayName,
+      memberSleeperUserId: members.sleeperUserId,
       franchiseId: smackPosts.franchiseId,
       franchiseSlug: franchises.slug,
       franchiseName: franchises.name,
@@ -33,8 +35,16 @@ export async function getAllSmackPostsForModeration(limit: number) {
 
   const avatars = await getLatestAvatarUrls(rows.map((r) => r.franchiseId));
 
-  return rows.map((r) => ({
-    ...r,
-    franchiseAvatarUrl: avatars.get(r.franchiseId) ?? null,
-  }));
+  return rows.map((r) => {
+    const { memberSleeperUserId, ...rest } = r;
+    return {
+      ...rest,
+      memberDisplayName:
+        resolveOwnerName({
+          userId: memberSleeperUserId,
+          displayName: r.memberDisplayName,
+        }) ?? r.memberDisplayName,
+      franchiseAvatarUrl: avatars.get(r.franchiseId) ?? null,
+    };
+  });
 }

@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { members, franchises } from "@/lib/db/schema";
 import { eq, asc } from "drizzle-orm";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
+import { resolveOwnerName } from "@/lib/owner-names";
 
 /**
  * All members with their currently-controlled franchise joined (slug, name,
@@ -36,6 +37,9 @@ export async function getAllMembersWithFranchise() {
 
     return rows.map((r) => ({
       ...r,
+      displayName:
+        resolveOwnerName({ userId: r.sleeperUserId, displayName: r.displayName }) ??
+        r.displayName,
       franchiseAvatarUrl: r.franchiseId
         ? avatars.get(r.franchiseId) ?? null
         : null,
@@ -54,7 +58,15 @@ export async function getMemberBySleeperUserId(sleeperUserId: string) {
       .from(members)
       .where(eq(members.sleeperUserId, sleeperUserId))
       .limit(1);
-    return member ?? null;
+    if (!member) return null;
+    return {
+      ...member,
+      displayName:
+        resolveOwnerName({
+          userId: member.sleeperUserId,
+          displayName: member.displayName,
+        }) ?? member.displayName,
+    };
   } catch (e) {
     console.error("[members] getMemberBySleeperUserId error:", e);
     return null;

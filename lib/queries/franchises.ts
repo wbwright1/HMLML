@@ -9,6 +9,7 @@ import {
 } from "@/lib/db/schema";
 import { eq, desc, and, count, sum, sql } from "drizzle-orm";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
+import { resolveOwnerName, resolveCoOwnerNames } from "@/lib/owner-names";
 
 /**
  * Returns all franchises with aggregate career stats:
@@ -46,6 +47,7 @@ export const getAllFranchises = cache(async function getAllFranchises() {
     const ownerRowsQuery = db.execute(sql`
       SELECT DISTINCT ON (fs.franchise_id)
         fs.franchise_id,
+        fs.user_id,
         fs.owner_display_name,
         fs.co_owner_display_name
       FROM franchise_seasons fs
@@ -60,9 +62,13 @@ export const getAllFranchises = cache(async function getAllFranchises() {
 
     const ownerMap = new Map<string, { owner: string; coOwner?: string }>();
     for (const row of ownerRows.rows as Array<Record<string, unknown>>) {
+      const owner = resolveOwnerName({
+        userId: row.user_id as string | null,
+        displayName: row.owner_display_name as string,
+      });
       ownerMap.set(row.franchise_id as string, {
-        owner: row.owner_display_name as string,
-        coOwner: (row.co_owner_display_name as string) ?? undefined,
+        owner: owner as string,
+        coOwner: resolveCoOwnerNames(row.co_owner_display_name as string | null),
       });
     }
 
@@ -168,6 +174,15 @@ export const getFranchiseBySlug = cache(async function getFranchiseBySlug(
       getLatestAvatarUrls([franchise.id]),
     ]);
 
+    const seasonHistoryWithNames = seasonHistory.map((row) => ({
+      ...row,
+      ownerDisplayName: resolveOwnerName({
+        userId: row.userId,
+        displayName: row.ownerDisplayName,
+      }),
+      coOwnerDisplayName: resolveCoOwnerNames(row.coOwnerDisplayName),
+    }));
+
     // Compute aggregate stats
     let totalWins = 0;
     let totalLosses = 0;
@@ -186,7 +201,7 @@ export const getFranchiseBySlug = cache(async function getFranchiseBySlug(
       abbreviation: franchise.abbreviation ?? undefined,
       brandingColor: franchise.brandingColor ?? undefined,
       avatarUrl: avatarUrls.get(franchise.id) ?? null,
-      seasonHistory,
+      seasonHistory: seasonHistoryWithNames,
       totalWins,
       totalLosses,
       totalPointsScored,
