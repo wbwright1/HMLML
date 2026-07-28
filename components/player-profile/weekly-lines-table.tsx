@@ -52,36 +52,54 @@ interface WeeklyLinesTableProps {
   selectedSeason: number | null;
   weeklyPoints: PlayerWeeklyPointRow[];
   weeklyStats: PlayerWeeklyStatRow[];
+  variant: "modal" | "page";
 }
 
 function SeasonPicker({
   playerId,
   seasonsPresent,
   selectedSeason,
+  variant,
 }: {
   playerId: string;
   seasonsPresent: number[];
   selectedSeason: number | null;
+  variant: "modal" | "page";
 }) {
   if (seasonsPresent.length <= 1) return null;
   return (
     <nav aria-label="Season" className="flex gap-2 overflow-x-auto pb-1">
       {seasonsPresent.map((year) => {
         const isActive = year === selectedSeason;
-        return (
+        const href = `/players/${playerId}?season=${year}`;
+        const className = `shrink-0 rounded-full border px-3 py-1.5 text-body-sm font-medium tabular-nums transition-colors ${
+          isActive
+            ? "border-accent-gold/30 bg-accent-gold-light text-accent-gold"
+            : "border-border bg-surface text-text-tertiary hover:text-text-primary"
+        }`;
+        // Inside the modal a soft nav keeps the dialog open (the intercepted
+        // route re-renders with the new season). On the canonical full page a
+        // soft nav to the same path would be INTERCEPTED and pop the modal
+        // over the page — a hard navigation stays on the canonical route.
+        return variant === "modal" ? (
           <Link
             key={year}
-            href={`/players/${playerId}?season=${year}`}
+            href={href}
             scroll={false}
             aria-current={isActive ? "page" : undefined}
-            className={`shrink-0 rounded-full border px-3 py-1.5 text-body-sm font-medium tabular-nums transition-colors ${
-              isActive
-                ? "border-accent-gold/30 bg-accent-gold-light text-accent-gold"
-                : "border-border bg-surface text-text-tertiary hover:text-text-primary"
-            }`}
+            className={className}
           >
             {year}
           </Link>
+        ) : (
+          <a
+            key={year}
+            href={href}
+            aria-current={isActive ? "page" : undefined}
+            className={className}
+          >
+            {year}
+          </a>
         );
       })}
     </nav>
@@ -116,6 +134,7 @@ export function WeeklyLinesTable({
   selectedSeason,
   weeklyPoints,
   weeklyStats,
+  variant,
 }: WeeklyLinesTableProps) {
   const statColumns = position ? (STAT_COLUMNS_BY_POSITION[position] ?? []) : [];
   const statsByWeek = new Map(weeklyStats.map((s) => [s.week, s]));
@@ -132,14 +151,25 @@ export function WeeklyLinesTable({
     ...(weeklyStats.length > 0 ? statColumns.map((c) => c.label) : []),
   ];
 
-  const rows = weeklyPoints.map((w) => {
+  // Union of lineup weeks and NFL-stat weeks: a season nobody in the league
+  // rostered the player still shows his real stat lines, with the league
+  // columns (owner/opponent/slot/status/points) blanked.
+  const pointsByWeek = new Map(weeklyPoints.map((w) => [w.week, w]));
+  const allWeeks = [
+    ...new Set([...pointsByWeek.keys(), ...statsByWeek.keys()]),
+  ].sort((a, b) => a - b);
+
+  const rows = allWeeks.map((week) => {
+    const w = pointsByWeek.get(week) ?? null;
     // Unplayed weeks (projection-only rows) show no actual and no delta —
     // a 0.0 actual would otherwise read as a fake negative delta.
     const delta =
-      w.played && w.projectedPoints != null ? w.points - w.projectedPoints : null;
-    const stat = statsByWeek.get(w.week);
+      w && w.played && w.projectedPoints != null
+        ? w.points - w.projectedPoints
+        : null;
+    const stat = statsByWeek.get(week);
 
-    const ownerCell = w.ownerFranchiseName ? (
+    const ownerCell = w?.ownerFranchiseName ? (
       <span className="inline-flex" title={w.ownerFranchiseName}>
         <FranchiseLogo
           slug={w.ownerFranchiseSlug ?? ""}
@@ -154,7 +184,7 @@ export function WeeklyLinesTable({
       <span className="text-text-tertiary">&ndash;</span>
     );
 
-    const opponentCell = w.opponentFranchiseName ? (
+    const opponentCell = w?.opponentFranchiseName ? (
       <span className="inline-flex" title={w.opponentFranchiseName}>
         <FranchiseLogo
           slug={w.opponentFranchiseSlug ?? ""}
@@ -169,20 +199,22 @@ export function WeeklyLinesTable({
       <span className="text-text-tertiary">&ndash;</span>
     );
 
-    const statusCell = w.started ? (
+    const statusCell = !w ? (
+      <span className="text-text-tertiary">&ndash;</span>
+    ) : w.started ? (
       <span className="font-medium text-text-primary">START</span>
     ) : (
       <span className="text-text-tertiary">BENCH</span>
     );
 
     const row: (string | number | React.ReactNode)[] = [
-      w.week,
+      week,
       ownerCell,
       opponentCell,
-      w.slot ?? "–",
+      w?.slot ?? "–",
       statusCell,
-      w.projectedPoints != null ? w.projectedPoints.toFixed(1) : "–",
-      w.played ? w.points.toFixed(1) : "–",
+      w?.projectedPoints != null ? w.projectedPoints.toFixed(1) : "–",
+      w && w.played ? w.points.toFixed(1) : "–",
       <DeltaCell key="delta" delta={delta} />,
     ];
 
@@ -202,6 +234,7 @@ export function WeeklyLinesTable({
         playerId={playerId}
         seasonsPresent={seasonsPresent}
         selectedSeason={selectedSeason}
+        variant={variant}
       />
       {rows.length === 0 ? (
         <p className="text-body-sm text-text-tertiary">

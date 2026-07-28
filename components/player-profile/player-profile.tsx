@@ -75,6 +75,7 @@ export async function PlayerProfile({
           selectedSeason={selectedSeason}
           weeklyPoints={weeklyPoints}
           weeklyStats={weeklyStats}
+          variant={variant}
         />
       </div>
 

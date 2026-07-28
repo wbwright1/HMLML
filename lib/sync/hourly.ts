@@ -771,23 +771,24 @@ async function syncPlayerWeekPoints(
  * naturally; FP_* pick pseudo-ids live only in player_values and never reach
  * here either.
  */
-export async function getRelevantPlayerIds(seasonId: number): Promise<{
+export async function getRelevantPlayerIds(_seasonId?: number): Promise<{
   playerIds: Set<string>;
   positionByPlayerId: Map<string, string | null>;
 }> {
+  // Career-wide universe: any player who was EVER league-relevant (in any
+  // season's lineups, rosters, or drafts). Player profiles show a player's
+  // full NFL stat history, including seasons nobody in the league rostered
+  // them, so stat rows are stored for every season once a player qualifies.
   const [pwpRows, rosterRows, draftRows] = await Promise.all([
     db
       .selectDistinct({ playerId: playerWeekPoints.playerId })
-      .from(playerWeekPoints)
-      .where(eq(playerWeekPoints.seasonId, seasonId)),
+      .from(playerWeekPoints),
     db
       .selectDistinct({ playerId: rosterPlayers.playerId })
-      .from(rosterPlayers)
-      .where(eq(rosterPlayers.seasonId, seasonId)),
+      .from(rosterPlayers),
     db
       .selectDistinct({ playerId: draftPicks.playerId })
-      .from(draftPicks)
-      .where(eq(draftPicks.seasonId, seasonId)),
+      .from(draftPicks),
   ]);
 
   const playerIds = new Set<string>();
