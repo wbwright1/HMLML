@@ -3,6 +3,7 @@ import { smackPosts, members, franchises } from "@/lib/db/schema";
 import { and, count, desc, eq, gt } from "drizzle-orm";
 import { SMACK_MAX_LENGTH } from "@/lib/smack-shared";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
+import { resolveOwnerName } from "@/lib/owner-names";
 
 // Re-exported so existing server-side consumers keep importing the cap from the
 // query module; the canonical definition lives in the db-free lib/smack-shared.
@@ -52,6 +53,7 @@ export async function getRecentSmackPosts(limit: number) {
       createdAt: smackPosts.createdAt,
       memberId: smackPosts.memberId,
       memberDisplayName: members.displayName,
+      memberSleeperUserId: members.sleeperUserId,
       franchiseId: smackPosts.franchiseId,
       franchiseSlug: franchises.slug,
       franchiseName: franchises.name,
@@ -65,17 +67,29 @@ export async function getRecentSmackPosts(limit: number) {
     .orderBy(desc(smackPosts.createdAt))
     .limit(limit);
 
-  if (posts.length === 0) {
-    return posts.map((p) => ({ ...p, avatarUrl: null as string | null }));
+  const withResolvedNames = posts.map((p) => {
+    const { memberSleeperUserId, ...rest } = p;
+    return {
+      ...rest,
+      memberDisplayName:
+        resolveOwnerName({
+          userId: memberSleeperUserId,
+          displayName: p.memberDisplayName,
+        }) ?? p.memberDisplayName,
+    };
+  });
+
+  if (withResolvedNames.length === 0) {
+    return withResolvedNames.map((p) => ({ ...p, avatarUrl: null as string | null }));
   }
 
   // The crest avatar is decorative and resolved defensively; the helper
   // degrades to an empty map (monogram crests) rather than blanking the feed.
   const avatarByFranchise = await getLatestAvatarUrls(
-    posts.map((p) => p.franchiseId),
+    withResolvedNames.map((p) => p.franchiseId),
   );
 
-  return posts.map((p) => ({
+  return withResolvedNames.map((p) => ({
     ...p,
     avatarUrl: avatarByFranchise.get(p.franchiseId) ?? null,
   }));

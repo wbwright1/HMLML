@@ -2,6 +2,7 @@ import { cache } from "react";
 import { db } from "@/lib/db";
 import { seasons, franchises, franchiseSeasons } from "@/lib/db/schema";
 import { eq, desc, asc, sql } from "drizzle-orm";
+import { resolveOwnerName, resolveCoOwnerNames } from "@/lib/owner-names";
 
 /**
  * Returns all seasons ordered by season_year DESC.
@@ -191,7 +192,14 @@ export const getSeasonStandings = cache(async function getSeasonStandings(season
       .where(eq(franchiseSeasons.seasonId, seasonId))
       .orderBy(asc(franchiseSeasons.standingsFinish));
 
-    return standings;
+    return standings.map((row) => ({
+      ...row,
+      ownerDisplayName: resolveOwnerName({
+        userId: row.userId,
+        displayName: row.ownerDisplayName,
+      }),
+      coOwnerDisplayName: resolveCoOwnerNames(row.coOwnerDisplayName),
+    }));
   } catch (e) {
     console.error("[seasons] getSeasonStandings error:", e);
     return [];
