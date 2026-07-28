@@ -202,7 +202,7 @@ Card gradient fill: `linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255
 
 ### Navigation Structure
 - **Desktop topbar (64px):** serif "HMLML" wordmark (left) · centered pill nav [Hub, Teams, Records, Drafts, Players] (active = accent-tint background + gold text) · right cluster: inline search field (~230px, ⌘K hint), a live-games pill (pulsing green dot + "N GAMES LIVE"), and the current user's dynasty crest.
-- **Mobile:** slim top header (56px: wordmark · right cluster of compact live pill, search icon trigger, and dynasty crest) plus a **fixed bottom dock** for thumb reach: a tab-bar-only 5-icon nav [Hub, Teams, Records, Drafts, Players] (icon + 9px label, active = accent-tint + gold), ~80px + safe-area. No hamburger; search opens a full-screen dialog from the header icon (same shared search UI Sleeper-backed as desktop, just a different trigger). Both the header and the dock hide on scroll-down and reveal on scroll-up (`components/nav/scroll-chrome.tsx`), staying pinned within 8px of the top to absorb iOS rubber-band. Bottom clearance for scrollable content lives on the footer (`pb-[calc(env(safe-area-inset-bottom)+96px)] lg:pb-8` on `SiteFooter`), not on `app/layout.tsx`'s `<main>`.
+- **Mobile:** slim top header (56px: wordmark · right cluster of compact live pill, search icon trigger, and dynasty crest) plus a **fixed bottom dock** for thumb reach: a tab-bar-only 5-icon nav [Hub, Teams, Records, Drafts, Players] (icon + 9px label, active = accent-tint + gold), ~80px + safe-area. No hamburger; search opens a full-screen dialog from the header icon (same shared search UI Sleeper-backed as desktop, just a different trigger). The header stays pinned at all times; only the bottom dock hides on scroll-down and reveals on scroll-up (`components/nav/scroll-chrome.tsx`), always shown within 8px of the top to absorb iOS rubber-band. Bottom clearance for scrollable content lives on the footer (`pb-[calc(env(safe-area-inset-bottom)+96px)] lg:pb-8` on `SiteFooter`), not on `app/layout.tsx`'s `<main>`.
 - **Live Pill** (replaces the old Seasonal Pill Badge): shows live-game count during game windows, otherwise the seasonal state ("Preseason", "Week 9", "Playoffs", "Offseason").
 - **Matchups are NOT a nav item;** live matchup cards surface on the hub during game windows; tapping goes to matchup detail pages.
 
@@ -223,7 +223,7 @@ The homepage automatically renders different content based on the football calen
 
 ### Animation Philosophy
 - No page transitions, no scroll-triggered animations, no loading spinners on server-rendered pages
-- **Allowed:** live score pulse (`@keyframes live-pulse`, CSS), draft countdown tick (opacity transition), card hover border (150ms), tab content fade (100ms), scroll-reveal on first paint, hide-on-scroll mobile nav chrome (`components/nav/scroll-chrome.tsx`, CSS transform). The `prefers-reduced-motion` block neutralizes all of these.
+- **Allowed:** live score pulse (`@keyframes live-pulse`, CSS), draft countdown tick (opacity transition), card hover border (150ms), tab content fade (100ms), scroll-reveal on first paint, hide-on-scroll mobile bottom dock (`components/nav/scroll-chrome.tsx`, CSS transform; the top header stays pinned). The `prefers-reduced-motion` block neutralizes all of these.
 - Movement is reserved for live data where it conveys real information
 
 ## Acceptance Testing Patterns
