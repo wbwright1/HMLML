@@ -73,6 +73,33 @@ test.describe("Mobile nav scroll chrome", () => {
     expect(headerBox!.y).toBe(0);
     expect(dockBox!.y + dockBox!.height).toBeGreaterThan(844 - 40);
   });
+
+  // Regression guard for #146: page content (franchise logos in the weekly
+  // cards) must never paint over the pinned header. The original bug was
+  // WebKit-only (a permanent will-change promoted the header layer, which
+  // iOS Safari mis-ordered behind scrolling content); this asserts the
+  // corrected stacking structure and is the guard to run under
+  // --project=webkit when that browser is available.
+  test("mobile header paints above page content while logos scroll beneath", async ({
+    page,
+  }) => {
+    await page.goto("/players/4046");
+    const header = mobileHeader(page);
+    const box = await header.boundingBox();
+    expect(box).not.toBeNull();
+
+    await page.evaluate(() => window.scrollTo(0, 600));
+
+    const cx = box!.x + box!.width / 2;
+    for (const y of [8, 28, 52]) {
+      const onTop = await page.evaluate(
+        ({ cx, y }) =>
+          !!document.elementFromPoint(cx, y)?.closest(".sticky.top-0.z-40"),
+        { cx, y },
+      );
+      expect(onTop, `header must own paint at (${cx}, ${y})`).toBe(true);
+    }
+  });
 });
 
 test.describe("Desktop chrome is untouched by scroll", () => {
