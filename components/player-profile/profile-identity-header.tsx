@@ -62,23 +62,25 @@ export function ProfileIdentityHeader({
         </div>
 
         {identity.ownerFranchiseSlug && identity.ownerFranchiseName ? (
-          <div className="flex items-center gap-2">
-            <FranchiseLogo
-              slug={identity.ownerFranchiseSlug}
-              name={identity.ownerFranchiseName}
-              avatarUrl={identity.ownerAvatarUrl}
-              size="sm"
-              decorative
-            />
-            <Link
-              href={`/teams/${identity.ownerFranchiseSlug}`}
-              className="text-body-sm font-medium text-accent-gold hover:brightness-110"
-            >
-              {identity.ownerFranchiseName}
-            </Link>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="inline-flex items-center gap-2">
+              <FranchiseLogo
+                slug={identity.ownerFranchiseSlug}
+                name={identity.ownerFranchiseName}
+                avatarUrl={identity.ownerAvatarUrl}
+                size="sm"
+                decorative
+              />
+              <Link
+                href={`/teams/${identity.ownerFranchiseSlug}`}
+                className="text-body-sm font-medium text-accent-gold hover:brightness-110"
+              >
+                {identity.ownerFranchiseName}
+              </Link>
+            </span>
             {identity.yearsInLeague > 0 && (
               <span className="text-body-sm text-text-tertiary">
-                &middot; Yr{" "}
+                Yr{" "}
                 <span className="font-mono tabular-nums">
                   {identity.yearsInLeague}
                 </span>{" "}
