@@ -374,17 +374,14 @@
     }
 }
 
-/* Mobile nav scroll chrome (header + dock): hides on scroll-down, reveals on
-   scroll-up. State is toggled via data-hidden by components/nav/scroll-chrome.tsx;
-   the transform direction differs per edge (chrome-top slides up off-screen,
-   chrome-bottom slides down past the safe-area inset). Neutralized by the
+/* Mobile bottom-dock scroll chrome: hides on scroll-down, reveals on
+   scroll-up (the top header stays pinned by design). State is toggled via
+   data-hidden by components/nav/scroll-chrome.tsx; the hidden transform
+   slides the dock down past the safe-area inset. Neutralized by the
    prefers-reduced-motion block above. */
 [data-scroll-chrome] {
     transition: transform 220ms ease;
     will-change: transform;
-}
-[data-scroll-chrome][data-hidden="true"].chrome-top {
-    transform: translateY(-100%);
 }
 [data-scroll-chrome][data-hidden="true"].chrome-bottom {
     transform: translateY(calc(100% + env(safe-area-inset-bottom)));
