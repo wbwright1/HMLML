@@ -381,6 +381,11 @@
    prefers-reduced-motion block above. */
 [data-scroll-chrome] {
     transition: transform 220ms ease;
+}
+/* Promote to a compositing layer only while hidden/animating: a permanent
+   will-change on fixed chrome made iOS Safari paint page content over it
+   (the #146 logos-over-header bug on the old header wrapper). */
+[data-scroll-chrome][data-hidden="true"] {
     will-change: transform;
 }
 [data-scroll-chrome][data-hidden="true"].chrome-bottom {
