@@ -136,12 +136,18 @@ test.describe("Player profile", () => {
     const seasonNav = page.getByRole("navigation", { name: "Season" });
     await expect(seasonNav).toBeVisible();
 
-    const pills = seasonNav.locator("a");
-    const secondPill = pills.nth(1);
-    const year = (await secondPill.textContent())?.trim();
-    await secondPill.click();
+    // Pick any pill that ISN'T already active (clicking the active pill is
+    // an intentional no-op) rather than assuming a fixed index — the
+    // default selected season isn't always the first pill.
+    const inactivePill = seasonNav.locator('a:not([aria-current="page"])').first();
+    const year = (await inactivePill.textContent())?.trim();
+    await inactivePill.click();
 
-    await expect(page).toHaveURL(new RegExp(`season=${year}`));
+    // The switch is now in-place (history.replaceState + router.refresh(),
+    // see season-switcher.tsx and e2e/player-profile-season-switch.spec.ts)
+    // rather than a hard navigation, so the round trip can take a few
+    // seconds on a cold dev server.
+    await expect(page).toHaveURL(new RegExp(`season=${year}`), { timeout: 15_000 });
   });
 
   test("season pill navigation inside the modal keeps the dialog open", async ({ page }) => {
