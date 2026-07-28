@@ -187,19 +187,45 @@ async function fetchValuesCsvForSha(sha: string): Promise<ValuesRow[]> {
   return csvRowsToObjects(parseCsv(text)) as unknown as ValuesRow[];
 }
 
-async function main() {
-  console.log("Fetching all trades to find distinct trade dates...");
-  const trades = await getTrades();
-  console.log(`Found ${trades.length} trades`);
-
-  const distinctDates = new Set<string>();
-  for (const trade of trades) {
-    if (trade.createdAtMs == null) continue;
-    const date = new Date(trade.createdAtMs).toISOString().slice(0, 10);
-    distinctDates.add(date);
+/** Weekly dates (every 7 days) from start to end inclusive, YYYY-MM-DD. */
+function weeklyDates(start: string, end: string): string[] {
+  const dates: string[] = [];
+  const cursor = new Date(`${start}T00:00:00Z`);
+  const endMs = new Date(`${end}T00:00:00Z`).getTime();
+  while (cursor.getTime() <= endMs) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 7);
   }
-  const sortedDates = Array.from(distinctDates).sort();
-  console.log(`Distinct trade dates: ${sortedDates.length}`);
+  return dates;
+}
+
+async function main() {
+  // Two modes: default snapshots at every distinct trade date (then-vs-now
+  // trade cards); WEEKLY_START[/WEEKLY_END] snapshots every 7 days in a range
+  // (densifies the per-player value-over-time chart). Both upsert by the
+  // CSV's own scrape_date, so overlapping runs are idempotent.
+  let sortedDates: string[];
+  if (process.env.WEEKLY_START) {
+    const end =
+      process.env.WEEKLY_END ?? new Date().toISOString().slice(0, 10);
+    sortedDates = weeklyDates(process.env.WEEKLY_START, end);
+    console.log(
+      `Weekly mode: ${sortedDates.length} dates from ${process.env.WEEKLY_START} to ${end}`
+    );
+  } else {
+    console.log("Fetching all trades to find distinct trade dates...");
+    const trades = await getTrades();
+    console.log(`Found ${trades.length} trades`);
+
+    const distinctDates = new Set<string>();
+    for (const trade of trades) {
+      if (trade.createdAtMs == null) continue;
+      const date = new Date(trade.createdAtMs).toISOString().slice(0, 10);
+      distinctDates.add(date);
+    }
+    sortedDates = Array.from(distinctDates).sort();
+    console.log(`Distinct trade dates: ${sortedDates.length}`);
+  }
 
   console.log("Fetching DynastyProcess player-id crosswalk...");
   const fpToSleeper = await fetchFantasyProsToSleeperMap();

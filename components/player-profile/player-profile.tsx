@@ -78,7 +78,10 @@ export async function PlayerProfile({
         />
       </div>
 
-      <OwnershipFacts facts={ownershipFacts} />
+      <OwnershipFacts
+        facts={ownershipFacts}
+        franchiseHistory={profile.franchiseHistory}
+      />
 
       <CareerTimeline timeline={timeline} />
     </div>

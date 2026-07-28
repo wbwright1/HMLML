@@ -5,12 +5,18 @@ interface ProjectedActualProps {
   weeklyPoints: PlayerWeeklyPointRow[];
 }
 
-/** Actual vs summed-projected points for the selected season. Null when no week has a projection. */
+/**
+ * Actual vs summed-projected points for the selected season, over PLAYED weeks
+ * only — comparing a full-season projection against a season that hasn't
+ * happened yet would read as a giant fake shortfall. Null when no played week
+ * has a projection.
+ */
 export function ProjectedActual({ seasonYear, weeklyPoints }: ProjectedActualProps) {
-  const withProjection = weeklyPoints.filter((w) => w.projectedPoints != null);
+  const playedWeeks = weeklyPoints.filter((w) => w.played);
+  const withProjection = playedWeeks.filter((w) => w.projectedPoints != null);
   if (withProjection.length === 0) return null;
 
-  const actual = weeklyPoints.reduce((sum, w) => sum + w.points, 0);
+  const actual = playedWeeks.reduce((sum, w) => sum + w.points, 0);
   const projected = withProjection.reduce(
     (sum, w) => sum + (w.projectedPoints ?? 0),
     0

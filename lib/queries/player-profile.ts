@@ -8,6 +8,7 @@ import {
   franchiseSeasons,
   franchises,
   matchups,
+  rosterPlayers,
   seasons,
 } from "@/lib/db/schema";
 import { and, eq, gt, inArray } from "drizzle-orm";
@@ -51,17 +52,25 @@ export async function getPlayerProfileIdentity(
     const base = await getPlayerById(playerId);
     if (!base) return null;
 
-    const rows = await db
-      .selectDistinct({ seasonId: playerWeekPoints.seasonId })
-      .from(playerWeekPoints)
-      .where(eq(playerWeekPoints.playerId, playerId));
-
-    const scoredRows = await db
-      .selectDistinct({ seasonId: playerWeekPoints.seasonId })
-      .from(playerWeekPoints)
-      .where(
-        and(eq(playerWeekPoints.playerId, playerId), gt(playerWeekPoints.points, 0)),
-      );
+    const [pointRows, rosteredRows, scoredRows] = await Promise.all([
+      db
+        .selectDistinct({ seasonId: playerWeekPoints.seasonId })
+        .from(playerWeekPoints)
+        .where(eq(playerWeekPoints.playerId, playerId)),
+      db
+        .selectDistinct({ seasonId: rosterPlayers.seasonId })
+        .from(rosterPlayers)
+        .where(eq(rosterPlayers.playerId, playerId)),
+      db
+        .selectDistinct({ seasonId: playerWeekPoints.seasonId })
+        .from(playerWeekPoints)
+        .where(
+          and(eq(playerWeekPoints.playerId, playerId), gt(playerWeekPoints.points, 0)),
+        ),
+    ]);
+    const rows = [
+      ...new Set([...pointRows, ...rosteredRows].map((r) => r.seasonId)),
+    ].map((seasonId) => ({ seasonId }));
 
     let seasonsPresent: number[] = [];
     let seasonsScored: number[] = [];
@@ -412,9 +421,15 @@ export interface PlayerWeeklyPointRow {
   started: boolean;
   franchiseId: string;
   matchupId: number | null;
+  /** False for weeks that haven't been played yet (projection-only rows). */
+  played: boolean;
+  ownerFranchiseName: string | null;
+  ownerFranchiseSlug: string | null;
+  ownerAvatarUrl: string | null;
   opponentFranchiseId: string | null;
   opponentFranchiseName: string | null;
   opponentFranchiseSlug: string | null;
+  opponentAvatarUrl: string | null;
 }
 
 /**
@@ -454,7 +469,10 @@ export async function getPlayerWeeklyPoints(
 
     if (rows.length === 0) return [];
 
-    // Resolve opponents: all matchup rows for this season, joined to franchises.
+    // Resolve opponents from the authoritative matchups table by
+    // (week, franchiseId). The matchup_id stored on player_week_points is NOT
+    // trusted: preseason projection syncs have written stale pairings there
+    // (observed for 2026), which produced wrong opponents.
     const matchupRows = await db
       .select({
         week: matchups.week,
@@ -467,12 +485,21 @@ export async function getPlayerWeeklyPoints(
       .innerJoin(franchises, eq(matchups.franchiseId, franchises.id))
       .where(eq(matchups.seasonId, season.id));
 
-    // (week|matchupId) -> list of {franchiseId, name, slug}
+    const franchiseByWeek = new Map<
+      string,
+      { matchupId: number; franchiseId: string; name: string; slug: string }
+    >();
     const pairByKey = new Map<
       string,
       { franchiseId: string; name: string; slug: string }[]
     >();
     for (const m of matchupRows) {
+      franchiseByWeek.set(`${m.week}|${m.franchiseId}`, {
+        matchupId: m.matchupId,
+        franchiseId: m.franchiseId,
+        name: m.franchiseName,
+        slug: m.franchiseSlug,
+      });
       const key = `${m.week}|${m.matchupId}`;
       const list = pairByKey.get(key) ?? [];
       list.push({
@@ -483,20 +510,41 @@ export async function getPlayerWeeklyPoints(
       pairByKey.set(key, list);
     }
 
+    // Per-season franchise avatars + owner identity for logo rendering.
+    const seasonFranchises = await db
+      .select({
+        franchiseId: franchiseSeasons.franchiseId,
+        avatarUrl: franchiseSeasons.avatarUrl,
+        name: franchises.name,
+        slug: franchises.slug,
+      })
+      .from(franchiseSeasons)
+      .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
+      .where(eq(franchiseSeasons.seasonId, season.id));
+    const seasonFranchiseById = new Map(
+      seasonFranchises.map((f) => [f.franchiseId, f]),
+    );
+
+    // Weeks actually played league-wide this season (any real points scored).
+    // Projection-only future weeks are marked played=false so the UI can
+    // blank actual/delta instead of showing a fake negative delta.
+    const playedRows = await db
+      .selectDistinct({ week: playerWeekPoints.week })
+      .from(playerWeekPoints)
+      .where(
+        and(eq(playerWeekPoints.seasonId, season.id), gt(playerWeekPoints.points, 0)),
+      );
+    const playedWeeks = new Set(playedRows.map((r) => r.week));
+
     return rows
       .map((r) => {
-        let opponentFranchiseId: string | null = null;
-        let opponentFranchiseName: string | null = null;
-        let opponentFranchiseSlug: string | null = null;
-        if (r.matchupId != null) {
-          const pair = pairByKey.get(`${r.week}|${r.matchupId}`) ?? [];
-          const opp = pair.find((p) => p.franchiseId !== r.franchiseId);
-          if (opp) {
-            opponentFranchiseId = opp.franchiseId;
-            opponentFranchiseName = opp.name;
-            opponentFranchiseSlug = opp.slug;
-          }
+        const own = franchiseByWeek.get(`${r.week}|${r.franchiseId}`);
+        let opp: { franchiseId: string; name: string; slug: string } | null = null;
+        if (own) {
+          const pair = pairByKey.get(`${r.week}|${own.matchupId}`) ?? [];
+          opp = pair.find((p) => p.franchiseId !== r.franchiseId) ?? null;
         }
+        const ownerSeason = seasonFranchiseById.get(r.franchiseId);
         return {
           week: r.week,
           points: r.points,
@@ -504,10 +552,17 @@ export async function getPlayerWeeklyPoints(
           slot: r.slot,
           started: r.started,
           franchiseId: r.franchiseId,
-          matchupId: r.matchupId,
-          opponentFranchiseId,
-          opponentFranchiseName,
-          opponentFranchiseSlug,
+          matchupId: own?.matchupId ?? r.matchupId,
+          played: playedWeeks.has(r.week),
+          ownerFranchiseName: ownerSeason?.name ?? null,
+          ownerFranchiseSlug: ownerSeason?.slug ?? null,
+          ownerAvatarUrl: ownerSeason?.avatarUrl ?? null,
+          opponentFranchiseId: opp?.franchiseId ?? null,
+          opponentFranchiseName: opp?.name ?? null,
+          opponentFranchiseSlug: opp?.slug ?? null,
+          opponentAvatarUrl: opp
+            ? (seasonFranchiseById.get(opp.franchiseId)?.avatarUrl ?? null)
+            : null,
         };
       })
       .sort((a, b) => a.week - b.week);
@@ -921,6 +976,115 @@ export async function getPlayerAwards(playerId: string): Promise<AwardEntry[]> {
 // Composer
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Franchise history (Ownership Ledger)
+// ---------------------------------------------------------------------------
+
+export interface FranchiseStint {
+  franchiseId: string;
+  name: string;
+  slug: string;
+  /** Latest-season team avatar for this franchise (Sleeper branding). */
+  avatarUrl: string | null;
+  firstSeasonYear: number;
+  lastSeasonYear: number;
+}
+
+/**
+ * Every franchise that has ever rostered the player, newest-last-season first.
+ * Union of player_week_points (lineup history) and roster_players (covers
+ * taxi/IR players who never hit a lineup).
+ */
+export async function getPlayerFranchiseHistory(
+  playerId: string,
+): Promise<FranchiseStint[]> {
+  try {
+    const [pwpRows, rosterRows] = await Promise.all([
+      db
+        .selectDistinct({
+          franchiseId: playerWeekPoints.franchiseId,
+          seasonId: playerWeekPoints.seasonId,
+        })
+        .from(playerWeekPoints)
+        .where(eq(playerWeekPoints.playerId, playerId)),
+      db
+        .selectDistinct({
+          franchiseId: rosterPlayers.franchiseId,
+          seasonId: rosterPlayers.seasonId,
+        })
+        .from(rosterPlayers)
+        .where(eq(rosterPlayers.playerId, playerId)),
+    ]);
+
+    const pairs = [...pwpRows, ...rosterRows];
+    if (pairs.length === 0) return [];
+
+    const seasonRows = await db
+      .select({ id: seasons.id, seasonYear: seasons.seasonYear })
+      .from(seasons);
+    const yearBySeasonId = new Map(seasonRows.map((s) => [s.id, s.seasonYear]));
+
+    const franchiseIds = [...new Set(pairs.map((p) => p.franchiseId))];
+    const franchiseRows = await db
+      .select({ id: franchises.id, name: franchises.name, slug: franchises.slug })
+      .from(franchises)
+      .where(inArray(franchises.id, franchiseIds));
+    const franchiseById = new Map(franchiseRows.map((f) => [f.id, f]));
+
+    const avatarRows = await db
+      .select({
+        franchiseId: franchiseSeasons.franchiseId,
+        seasonId: franchiseSeasons.seasonId,
+        avatarUrl: franchiseSeasons.avatarUrl,
+      })
+      .from(franchiseSeasons)
+      .where(inArray(franchiseSeasons.franchiseId, franchiseIds));
+
+    const stints = new Map<string, FranchiseStint>();
+    for (const p of pairs) {
+      const year = yearBySeasonId.get(p.seasonId);
+      const franchise = franchiseById.get(p.franchiseId);
+      if (year == null || !franchise) continue;
+      const existing = stints.get(p.franchiseId);
+      if (existing) {
+        existing.firstSeasonYear = Math.min(existing.firstSeasonYear, year);
+        existing.lastSeasonYear = Math.max(existing.lastSeasonYear, year);
+      } else {
+        stints.set(p.franchiseId, {
+          franchiseId: p.franchiseId,
+          name: franchise.name,
+          slug: franchise.slug,
+          avatarUrl: null,
+          firstSeasonYear: year,
+          lastSeasonYear: year,
+        });
+      }
+    }
+
+    // Latest-season avatar per franchise.
+    const avatarByFranchise = new Map<string, { year: number; url: string }>();
+    for (const a of avatarRows) {
+      if (!a.avatarUrl) continue;
+      const year = yearBySeasonId.get(a.seasonId);
+      if (year == null) continue;
+      const prev = avatarByFranchise.get(a.franchiseId);
+      if (!prev || year > prev.year) {
+        avatarByFranchise.set(a.franchiseId, { year, url: a.avatarUrl });
+      }
+    }
+    for (const stint of stints.values()) {
+      stint.avatarUrl = avatarByFranchise.get(stint.franchiseId)?.url ?? null;
+    }
+
+    return [...stints.values()].sort(
+      (a, b) => b.lastSeasonYear - a.lastSeasonYear || b.firstSeasonYear - a.firstSeasonYear,
+    );
+  } catch (error) {
+    console.error("[player-profile] getPlayerFranchiseHistory error:", error);
+    return [];
+  }
+}
+
 export interface PlayerProfile {
   identity: PlayerProfileIdentity;
   timeline: TimelineEvent[];
@@ -929,6 +1093,7 @@ export interface PlayerProfile {
   seasonStatTotals: PlayerSeasonStatTotals[];
   seasonPointsAggregates: PlayerSeasonPointsAggregate[];
   ownershipFacts: PlayerOwnershipFacts;
+  franchiseHistory: FranchiseStint[];
 }
 
 /**
@@ -950,12 +1115,14 @@ export async function getPlayerProfile(
     valueSeries,
     seasonStatTotals,
     seasonPointsAggregates,
+    franchiseHistory,
   ] = await Promise.all([
     getPlayerTimeline(playerId),
     getPlayerAwards(playerId),
     getPlayerValueSeries(playerId),
     getPlayerSeasonStatTotals(playerId),
     getPlayerSeasonPointsAggregates(playerId),
+    getPlayerFranchiseHistory(playerId),
   ]);
 
   const ownershipFacts = await getPlayerOwnershipFacts(
@@ -971,5 +1138,6 @@ export async function getPlayerProfile(
     seasonStatTotals,
     seasonPointsAggregates,
     ownershipFacts,
+    franchiseHistory,
   };
 }
