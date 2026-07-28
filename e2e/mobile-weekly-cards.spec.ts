@@ -27,6 +27,13 @@ const QB_ID = "4046"; // Patrick Mahomes
 const STAT_ONLY_ID = "6957"; // James Proche
 const STAT_ONLY_SEASON = 2025;
 
+// KC's real 2024 bye was week 6 (verified against the live nfl_games
+// schedule: `getSeasonScheduleFacts([2024]).teamByeWeeks.get("2024:KC")` ===
+// 6). Mahomes was left in the BENCH slot that week with 0 recorded points —
+// exactly the case honest BYE labeling exists for (#132/#133).
+const KC_BYE_SEASON = 2024;
+const KC_BYE_WEEK = 6;
+
 test.describe("Mobile weekly-line cards", () => {
   test("QB profile at mobile viewport renders hero points, projection, and stat summary", async ({ page }) => {
     await page.setViewportSize(MOBILE_VIEWPORT);
@@ -70,6 +77,50 @@ test.describe("Mobile weekly-line cards", () => {
     const card = page.locator('[role="listitem"]').filter({ hasText: "NOT ROSTERED" }).first();
     await expect(card.locator("span.text-stat")).toHaveCount(0);
     await expect(card.getByText(/^proj \d/)).toHaveCount(0);
+  });
+
+  test("KC player's 2024 season shows BYE on week 6 with no fabricated points (#132/#133)", async ({ page }) => {
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    await page.goto(`/players/${QB_ID}?season=${KC_BYE_SEASON}`);
+
+    const cards = page.locator('[role="listitem"]');
+    await expect(cards.first()).toBeVisible();
+
+    const byeCard = cards.filter({ hasText: `WK ${KC_BYE_WEEK}` });
+    await expect(byeCard).toHaveCount(1);
+    await expect(byeCard.getByText("BYE", { exact: true })).toBeVisible();
+
+    // No fabricated 0.0 hero number and no dangling "proj" line on the bye card.
+    await expect(byeCard.locator("span.text-stat")).toHaveCount(0);
+    await expect(byeCard.getByText(/^proj \d/)).toHaveCount(0);
+  });
+
+  test("KC player's 2024 season shows BYE on week 6 in the desktop table with a dash, not 0.0", async ({ page }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await page.goto(`/players/${QB_ID}?season=${KC_BYE_SEASON}`);
+
+    const table = page.locator("table");
+    await expect(table).toBeVisible();
+
+    const rows = table.locator("tbody tr");
+    const rowCount = await rows.count();
+    let byeRow = rows.first();
+    let found = false;
+    for (let i = 0; i < rowCount; i++) {
+      const weekText = (await rows.nth(i).locator("td").first().textContent())?.trim();
+      if (weekText === String(KC_BYE_WEEK)) {
+        byeRow = rows.nth(i);
+        found = true;
+        break;
+      }
+    }
+    expect(found).toBe(true);
+    await expect(byeRow.getByText("BYE", { exact: true })).toBeVisible();
+
+    // Actual + delta columns show the en-dash placeholder, never "0.0".
+    const cells = byeRow.locator("td");
+    const actualText = (await cells.nth(6).textContent())?.trim();
+    expect(actualText).toBe("–");
   });
 
   test("desktop viewport renders the table, not the mobile cards", async ({ page }) => {

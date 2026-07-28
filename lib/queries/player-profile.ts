@@ -20,6 +20,12 @@ import {
 } from "@/lib/queries/player-values";
 import { getAwardsForPlayer } from "@/lib/queries/awards";
 import type { AwardEntry } from "@/lib/queries/awards";
+import {
+  classifyPlayerWeekAvailability,
+  getSeasonScheduleFacts,
+  normalizeNflTeam,
+  seasonWeekKey,
+} from "@/lib/player-week-availability";
 
 // ---------------------------------------------------------------------------
 // Identity
@@ -649,25 +655,29 @@ export interface PlayerSeasonPointsAggregate {
   seasonYear: number;
   /** Sum of all points (started + benched). */
   totalPoints: number;
-  /** Sum of points scored while in a starting slot. */
+  /** Sum of points scored while in a starting slot AND actually played. */
   startedPoints: number;
+  /** Raw count of started weeks, including byes/DNPs — for "weeks in the lineup" facts. */
   startedWeeks: number;
+  /** Started weeks that actually classify as PLAYED (excludes BYE/DNP). */
+  startedPlayedWeeks: number;
   benchedWeeks: number;
   /** Sum of points scored while benched (points left on the bench). */
   benchPoints: number;
-  /** startedPoints / startedWeeks, null when never started. */
+  /** startedPoints / startedPlayedWeeks, null when never started-and-played. */
   avgWhenStarted: number | null;
-  /** Highest-scoring STARTED week of the season; null when never started. */
+  /** Highest-scoring STARTED-AND-PLAYED week of the season; null when never started-and-played. */
   bestWeek: WeekRef | null;
-  /** Lowest-scoring STARTED week of the season; null when never started. */
+  /** Lowest-scoring STARTED-AND-PLAYED week of the season; null when never started-and-played. */
   worstStartedWeek: WeekRef | null;
 }
 
 /**
  * Per-season point aggregates for a player, most recent season first. Best /
- * worst weeks and avgWhenStarted are computed over STARTED weeks only (a big
- * game from the bench isn't a performance the manager captured). Bench points
- * are the points that scored while the player sat. Returns [] on error / no data.
+ * worst weeks and avgWhenStarted are computed over started weeks that
+ * actually classify as PLAYED (a bye-week or DNP zero isn't a performance —
+ * neither is a big bench game the manager never captured). Bench points are
+ * the points that scored while the player sat. Returns [] on error / no data.
  */
 export async function getPlayerSeasonPointsAggregates(
   playerId: string,
@@ -690,11 +700,38 @@ export async function getPlayerSeasonPointsAggregates(
       .from(seasons);
     const yearBySeasonId = new Map(seasonRows.map((s) => [s.id, s.seasonYear]));
 
+    // Weekly NFL stats + the player's current team's bye schedule, so started
+    // weeks can be honestly classified PLAYED / BYE / DNP instead of trusting
+    // "started" + "points" alone (a bye or a DNP is not a performance).
+    const [player] = await db
+      .select({ nflTeam: players.nflTeam })
+      .from(players)
+      .where(eq(players.id, playerId));
+
+    const statRows = await db
+      .select({
+        seasonId: playerWeekStats.seasonId,
+        week: playerWeekStats.week,
+        gamesPlayed: playerWeekStats.gamesPlayed,
+        stats: playerWeekStats.stats,
+      })
+      .from(playerWeekStats)
+      .where(eq(playerWeekStats.playerId, playerId));
+    const statByKey = new Map(
+      statRows.map((s) => [`${s.seasonId}|${s.week}`, s]),
+    );
+
+    const seasonYears = [
+      ...new Set(rows.map((r) => yearBySeasonId.get(r.seasonId)).filter((y): y is number => y != null)),
+    ];
+    const { teamByeWeeks, completeWeeks } = await getSeasonScheduleFacts(seasonYears);
+
     interface Acc {
       seasonYear: number;
       totalPoints: number;
       startedPoints: number;
       startedWeeks: number;
+      startedPlayedWeeks: number;
       benchedWeeks: number;
       benchPoints: number;
       bestWeek: WeekRef | null;
@@ -712,6 +749,7 @@ export async function getPlayerSeasonPointsAggregates(
           totalPoints: 0,
           startedPoints: 0,
           startedWeeks: 0,
+          startedPlayedWeeks: 0,
           benchedWeeks: 0,
           benchPoints: 0,
           bestWeek: null,
@@ -721,12 +759,35 @@ export async function getPlayerSeasonPointsAggregates(
       const pts = r.points ?? 0;
       acc.totalPoints += pts;
       if (r.started) {
-        acc.startedPoints += pts;
         acc.startedWeeks += 1;
-        const ref: WeekRef = { week: r.week, seasonYear, points: pts };
-        if (!acc.bestWeek || pts > acc.bestWeek.points) acc.bestWeek = ref;
-        if (!acc.worstStartedWeek || pts < acc.worstStartedWeek.points)
-          acc.worstStartedWeek = ref;
+
+        const stat = statByKey.get(`${r.seasonId}|${r.week}`);
+        const teamBye = player?.nflTeam
+          ? teamByeWeeks.get(`${seasonYear}:${normalizeNflTeam(player.nflTeam)}`)
+          : undefined;
+        const availability = classifyPlayerWeekAvailability({
+          week: r.week,
+          gamesPlayed: stat?.gamesPlayed ?? null,
+          gmsActive: (stat?.stats as Record<string, number | null> | null)?.gms_active ?? null,
+          points: pts,
+          curatedStats: CURATED_STAT_KEYS.map((k) =>
+            stat ? ((stat as unknown as Record<string, number | null>)[k] ?? null) : null,
+          ),
+          teamByeWeek: teamBye ?? null,
+          weekIsComplete: completeWeeks.has(seasonWeekKey(seasonYear, r.week)),
+        });
+        // null (schedule not resolvable / week not yet complete) preserves the
+        // prior unguarded behavior; only an explicit BYE/DNP excludes the week.
+        const playedForPurposesOfBestWorst = availability !== "BYE" && availability !== "DNP";
+
+        if (playedForPurposesOfBestWorst) {
+          acc.startedPoints += pts;
+          acc.startedPlayedWeeks += 1;
+          const ref: WeekRef = { week: r.week, seasonYear, points: pts };
+          if (!acc.bestWeek || pts > acc.bestWeek.points) acc.bestWeek = ref;
+          if (!acc.worstStartedWeek || pts < acc.worstStartedWeek.points)
+            acc.worstStartedWeek = ref;
+        }
       } else {
         acc.benchedWeeks += 1;
         acc.benchPoints += pts;
@@ -741,10 +802,11 @@ export async function getPlayerSeasonPointsAggregates(
         totalPoints: a.totalPoints,
         startedPoints: a.startedPoints,
         startedWeeks: a.startedWeeks,
+        startedPlayedWeeks: a.startedPlayedWeeks,
         benchedWeeks: a.benchedWeeks,
         benchPoints: a.benchPoints,
         avgWhenStarted:
-          a.startedWeeks > 0 ? a.startedPoints / a.startedWeeks : null,
+          a.startedPlayedWeeks > 0 ? a.startedPoints / a.startedPlayedWeeks : null,
         bestWeek: a.bestWeek,
         worstStartedWeek: a.worstStartedWeek,
       }))
@@ -848,7 +910,7 @@ export async function getPlayerWeeklyStats(
   }
 }
 
-const CURATED_STAT_KEYS = [
+export const CURATED_STAT_KEYS = [
   "passYd",
   "passTd",
   "passInt",

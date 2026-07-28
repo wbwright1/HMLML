@@ -3,6 +3,7 @@ import {
   getPlayerWeeklyPoints,
   getPlayerWeeklyStats,
 } from "@/lib/queries/player-profile";
+import { getSeasonScheduleFacts } from "@/lib/player-week-availability";
 import { ProfileIdentityHeader } from "./profile-identity-header";
 import { InjuryBanner } from "./injury-banner";
 import { ValueStatCallouts } from "./value-stat-callouts";
@@ -41,12 +42,13 @@ export async function PlayerProfile({
     ? requestedSeason
     : (identity.defaultSeason ?? null);
 
-  const [weeklyPoints, weeklyStats] = selectedSeason
+  const [weeklyPoints, weeklyStats, scheduleFacts] = selectedSeason
     ? await Promise.all([
         getPlayerWeeklyPoints(playerId, selectedSeason),
         getPlayerWeeklyStats(playerId, selectedSeason),
+        getSeasonScheduleFacts([selectedSeason]),
       ])
-    : [[], []];
+    : [[], [], { teamByeWeeks: new Map<string, number>(), completeWeeks: new Set<string>() }];
 
   return (
     <div className="space-y-8">
@@ -76,6 +78,9 @@ export async function PlayerProfile({
           weeklyPoints={weeklyPoints}
           weeklyStats={weeklyStats}
           variant={variant}
+          nflTeam={identity.nflTeam}
+          teamByeWeeks={scheduleFacts.teamByeWeeks}
+          completeWeeks={scheduleFacts.completeWeeks}
         />
       </div>
 
