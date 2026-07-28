@@ -80,7 +80,7 @@ export function groupFranchiseTrophies(
   if (championships.length > 0) {
     groups.push({
       key: "championship",
-      label: "Championship",
+      label: "League Champion",
       trophies: championships,
     });
   }
