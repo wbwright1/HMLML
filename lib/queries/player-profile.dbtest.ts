@@ -154,6 +154,30 @@ describe("getPlayerSeasonPointsAggregates", () => {
       expect(season2024.worstStartedWeek.points).toBeGreaterThan(0);
     }
   });
+
+  // Regression coverage for #166: a future/unplayed season (rows exist with
+  // started=true and points=0 because lineups lock before kickoff, but the
+  // games themselves haven't happened) must never surface as a played week.
+  // Patrick Mahomes' 2026 season is a real, live-DB case: the OLD unguarded
+  // logic (any `started` week whose availability wasn't explicitly BYE/DNP)
+  // treated every un-played 2026 week as PLAYED at 0.0 points, so "worst
+  // started week" picked Week 1 2026 outright. Verified directly against the
+  // live DB before this fix landed (OLD startedPlayedWeeks=18 for a season
+  // with zero games played, worstStartedWeek={week:1, points:0}; NEW
+  // startedPlayedWeeks=0, worstStartedWeek=null) — see the PR description.
+  it("never selects an unplayed future week as best/worst started (Mahomes 2026, #166)", async () => {
+    const aggs = await getPlayerSeasonPointsAggregates("4046");
+    const futureSeasons = aggs.filter(
+      (a) => a.seasonYear >= 2026 && a.totalPoints === 0,
+    );
+    for (const season of futureSeasons) {
+      // No games played yet this season: no week can honestly be "played".
+      expect(season.startedPlayedWeeks).toBe(0);
+      expect(season.bestWeek).toBeNull();
+      expect(season.worstStartedWeek).toBeNull();
+      expect(season.avgWhenStarted).toBeNull();
+    }
+  });
 });
 
 describe("getPlayerWeeklyPoints", () => {
