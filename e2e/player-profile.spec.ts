@@ -12,6 +12,7 @@ import { test, expect } from "@playwright/test";
  */
 
 const DESKTOP_VIEWPORT = { width: 1280, height: 900 };
+const MOBILE_VIEWPORT = { width: 390, height: 844 };
 
 async function findFranchiseSlug(page: import("@playwright/test").Page): Promise<string | null> {
   await page.goto("/teams");
@@ -117,6 +118,22 @@ test.describe("Player profile", () => {
     await page.goBack();
     await expect(dialog).not.toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/teams/${slug}/roster$`));
+  });
+
+  test("floating close button stays visible after scrolling the modal on mobile", async ({ page }) => {
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    const playerId = await findRosteredPlayerId(page);
+    test.skip(!playerId, "No rostered player found in this environment.");
+
+    const slug = await findFranchiseSlug(page);
+    await page.goto(`/teams/${slug}/roster`);
+    await page.locator(`a[href="/players/${playerId}"]:visible`).first().click();
+    const dialog = await awaitModalReady(page);
+
+    await dialog.evaluate((el) => el.scrollTo(0, 400));
+    const closeButton = dialog.getByRole("button", { name: "Close" });
+    await expect(closeButton).toBeVisible();
+    await expect(closeButton).toBeInViewport();
   });
 
   test("direct navigation renders the canonical full page, no dialog", async ({ page }) => {

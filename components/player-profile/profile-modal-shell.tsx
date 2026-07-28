@@ -112,29 +112,33 @@ export function ProfileModalShell({ children }: ProfileModalShellProps) {
           ${mounted ? "lg:-translate-y-1/2" : "lg:translate-y-[calc(-50%+8px)]"}
         `}
       >
-        <div className="sticky top-0 z-10 flex items-center justify-end gap-2 border-b border-divider bg-canvas/95 px-4 py-3 backdrop-blur-sm">
-          {/*
-            Plain anchor, not next/link: we're already at this pathname (the
-            modal intercepts it), so a client-side Link nav would be a no-op.
-            A hard navigation is what actually lands on the canonical full page.
-          */}
-          <a
-            href={pathname}
-            className="hidden sm:inline text-caption text-text-tertiary hover:text-accent-gold transition-colors"
-          >
-            Open full page
-          </a>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            onClick={close}
-            aria-label="Close"
-            className="flex size-9 items-center justify-center rounded-full text-text-tertiary hover:bg-surface-muted hover:text-text-primary transition-colors"
-          >
-            <X className="size-5" strokeWidth={1.7} aria-hidden="true" />
-          </button>
+        {/* Floating dismiss control. sticky top-0 h-0 pins to the dialog's scroll
+            viewport without consuming height; abs-positioned children float top-right. */}
+        <div className="sticky top-0 z-20 h-0">
+          <div className="pointer-events-none absolute right-3 top-3 flex items-center gap-2">
+            {/*
+              Plain anchor, not next/link: we're already at this pathname (the
+              modal intercepts it), so a client-side Link nav would be a no-op.
+              A hard navigation is what actually lands on the canonical full page.
+            */}
+            <a
+              href={pathname}
+              className="pointer-events-auto hidden sm:inline-flex items-center rounded-full border border-border bg-surface px-3 py-2 text-caption text-text-tertiary backdrop-blur-sm transition-colors hover:bg-surface-muted hover:text-accent-gold"
+            >
+              Open full page
+            </a>
+            <button
+              ref={closeButtonRef}
+              type="button"
+              onClick={close}
+              aria-label="Close"
+              className="pointer-events-auto flex size-11 items-center justify-center rounded-full border border-border bg-surface text-text-secondary backdrop-blur-sm transition-colors hover:bg-surface-muted hover:text-text-primary"
+            >
+              <X className="size-5" strokeWidth={1.7} aria-hidden="true" />
+            </button>
+          </div>
         </div>
-        <div className="p-4 sm:p-6">{children}</div>
+        <div className="px-4 pb-4 pt-16 sm:px-6 sm:pb-6 sm:pt-16">{children}</div>
       </div>
     </div>
   );
