@@ -374,6 +374,34 @@
     }
 }
 
+/* First-paint reveal for above-the-fold sections wrapped in <ScrollReveal>.
+   Server-rendered; content is always visible (opacity defaults to 1 via the
+   animation's "both" fill-mode from-state) so it never depends on JS or an
+   IntersectionObserver crossing threshold. Neutralized by the global
+   prefers-reduced-motion block above, plus an explicit override here. */
+@keyframes reveal-rise {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@layer utilities {
+    .reveal-on-load {
+        animation: reveal-rise 0.4s ease-out both;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .reveal-on-load {
+        animation: none;
+    }
+}
+
 /* Mobile bottom-dock scroll chrome: hides on scroll-down, reveals on
    scroll-up (the top header stays pinned by design). State is toggled via
    data-hidden by components/nav/scroll-chrome.tsx; the hidden transform

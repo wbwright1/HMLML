@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { db } from "@/lib/db";
 import {
   franchises,
@@ -13,10 +14,13 @@ import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
  * Returns all franchises with aggregate career stats:
  * total championships, wins, losses, and points scored.
  * Also fetches the current owner from the most recent season.
+ *
+ * Wrapped in React `cache()` so repeated calls within the same request (e.g.
+ * a page body plus generateMetadata) dedupe to a single set of queries.
  */
-export async function getAllFranchises() {
+export const getAllFranchises = cache(async function getAllFranchises() {
   try {
-    const rows = await db
+    const rowsQuery = db
       .select({
         id: franchises.id,
         slug: franchises.slug,
@@ -39,7 +43,7 @@ export async function getAllFranchises() {
       .orderBy(franchises.name);
 
     // Fetch current owner for each franchise (from the most recent season only)
-    const ownerRows = await db.execute(sql`
+    const ownerRowsQuery = db.execute(sql`
       SELECT DISTINCT ON (fs.franchise_id)
         fs.franchise_id,
         fs.owner_display_name,
@@ -49,6 +53,10 @@ export async function getAllFranchises() {
       WHERE fs.owner_display_name IS NOT NULL
       ORDER BY fs.franchise_id, s.season_year DESC
     `);
+
+    // rows and ownerRows are independent queries; avatars depend on rows'
+    // franchise ids, so it joins the Promise.all once rows resolves.
+    const [rows, ownerRows] = await Promise.all([rowsQuery, ownerRowsQuery]);
 
     const ownerMap = new Map<string, { owner: string; coOwner?: string }>();
     for (const row of ownerRows.rows as Array<Record<string, unknown>>) {
@@ -77,7 +85,7 @@ export async function getAllFranchises() {
   } catch {
     return null;
   }
-}
+});
 
 /**
  * Lightweight franchise-id -> crest lookup (name/slug/abbreviation/color),
@@ -112,8 +120,13 @@ export async function getFranchiseCrestById(franchiseId: string) {
 /**
  * Returns a single franchise by slug, together with all of its
  * franchise_seasons rows joined with season info, ordered newest-first.
+ *
+ * Wrapped in React `cache()` so generateMetadata + the page body dedupe to a
+ * single set of queries per request.
  */
-export async function getFranchiseBySlug(slug: string) {
+export const getFranchiseBySlug = cache(async function getFranchiseBySlug(
+  slug: string
+) {
   try {
     const [franchise] = await db
       .select()
@@ -123,32 +136,37 @@ export async function getFranchiseBySlug(slug: string) {
 
     if (!franchise) return null;
 
-    const seasonHistory = await db
-      .select({
-        id: franchiseSeasons.id,
-        franchiseId: franchiseSeasons.franchiseId,
-        seasonId: franchiseSeasons.seasonId,
-        rosterId: franchiseSeasons.rosterId,
-        userId: franchiseSeasons.userId,
-        ownerDisplayName: franchiseSeasons.ownerDisplayName,
-        coOwnerDisplayName: franchiseSeasons.coOwnerDisplayName,
-        division: franchiseSeasons.division,
-        divisionName: franchiseSeasons.divisionName,
-        wins: franchiseSeasons.wins,
-        losses: franchiseSeasons.losses,
-        ties: franchiseSeasons.ties,
-        pointsScored: franchiseSeasons.pointsScored,
-        pointsAgainst: franchiseSeasons.pointsAgainst,
-        standingsFinish: franchiseSeasons.standingsFinish,
-        playoffResult: franchiseSeasons.playoffResult,
-        isLegacyEra: franchiseSeasons.isLegacyEra,
-        seasonYear: seasons.seasonYear,
-        seasonStatus: seasons.status,
-      })
-      .from(franchiseSeasons)
-      .innerJoin(seasons, eq(franchiseSeasons.seasonId, seasons.id))
-      .where(eq(franchiseSeasons.franchiseId, franchise.id))
-      .orderBy(desc(seasons.seasonYear));
+    // seasonHistory and avatarUrls both depend only on franchise.id, not on
+    // each other, so they run concurrently rather than serially.
+    const [seasonHistory, avatarUrls] = await Promise.all([
+      db
+        .select({
+          id: franchiseSeasons.id,
+          franchiseId: franchiseSeasons.franchiseId,
+          seasonId: franchiseSeasons.seasonId,
+          rosterId: franchiseSeasons.rosterId,
+          userId: franchiseSeasons.userId,
+          ownerDisplayName: franchiseSeasons.ownerDisplayName,
+          coOwnerDisplayName: franchiseSeasons.coOwnerDisplayName,
+          division: franchiseSeasons.division,
+          divisionName: franchiseSeasons.divisionName,
+          wins: franchiseSeasons.wins,
+          losses: franchiseSeasons.losses,
+          ties: franchiseSeasons.ties,
+          pointsScored: franchiseSeasons.pointsScored,
+          pointsAgainst: franchiseSeasons.pointsAgainst,
+          standingsFinish: franchiseSeasons.standingsFinish,
+          playoffResult: franchiseSeasons.playoffResult,
+          isLegacyEra: franchiseSeasons.isLegacyEra,
+          seasonYear: seasons.seasonYear,
+          seasonStatus: seasons.status,
+        })
+        .from(franchiseSeasons)
+        .innerJoin(seasons, eq(franchiseSeasons.seasonId, seasons.id))
+        .where(eq(franchiseSeasons.franchiseId, franchise.id))
+        .orderBy(desc(seasons.seasonYear)),
+      getLatestAvatarUrls([franchise.id]),
+    ]);
 
     // Compute aggregate stats
     let totalWins = 0;
@@ -162,8 +180,6 @@ export async function getFranchiseBySlug(slug: string) {
       totalPointsScored += s.pointsScored ?? 0;
       if (s.playoffResult === "champion") championships++;
     }
-
-    const avatarUrls = await getLatestAvatarUrls([franchise.id]);
 
     return {
       ...franchise,
@@ -179,7 +195,7 @@ export async function getFranchiseBySlug(slug: string) {
   } catch {
     return null;
   }
-}
+});
 
 /**
  * Returns roster_players for a franchise/season, joined with player info.

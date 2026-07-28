@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { db } from "@/lib/db";
 import {
   franchises,
@@ -1230,7 +1231,7 @@ export async function getTrophyCase(): Promise<TrophyEntry[]> {
 // Helpers — Get all franchise options (for selectors)
 // ---------------------------------------------------------------------------
 
-export async function getAllFranchiseOptions(): Promise<
+export const getAllFranchiseOptions = cache(async function getAllFranchiseOptions(): Promise<
   {
     id: string;
     slug: string;
@@ -1263,7 +1264,7 @@ export async function getAllFranchiseOptions(): Promise<
   } catch {
     return [];
   }
-}
+});
 
 // ---------------------------------------------------------------------------
 // Helper — Get available season years
