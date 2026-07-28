@@ -37,6 +37,8 @@ export interface PlayerProfileIdentity extends PlayerSearchResult {
    * open every profile on an empty table until week 1.
    */
   defaultSeason: number | null;
+  /** Current owner's latest-season team avatar for crest rendering. */
+  ownerAvatarUrl: string | null;
 }
 
 /**
@@ -52,7 +54,7 @@ export async function getPlayerProfileIdentity(
     const base = await getPlayerById(playerId);
     if (!base) return null;
 
-    const [pointRows, rosteredRows, scoredRows] = await Promise.all([
+    const [pointRows, rosteredRows, statRows, scoredRows] = await Promise.all([
       db
         .selectDistinct({ seasonId: playerWeekPoints.seasonId })
         .from(playerWeekPoints)
@@ -61,6 +63,12 @@ export async function getPlayerProfileIdentity(
         .selectDistinct({ seasonId: rosterPlayers.seasonId })
         .from(rosterPlayers)
         .where(eq(rosterPlayers.playerId, playerId)),
+      // NFL stat lines exist even for seasons nobody in the league rostered
+      // the player (full-career stats) — those seasons belong in the picker.
+      db
+        .selectDistinct({ seasonId: playerWeekStats.seasonId })
+        .from(playerWeekStats)
+        .where(eq(playerWeekStats.playerId, playerId)),
       db
         .selectDistinct({ seasonId: playerWeekPoints.seasonId })
         .from(playerWeekPoints)
@@ -69,11 +77,14 @@ export async function getPlayerProfileIdentity(
         ),
     ]);
     const rows = [
-      ...new Set([...pointRows, ...rosteredRows].map((r) => r.seasonId)),
+      ...new Set(
+        [...pointRows, ...rosteredRows, ...statRows].map((r) => r.seasonId),
+      ),
     ].map((seasonId) => ({ seasonId }));
 
     let seasonsPresent: number[] = [];
     let seasonsScored: number[] = [];
+    let leagueSeasonCount = 0;
     if (rows.length > 0) {
       const seasonRows = await db
         .select({ id: seasons.id, seasonYear: seasons.seasonYear })
@@ -92,13 +103,42 @@ export async function getPlayerProfileIdentity(
         .map((r) => yearBySeasonId.get(r.seasonId))
         .filter((y): y is number => y != null)
         .sort((a, b) => b - a);
+      // League tenure counts only seasons someone actually had the player
+      // (lineups or rosters) — stat-only NFL seasons don't add HMLML years.
+      leagueSeasonCount = new Set(
+        [...pointRows, ...rosteredRows].map((r) => r.seasonId),
+      ).size;
+    }
+
+    let ownerAvatarUrl: string | null = null;
+    if (base.ownerFranchiseId) {
+      const avatarRows = await db
+        .select({
+          seasonId: franchiseSeasons.seasonId,
+          avatarUrl: franchiseSeasons.avatarUrl,
+        })
+        .from(franchiseSeasons)
+        .where(eq(franchiseSeasons.franchiseId, base.ownerFranchiseId));
+      const seasonYears = await db
+        .select({ id: seasons.id, seasonYear: seasons.seasonYear })
+        .from(seasons);
+      const yearById = new Map(seasonYears.map((s) => [s.id, s.seasonYear]));
+      let bestYear = -1;
+      for (const a of avatarRows) {
+        const year = yearById.get(a.seasonId) ?? 0;
+        if (a.avatarUrl && year > bestYear) {
+          ownerAvatarUrl = a.avatarUrl;
+          bestYear = year;
+        }
+      }
     }
 
     return {
       ...base,
-      yearsInLeague: seasonsPresent.length,
+      yearsInLeague: leagueSeasonCount,
       seasonsPresent,
       defaultSeason: seasonsScored[0] ?? seasonsPresent[0] ?? null,
+      ownerAvatarUrl,
     };
   } catch {
     return null;
@@ -113,6 +153,8 @@ export interface TimelineFranchiseRef {
   id: string;
   name: string;
   slug: string;
+  /** Latest-season team avatar for crest rendering. */
+  avatarUrl: string | null;
 }
 
 export type TimelineEventType =
@@ -189,7 +231,7 @@ export async function getPlayerTimeline(
   playerId: string,
 ): Promise<TimelineEvent[]> {
   try {
-    // Franchise id -> {name, slug} for crest resolution.
+    // Franchise id -> {name, slug, avatarUrl} for crest resolution.
     const franchiseRows = await db
       .select({
         id: franchises.id,
@@ -198,7 +240,8 @@ export async function getPlayerTimeline(
       })
       .from(franchises);
     const franchiseById = new Map<string, TimelineFranchiseRef>();
-    for (const f of franchiseRows) franchiseById.set(f.id, f);
+    for (const f of franchiseRows)
+      franchiseById.set(f.id, { ...f, avatarUrl: null });
 
     // season id -> year.
     const seasonRows = await db
@@ -206,14 +249,26 @@ export async function getPlayerTimeline(
       .from(seasons);
     const yearBySeasonId = new Map(seasonRows.map((s) => [s.id, s.seasonYear]));
 
-    // roster_id -> franchise id, per season (to resolve adds/drops).
+    // roster_id -> franchise id, per season (to resolve adds/drops), and the
+    // latest-season team avatar per franchise for crest rendering.
     const fsRows = await db
       .select({
         seasonId: franchiseSeasons.seasonId,
         rosterId: franchiseSeasons.rosterId,
         franchiseId: franchiseSeasons.franchiseId,
+        avatarUrl: franchiseSeasons.avatarUrl,
       })
       .from(franchiseSeasons);
+    const avatarYearByFranchise = new Map<string, number>();
+    for (const fs of fsRows) {
+      if (!fs.avatarUrl) continue;
+      const year = yearBySeasonId.get(fs.seasonId) ?? 0;
+      const ref = franchiseById.get(fs.franchiseId);
+      if (ref && year >= (avatarYearByFranchise.get(fs.franchiseId) ?? -1)) {
+        ref.avatarUrl = fs.avatarUrl;
+        avatarYearByFranchise.set(fs.franchiseId, year);
+      }
+    }
     const franchiseBySeasonRoster = new Map<string, string>();
     for (const fs of fsRows) {
       franchiseBySeasonRoster.set(
@@ -336,7 +391,15 @@ export async function getPlayerTimeline(
         week: null,
         sleeperMs: null,
         franchise: a.franchise
-          ? { id: a.franchise.id, name: a.franchise.name, slug: a.franchise.slug }
+          ? {
+              id: a.franchise.id,
+              name: a.franchise.name,
+              slug: a.franchise.slug,
+              avatarUrl:
+                a.franchise.avatarUrl ??
+                franchiseById.get(a.franchise.id)?.avatarUrl ??
+                null,
+            }
           : null,
         transactionId: null,
         tradeDbId: null,

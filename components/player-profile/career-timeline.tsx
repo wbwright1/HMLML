@@ -162,6 +162,7 @@ export function CareerTimeline({ timeline }: CareerTimelineProps) {
                     <FranchiseLogo
                       slug={event.franchise.slug}
                       name={event.franchise.name}
+                      avatarUrl={event.franchise.avatarUrl}
                       size={18}
                       decorative
                     />

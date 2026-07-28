@@ -66,6 +66,7 @@ export function ProfileIdentityHeader({
             <FranchiseLogo
               slug={identity.ownerFranchiseSlug}
               name={identity.ownerFranchiseName}
+              avatarUrl={identity.ownerAvatarUrl}
               size="sm"
               decorative
             />
