@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback, useId } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { Search, X } from "lucide-react";
 import {
@@ -10,6 +11,7 @@ import {
 } from "./search-results";
 
 type Variant = "desktop" | "mobile";
+type Trigger = "bar" | "icon";
 
 const MIN_CHARS = 2;
 const DEBOUNCE_MS = 250;
@@ -19,15 +21,23 @@ const EMPTY: SearchData = { franchises: [], players: [] };
 interface SearchCommandProps {
   variant: Variant;
   className?: string;
+  /** Mobile trigger presentation only: "bar" = full-width dock button (legacy),
+   *  "icon" = compact 44px tap-target icon button for the mobile header.
+   *  Ignored on variant="desktop". */
+  trigger?: Trigger;
 }
 
 /**
  * Site-wide search. One component, two presentations:
  * - "desktop": inline topbar field + popover listbox (⌘K / focus opens).
- * - "mobile": dock trigger bar that opens a full-screen sheet.
+ * - "mobile": trigger (bar or icon) that opens a full-screen sheet.
  * ARIA combobox pattern; keyboard + pointer stay in sync via a flat option list.
  */
-export function SearchCommand({ variant, className = "" }: SearchCommandProps) {
+export function SearchCommand({
+  variant,
+  className = "",
+  trigger = "bar",
+}: SearchCommandProps) {
   const router = useRouter();
   const listboxId = useId();
 
@@ -258,87 +268,103 @@ export function SearchCommand({ variant, className = "" }: SearchCommandProps) {
   // ── Mobile presentation ───────────────────────────────────────────────────
   return (
     <>
-      <button
-        ref={triggerRef}
-        type="button"
-        onClick={() => setOpen(true)}
-        aria-haspopup="dialog"
-        aria-expanded={open}
-        aria-label="Search teams, players, records"
-        className={`flex w-full items-center gap-2.5 rounded-[14px] border border-border bg-surface px-3.5 py-3 text-left ${className}`}
-      >
-        <Search
-          className="size-5 shrink-0 text-text-tertiary"
-          strokeWidth={1.7}
-          aria-hidden="true"
-        />
-        <span className="flex-1 truncate text-body-sm text-text-tertiary">
-          Search teams, players, records…
-        </span>
-      </button>
-
-      {open && (
-        <div
-          ref={dialogRef}
-          role="dialog"
-          aria-modal="true"
-          aria-label="Search"
-          className="fixed inset-0 z-[60] flex flex-col bg-canvas"
-          style={{
-            paddingTop: "env(safe-area-inset-top)",
-            paddingBottom: "env(safe-area-inset-bottom)",
-          }}
+      {trigger === "icon" ? (
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-label="Search teams, players, records"
+          className={`flex size-10 shrink-0 items-center justify-center rounded-full text-text-tertiary ${className}`}
         >
-          <div className="flex items-center gap-2 border-b border-border p-3">
-            <div className="relative flex-1">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-text-tertiary"
-                strokeWidth={1.7}
-                aria-hidden="true"
-              />
-              <input
-                ref={inputRef}
-                type="text"
-                value={query}
-                placeholder="Search teams, players, records…"
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={handleKeyNav}
-                {...inputAria}
-                className="h-11 w-full rounded-[10px] border border-border bg-surface pl-10 pr-3 text-body text-text-primary outline-none placeholder:text-text-tertiary focus-visible:border-border-strong"
-              />
-            </div>
-            <button
-              type="button"
-              onClick={close}
-              aria-label="Close search"
-              className="flex size-11 shrink-0 items-center justify-center rounded-[10px] text-text-tertiary"
-            >
-              <X className="size-5" strokeWidth={1.7} aria-hidden="true" />
-            </button>
-          </div>
-          <div
-            id={listboxId}
-            role="listbox"
-            aria-label="Search results"
-            className="flex-1 overflow-y-auto"
-          >
-            {data ? (
-              <SearchResults
-                data={data}
-                activeId={activeId}
-                onSelect={close}
-                onHover={onHover}
-              />
-            ) : (
-              <p className="px-4 py-6 text-center text-body-sm text-text-tertiary">
-                {hasQuery
-                  ? "Searching…"
-                  : "Type to search teams, players, and records."}
-              </p>
-            )}
-          </div>
-        </div>
+          <Search className="size-5" strokeWidth={1.7} aria-hidden="true" />
+        </button>
+      ) : (
+        <button
+          ref={triggerRef}
+          type="button"
+          onClick={() => setOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={open}
+          aria-label="Search teams, players, records"
+          className={`flex w-full items-center gap-2.5 rounded-[14px] border border-border bg-surface px-3.5 py-3 text-left ${className}`}
+        >
+          <Search
+            className="size-5 shrink-0 text-text-tertiary"
+            strokeWidth={1.7}
+            aria-hidden="true"
+          />
+          <span className="flex-1 truncate text-body-sm text-text-tertiary">
+            Search teams, players, records…
+          </span>
+        </button>
       )}
+
+      {open &&
+        createPortal(
+          <div
+            ref={dialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Search"
+            className="fixed inset-0 z-[60] flex flex-col bg-canvas"
+            style={{
+              paddingTop: "env(safe-area-inset-top)",
+              paddingBottom: "env(safe-area-inset-bottom)",
+            }}
+          >
+            <div className="flex items-center gap-2 border-b border-border p-3">
+              <div className="relative flex-1">
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-text-tertiary"
+                  strokeWidth={1.7}
+                  aria-hidden="true"
+                />
+                <input
+                  ref={inputRef}
+                  type="text"
+                  value={query}
+                  placeholder="Search teams, players, records…"
+                  onChange={(e) => setQuery(e.target.value)}
+                  onKeyDown={handleKeyNav}
+                  {...inputAria}
+                  className="h-11 w-full rounded-[10px] border border-border bg-surface pl-10 pr-3 text-body text-text-primary outline-none placeholder:text-text-tertiary focus-visible:border-border-strong"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={close}
+                aria-label="Close search"
+                className="flex size-11 shrink-0 items-center justify-center rounded-[10px] text-text-tertiary"
+              >
+                <X className="size-5" strokeWidth={1.7} aria-hidden="true" />
+              </button>
+            </div>
+            <div
+              id={listboxId}
+              role="listbox"
+              aria-label="Search results"
+              className="flex-1 overflow-y-auto"
+            >
+              {data ? (
+                <SearchResults
+                  data={data}
+                  activeId={activeId}
+                  onSelect={close}
+                  onHover={onHover}
+                />
+              ) : (
+                <p className="px-4 py-6 text-center text-body-sm text-text-tertiary">
+                  {hasQuery
+                    ? "Searching…"
+                    : "Type to search teams, players, and records."}
+                </p>
+              )}
+            </div>
+          </div>,
+          document.body
+        )}
     </>
   );
 }

@@ -12,7 +12,7 @@ const TABS = [
 ];
 
 test.describe("Mobile dock", () => {
-  test("dock is fixed at the bottom with 5 tabs and a search bar", async ({
+  test("dock is fixed at the bottom, tab-bar only (no search field)", async ({
     page,
   }) => {
     await page.goto("/");
@@ -21,20 +21,33 @@ test.describe("Mobile dock", () => {
     await expect(dock).toBeVisible();
     await expect(dock.locator("a")).toHaveCount(5);
 
-    // Persistent search bar sits directly above the tab bar.
-    const searchBar = page.getByRole("button", {
-      name: "Search teams, players, records",
-    });
-    await expect(searchBar).toBeVisible();
-    const searchBox = await searchBar.boundingBox();
-    const dockBox = await dock.boundingBox();
-    expect(searchBox).not.toBeNull();
-    expect(dockBox).not.toBeNull();
-    // Search bar is above the tab bar.
-    expect(searchBox!.y).toBeLessThan(dockBox!.y);
+    // Search moved to the mobile header; the dock has no input/button of its own.
+    await expect(dock.locator("input")).toHaveCount(0);
+    await expect(dock.locator("button")).toHaveCount(0);
 
+    const dockBox = await dock.boundingBox();
+    expect(dockBox).not.toBeNull();
     // Tab bar sits at the bottom of the viewport (within the dock's own padding).
     expect(dockBox!.y + dockBox!.height).toBeGreaterThan(812 - 40);
+  });
+
+  test("search trigger lives in the mobile header, not the dock", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const trigger = page.getByRole("button", {
+      name: "Search teams, players, records",
+    });
+    await expect(trigger).toBeVisible();
+
+    const dock = page.locator('nav[aria-label="Mobile navigation"]');
+    const dockBox = await dock.boundingBox();
+    const triggerBox = await trigger.boundingBox();
+    expect(dockBox).not.toBeNull();
+    expect(triggerBox).not.toBeNull();
+    // Trigger sits well above the dock (it's in the top header).
+    expect(triggerBox!.y).toBeLessThan(dockBox!.y - 400);
   });
 
   test("no hamburger button anywhere", async ({ page }) => {
@@ -78,8 +91,8 @@ test.describe("Mobile dock", () => {
     const paddingBottom = await footer.evaluate((el) =>
       parseFloat(window.getComputedStyle(el).paddingBottom)
     );
-    // 148px clearance + env(safe-area-inset-bottom) (0 in headless).
-    expect(paddingBottom).toBeGreaterThanOrEqual(140);
+    // 96px clearance + env(safe-area-inset-bottom) (0 in headless).
+    expect(paddingBottom).toBeGreaterThanOrEqual(90);
 
     // The footer text sits above the top edge of the dock.
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));

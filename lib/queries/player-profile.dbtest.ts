@@ -11,8 +11,17 @@ import {
   getPlayerSeasonStatTotals,
   getPlayerValueSeries,
   getPlayerOwnershipFacts,
+  getPlayerFranchiseHistory,
   getPlayerProfile,
 } from "./player-profile";
+
+// CeeDee Lamb (player_id 6786): verified ground truth against the live DB.
+// Tokyo Thunderbirds 2021-2022, Latter Day Lamb Special 2023-2024, Tokyo
+// Thunderbirds 2024-2026 (mid-season trade, transaction id 444, week 10/11
+// of 2024 — the ONLY CeeDee trade in the DB). Draft picks: 2021 R4 overall 36
+// (10-team startup -> pick 6 of the round), 2023 R1 overall 10 (pick 10 of
+// the round).
+const CEEDEE_PLAYER_ID = "6786";
 
 // ---------------------------------------------------------------------------
 // Real-DB acceptance tests (read-only). These run against the live database
@@ -94,9 +103,16 @@ describe("getPlayerSeasonPointsAggregates", () => {
     for (const a of aggs) {
       // totalPoints == startedPoints + benchPoints.
       expect(a.totalPoints).toBeCloseTo(a.startedPoints + a.benchPoints, 3);
-      // avgWhenStarted == startedPoints / startedWeeks (or null).
-      if (a.startedWeeks > 0) {
-        expect(a.avgWhenStarted).toBeCloseTo(a.startedPoints / a.startedWeeks, 3);
+      // startedPlayedWeeks (started AND actually PLAYED, excluding BYE/DNP)
+      // never exceeds the raw started count.
+      expect(a.startedPlayedWeeks).toBeLessThanOrEqual(a.startedWeeks);
+      // avgWhenStarted == startedPoints / startedPlayedWeeks (or null) — the
+      // denominator excludes bye/DNP weeks, which never contribute points.
+      if (a.startedPlayedWeeks > 0) {
+        expect(a.avgWhenStarted).toBeCloseTo(
+          a.startedPoints / a.startedPlayedWeeks,
+          3,
+        );
         expect(a.bestWeek).not.toBeNull();
         expect(a.worstStartedWeek).not.toBeNull();
         expect(a.bestWeek!.points).toBeGreaterThanOrEqual(
@@ -118,6 +134,25 @@ describe("getPlayerSeasonPointsAggregates", () => {
     expect(target.startedWeeks).toBe(handStarted);
     const handBench = weekly.filter((w) => !w.started).length;
     expect(target.benchedWeeks).toBe(handBench);
+  });
+
+  // Regression coverage for the honest BYE/DNP exclusion (#132): Patrick
+  // Mahomes' 2024 season is a real, fully-played, non-mock case where the
+  // OLD unguarded logic (min points among ANY started week) picked week 18 —
+  // a meaningless season-finale rest week where Mahomes was left started at
+  // 0.0 (a DNP, not a performance). The 2024 season's actual worst STARTED
+  // week that Mahomes really played was week 4 (14.0 pts). This was verified
+  // directly against the live DB before this fix landed (OLD week=18 pts=0,
+  // NEW week=4 pts=14) — see the PR description for the raw query output.
+  it("excludes a real DNP week from the worst-started-week pick (Mahomes 2024, #132)", async () => {
+    const aggs = await getPlayerSeasonPointsAggregates("4046");
+    const season2024 = aggs.find((a) => a.seasonYear === 2024);
+    // Skip gracefully if this environment's data differs (e.g. a fresh/partial sync).
+    if (!season2024) return;
+    expect(season2024.worstStartedWeek?.week).not.toBe(18);
+    if (season2024.worstStartedWeek) {
+      expect(season2024.worstStartedWeek.points).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -173,7 +208,7 @@ describe("getPlayerTimeline", () => {
         expect(e.franchise.id).toBeTruthy();
         expect(e.franchise.slug).toBeTruthy();
       }
-      if (e.type === "trade_in" || e.type === "trade_out" || e.type === "drop" || e.type === "waiver_add") {
+      if (e.type === "traded" || e.type === "drop" || e.type === "waiver_add") {
         expect(e.transactionId).toBeTruthy();
       }
       if (e.type === "drafted") {
@@ -184,6 +219,77 @@ describe("getPlayerTimeline", () => {
         expect(e.stintEndSeasonYear!).toBeGreaterThanOrEqual(e.seasonYear);
       }
     }
+  });
+});
+
+describe("getPlayerFranchiseHistory (Ownership Ledger, CeeDee Lamb ground truth)", () => {
+  it("returns 3 chronological stints, Tokyo Thunderbirds appearing twice (non-contiguous, split by a mid-season trade back)", async () => {
+    const history = await getPlayerFranchiseHistory(CEEDEE_PLAYER_ID);
+    expect(history.length).toBe(3);
+
+    // Chronological, oldest first.
+    for (let i = 1; i < history.length; i++) {
+      expect(history[i].firstSeasonYear).toBeGreaterThanOrEqual(
+        history[i - 1].firstSeasonYear,
+      );
+    }
+
+    expect(history[0]).toMatchObject({
+      firstSeasonYear: 2021,
+      lastSeasonYear: 2022,
+    });
+    expect(history[1]).toMatchObject({
+      firstSeasonYear: 2023,
+      lastSeasonYear: 2024,
+    });
+    expect(history[2]).toMatchObject({
+      firstSeasonYear: 2024,
+      lastSeasonYear: 2026,
+    });
+
+    // Tokyo Thunderbirds appears in both the first and third (non-adjacent) stints.
+    expect(history[0].franchiseId).toBe(history[2].franchiseId);
+    expect(history[0].franchiseId).not.toBe(history[1].franchiseId);
+  });
+});
+
+describe("getPlayerTimeline (CeeDee Lamb ground truth)", () => {
+  it("includes drafted events with the correct in-round pick numbers", async () => {
+    const timeline = await getPlayerTimeline(CEEDEE_PLAYER_ID);
+    const draftedEvents = timeline.filter((e) => e.type === "drafted");
+    expect(draftedEvents.length).toBeGreaterThanOrEqual(1);
+
+    const startup2021 = draftedEvents.find((e) => e.seasonYear === 2021);
+    if (startup2021) {
+      expect(startup2021.draftRound).toBe(4);
+      expect(startup2021.draftPickNumber).toBe(36);
+      expect(startup2021.draftPickInRound).toBe(6);
+    }
+
+    const rookie2023 = draftedEvents.find((e) => e.seasonYear === 2023);
+    if (rookie2023) {
+      expect(rookie2023.draftRound).toBe(1);
+      expect(rookie2023.draftPickNumber).toBe(10);
+      expect(rookie2023.draftPickInRound).toBe(10);
+    }
+  });
+
+  it("condenses transaction 444 into a single 'traded' event: Latter Day Lamb Special -> Tokyo Thunderbirds", async () => {
+    const timeline = await getPlayerTimeline(CEEDEE_PLAYER_ID);
+    const tradedEvents = timeline.filter((e) => e.type === "traded");
+    // The DB contains exactly one CeeDee trade (id 444); if more trades were
+    // expected, that's a sync-completeness question, not a rendering bug.
+    expect(tradedEvents.length).toBe(1);
+
+    const trade = tradedEvents[0];
+    expect(trade.tradeDbId).toBe(444);
+    expect(trade.tradeFromFranchise).not.toBeNull();
+    expect(trade.tradeToFranchise).not.toBeNull();
+    expect(trade.tradeFromFranchise!.name).toBe("Latter Day Lamb Special");
+    expect(trade.tradeToFranchise!.name).toBe("The Tokyo Thunderbirds");
+    // Exact date carried via sleeperMs (not just season/week).
+    expect(trade.sleeperMs).not.toBeNull();
+    expect(trade.seasonYear).toBe(2024);
   });
 });
 

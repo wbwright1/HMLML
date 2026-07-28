@@ -48,29 +48,35 @@ export function OwnershipFacts({ facts, franchiseHistory }: OwnershipFactsProps)
       <p className="text-kicker text-text-tertiary mb-1">Ownership Ledger</p>
       {franchiseHistory.length > 0 && (
         <ul className="flex flex-wrap gap-3 py-2">
-          {franchiseHistory.map((stint) => (
-            <li key={stint.franchiseId}>
-              <Link
-                href={`/teams/${stint.slug}`}
-                className="flex items-center gap-2 rounded-full border border-border bg-surface py-1 pl-1 pr-3 transition-colors hover:border-border-strong"
-                title={stint.name}
-              >
-                <FranchiseLogo
-                  slug={stint.slug}
-                  name={stint.name}
-                  avatarUrl={stint.avatarUrl}
-                  size={28}
-                  decorative
-                />
-                <span className="font-mono tabular-nums text-caption text-text-tertiary">
-                  {stint.firstSeasonYear === stint.lastSeasonYear
-                    ? stint.firstSeasonYear
-                    : `${stint.firstSeasonYear}–${String(stint.lastSeasonYear).slice(2)}`}
-                </span>
-                <span className="sr-only">{stint.name}</span>
-              </Link>
-            </li>
-          ))}
+          {franchiseHistory.map((stint) => {
+            const yearRange =
+              stint.firstSeasonYear === stint.lastSeasonYear
+                ? String(stint.firstSeasonYear)
+                : `${stint.firstSeasonYear}–${String(stint.lastSeasonYear).slice(2)}`;
+            return (
+              <li key={`${stint.franchiseId}-${stint.firstSeasonYear}`}>
+                <Link
+                  href={`/teams/${stint.slug}`}
+                  className="flex items-center gap-2 rounded-full border border-border bg-surface py-1 pl-1 pr-3 transition-colors hover:border-border-strong"
+                  title={`${stint.name} (${yearRange})`}
+                >
+                  <FranchiseLogo
+                    slug={stint.slug}
+                    name={stint.name}
+                    avatarUrl={stint.avatarUrl}
+                    size={28}
+                    decorative
+                  />
+                  <span className="font-mono tabular-nums text-caption text-text-tertiary">
+                    {yearRange}
+                  </span>
+                  <span className="sr-only">
+                    {stint.name}, {yearRange}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
         </ul>
       )}
       <div className="divide-y divide-divider">
