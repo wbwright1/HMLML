@@ -17,7 +17,7 @@ export function MedallionShelf({ label, count, children }: MedallionShelfProps) 
   return (
     <div>
       <div className="flex items-center gap-2">
-        <span className="text-caption text-text-tertiary">{label}</span>
+        <span className="text-kicker">{label}</span>
         <span className="font-mono text-[11px] text-text-muted">×{count}</span>
       </div>
       <div className="medallion-strip no-scrollbar">{children}</div>
@@ -65,7 +65,7 @@ export function Medallion({ iconType, href, ariaLabel, plate }: MedallionProps) 
   }
 
   return (
-    <div aria-label={ariaLabel} className="medallion-item">
+    <div role="group" aria-label={ariaLabel} className="medallion-item">
       {content}
     </div>
   );

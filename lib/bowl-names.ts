@@ -46,8 +46,9 @@ export function getBowlName(seasonYear: number): string | null {
 }
 
 /**
- * Formats a season record as "W–L" (en dash), appending "–T" only when there
- * were ties. Returns null when wins or losses is null (incomplete data).
+ * Formats a season record as "W–L" (en dash), appending "–{ties}" only when
+ * there were ties (standard "W–L–T" notation). Returns null when wins or
+ * losses is null (incomplete data).
  */
 export function formatRecord(
   wins: number | null,
@@ -56,5 +57,5 @@ export function formatRecord(
 ): string | null {
   if (wins == null || losses == null) return null;
   const base = `${wins}–${losses}`;
-  return ties != null && ties > 0 ? `${base}–${ties}T` : base;
+  return ties != null && ties > 0 ? `${base}–${ties}` : base;
 }

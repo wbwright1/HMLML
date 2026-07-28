@@ -40,7 +40,7 @@ describe("formatRecord", () => {
   });
 
   it("appends the tie count only when ties > 0", () => {
-    expect(formatRecord(9, 4, 1)).toBe("9–4–1T");
+    expect(formatRecord(9, 4, 1)).toBe("9–4–1");
   });
 
   it("returns null when wins or losses is null", () => {
