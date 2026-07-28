@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { PlayerHeadshot } from "@/components/player-headshot";
 
 /** Shapes returned by /api/search (see app/api/search/route.ts). */
 export interface SearchTeam {
@@ -176,6 +177,18 @@ export function SearchResults({
                 onSelect={onSelect}
                 onHover={onHover}
               >
+                {/* Decorative: the option's accessible name stays the text;
+                    the monogram fallback paints synchronously so rows never
+                    shift while the image loads. */}
+                <span aria-hidden="true" className="shrink-0">
+                  <PlayerHeadshot
+                    playerId={p.id}
+                    name={p.name}
+                    size={28}
+                    nflTeam={p.nflTeam}
+                    showTeamBadge={false}
+                  />
+                </span>
                 <span className="flex min-w-0 flex-col">
                   <span className="truncate font-medium text-text-primary">
                     {p.name}

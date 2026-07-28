@@ -48,8 +48,11 @@ export async function getAllSeasons() {
  * projSeason (e.g. the upcoming season has no row yet), since scoring settings
  * carry over year to year. Returns null only when there is no season row at
  * all, or the row carries no scoring_settings.
+ *
+ * Wrapped in React `cache()` so repeated calls for the same season within a
+ * request dedupe to a single set of queries.
  */
-export async function loadSeasonScoringSettings(
+export const loadSeasonScoringSettings = cache(async function loadSeasonScoringSettings(
   projSeason: number
 ): Promise<Record<string, number> | null> {
   try {
@@ -85,7 +88,7 @@ export async function loadSeasonScoringSettings(
     console.error("[seasons] loadSeasonScoringSettings error:", e);
     return null;
   }
-}
+});
 
 /**
  * Returns the most recent season with status 'complete'.
