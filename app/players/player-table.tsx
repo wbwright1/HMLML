@@ -275,11 +275,14 @@ interface PlayerTableProps {
   projSeason?: number | null;
   /**
    * Whether the season-long projection leads the table (headline PROJ column
-   * first, actual points de-emphasized second). Computed in the page: true in
-   * the offseason when projSeason > statsSeason, false in-season.
+   * first, last season's points de-emphasized second). Computed in the page
+   * from the three-segment season model (lib/season-segment.ts): true only in
+   * the PRESEASON segment (`segment === "preseason" && projSeason != null`),
+   * i.e. after the rookie draft but before the NFL season starts. False in the
+   * offseason (PTS leads) and in-season (the WK column leads instead).
    */
   projLeads?: boolean;
-  /** Current NFL week (for the in-season WK column header); null offseason. */
+  /** Current NFL week (for the in-season WK column header); null outside the in-season segment. */
   currentWeek?: number | null;
   initialQuery?: string;
   /**

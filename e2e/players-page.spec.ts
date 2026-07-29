@@ -149,19 +149,52 @@ test.describe("Players page", () => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto("/players");
 
-    const rows = page.locator("table tbody tr");
-    if ((await rows.count()) < 2) return;
+    // Decide the EXPECTED segment from the nav's seasonal live pill, which is
+    // rendered by a completely separate code path (lib/hub/season-state +
+    // kickoff countdown) from the players table. This makes the assertion
+    // non-circular: if the PROJ-leads rendering were deleted while the site is
+    // in preseason, the pill would still read "PRESEASON" and this test would
+    // fail rather than silently pass.
+    //
+    // Only visible text is returned by innerText, so at the desktop viewport
+    // the (hidden) mobile header's duplicate pill is excluded.
+    const chromeText = await page.locator("body").innerText();
+    const preseasonKickoff = chromeText.match(
+      /PRESEASON\b[^\n]*?\bIN\s+(\d+)\s*D\b/i
+    );
+    const isPreseasonPill =
+      preseasonKickoff != null || /\bpreseason\b/i.test(chromeText);
 
-    // First stat header (right after the sticky Player column). In the
-    // preseason segment the season-long projection leads; if the site is in a
-    // different segment (offseason PTS-first / in-season WK-first) this test
-    // no-ops rather than failing.
+    // KICKOFF_LEAD_DAYS in lib/season-segment.ts: within this window before
+    // week-1 kickoff the page (deliberately) flips to the in-season WK layout,
+    // even while the pill still says PRESEASON. That is the accepted seam, so
+    // skip only there, with a logged reason (never an unconditional skip).
+    const KICKOFF_LEAD_DAYS = 5;
+    const daysToKickoff = preseasonKickoff
+      ? Number(preseasonKickoff[1])
+      : null;
+
+    test.skip(
+      !isPreseasonPill,
+      `live season is not preseason (nav pill did not read PRESEASON); nothing to assert for the PROJ-leads layout`
+    );
+    test.skip(
+      daysToKickoff != null && daysToKickoff <= KICKOFF_LEAD_DAYS,
+      `within ${KICKOFF_LEAD_DAYS}-day kickoff seam (${daysToKickoff}D out): page flips to the in-season WK layout by design`
+    );
+
+    // From here the live season is unambiguously preseason, so the PROJ-leads
+    // layout MUST be present. No early returns below: any deviation is a hard
+    // failure.
+    const rows = page.locator("table tbody tr");
+    await expect(rows.first()).toBeVisible();
+    expect(await rows.count()).toBeGreaterThanOrEqual(2);
+
+    // First stat header (right after the sticky Player column) is the season
+    // projection.
     const firstStatHeader = page.locator("thead th").nth(1);
-    const title = await firstStatHeader.getAttribute("title");
-    if (!/projected/i.test(title ?? "")) {
-      return;
-    }
     await expect(firstStatHeader).toContainText("PROJ");
+    await expect(firstStatHeader).toHaveAttribute("title", /projected/i);
 
     // Default sort is PROJ desc: first row's projection >= second row's.
     const projFirst = parseFloat(
@@ -173,7 +206,8 @@ test.describe("Players page", () => {
     expect(projFirst).toBeGreaterThanOrEqual(projSecond);
 
     // Actual points are the de-emphasized second stat column; clicking the
-    // PTS header re-sorts the table (its aria-sort becomes descending).
+    // PTS header re-sorts the table (its aria-sort becomes descending, and the
+    // PROJ header goes inactive).
     const ptsHeader = page.locator("th", { hasText: "PTS" });
     await expect(ptsHeader).toBeVisible();
     await ptsHeader.click();
