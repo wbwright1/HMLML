@@ -111,13 +111,22 @@ function RosterSection({
 }) {
   if (players.length === 0) return null;
 
-  // Column logic mirrors app/players/player-table.tsx's three-segment model:
-  //  - preseason: headline season-long PROJ leads, prior-year PTS de-emphasized second.
-  //  - in_season: merged "this week" WK column leads, current-season PTS second.
+  // Column logic mirrors app/players/player-table.tsx's three-segment model,
+  // including its data-presence guards: a segment alone is not enough to show
+  // a column, since the column would render all-dashes before the relevant
+  // sync has run (the daily projection sync for PROJ, the current week's
+  // player_week_points sync for WK).
+  //  - preseason: headline season-long PROJ leads (only when the roster
+  //    actually has projection data), prior-year PTS de-emphasized second.
+  //  - in_season: merged "this week" WK column leads (only when there is
+  //    week-status data for this roster), current-season PTS second.
   //  - offseason: last season's PTS only, headline treatment.
-  const showProjColumn = segment === "preseason";
-  const showWkColumn = segment === "in_season";
-  const ptsHeadline = segment === "offseason";
+  // Whenever neither PROJ nor WK renders (including a data-guarded fallback
+  // out of preseason/in_season), PTS gets the headline treatment instead, so
+  // there is always exactly one headline stat column.
+  const showProjColumn = segment === "preseason" && projSeason != null;
+  const showWkColumn = segment === "in_season" && weekStatusByPlayer.size > 0;
+  const ptsHeadline = !showProjColumn && !showWkColumn;
 
   return (
     <div className="space-y-3">
