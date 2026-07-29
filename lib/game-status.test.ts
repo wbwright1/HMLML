@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { classifyStarter } from "./game-status";
+import { classifyStarter, decideWeekDisplay } from "./game-status";
 
 describe("classifyStarter", () => {
   it("pre_game: yet to play, full projection remains", () => {
@@ -70,5 +70,69 @@ describe("classifyStarter", () => {
       yetToPlay: false,
       projRemaining: 0,
     });
+  });
+});
+
+describe("decideWeekDisplay", () => {
+  it("not started (pre_game): shows the projection, flagged", () => {
+    expect(decideWeekDisplay("pre_game", 0, 12.4)).toEqual({
+      value: 12.4,
+      isProjected: true,
+    });
+  });
+
+  it("in progress: shows actual points (not the projection)", () => {
+    expect(decideWeekDisplay("in_game", 8.6, 15)).toEqual({
+      value: 8.6,
+      isProjected: false,
+    });
+  });
+
+  it("final: shows actual points", () => {
+    expect(decideWeekDisplay("complete", 21.5, 18)).toEqual({
+      value: 21.5,
+      isProjected: false,
+    });
+  });
+
+  it("final 0.0: shows 0.0 actual, never the projection", () => {
+    expect(decideWeekDisplay("complete", 0, 14.2)).toEqual({
+      value: 0,
+      isProjected: false,
+    });
+  });
+
+  it("canceled: treated as played, shows actual points", () => {
+    expect(decideWeekDisplay("canceled", 0, 9.9)).toEqual({
+      value: 0,
+      isProjected: false,
+    });
+  });
+
+  it("no schedule rows (null status): shows the projection, flagged", () => {
+    expect(decideWeekDisplay(null, 0, 11.1)).toEqual({
+      value: 11.1,
+      isProjected: true,
+    });
+  });
+
+  it("null status with no projection: falls back to actual points", () => {
+    expect(decideWeekDisplay(null, 4.5, null)).toEqual({
+      value: 4.5,
+      isProjected: false,
+    });
+  });
+
+  it("played but no actual points recorded: falls back to projection", () => {
+    expect(decideWeekDisplay("complete", null, 13.3)).toEqual({
+      value: 13.3,
+      isProjected: true,
+    });
+  });
+
+  it("both values null: returns null (cell renders a dash)", () => {
+    expect(decideWeekDisplay("pre_game", null, null)).toBeNull();
+    expect(decideWeekDisplay("complete", null, null)).toBeNull();
+    expect(decideWeekDisplay(null, null, null)).toBeNull();
   });
 });

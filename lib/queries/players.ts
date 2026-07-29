@@ -27,6 +27,8 @@ export type RosteredPlayer = {
   ownerFranchiseAvatarUrl: string | null;
   pointsPpr: number | null;
   statsSeason: number | null;
+  projPointsPpr: number | null;
+  projSeason: number | null;
 };
 
 /**
@@ -61,6 +63,8 @@ export async function getAllRosteredPlayers(): Promise<RosteredPlayer[]> {
         ownerFranchiseSlug: franchises.slug,
         pointsPpr: players.pointsPpr,
         statsSeason: players.statsSeason,
+        projPointsPpr: players.projPointsPpr,
+        projSeason: players.projSeason,
         rosterPlayerId: rosterPlayers.playerId,
       })
       // leftJoin players, not innerJoin: the hourly roster sync can add a
@@ -237,6 +241,8 @@ export async function getAllPlayersWithStats(): Promise<RosteredPlayer[]> {
         ownerFranchiseAvatarUrl: franchiseSeasons.avatarUrl,
         pointsPpr: players.pointsPpr,
         statsSeason: players.statsSeason,
+        projPointsPpr: players.projPointsPpr,
+        projSeason: players.projSeason,
       })
       .from(players)
       .leftJoin(
@@ -261,6 +267,7 @@ export async function getAllPlayersWithStats(): Promise<RosteredPlayer[]> {
           inArray(players.position, ["QB", "RB", "WR", "TE"]),
           or(
             gt(players.pointsPpr, 0),
+            gt(players.projPointsPpr, 0),
             isNotNull(rosterPlayers.id)
           )
         )

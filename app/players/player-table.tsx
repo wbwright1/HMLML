@@ -52,22 +52,32 @@ function PlayerLink({
 }
 
 /**
- * A RosteredPlayer enriched with the current-week PROJ signal and the
- * trending-adds signal. Both fields are null when the page has no data for
- * that player (no sync yet, or the player isn't in the trending list); the
- * table decides whether to show the PROJ/TRD columns at all via
- * showProjColumn / showTrdColumn, computed once in the page from whether any
- * player has a non-null value.
+ * A RosteredPlayer enriched with the merged in-season "this week" (WK) signal
+ * and the trending-adds signal. `weekValue` is the number shown in the WK cell
+ * (actual points once the player's game has started/finished, otherwise the
+ * projection); `weekIsProjected` flags the projected case so the cell can show
+ * a "~" prefix. Both default to null/false when the page has no week data for
+ * that player. The table decides whether to show the WK/TRD columns at all via
+ * showWkColumn / showTrdColumn, computed once in the page.
  */
 export interface PlayerRow extends RosteredPlayer {
-  projPoints: number | null;
+  weekValue: number | null;
+  weekIsProjected: boolean;
   trendingCount: number | null;
 }
 
 const POSITIONS = ["ALL", "QB", "RB", "WR", "TE"] as const;
 type PositionFilter = (typeof POSITIONS)[number];
 
-type SortKey = "name" | "points" | "age" | "yearsExp" | "hmlTeam" | "status";
+type SortKey =
+  | "name"
+  | "points"
+  | "seasonProj"
+  | "week"
+  | "age"
+  | "yearsExp"
+  | "hmlTeam"
+  | "status";
 type SortDir = "asc" | "desc";
 
 function compareValues(
@@ -84,6 +94,12 @@ function compareValues(
       break;
     case "points":
       cmp = (a.pointsPpr ?? 0) - (b.pointsPpr ?? 0);
+      break;
+    case "seasonProj":
+      cmp = (a.projPointsPpr ?? 0) - (b.projPointsPpr ?? 0);
+      break;
+    case "week":
+      cmp = (a.weekValue ?? 0) - (b.weekValue ?? 0);
       break;
     case "age":
       cmp = (a.age ?? 0) - (b.age ?? 0);
@@ -255,9 +271,22 @@ interface PlayerTableProps {
   players: PlayerRow[];
   franchises: { id: string; name: string; slug: string }[];
   statsSeason: number | null;
+  /** The season the season-long projection is for (e.g. 2026). */
+  projSeason?: number | null;
+  /**
+   * Whether the season-long projection leads the table (headline PROJ column
+   * first, actual points de-emphasized second). Computed in the page: true in
+   * the offseason when projSeason > statsSeason, false in-season.
+   */
+  projLeads?: boolean;
+  /** Current NFL week (for the in-season WK column header); null offseason. */
+  currentWeek?: number | null;
   initialQuery?: string;
-  /** Whether to render the PROJ column: false when no rows have a projection (no sync yet / offseason). */
-  showProjColumn?: boolean;
+  /**
+   * Whether to render the merged in-season "WK" column: false offseason or
+   * before the current week's data has synced. Never true when projLeads.
+   */
+  showWkColumn?: boolean;
   /** Whether to render the TRD column: false when the trending-adds list is empty. */
   showTrdColumn?: boolean;
   /** League-award badges ("MVP '25") keyed by player id. Empty pre-seed. */
@@ -268,15 +297,24 @@ export function PlayerTable({
   players,
   franchises,
   statsSeason,
+  projSeason = null,
+  projLeads = false,
+  currentWeek = null,
   initialQuery = "",
-  showProjColumn = false,
+  showWkColumn = false,
   showTrdColumn = false,
   awardsByPlayerId = {},
 }: PlayerTableProps) {
   const [search, setSearch] = useState(initialQuery);
   const [posFilter, setPosFilter] = useState<PositionFilter>("ALL");
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>("FA");
-  const [sortKey, setSortKey] = useState<SortKey>("points");
+  // Headline column and default sort:
+  //  - offseason (projLeads): the season-long projection leads.
+  //  - in-season with week data: the merged "this week" (WK) column leads.
+  //  - otherwise: the season point total leads.
+  const [sortKey, setSortKey] = useState<SortKey>(
+    projLeads ? "seasonProj" : showWkColumn ? "week" : "points"
+  );
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const handleSort = useCallback(
@@ -285,8 +323,12 @@ export function PlayerTable({
         setSortDir((d) => (d === "asc" ? "desc" : "asc"));
       } else {
         setSortKey(key);
-        // Default to desc for points, asc for everything else
-        setSortDir(key === "points" ? "desc" : "asc");
+        // Default to desc for the numeric headline columns, asc otherwise
+        setSortDir(
+          key === "points" || key === "seasonProj" || key === "week"
+            ? "desc"
+            : "asc"
+        );
       }
     },
     [sortKey]
@@ -445,6 +487,36 @@ export function PlayerTable({
                   )}
                 </span>
               </th>
+              {projLeads && (
+                <SortHeader
+                  label="PROJ"
+                  fullText={
+                    projSeason
+                      ? `Projected ${projSeason} fantasy points`
+                      : "Projected fantasy points"
+                  }
+                  sortKey="seasonProj"
+                  activeKey={sortKey}
+                  activeDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                />
+              )}
+              {showWkColumn && (
+                <SortHeader
+                  label="WK"
+                  fullText={
+                    currentWeek
+                      ? `Week ${currentWeek}: points if played, projected if not`
+                      : "This week: points if played, projected if not"
+                  }
+                  sortKey="week"
+                  activeKey={sortKey}
+                  activeDir={sortDir}
+                  onSort={handleSort}
+                  align="right"
+                />
+              )}
               <SortHeader
                 label="PTS"
                 fullText={statsSeason ? `${statsSeason} fantasy points` : "Fantasy points"}
@@ -454,15 +526,6 @@ export function PlayerTable({
                 onSort={handleSort}
                 align="right"
               />
-              {showProjColumn && (
-                <th
-                  className={`${TH_PADDING} text-right text-caption text-text-tertiary`}
-                  aria-label="Projected points, current week"
-                  title="Projected points, current week"
-                >
-                  PROJ
-                </th>
-              )}
               <SortHeader
                 label="AGE"
                 fullText="Player age"
@@ -537,22 +600,46 @@ export function PlayerTable({
                     </div>
                   </PlayerLink>
                 </td>
+                {projLeads && (
+                  <td className={`${TD_PADDING} text-right`}>
+                    <span className="text-stat text-text-primary">
+                      {player.projPointsPpr != null
+                        ? player.projPointsPpr.toFixed(1)
+                        : "-"}
+                    </span>
+                  </td>
+                )}
+                {showWkColumn && (
+                  <td className={`${TD_PADDING} text-right`}>
+                    {player.weekValue == null ? (
+                      <span className="text-stat text-text-tertiary">-</span>
+                    ) : player.weekIsProjected ? (
+                      <span
+                        className="text-stat text-text-tertiary"
+                        title="Projected, has not played yet"
+                        aria-label={`Projected ${player.weekValue.toFixed(1)}, has not played yet`}
+                      >
+                        ~{player.weekValue.toFixed(1)}
+                      </span>
+                    ) : (
+                      <span className="text-stat text-text-primary">
+                        {player.weekValue.toFixed(1)}
+                      </span>
+                    )}
+                  </td>
+                )}
                 <td className={`${TD_PADDING} text-right`}>
-                  <span className="text-stat text-text-primary">
+                  <span
+                    className={cn(
+                      "text-stat",
+                      projLeads ? "text-text-tertiary" : "text-text-primary"
+                    )}
+                  >
                     {player.pointsPpr != null
                       ? player.pointsPpr.toFixed(1)
                       : "-"}
                   </span>
                 </td>
-                {showProjColumn && (
-                  <td className={`${TD_PADDING} text-right`}>
-                    <span className="text-stat font-mono text-text-tertiary">
-                      {player.projPoints != null
-                        ? player.projPoints.toFixed(1)
-                        : "-"}
-                    </span>
-                  </td>
-                )}
                 <td className={`${TD_PADDING} text-right`}>
                   <span className="text-stat text-text-secondary">
                     {player.age ?? "-"}

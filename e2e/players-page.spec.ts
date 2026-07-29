@@ -100,7 +100,7 @@ test.describe("Players page", () => {
     expect(alt!.length).toBeGreaterThan(0);
   });
 
-  test("clicking the points column header sorts the table", async ({
+  test("clicking the PTS column header sorts the table by points", async ({
     page,
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
@@ -110,24 +110,75 @@ test.describe("Players page", () => {
     const count = await rows.count();
     if (count < 2) return;
 
-    // The header now shows the acronym "PTS" with the full text ("2026
-    // fantasy points") reachable via aria-label/title; match on the title
-    // rather than the visible acronym text.
-    const ptsHeader = page.getByTitle(/fantasy points/i);
+    // The PTS column can be the first or the second stat column depending on
+    // whether the season projection leads (offseason) or not (in-season), so
+    // match the header by its acronym rather than a fixed column index.
+    const ptsHeader = page.locator("th", { hasText: "PTS" });
     await expect(ptsHeader).toBeVisible();
 
-    // Default sort is points descending — capture it, then toggle to
-    // ascending and confirm the order actually flips.
-    const pointsCellSelector = "td:nth-child(2) span";
-    const beforeFirst = await rows.first().locator(pointsCellSelector).textContent();
+    // Discover the PTS column index (0-based) among the header cells.
+    const ptsCol = await ptsHeader.evaluate((el) =>
+      Array.from(el.parentElement!.children).indexOf(el)
+    );
 
-    await ptsHeader.click(); // toggles desc -> asc
-    await expect(ptsHeader).toHaveAttribute("aria-sort", "ascending");
+    // Click until PTS is the active descending sort (one click if PTS wasn't
+    // active, two if it started active-ascending).
+    await ptsHeader.click();
+    if ((await ptsHeader.getAttribute("aria-sort")) !== "descending") {
+      await ptsHeader.click();
+    }
+    await expect(ptsHeader).toHaveAttribute("aria-sort", "descending");
 
-    const afterRows = page.locator("table tbody tr");
-    const afterFirst = await afterRows.first().locator(pointsCellSelector).textContent();
+    // The PTS column must now be non-increasing from top to bottom, proving
+    // the click actually sorted the table by points.
+    const n = await rows.count();
+    let prev = Infinity;
+    for (let i = 0; i < Math.min(n, 15); i++) {
+      const raw =
+        (await rows.nth(i).locator("td").nth(ptsCol).textContent())?.trim() ??
+        "-";
+      const val = raw === "-" ? 0 : parseFloat(raw);
+      expect(val).toBeLessThanOrEqual(prev + 1e-9);
+      prev = val;
+    }
+  });
 
-    expect(afterFirst).not.toBe(beforeFirst);
+  test("preseason: season projection (PROJ) leads and sorts desc by default", async ({
+    page,
+  }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await page.goto("/players");
+
+    const rows = page.locator("table tbody tr");
+    if ((await rows.count()) < 2) return;
+
+    // First stat header (right after the sticky Player column). In the
+    // preseason segment the season-long projection leads; if the site is in a
+    // different segment (offseason PTS-first / in-season WK-first) this test
+    // no-ops rather than failing.
+    const firstStatHeader = page.locator("thead th").nth(1);
+    const title = await firstStatHeader.getAttribute("title");
+    if (!/projected/i.test(title ?? "")) {
+      return;
+    }
+    await expect(firstStatHeader).toContainText("PROJ");
+
+    // Default sort is PROJ desc: first row's projection >= second row's.
+    const projFirst = parseFloat(
+      (await rows.nth(0).locator("td").nth(1).textContent()) ?? "0"
+    );
+    const projSecond = parseFloat(
+      (await rows.nth(1).locator("td").nth(1).textContent()) ?? "0"
+    );
+    expect(projFirst).toBeGreaterThanOrEqual(projSecond);
+
+    // Actual points are the de-emphasized second stat column; clicking the
+    // PTS header re-sorts the table (its aria-sort becomes descending).
+    const ptsHeader = page.locator("th", { hasText: "PTS" });
+    await expect(ptsHeader).toBeVisible();
+    await ptsHeader.click();
+    await expect(ptsHeader).toHaveAttribute("aria-sort", "descending");
+    await expect(firstStatHeader).toHaveAttribute("aria-sort", "none");
   });
 
   test("?q= query param prefills the search box and filters results", async ({
