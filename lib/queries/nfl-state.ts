@@ -1,5 +1,8 @@
 import { cache } from "react";
 import { getNFLState } from "@/lib/sleeper";
+import { db } from "@/lib/db";
+import { nflGames } from "@/lib/db/schema";
+import { and, eq, sql } from "drizzle-orm";
 
 export type NflSeasonType = "pre" | "regular" | "post" | "off";
 
@@ -43,3 +46,23 @@ export const getNflState = cache(async function getNflState(): Promise<NflState 
     return null;
   }
 });
+
+/**
+ * Returns the earliest week-1 game date (YYYY-MM-DD text) for a season year,
+ * or null when nfl_games has no week-1 rows for it. Feeds the season-segment
+ * resolver's 5-day-before-kickoff rule.
+ */
+export async function getWeek1EarliestGameDate(
+  seasonYear: number
+): Promise<string | null> {
+  try {
+    const [row] = await db
+      .select({ earliest: sql<string | null>`min(${nflGames.gameDate})` })
+      .from(nflGames)
+      .where(and(eq(nflGames.seasonYear, seasonYear), eq(nflGames.week, 1)));
+
+    return row?.earliest ?? null;
+  } catch {
+    return null;
+  }
+}

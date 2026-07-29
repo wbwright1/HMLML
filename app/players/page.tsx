@@ -2,11 +2,13 @@ import { SyncTimestamp } from "@/components/sync-timestamp";
 import { TrendingRail } from "@/components/trending-rail";
 import { getAllPlayersWithStats, getAllFranchiseNames } from "@/lib/queries/players";
 import { getLatestSeason } from "@/lib/queries/matchups";
-import { getNflState } from "@/lib/queries/nfl-state";
+import { getNflState, getWeek1EarliestGameDate } from "@/lib/queries/nfl-state";
+import { resolveSeasonSegment } from "@/lib/season-segment";
 import {
-  getCurrentWeekProjectionsByPlayer,
+  getCurrentWeekPlayerStatusByPlayer,
   getTrendingAddPlayers,
 } from "@/lib/queries/player-points";
+import { decideWeekDisplay } from "@/lib/game-status";
 import { getAwardsByPlayerIds } from "@/lib/queries/awards";
 import type { AwardChipData } from "@/components/award-chip";
 import { PlayerTable, type PlayerRow } from "./player-table";
@@ -34,19 +36,43 @@ export default async function PlayersPage({ searchParams }: PlayersPageProps) {
     getTrendingAddPlayers(10),
   ]);
 
-  // Derive the stats season from the first player that has it
+  // Derive the stats/projection seasons from the first player that has each.
   const statsSeason = players.find((p) => p.statsSeason != null)?.statsSeason ?? null;
+  const projSeason = players.find((p) => p.projSeason != null)?.projSeason ?? null;
 
-  // PROJ only applies once the current season's hourly sync has populated a
-  // projection for the current week; otherwise the column is omitted rather
-  // than showing an all-dashes column (no sync yet / offseason).
+  // Resolve the three-segment season model (offseason -> preseason -> in-season)
+  // from data, no hardcoded dates. It drives which column leads the table:
+  //   - offseason:  last season's PTS leads (today's layout).
+  //   - preseason:  the season-long PROJ leads, PTS de-emphasized second.
+  //   - in-season:  the merged "this week" WK column leads, PTS second.
+  const week1EarliestGameDate = latestSeason
+    ? await getWeek1EarliestGameDate(latestSeason.seasonYear)
+    : null;
+
+  const segment = resolveSeasonSegment({
+    seasonStatus: latestSeason?.status ?? null,
+    seasonType: nflState?.seasonType ?? null,
+    week1EarliestGameDate,
+    now: new Date(),
+  });
+
+  // Preseason: the season-long projection leads (headline PROJ column).
+  const projLeads = segment === "preseason" && projSeason != null;
+
+  // In-season: fetch per-player week status for the merged WK column. The
+  // current NFL week comes from nfl_state; guard on the season matching the
+  // latest season row so a stale off-season nfl_state can't mis-key the query.
   const isCurrentSeason =
     !!latestSeason && !!nflState && Number(nflState.season) === latestSeason.seasonYear;
+  const currentWeek = isCurrentSeason && nflState ? nflState.week : null;
 
-  const projectionsByPlayer =
-    isCurrentSeason && latestSeason && nflState
-      ? await getCurrentWeekProjectionsByPlayer(latestSeason.id, nflState.week)
-      : new Map<string, number>();
+  const weekStatusByPlayer =
+    segment === "in_season" && isCurrentSeason && latestSeason && nflState
+      ? await getCurrentWeekPlayerStatusByPlayer(latestSeason.id, nflState.week)
+      : new Map<
+          string,
+          { points: number | null; projected: number | null; gameStatus: string | null }
+        >();
 
   const trendingCountByPlayer = new Map(
     trendingPlayers.map((p) => [p.playerId, p.count])
@@ -62,14 +88,22 @@ export default async function PlayersPage({ searchParams }: PlayersPageProps) {
     }));
   }
 
-  const showProjColumn = projectionsByPlayer.size > 0;
+  // The WK column leads in-season (never alongside the preseason PROJ column).
+  const showWkColumn = segment === "in_season" && weekStatusByPlayer.size > 0;
   const showTrdColumn = trendingCountByPlayer.size > 0;
 
-  const playerRows: PlayerRow[] = players.map((player) => ({
-    ...player,
-    projPoints: projectionsByPlayer.get(player.id) ?? null,
-    trendingCount: trendingCountByPlayer.get(player.id) ?? null,
-  }));
+  const playerRows: PlayerRow[] = players.map((player) => {
+    const wk = weekStatusByPlayer.get(player.id);
+    const display = wk
+      ? decideWeekDisplay(wk.gameStatus, wk.points, wk.projected)
+      : null;
+    return {
+      ...player,
+      weekValue: display?.value ?? null,
+      weekIsProjected: display?.isProjected ?? false,
+      trendingCount: trendingCountByPlayer.get(player.id) ?? null,
+    };
+  });
 
   return (
     <section className="py-8 md:py-12 space-y-6">
@@ -91,8 +125,11 @@ export default async function PlayersPage({ searchParams }: PlayersPageProps) {
           players={playerRows}
           franchises={franchises}
           statsSeason={statsSeason}
+          projSeason={projSeason}
+          projLeads={projLeads}
+          currentWeek={currentWeek}
           initialQuery={q ?? ""}
-          showProjColumn={showProjColumn}
+          showWkColumn={showWkColumn}
           showTrdColumn={showTrdColumn}
           awardsByPlayerId={awardsByPlayerId}
         />

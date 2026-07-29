@@ -100,7 +100,7 @@ test.describe("Players page", () => {
     expect(alt!.length).toBeGreaterThan(0);
   });
 
-  test("clicking the points column header sorts the table", async ({
+  test("clicking the PTS column header sorts the table by points", async ({
     page,
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
@@ -110,24 +110,109 @@ test.describe("Players page", () => {
     const count = await rows.count();
     if (count < 2) return;
 
-    // The header now shows the acronym "PTS" with the full text ("2026
-    // fantasy points") reachable via aria-label/title; match on the title
-    // rather than the visible acronym text.
-    const ptsHeader = page.getByTitle(/fantasy points/i);
+    // The PTS column can be the first or the second stat column depending on
+    // whether the season projection leads (offseason) or not (in-season), so
+    // match the header by its acronym rather than a fixed column index.
+    const ptsHeader = page.locator("th", { hasText: "PTS" });
     await expect(ptsHeader).toBeVisible();
 
-    // Default sort is points descending — capture it, then toggle to
-    // ascending and confirm the order actually flips.
-    const pointsCellSelector = "td:nth-child(2) span";
-    const beforeFirst = await rows.first().locator(pointsCellSelector).textContent();
+    // Discover the PTS column index (0-based) among the header cells.
+    const ptsCol = await ptsHeader.evaluate((el) =>
+      Array.from(el.parentElement!.children).indexOf(el)
+    );
 
-    await ptsHeader.click(); // toggles desc -> asc
-    await expect(ptsHeader).toHaveAttribute("aria-sort", "ascending");
+    // Click until PTS is the active descending sort (one click if PTS wasn't
+    // active, two if it started active-ascending).
+    await ptsHeader.click();
+    if ((await ptsHeader.getAttribute("aria-sort")) !== "descending") {
+      await ptsHeader.click();
+    }
+    await expect(ptsHeader).toHaveAttribute("aria-sort", "descending");
 
-    const afterRows = page.locator("table tbody tr");
-    const afterFirst = await afterRows.first().locator(pointsCellSelector).textContent();
+    // The PTS column must now be non-increasing from top to bottom, proving
+    // the click actually sorted the table by points.
+    const n = await rows.count();
+    let prev = Infinity;
+    for (let i = 0; i < Math.min(n, 15); i++) {
+      const raw =
+        (await rows.nth(i).locator("td").nth(ptsCol).textContent())?.trim() ??
+        "-";
+      const val = raw === "-" ? 0 : parseFloat(raw);
+      expect(val).toBeLessThanOrEqual(prev + 1e-9);
+      prev = val;
+    }
+  });
 
-    expect(afterFirst).not.toBe(beforeFirst);
+  test("preseason: season projection (PROJ) leads and sorts desc by default", async ({
+    page,
+  }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await page.goto("/players");
+
+    // Decide the EXPECTED segment from the nav's seasonal live pill, which is
+    // rendered by a completely separate code path (lib/hub/season-state +
+    // kickoff countdown) from the players table. This makes the assertion
+    // non-circular: if the PROJ-leads rendering were deleted while the site is
+    // in preseason, the pill would still read "PRESEASON" and this test would
+    // fail rather than silently pass.
+    //
+    // Only visible text is returned by innerText, so at the desktop viewport
+    // the (hidden) mobile header's duplicate pill is excluded.
+    const chromeText = await page.locator("body").innerText();
+    const preseasonKickoff = chromeText.match(
+      /PRESEASON\b[^\n]*?\bIN\s+(\d+)\s*D\b/i
+    );
+    const isPreseasonPill =
+      preseasonKickoff != null || /\bpreseason\b/i.test(chromeText);
+
+    // KICKOFF_LEAD_DAYS in lib/season-segment.ts: within this window before
+    // week-1 kickoff the page (deliberately) flips to the in-season WK layout,
+    // even while the pill still says PRESEASON. That is the accepted seam, so
+    // skip only there, with a logged reason (never an unconditional skip).
+    const KICKOFF_LEAD_DAYS = 5;
+    const daysToKickoff = preseasonKickoff
+      ? Number(preseasonKickoff[1])
+      : null;
+
+    test.skip(
+      !isPreseasonPill,
+      `live season is not preseason (nav pill did not read PRESEASON); nothing to assert for the PROJ-leads layout`
+    );
+    test.skip(
+      daysToKickoff != null && daysToKickoff <= KICKOFF_LEAD_DAYS,
+      `within ${KICKOFF_LEAD_DAYS}-day kickoff seam (${daysToKickoff}D out): page flips to the in-season WK layout by design`
+    );
+
+    // From here the live season is unambiguously preseason, so the PROJ-leads
+    // layout MUST be present. No early returns below: any deviation is a hard
+    // failure.
+    const rows = page.locator("table tbody tr");
+    await expect(rows.first()).toBeVisible();
+    expect(await rows.count()).toBeGreaterThanOrEqual(2);
+
+    // First stat header (right after the sticky Player column) is the season
+    // projection.
+    const firstStatHeader = page.locator("thead th").nth(1);
+    await expect(firstStatHeader).toContainText("PROJ");
+    await expect(firstStatHeader).toHaveAttribute("title", /projected/i);
+
+    // Default sort is PROJ desc: first row's projection >= second row's.
+    const projFirst = parseFloat(
+      (await rows.nth(0).locator("td").nth(1).textContent()) ?? "0"
+    );
+    const projSecond = parseFloat(
+      (await rows.nth(1).locator("td").nth(1).textContent()) ?? "0"
+    );
+    expect(projFirst).toBeGreaterThanOrEqual(projSecond);
+
+    // Actual points are the de-emphasized second stat column; clicking the
+    // PTS header re-sorts the table (its aria-sort becomes descending, and the
+    // PROJ header goes inactive).
+    const ptsHeader = page.locator("th", { hasText: "PTS" });
+    await expect(ptsHeader).toBeVisible();
+    await ptsHeader.click();
+    await expect(ptsHeader).toHaveAttribute("aria-sort", "descending");
+    await expect(firstStatHeader).toHaveAttribute("aria-sort", "none");
   });
 
   test("?q= query param prefills the search box and filters results", async ({
@@ -256,6 +341,33 @@ test.describe("Players page", () => {
 
       const left = await firstCell.evaluate((el) => getComputedStyle(el).left);
       expect(left).toBe("0px");
+    });
+
+    test("the sticky Player cell is width-capped and the page never scrolls horizontally", async ({
+      page,
+    }) => {
+      await page.setViewportSize(MOBILE_VIEWPORT);
+      await page.goto("/players");
+
+      const rows = page.locator("table tbody tr");
+      if ((await rows.count()) === 0) return;
+
+      // The first (sticky Player) cell is capped at max-w-[168px] on mobile so
+      // the headshot + truncated name can't eat the whole viewport.
+      const firstCell = rows.first().locator("td").first();
+      const width = await firstCell.evaluate(
+        (el) => el.getBoundingClientRect().width
+      );
+      expect(width).toBeGreaterThan(0);
+      expect(width).toBeLessThanOrEqual(176);
+
+      // The document itself must never overflow horizontally; only the table's
+      // own overflow-x-auto container scrolls.
+      const overflow = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
     });
 
     test("a rostered player's TM cell shows a team logo with a non-empty name label", async ({

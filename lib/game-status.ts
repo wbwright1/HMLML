@@ -47,3 +47,52 @@ export function classifyStarter(
   // In-game: some projection may still be coming.
   return { yetToPlay: false, projRemaining: Math.max(0, projected - points) };
 }
+
+// ---------------------------------------------------------------------------
+// Players-page "this week" (WK) column display decision
+// ---------------------------------------------------------------------------
+
+export interface WeekDisplay {
+  // The number to render in the WK cell.
+  value: number;
+  // True when `value` is a projection (game not started / no schedule): the
+  // cell shows it de-emphasized with a "~" prefix so the distinction never
+  // rests on color alone.
+  isProjected: boolean;
+}
+
+/**
+ * Decides what a player's merged "this week" (WK) cell shows on the players
+ * page, given the real NFL game status of their team plus their current-week
+ * actual and projected points.
+ *
+ * - Game started or finished (any non-null status other than "pre_game",
+ *   including in-game, "complete", and "canceled"): show ACTUAL points, even a
+ *   0.0 final (never a projection). Falls back to the projection only if there
+ *   is no actual points value at all.
+ * - Not started ("pre_game") or no game / no schedule (null status): show the
+ *   PROJECTION, flagged isProjected. Falls back to actual points if there is no
+ *   projection.
+ * - Neither value available: returns null (the cell renders a dash).
+ *
+ * CRITICAL: `gameStatus` must come from real NFL game data (the nfl_games
+ * table), never a points heuristic. Callers pass null for every player when
+ * nfl_games has no rows for the week, which correctly yields projections.
+ */
+export function decideWeekDisplay(
+  gameStatus: string | null | undefined,
+  points: number | null,
+  projected: number | null
+): WeekDisplay | null {
+  const hasPlayed = gameStatus != null && gameStatus !== "pre_game";
+
+  if (hasPlayed) {
+    if (points != null) return { value: points, isProjected: false };
+    return projected != null ? { value: projected, isProjected: true } : null;
+  }
+
+  // Not started / no game: prefer the projection.
+  if (projected != null) return { value: projected, isProjected: true };
+  if (points != null) return { value: points, isProjected: false };
+  return null;
+}

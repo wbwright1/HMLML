@@ -377,6 +377,92 @@ export async function getCurrentWeekProjectionsByPlayer(
 }
 
 /**
+ * Per-player current-week status for the players page's merged "WK" column.
+ * Returns a map of playerId -> { points, projected, gameStatus } for the given
+ * season/week, where gameStatus is the real NFL game status of the player's
+ * team (from nfl_games), joined via nflTeam.
+ *
+ * CRITICAL: played/not-played is decided downstream from gameStatus (see
+ * decideWeekDisplay), NEVER from a points heuristic. When nfl_games has zero
+ * rows for the (seasonYear, week), every gameStatus is null, which correctly
+ * yields projections for all players.
+ */
+export interface CurrentWeekPlayerStatus {
+  points: number | null;
+  projected: number | null;
+  gameStatus: string | null;
+}
+
+export async function getCurrentWeekPlayerStatusByPlayer(
+  seasonId: number,
+  week: number
+): Promise<Map<string, CurrentWeekPlayerStatus>> {
+  const result = new Map<string, CurrentWeekPlayerStatus>();
+
+  try {
+    const [seasonRow] = await db
+      .select({ seasonYear: seasons.seasonYear })
+      .from(seasons)
+      .where(eq(seasons.id, seasonId));
+
+    if (!seasonRow) return result;
+    const seasonYear = seasonRow.seasonYear;
+
+    // nflTeam -> game status for the week (both sides of each game).
+    const gameRows = await db
+      .select({
+        homeTeam: nflGames.homeTeam,
+        awayTeam: nflGames.awayTeam,
+        status: nflGames.status,
+      })
+      .from(nflGames)
+      .where(and(eq(nflGames.seasonYear, seasonYear), eq(nflGames.week, week)));
+
+    const statusByTeam = new Map<string, string>();
+    for (const g of gameRows) {
+      statusByTeam.set(g.homeTeam, g.status);
+      statusByTeam.set(g.awayTeam, g.status);
+    }
+
+    const rows = await db
+      .select({
+        playerId: playerWeekPoints.playerId,
+        points: playerWeekPoints.points,
+        projectedPoints: playerWeekPoints.projectedPoints,
+        nflTeam: players.nflTeam,
+      })
+      .from(playerWeekPoints)
+      .leftJoin(players, eq(playerWeekPoints.playerId, players.id))
+      .where(
+        and(
+          eq(playerWeekPoints.seasonId, seasonId),
+          eq(playerWeekPoints.week, week)
+        )
+      );
+
+    for (const row of rows) {
+      // A player can appear once per week; keep the first row seen.
+      if (result.has(row.playerId)) continue;
+      const gameStatus = row.nflTeam
+        ? statusByTeam.get(row.nflTeam) ?? null
+        : null;
+      result.set(row.playerId, {
+        points: row.points ?? null,
+        projected: row.projectedPoints ?? null,
+        gameStatus,
+      });
+    }
+  } catch (e) {
+    console.error(
+      "[player-points] getCurrentWeekPlayerStatusByPlayer error:",
+      e
+    );
+  }
+
+  return result;
+}
+
+/**
  * Returns the most-added players across Sleeper, joined with local player
  * records for names/positions/teams, ordered by add count descending.
  *
