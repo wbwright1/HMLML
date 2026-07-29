@@ -167,4 +167,119 @@ test.describe("Roster page", () => {
     expect(alt).toBeTruthy();
     expect(alt!.length).toBeGreaterThan(0);
   });
+
+  /**
+   * Detects the live season segment from the nav's seasonal live pill, a
+   * completely separate code path (lib/hub/season-state + kickoff countdown)
+   * from the roster table's column logic. This makes the assertions below
+   * non-circular: if the PROJ-leads rendering were deleted while the site is
+   * in preseason, the pill would still read "PRESEASON" and the test would
+   * fail rather than silently pass. Mirrors e2e/players-page.spec.ts.
+   */
+  async function detectPreseason(page: import("@playwright/test").Page) {
+    const chromeText = await page.locator("body").innerText();
+    const preseasonKickoff = chromeText.match(
+      /PRESEASON\b[^\n]*?\bIN\s+(\d+)\s*D\b/i
+    );
+    const isPreseasonPill =
+      preseasonKickoff != null || /\bpreseason\b/i.test(chromeText);
+
+    // KICKOFF_LEAD_DAYS in lib/season-segment.ts: within this window before
+    // week-1 kickoff the page (deliberately) flips to the in-season WK
+    // layout, even while the pill still says PRESEASON.
+    const KICKOFF_LEAD_DAYS = 5;
+    const daysToKickoff = preseasonKickoff ? Number(preseasonKickoff[1]) : null;
+    const inKickoffSeam =
+      daysToKickoff != null && daysToKickoff <= KICKOFF_LEAD_DAYS;
+
+    return { isPreseasonPill, inKickoffSeam, daysToKickoff };
+  }
+
+  test("preseason: PROJ column leads with a real projected value, and mobile stays width-capped without horizontal page overflow", async ({
+    page,
+  }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    const rosterPath = await firstRosterPath(page);
+    if (!rosterPath) return; // No franchises seeded in this environment.
+
+    await page.goto(rosterPath);
+
+    const { isPreseasonPill, inKickoffSeam, daysToKickoff } =
+      await detectPreseason(page);
+
+    test.skip(
+      !isPreseasonPill,
+      "live season is not preseason (nav pill did not read PRESEASON); nothing to assert for the PROJ-leads roster layout"
+    );
+    test.skip(
+      inKickoffSeam,
+      `within the kickoff seam (${daysToKickoff}D out): roster page flips to the in-season WK layout by design`
+    );
+
+    // From here the live season is unambiguously preseason: the PROJ-leads
+    // layout MUST be present on the Starting Lineup table. No early returns
+    // below; any deviation is a hard failure.
+    const startingLineupHeading = page.locator("h2", {
+      hasText: "Starting Lineup",
+    });
+    await expect(startingLineupHeading).toBeVisible();
+
+    const startingLineupTable = startingLineupHeading
+      .locator("xpath=following-sibling::div[1]")
+      .locator("table");
+    await expect(startingLineupTable).toBeVisible();
+
+    const projHeader = startingLineupTable.locator("th").filter({ hasText: /^PROJ$/ });
+    await expect(projHeader).toBeVisible();
+    await expect(projHeader).toHaveAttribute("title", /projected/i);
+
+    // PROJ is the third column: Player (sticky), POS, then PROJ.
+    const projColIndex = await projHeader.evaluate((el) =>
+      Array.from(el.parentElement!.children).indexOf(el)
+    );
+    expect(projColIndex).toBe(2);
+
+    // At least one starter row renders a non-dash PROJ value in the mono
+    // stat style (text-stat), proving real projection data reached the cell.
+    const rows = startingLineupTable.locator("tbody tr");
+    const rowCount = await rows.count();
+    expect(rowCount).toBeGreaterThan(0);
+
+    let foundNonDash = false;
+    for (let i = 0; i < rowCount; i++) {
+      const cell = rows.nth(i).locator("td").nth(projColIndex);
+      const text = (await cell.textContent())?.trim() ?? "";
+      if (text !== "-" && text.length > 0) {
+        expect(text).toMatch(/^\d+\.\d$/);
+        const statSpan = cell.locator(".text-stat");
+        await expect(statSpan).toHaveCount(1);
+        await expect(statSpan).toHaveClass(/text-text-primary/);
+        foundNonDash = true;
+        break;
+      }
+    }
+    expect(foundNonDash).toBe(true);
+
+    // Mobile: the sticky Player cell stays width-capped and the document
+    // never scrolls horizontally, matching the players page's mobile
+    // compaction contract.
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    await page.goto(rosterPath);
+
+    const firstRow = page.locator("table tbody tr").first();
+    await expect(firstRow).toBeVisible();
+
+    const firstCell = firstRow.locator("td").first();
+    const width = await firstCell.evaluate(
+      (el) => el.getBoundingClientRect().width
+    );
+    expect(width).toBeGreaterThan(0);
+    expect(width).toBeLessThanOrEqual(176);
+
+    const overflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
+  });
 });

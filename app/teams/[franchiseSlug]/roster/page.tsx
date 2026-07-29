@@ -14,8 +14,11 @@ import {
   getFranchiseBySlug,
   getFranchiseRoster,
 } from "@/lib/queries/franchises";
-import { getNflState } from "@/lib/queries/nfl-state";
-import { getCurrentWeekProjectionsByPlayer } from "@/lib/queries/player-points";
+import { getLatestSeason } from "@/lib/queries/matchups";
+import { getNflState, resolveLiveSeasonSegment } from "@/lib/queries/nfl-state";
+import { getCurrentWeekPlayerStatusByPlayer } from "@/lib/queries/player-points";
+import { decideWeekDisplay } from "@/lib/game-status";
+import type { SeasonSegment } from "@/lib/season-segment";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +76,11 @@ type RosterPlayer = NonNullable<
   Awaited<ReturnType<typeof getFranchiseRoster>>
 >[number];
 
+interface WeekDisplayInfo {
+  value: number | null;
+  isProjected: boolean;
+}
+
 // Shared cell padding, matching app/players/player-table.tsx's desktop
 // table so roster tables and the players table read as one system.
 const TH_CLASS =
@@ -87,15 +95,29 @@ const STICKY_CLASS = "sticky left-0 z-[1] bg-canvas border-r border-divider";
 function RosterSection({
   label,
   players,
-  projectionsByPlayer,
-  showProjColumn,
+  segment,
+  statsSeason,
+  projSeason,
+  currentWeek,
+  weekStatusByPlayer,
 }: {
   label: string;
   players: RosterPlayer[];
-  projectionsByPlayer: Map<string, number>;
-  showProjColumn: boolean;
+  segment: SeasonSegment;
+  statsSeason: number | null;
+  projSeason: number | null;
+  currentWeek: number | null;
+  weekStatusByPlayer: Map<string, WeekDisplayInfo>;
 }) {
   if (players.length === 0) return null;
+
+  // Column logic mirrors app/players/player-table.tsx's three-segment model:
+  //  - preseason: headline season-long PROJ leads, prior-year PTS de-emphasized second.
+  //  - in_season: merged "this week" WK column leads, current-season PTS second.
+  //  - offseason: last season's PTS only, headline treatment.
+  const showProjColumn = segment === "preseason";
+  const showWkColumn = segment === "in_season";
+  const ptsHeadline = segment === "offseason";
 
   return (
     <div className="space-y-3">
@@ -110,7 +132,7 @@ function RosterSection({
           <table className="w-full min-w-[560px] text-left">
             <thead>
               <tr className="border-b border-divider">
-                <th className={`${TH_CLASS} ${STICKY_CLASS}`} title="Player">
+                <th className={`${TH_CLASS} ${STICKY_CLASS} max-w-[168px] md:max-w-none`} title="Player">
                   Player
                 </th>
                 <th
@@ -123,12 +145,44 @@ function RosterSection({
                 {showProjColumn && (
                   <th
                     className={`${TH_CLASS} text-right`}
-                    title="Projected points, current week"
-                    aria-label="Projected points, current week"
+                    title={
+                      projSeason
+                        ? `Projected ${projSeason} fantasy points`
+                        : "Projected fantasy points"
+                    }
+                    aria-label={
+                      projSeason
+                        ? `Projected ${projSeason} fantasy points`
+                        : "Projected fantasy points"
+                    }
                   >
                     PROJ
                   </th>
                 )}
+                {showWkColumn && (
+                  <th
+                    className={`${TH_CLASS} text-right`}
+                    title={
+                      currentWeek
+                        ? `Week ${currentWeek}: points if played, projected if not`
+                        : "This week: points if played, projected if not"
+                    }
+                    aria-label={
+                      currentWeek
+                        ? `Week ${currentWeek}: points if played, projected if not`
+                        : "This week: points if played, projected if not"
+                    }
+                  >
+                    WK
+                  </th>
+                )}
+                <th
+                  className={`${TH_CLASS} text-right`}
+                  title={statsSeason ? `${statsSeason} fantasy points` : "Fantasy points"}
+                  aria-label={statsSeason ? `${statsSeason} fantasy points` : "Fantasy points"}
+                >
+                  PTS
+                </th>
                 <th
                   className={`${TH_CLASS} text-right`}
                   title="Player age"
@@ -163,17 +217,17 @@ function RosterSection({
               {players.map((player) => {
                 const name = getPlayerName(player);
                 const isDef = player.position === "DEF";
-                const projection = projectionsByPlayer.get(player.playerId);
+                const week = weekStatusByPlayer.get(player.playerId);
 
                 return (
                   <tr
                     key={player.playerId}
                     className="border-b border-divider last:border-0 hover:bg-surface transition-colors"
                   >
-                    <td className={`${TD_CLASS} ${STICKY_CLASS}`}>
+                    <td className={`${TD_CLASS} ${STICKY_CLASS} max-w-[168px] md:max-w-none`}>
                       <PlayerLink
                         playerId={isDef ? null : player.playerId}
-                        className="flex min-w-0 items-center gap-2.5"
+                        className="flex min-w-0 items-center gap-2 md:gap-3"
                       >
                         {isDef ? (
                           <NflTeamLogo teamAbbrev={player.nflTeam} size={32} />
@@ -185,9 +239,11 @@ function RosterSection({
                             nflTeam={player.nflTeam}
                           />
                         )}
-                        <span className="font-medium text-text-primary truncate">
-                          {name}
-                        </span>
+                        <div className="min-w-0 overflow-hidden">
+                          <p className="font-medium text-text-primary truncate">
+                            {name}
+                          </p>
+                        </div>
                       </PlayerLink>
                     </td>
                     <td className={TD_CLASS}>
@@ -195,11 +251,41 @@ function RosterSection({
                     </td>
                     {showProjColumn && (
                       <td className={`${TD_CLASS} text-right`}>
-                        <span className="text-stat font-mono text-text-tertiary">
-                          {projection != null ? projection.toFixed(1) : "-"}
+                        <span className="text-stat text-text-primary">
+                          {player.projPointsPpr != null
+                            ? player.projPointsPpr.toFixed(1)
+                            : "-"}
                         </span>
                       </td>
                     )}
+                    {showWkColumn && (
+                      <td className={`${TD_CLASS} text-right`}>
+                        {week?.value == null ? (
+                          <span className="text-stat text-text-tertiary">-</span>
+                        ) : week.isProjected ? (
+                          <span
+                            className="text-stat text-text-tertiary"
+                            title="Projected, has not played yet"
+                            aria-label={`Projected ${week.value.toFixed(1)}, has not played yet`}
+                          >
+                            ~{week.value.toFixed(1)}
+                          </span>
+                        ) : (
+                          <span className="text-stat text-text-primary">
+                            {week.value.toFixed(1)}
+                          </span>
+                        )}
+                      </td>
+                    )}
+                    <td className={`${TD_CLASS} text-right`}>
+                      <span
+                        className={`text-stat ${
+                          ptsHeadline ? "text-text-primary" : "text-text-tertiary"
+                        }`}
+                      >
+                        {player.pointsPpr != null ? player.pointsPpr.toFixed(1) : "-"}
+                      </span>
+                    </td>
                     <td className={`${TD_CLASS} text-right`}>
                       <span className="text-stat text-text-secondary">
                         {player.age ?? "-"}
@@ -271,33 +357,53 @@ export default async function RosterPage({ params }: RosterPageProps) {
   // Use the most recent season to fetch the roster
   const latestSeason = franchise.seasonHistory[0];
 
-  // These three are independent; fetch in parallel. Each degrades to null on
+  // These are independent; fetch in parallel. Each degrades to null on
   // failure (roster data missing, DB down in dev, NFL state unavailable) so one
-  // failure doesn't sink the others.
-  const [roster, allFranchises, nflState] = await Promise.all([
+  // failure doesn't sink the others. `globalSeason` (the league's latest season
+  // row, not this franchise's) plus `nflState` feed the season-segment
+  // resolver, exactly like app/players/page.tsx, so both tables lead with the
+  // same column for the same live data.
+  const [roster, allFranchises, nflState, globalSeason] = await Promise.all([
     latestSeason
       ? getFranchiseRoster(franchise.id, latestSeason.seasonId).catch(() => null)
       : Promise.resolve(null),
     getAllFranchises().catch(() => null),
     getNflState().catch(() => null),
+    getLatestSeason().catch(() => null),
   ]);
+
+  const segment = await resolveLiveSeasonSegment(globalSeason, nflState);
 
   const isCurrentSeason =
     !!latestSeason && !!nflState && Number(nflState.season) === latestSeason.seasonYear;
 
-  let projectionsByPlayer = new Map<string, number>();
-  if (isCurrentSeason && latestSeason && nflState) {
-    try {
-      projectionsByPlayer = await getCurrentWeekProjectionsByPlayer(
-        latestSeason.seasonId,
-        nflState.week
-      );
-    } catch {
-      // Projections may not be available
-    }
+  const currentWeek = isCurrentSeason && nflState ? nflState.week : null;
+
+  const weekStatusRaw =
+    segment === "in_season" && isCurrentSeason && latestSeason && nflState
+      ? await getCurrentWeekPlayerStatusByPlayer(latestSeason.seasonId, nflState.week).catch(
+          () => new Map()
+        )
+      : new Map<
+          string,
+          { points: number | null; projected: number | null; gameStatus: string | null }
+        >();
+
+  const weekStatusByPlayer = new Map<string, WeekDisplayInfo>();
+  for (const [playerId, status] of weekStatusRaw) {
+    const display = decideWeekDisplay(status.gameStatus, status.points, status.projected);
+    weekStatusByPlayer.set(playerId, {
+      value: display?.value ?? null,
+      isProjected: display?.isProjected ?? false,
+    });
   }
 
-  const showProjColumn = isCurrentSeason && projectionsByPlayer.size > 0;
+  // Derive the stats/projection seasons from the first roster player that has
+  // each, mirroring app/players/page.tsx.
+  const statsSeason =
+    roster?.find((p) => p.statsSeason != null)?.statsSeason ?? null;
+  const projSeason =
+    roster?.find((p) => p.projSeason != null)?.projSeason ?? null;
 
   const sortedRoster = roster
     ? [...roster].sort(
@@ -396,14 +502,20 @@ export default async function RosterPage({ params }: RosterPageProps) {
             <RosterSection
               label="Starting Lineup"
               players={starters}
-              projectionsByPlayer={projectionsByPlayer}
-              showProjColumn={showProjColumn}
+              segment={segment}
+              statsSeason={statsSeason}
+              projSeason={projSeason}
+              currentWeek={currentWeek}
+              weekStatusByPlayer={weekStatusByPlayer}
             />
             <RosterSection
               label="Bench & IR"
               players={benchAndIr}
-              projectionsByPlayer={projectionsByPlayer}
-              showProjColumn={showProjColumn}
+              segment={segment}
+              statsSeason={statsSeason}
+              projSeason={projSeason}
+              currentWeek={currentWeek}
+              weekStatusByPlayer={weekStatusByPlayer}
             />
           </div>
 
