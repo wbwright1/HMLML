@@ -309,6 +309,33 @@ test.describe("Players page", () => {
       expect(left).toBe("0px");
     });
 
+    test("the sticky Player cell is width-capped and the page never scrolls horizontally", async ({
+      page,
+    }) => {
+      await page.setViewportSize(MOBILE_VIEWPORT);
+      await page.goto("/players");
+
+      const rows = page.locator("table tbody tr");
+      if ((await rows.count()) === 0) return;
+
+      // The first (sticky Player) cell is capped at max-w-[168px] on mobile so
+      // the headshot + truncated name can't eat the whole viewport.
+      const firstCell = rows.first().locator("td").first();
+      const width = await firstCell.evaluate(
+        (el) => el.getBoundingClientRect().width
+      );
+      expect(width).toBeGreaterThan(0);
+      expect(width).toBeLessThanOrEqual(176);
+
+      // The document itself must never overflow horizontally; only the table's
+      // own overflow-x-auto container scrolls.
+      const overflow = await page.evaluate(() => ({
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth,
+      }));
+      expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
+    });
+
     test("a rostered player's TM cell shows a team logo with a non-empty name label", async ({
       page,
     }) => {

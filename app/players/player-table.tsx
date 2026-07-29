@@ -450,11 +450,11 @@ export function PlayerTable({
         ancestor silently breaks `position: sticky` (see PRs #150/#155/#156).
       */}
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[680px] text-left">
+        <table className="w-full min-w-[560px] text-left">
           <thead>
             <tr className="border-b border-divider">
               <th
-                className={`sticky left-0 z-[1] bg-canvas border-r border-divider ${TH_PADDING} text-caption text-text-tertiary cursor-pointer select-none hover:text-text-primary transition-colors text-left`}
+                className={`sticky left-0 z-[1] bg-canvas border-r border-divider max-w-[168px] md:max-w-none ${TH_PADDING} text-caption text-text-tertiary cursor-pointer select-none hover:text-text-primary transition-colors text-left`}
                 role="button"
                 tabIndex={0}
                 onClick={() => handleSort("name")}
@@ -578,21 +578,25 @@ export function PlayerTable({
                 className="border-b border-divider last:border-0 hover:bg-surface transition-colors"
               >
                 <td
-                  className={`sticky left-0 z-[1] bg-canvas border-r border-divider ${TD_PADDING}`}
+                  className={`sticky left-0 z-[1] bg-canvas border-r border-divider max-w-[168px] md:max-w-none ${TD_PADDING}`}
                 >
-                  <PlayerLink playerId={player.id} className="flex items-center gap-3">
+                  <PlayerLink playerId={player.id} className="flex items-center gap-2 md:gap-3">
                     <PlayerHeadshot
                       playerId={player.id}
                       name={player.fullName ?? "Unknown"}
                       size={32}
                       nflTeam={player.nflTeam}
                     />
-                    <div className="min-w-0">
+                    <div className="min-w-0 overflow-hidden">
                       <div className="flex items-center gap-2">
                         <p className="text-body font-medium text-text-primary truncate">
                           {player.fullName ?? "Unknown"}
                         </p>
-                        <AwardChipRow awards={awardsByPlayerId[player.id] ?? []} />
+                        {/* Award chips add width the capped mobile column can't
+                            spare; show them only from md up. */}
+                        <span className="hidden md:flex">
+                          <AwardChipRow awards={awardsByPlayerId[player.id] ?? []} />
+                        </span>
                       </div>
                       <p className="text-body-sm text-text-tertiary">
                         {player.nflTeam ?? "FA"} &middot; {player.position ?? "-"}
