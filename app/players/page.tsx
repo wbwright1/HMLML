@@ -2,8 +2,7 @@ import { SyncTimestamp } from "@/components/sync-timestamp";
 import { TrendingRail } from "@/components/trending-rail";
 import { getAllPlayersWithStats, getAllFranchiseNames } from "@/lib/queries/players";
 import { getLatestSeason } from "@/lib/queries/matchups";
-import { getNflState, getWeek1EarliestGameDate } from "@/lib/queries/nfl-state";
-import { resolveSeasonSegment } from "@/lib/season-segment";
+import { getNflState, resolveLiveSeasonSegment } from "@/lib/queries/nfl-state";
 import {
   getCurrentWeekPlayerStatusByPlayer,
   getTrendingAddPlayers,
@@ -45,16 +44,7 @@ export default async function PlayersPage({ searchParams }: PlayersPageProps) {
   //   - offseason:  last season's PTS leads (today's layout).
   //   - preseason:  the season-long PROJ leads, PTS de-emphasized second.
   //   - in-season:  the merged "this week" WK column leads, PTS second.
-  const week1EarliestGameDate = latestSeason
-    ? await getWeek1EarliestGameDate(latestSeason.seasonYear)
-    : null;
-
-  const segment = resolveSeasonSegment({
-    seasonStatus: latestSeason?.status ?? null,
-    seasonType: nflState?.seasonType ?? null,
-    week1EarliestGameDate,
-    now: new Date(),
-  });
+  const segment = await resolveLiveSeasonSegment(latestSeason, nflState);
 
   // Preseason: the season-long projection leads (headline PROJ column).
   const projLeads = segment === "preseason" && projSeason != null;

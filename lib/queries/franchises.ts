@@ -234,6 +234,10 @@ export async function getFranchiseRoster(
         injuryStatus: players.injuryStatus,
         age: players.age,
         yearsExp: players.yearsExp,
+        pointsPpr: players.pointsPpr,
+        statsSeason: players.statsSeason,
+        projPointsPpr: players.projPointsPpr,
+        projSeason: players.projSeason,
       })
       // leftJoin, not innerJoin: the hourly roster sync can add a player
       // before the daily players sync has written their row, and an

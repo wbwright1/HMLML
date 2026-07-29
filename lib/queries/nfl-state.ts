@@ -3,6 +3,7 @@ import { getNFLState } from "@/lib/sleeper";
 import { db } from "@/lib/db";
 import { nflGames } from "@/lib/db/schema";
 import { and, eq, sql } from "drizzle-orm";
+import { resolveSeasonSegment, type SeasonSegment } from "@/lib/season-segment";
 
 export type NflSeasonType = "pre" | "regular" | "post" | "off";
 
@@ -65,4 +66,27 @@ export async function getWeek1EarliestGameDate(
   } catch {
     return null;
   }
+}
+
+/**
+ * Orchestrates the I/O around lib/season-segment.ts's pure `resolveSeasonSegment`:
+ * fetches the week-1 earliest game date for `latestSeason`'s year (when present)
+ * and resolves the three-segment season model from it plus the season status
+ * and NFL state. Shared by app/players/page.tsx and the roster page so both
+ * lead with the same column for the same live data.
+ */
+export async function resolveLiveSeasonSegment(
+  latestSeason: { seasonYear: number; status: string | null } | null,
+  nflState: { seasonType: string | null } | null
+): Promise<SeasonSegment> {
+  const week1EarliestGameDate = latestSeason
+    ? await getWeek1EarliestGameDate(latestSeason.seasonYear)
+    : null;
+
+  return resolveSeasonSegment({
+    seasonStatus: latestSeason?.status ?? null,
+    seasonType: nflState?.seasonType ?? null,
+    week1EarliestGameDate,
+    now: new Date(),
+  });
 }
