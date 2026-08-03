@@ -24,6 +24,16 @@ export function ProfileModalShell({ children }: ProfileModalShellProps) {
 
   const close = () => router.back();
 
+  // The @modal slot is an intercepted parallel route: it stays mounted
+  // across a soft nav to any other route (the trade link, a franchise
+  // link, etc.) because Next.js only swaps the `children` slot, not
+  // `@modal`. Only treat the modal as visible while the URL is still on a
+  // player detail route; the players index itself (`/players`, no id)
+  // must not count, since navigating from the modal back to the index
+  // should also dismiss it. Everything below gates its side effects on
+  // this so the underlying page is fully usable once we've "left".
+  const isVisible = pathname.startsWith("/players/") && pathname !== "/players";
+
   // Entrance transition: mount in the "before" state, flip to "after" on the
   // next frame so the transition actually runs. No exit animation (per spec).
   useEffect(() => {
@@ -31,17 +41,21 @@ export function ProfileModalShell({ children }: ProfileModalShellProps) {
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // Scroll lock while the modal is open.
+  // Scroll lock while the modal is open; released the instant we're no
+  // longer on a player route so a soft nav away doesn't leave the
+  // destination page stuck non-scrollable.
   useEffect(() => {
+    if (!isVisible) return;
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = prevOverflow;
     };
-  }, []);
+  }, [isVisible]);
 
   // Focus the close button on mount, then trap Tab within the dialog.
   useEffect(() => {
+    if (!isVisible) return;
     closeButtonRef.current?.focus();
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== "Tab") return;
@@ -68,7 +82,7 @@ export function ProfileModalShell({ children }: ProfileModalShellProps) {
     dialog.addEventListener("keydown", onKeyDown);
     return () => dialog.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isVisible]);
 
   // Escape-to-close listens on `document` (not scoped to the dialog
   // element) so it keeps working across an in-place season switch inside
@@ -76,8 +90,11 @@ export function ProfileModalShell({ children }: ProfileModalShellProps) {
   // which replaces the dialog's DOM subtree — a scoped listener attached in
   // a mount-only effect would go stale once its original node is gone. A
   // document-level listener is re-attached fresh on every mount/remount and
-  // has no dependency on which DOM node currently holds focus.
+  // has no dependency on which DOM node currently holds focus. Gated on
+  // isVisible so a stale-mounted shell (soft-navigated away, see above)
+  // doesn't swallow Escape on whatever page the user landed on.
   useEffect(() => {
+    if (!isVisible) return;
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
         e.preventDefault();
@@ -87,7 +104,9 @@ export function ProfileModalShell({ children }: ProfileModalShellProps) {
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [isVisible]);
+
+  if (!isVisible) return null;
 
   return (
     <div
