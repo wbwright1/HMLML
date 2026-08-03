@@ -73,7 +73,7 @@ function eventCopy(event: TimelineEvent): React.ReactNode {
           {" "}
           (
           <Link
-            href={`/trades#trade-${event.tradeDbId}`}
+            href={`/trades?highlight=${event.tradeDbId}#trade-${event.tradeDbId}`}
             className="text-accent-gold hover:underline"
           >
             see the deal

@@ -396,6 +396,27 @@
     }
 }
 
+/* Deep-link location cue for a trade card reached via /trades?highlight=.
+   Persistent gold ring (survives reduced-motion) + a brief gold-tint fade;
+   this is a LOCATION cue, not a semantic status signal, so ring+tint alone
+   (no letter/glyph) is appropriate here. */
+@layer components {
+    .trade-focus {
+        outline: 2px solid var(--accent-gold);
+        outline-offset: 2px;
+        animation: trade-focus-flash 2.2s ease-out both;
+    }
+}
+
+@keyframes trade-focus-flash {
+    from {
+        background-color: var(--accent-gold-light);
+    }
+    to {
+        background-color: transparent;
+    }
+}
+
 /* =========================================================================
    Medallion Podium trophy shelf — franchise/league Trophy Case
    A minted-coin medallion raised on a small podium under a soft spotlight,
@@ -537,6 +558,9 @@
     }
     .medallion-item:hover {
         transform: none;
+    }
+    .trade-focus {
+        animation: none;
     }
 }
 
