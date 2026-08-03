@@ -148,12 +148,23 @@ export function TradeCard({
                             decorative
                           />
                         )}
-                        <span className="font-mono tabular-nums text-accent-gold">
+                        <span
+                          className={`font-mono tabular-nums ${pick.voided ? "text-text-muted line-through" : "text-accent-gold"}`}
+                        >
                           {pick.season}
                         </span>
-                        <span>Round {pick.round} pick</span>
+                        <span className={pick.voided ? "text-text-muted line-through" : undefined}>
+                          Round {pick.round} pick
+                        </span>
+                        {pick.voided && (
+                          <SuperlativeBadge text="Voided" variant="brown" />
+                        )}
                       </div>
-                      {pick.flippedToTradeId != null ? (
+                      {pick.voided ? (
+                        <p className="pl-1 text-caption text-text-tertiary">
+                          Never conveyed. The 2023 redraft reset the board.
+                        </p>
+                      ) : pick.flippedToTradeId != null ? (
                         <Link
                           href={`/trades?highlight=${pick.flippedToTradeId}#trade-${pick.flippedToTradeId}`}
                           className="w-fit pl-1 text-caption text-accent-gold hover:underline"

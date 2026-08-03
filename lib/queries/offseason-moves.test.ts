@@ -71,7 +71,7 @@ describe("buildOffseasonMoves", () => {
           rosterId: "1",
           gaveAssetCount: 1,
           players: [{ id: "wr1", name: "Big Receiver", position: "WR", nflTeam: "KC" }],
-          picks: [{ season: "2027", round: 1, originalFranchise: null, became: null, flippedToTradeId: null }],
+          picks: [{ season: "2027", round: 1, originalFranchise: null, became: null, flippedToTradeId: null, voided: false }],
         },
         {
           franchise: { id: "f2", name: "Olave Garden", slug: "olave-garden" },
@@ -117,7 +117,7 @@ describe("buildOffseasonMoves", () => {
           rosterId: "2",
           gaveAssetCount: 1,
           players: [{ id: "b", name: "Player B", position: "RB", nflTeam: null }],
-          picks: [{ season: "2026", round: 2, originalFranchise: null, became: null, flippedToTradeId: null }],
+          picks: [{ season: "2026", round: 2, originalFranchise: null, became: null, flippedToTradeId: null, voided: false }],
         },
         {
           franchise: { id: "f3", name: "Team C", slug: "team-c" },

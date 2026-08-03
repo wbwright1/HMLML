@@ -111,11 +111,11 @@ export function buildOffseasonMoves(
         date: trade.date,
         acquired: {
           players: side.players.map((p) => p.name),
-          picks: side.picks.map(formatPick),
+          picks: side.picks.filter((p) => !p.voided).map(formatPick),
         },
         surrendered: {
           players: others.flatMap((s) => s.players.map((p) => p.name)),
-          picks: others.flatMap((s) => s.picks.map(formatPick)),
+          picks: others.flatMap((s) => s.picks.filter((p) => !p.voided).map(formatPick)),
         },
       });
     }
