@@ -120,6 +120,34 @@ test.describe("Player profile", () => {
     await expect(page).toHaveURL(new RegExp(`/teams/${slug}/roster$`));
   });
 
+  test("clicking a franchise link inside the modal dismisses it and leaves the destination page usable (#187)", async ({ page }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    const playerId = await findRosteredPlayerId(page);
+    test.skip(!playerId, "No rostered player found in this environment.");
+
+    const slug = await findFranchiseSlug(page);
+    await page.goto(`/teams/${slug}/roster`);
+    await page.locator(`a[href="/players/${playerId}"]:visible`).first().click();
+    const dialog = await awaitModalReady(page);
+
+    // The identity header's owner link (a soft next/link nav) is the
+    // reliably-present case; the "see the deal" trade link is the same
+    // code path but not always present in seeded data.
+    const franchiseLink = dialog.locator('a[href^="/teams/"]').first();
+    await expect(franchiseLink).toBeVisible();
+    const href = await franchiseLink.getAttribute("href");
+    await franchiseLink.click();
+
+    // Soft nav landed on the franchise page; the modal's intercepted slot
+    // must not stay mounted over it.
+    await expect(page).toHaveURL(new RegExp(href!.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$"));
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+
+    // Scroll lock released: body is usable again, not stuck at overflow:hidden.
+    const bodyOverflow = await page.evaluate(() => document.body.style.overflow);
+    expect(bodyOverflow).not.toBe("hidden");
+  });
+
   test("floating close button stays visible after scrolling the modal on mobile", async ({ page }) => {
     await page.setViewportSize(MOBILE_VIEWPORT);
     const playerId = await findRosteredPlayerId(page);
