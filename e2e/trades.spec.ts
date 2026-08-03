@@ -103,7 +103,7 @@ test.describe("Trade history page (seeded fixture)", () => {
     await expect(card).toContainText(`Round ${t.pick.round} pick`);
   });
 
-  test("a flipped pick links to the later trade it moved on in", async ({ page }) => {
+  test("a flipped pick links to the later trade it moved on in, lands in viewport, and highlights", async ({ page }) => {
     const t = TRADE_TEST_DATA;
     await page.setViewportSize(DESKTOP_VIEWPORT);
 
@@ -120,20 +120,95 @@ test.describe("Trade history page (seeded fixture)", () => {
     await expect(flipLink).toBeVisible();
 
     const href = await flipLink.getAttribute("href");
-    expect(href).toMatch(/^\/trades#trade-\d+$/);
+    expect(href).toMatch(/^\/trades\?highlight=\d+#trade-\d+$/);
 
     // Following the link lands on the (unfiltered) trades page with the flip
-    // trade's card present at the anchor target.
+    // trade's card present at the anchor target, scrolled into view (not just
+    // "visible" — that passes even far below the fold) and gold-highlighted.
     await flipLink.click();
-    await page.waitForURL(/\/trades#trade-\d+/);
+    await page.waitForURL(/\/trades\?highlight=\d+#trade-\d+/);
 
-    const target = page.locator(`#${href!.split("#")[1]}`);
+    const targetId = href!.split("#")[1];
+    const target = page.locator(`#${targetId}`);
     await expect(target).toBeVisible();
     await expect(target).toContainText(`Round ${t.pick.round} pick`);
     // The flip trade's receiver (franchise B) kept the pick: no further link.
     await expect(
       target.getByRole("link", { name: /flipped in a later trade/ })
     ).toHaveCount(0);
+
+    await expect(target).toHaveClass(/trade-focus/);
+    const box = await target.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.y).toBeLessThan(DESKTOP_VIEWPORT.height);
+  });
+
+  test("a direct URL with ?highlight= and the matching hash scrolls to and highlights the target card (cold load)", async ({ page }) => {
+    const t = TRADE_TEST_DATA;
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+
+    // Discover the flip target id from the flip link's href first.
+    await page.goto(`/trades?season=${t.seasonYear}`);
+    const originalCard = page
+      .locator(".card-surface", { hasText: "Trade" })
+      .filter({ hasText: t.player2.fullName });
+    const flipLink = originalCard.getByRole("link", {
+      name: /flipped in a later trade/,
+    });
+    const href = await flipLink.getAttribute("href");
+    const targetId = href!.split("#")[1].replace("trade-", "");
+
+    // Cold-load the deep link directly (no soft nav).
+    await page.goto(`/trades?highlight=${targetId}#trade-${targetId}`);
+
+    const target = page.locator(`#trade-${targetId}`);
+    await expect(target).toBeVisible();
+    await expect(target).toHaveClass(/trade-focus/);
+
+    const box = await target.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.y).toBeLessThan(DESKTOP_VIEWPORT.height);
+  });
+
+  test("'see the deal' from a traded player's profile modal lands on and highlights the trade card", async ({ page }) => {
+    const t = TRADE_TEST_DATA;
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+
+    await page.goto(`/trades?season=${t.seasonYear}`);
+
+    const playerLink = page
+      .locator(`a[href^="/players/${t.player2.id}"]`)
+      .first();
+    await expect(playerLink).toBeVisible();
+    await playerLink.click();
+
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    // The modal's content streams in after the shell mounts; wait for the
+    // career timeline section (which holds the "see the deal" link) rather
+    // than racing the initial dialog paint.
+    await expect(dialog.getByText("Career Timeline")).toBeVisible({ timeout: 10_000 });
+
+    const dealLink = dialog.getByRole("link", { name: "see the deal" });
+    await expect(dealLink).toBeVisible();
+
+    const href = await dealLink.getAttribute("href");
+    expect(href).toMatch(/^\/trades\?highlight=\d+#trade-\d+$/);
+    const targetId = href!.split("#")[1];
+
+    await dealLink.click();
+    await page.waitForURL(/\/trades\?highlight=\d+#trade-\d+/);
+
+    const target = page.locator(`#${targetId}`);
+    await expect(target).toBeVisible();
+    await expect(target).toHaveClass(/trade-focus/);
+
+    const box = await target.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.y).toBeLessThan(DESKTOP_VIEWPORT.height);
   });
 
   test("year-old trade shows a hindsight grade computed from realized points", async ({

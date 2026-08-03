@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/empty-state";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { TradeCard } from "@/components/trade-card";
+import { TradeScrollFocus } from "@/components/trades/trade-scroll-focus";
 import { GradeFormulaNugget } from "@/components/grade-formula-nugget";
 import { TradeFilters } from "@/app/trades/trade-filters";
 import { getTrades, filterTrades } from "@/lib/queries/trades";
@@ -20,11 +21,11 @@ export const metadata = {
 };
 
 interface TradesPageProps {
-  searchParams: Promise<{ season?: string; team?: string }>;
+  searchParams: Promise<{ season?: string; team?: string; highlight?: string }>;
 }
 
 export default async function TradesPage({ searchParams }: TradesPageProps) {
-  const { season, team } = await searchParams;
+  const { season, team, highlight } = await searchParams;
 
   let allFranchises: Awaited<ReturnType<typeof getAllFranchises>> = null;
   let allSeasons: Awaited<ReturnType<typeof getAllSeasons>> = [];
@@ -113,16 +114,23 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
         />
       ) : (
         <div className="space-y-4">
-          {trades.map((trade, index) => (
-            <ScrollReveal key={trade.id} delay={index * 40}>
-              <TradeCard
-                trade={trade}
-                verdict={verdicts.get(String(trade.id))}
-                grade={grades.get(trade.id)}
-                values={tradeValues.get(trade.id) ?? null}
-              />
-            </ScrollReveal>
-          ))}
+          {trades.map((trade, index) => {
+            const isHighlight = String(trade.id) === highlight;
+            return (
+              <ScrollReveal key={trade.id} delay={isHighlight ? 0 : index * 40}>
+                <TradeCard
+                  trade={trade}
+                  verdict={verdicts.get(String(trade.id))}
+                  grade={grades.get(trade.id)}
+                  values={tradeValues.get(trade.id) ?? null}
+                  highlighted={isHighlight}
+                />
+              </ScrollReveal>
+            );
+          })}
+          {highlight && trades.length > 0 && (
+            <TradeScrollFocus targetId={highlight} />
+          )}
         </div>
       )}
 

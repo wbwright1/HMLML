@@ -19,6 +19,11 @@ interface TradeCardProps {
   grade?: TradeGrade | null;
   /** Optional dynasty market values per side. Purely presentational; never feeds grades. */
   values?: TradeValueSummary | null;
+  /**
+   * True when this card is the target of a `?highlight=` deep link. Applies
+   * the `trade-focus` gold ring + tint-flash location cue (see globals.css).
+   */
+  highlighted?: boolean;
 }
 
 function gradeChipClasses(letter: string): string {
@@ -36,9 +41,19 @@ function labelVariant(
   return "neutral";
 }
 
-export function TradeCard({ trade, verdict, grade, values }: TradeCardProps) {
+export function TradeCard({
+  trade,
+  verdict,
+  grade,
+  values,
+  highlighted,
+}: TradeCardProps) {
   return (
-    <div id={`trade-${trade.id}`} className="card-surface p-5 space-y-4 scroll-mt-24">
+    <div
+      id={`trade-${trade.id}`}
+      className={`card-surface p-5 space-y-4 scroll-mt-24${highlighted ? " trade-focus" : ""}`}
+    >
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-3">
           <SuperlativeBadge text="Trade" variant="gold" />
@@ -140,7 +155,7 @@ export function TradeCard({ trade, verdict, grade, values }: TradeCardProps) {
                       </div>
                       {pick.flippedToTradeId != null ? (
                         <Link
-                          href={`/trades#trade-${pick.flippedToTradeId}`}
+                          href={`/trades?highlight=${pick.flippedToTradeId}#trade-${pick.flippedToTradeId}`}
                           className="w-fit pl-1 text-caption text-accent-gold hover:underline"
                         >
                           flipped in a later trade &rarr;
