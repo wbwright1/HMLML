@@ -136,6 +136,7 @@ describe("computeTradeGrade", () => {
         originalFranchise: null,
         became: { id: "rook1", name: "Kept Rookie" },
         flippedToTradeId: null,
+        voided: false,
       },
       {
         season: "2025",
@@ -143,6 +144,7 @@ describe("computeTradeGrade", () => {
         originalFranchise: null,
         became: { id: "rook2", name: "Flipped Rookie" },
         flippedToTradeId: 99,
+        voided: false,
       },
     ];
     const rows = [
@@ -218,6 +220,7 @@ describe("computeTradeGrade", () => {
         originalFranchise: null,
         became: null,
         flippedToTradeId: null,
+        voided: false,
       },
     ];
     const rows = [
@@ -239,6 +242,7 @@ describe("computeTradeGrade", () => {
         originalFranchise: null,
         became: null,
         flippedToTradeId: 42,
+        voided: false,
       },
     ];
     const rows = [
@@ -311,6 +315,7 @@ function hamptonTrades(): Trade[] {
             originalFranchise: null,
             became: { id: "someone", name: "Whoever It Became" },
             flippedToTradeId: 2,
+            voided: false,
           },
         ],
       },
@@ -398,6 +403,7 @@ describe("computeTradeGrades flip-chain credit", () => {
         originalFranchise: null,
         became: null,
         flippedToTradeId: 3,
+        voided: false,
       },
     ];
     trade2.sides[0].gaveAssetCount = 3;
@@ -506,6 +512,7 @@ describe("computeTradeGrade value lens", () => {
         originalFranchise: null,
         became: { id: "rook1", name: "Kept Rookie" },
         flippedToTradeId: null,
+        voided: false,
       },
     ];
     const rows = [
@@ -538,6 +545,7 @@ describe("computeTradeGrade value lens", () => {
         originalFranchise: null,
         became: { id: "rook1", name: "Kept Rookie" },
         flippedToTradeId: null,
+        voided: false,
       },
     ];
     const rows = [
@@ -607,6 +615,7 @@ describe("computeTradeGrade value lens", () => {
         originalFranchise: null,
         became: null,
         flippedToTradeId: null,
+        voided: false,
       },
     ];
     const rows = [row({ playerId: "rb1", franchiseId: "fb", points: 100 })];
@@ -633,6 +642,7 @@ describe("computeTradeGrade unresolved past kept pick guard (FIX 2)", () => {
         originalFranchise: null,
         became: { id: "rook1", name: "Homegrown Rookie" },
         flippedToTradeId: null,
+        voided: false,
       },
     ];
     const rows = [
@@ -662,6 +672,7 @@ describe("computeTradeGrade unresolved past kept pick guard (FIX 2)", () => {
         // not-yet-drafted pick, so it must NOT fall back to a pseudo-id price.
         became: null,
         flippedToTradeId: null,
+        voided: false,
       },
     ];
     const rows = [
@@ -691,6 +702,7 @@ describe("computeTradeGrade unresolved past kept pick guard (FIX 2)", () => {
         originalFranchise: null,
         became: null,
         flippedToTradeId: null,
+        voided: false,
       },
     ];
     const rows = [row({ playerId: "rb1", franchiseId: "fb", points: 500 })];

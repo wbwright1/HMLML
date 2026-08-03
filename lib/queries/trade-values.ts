@@ -48,6 +48,7 @@ function sideAssets(side: Trade["sides"][number]): SideAsset[] {
     isPick: false,
   }));
   for (const pick of side.picks) {
+    if (pick.voided) continue; // never conveyed; not a real asset on either side
     const valueId = pick.became?.id ?? pickAssetToValueId(pick);
     assets.push({ valueId, isPick: true });
   }

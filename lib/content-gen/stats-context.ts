@@ -507,7 +507,7 @@ export async function buildStatsContext(
         sides: t.sides.map((s) => ({
           franchiseName: s.franchise?.name ?? null,
           players: s.players.map((p) => ({ name: p.name, position: p.position })),
-          picks: s.picks.length,
+          picks: s.picks.filter((p) => !p.voided).length,
         })),
       }));
     } catch (e) {

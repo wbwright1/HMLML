@@ -7,6 +7,7 @@ import {
   type PickResolutionMaps,
   type PickMovement,
 } from "./trades";
+import { isVoidedPick } from "@/lib/voided-picks";
 
 const FRANCHISE_A: FranchiseInfo = {
   id: "fa",
@@ -155,6 +156,23 @@ describe("resolvePickAsset", () => {
     );
     expect(result.originalFranchise).toEqual(FRANCHISE_B);
     expect(result.became).toEqual({ id: "p42", name: "Homegrown Rookie" });
+  });
+});
+
+describe("voided pick identification (2023 startup redraft)", () => {
+  // getTrades() itself touches the database and is exercised end-to-end by
+  // e2e/voided-picks.spec.ts; this documents the boundary the query layer
+  // relies on to decide which picks it must never resolve or flip-credit.
+  it("flags a pre-redraft trade naming a redraft-era pick as voided", () => {
+    expect(isVoidedPick(2022, "2023")).toBe(true);
+  });
+
+  it("does not flag an in-draft 2023 trade (league year 2023) as voided", () => {
+    expect(isVoidedPick(2023, "2023")).toBe(false);
+  });
+
+  it("does not flag a same-era pre-redraft trade as voided", () => {
+    expect(isVoidedPick(2022, "2022")).toBe(false);
   });
 });
 

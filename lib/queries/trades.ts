@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { transactions, franchiseSeasons, franchises, players, seasons, draftPicks } from "@/lib/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
+import { isVoidedPick } from "@/lib/voided-picks";
 
 interface DraftPickInvolved {
   season: string;
@@ -39,6 +40,14 @@ export interface PickAsset {
   originalFranchise: FranchiseInfo | null;
   became: PickBecame | null;
   flippedToTradeId: number | null;
+  /**
+   * True when this pick was traded in a deal that predates the 2023 startup
+   * redraft but names a pick for the redraft season or later: that pick never
+   * conveyed, since the redraft reset the board. `became` and
+   * `flippedToTradeId` are always null on a voided pick; it is also excluded
+   * from `movementsByKey` so it can never source or receive real flip credit.
+   */
+  voided: boolean;
 }
 
 interface TradeSide {
@@ -118,6 +127,7 @@ export function resolvePickAsset(
     originalFranchise,
     became,
     flippedToTradeId: null,
+    voided: false,
   };
 }
 
@@ -397,12 +407,17 @@ export async function getTrades({
 
     // Every pick movement across all trades, keyed by pick identity, for
     // "flipped later" detection. Senders resolve to franchises via the
-    // sending trade's own season.
+    // sending trade's own season. Picks voided by the 2023 startup redraft
+    // (traded before 2023 for a 2023+ season) are excluded entirely, so a
+    // void pick can never be the source or target of a real pick's flip
+    // lineage: this is the single source-level guard that keeps the grader,
+    // offseason receipts, and content-gen from crediting a phantom flip.
     const movementsByKey = new Map<string, PickMovement[]>();
     for (const row of rows) {
       if (row.createdAtSleeper === null) continue;
       const picks = (row.draftPicksInvolved as DraftPickInvolved[] | null) ?? [];
       for (const p of picks) {
+        if (isVoidedPick(row.seasonYear, p.season)) continue;
         const key = pickMovementKey(p);
         const list = movementsByKey.get(key) ?? [];
         list.push({
@@ -480,16 +495,26 @@ export async function getTrades({
 
         const receivedPicks = picks
           .filter((p) => p.owner_id === rosterIdNum)
-          .map((p) => ({
-            ...resolvePickAsset(p, row.seasonId, pickMaps),
-            flippedToTradeId: findPickFlip(movementsByKey, {
-              pickKey: pickMovementKey(p),
-              tradeId: row.id,
-              timestamp: row.createdAtSleeper,
-              franchiseId: franchise?.id ?? null,
-              rosterId: rosterIdNum,
-            }),
-          }));
+          .map((p) => {
+            const voided = isVoidedPick(row.seasonYear, p.season);
+            const resolved = resolvePickAsset(p, row.seasonId, pickMaps);
+            if (voided) {
+              // Never conveyed: no "became" resolution, and never a source or
+              // target of flip-chain credit (see movementsByKey exclusion).
+              return { ...resolved, became: null, flippedToTradeId: null, voided: true };
+            }
+            return {
+              ...resolved,
+              voided: false,
+              flippedToTradeId: findPickFlip(movementsByKey, {
+                pickKey: pickMovementKey(p),
+                tradeId: row.id,
+                timestamp: row.createdAtSleeper,
+                franchiseId: franchise?.id ?? null,
+                rosterId: rosterIdNum,
+              }),
+            };
+          });
 
         return {
           franchise,
