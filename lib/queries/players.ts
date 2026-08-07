@@ -102,6 +102,41 @@ export async function getAllRosteredPlayers(): Promise<RosteredPlayer[]> {
   }
 }
 
+/**
+ * Sleeper's `search_full_name` is lowercase and spaceless ("dariuscooper",
+ * "ajbrown"), so the query has to be collapsed the same way before a LIKE
+ * match. Anything that isn't a-z goes: spaces, periods, apostrophes, hyphens,
+ * digits. Returns "" for symbol-only input, which callers treat as no-op.
+ */
+export function normalizePlayerSearchQuery(query: string): string {
+  return query.toLowerCase().replace(/[^a-z]/g, "");
+}
+
+/**
+ * Relevance tier ordering shared by both searchPlayers branches:
+ * 1. fantasy position with real production (points or projections)
+ * 2. fantasy position, active, on an NFL team (rookies mid-preseason)
+ * 3. fantasy position, active free agent
+ * 4. everything else (OL/IDP, inactive)
+ * Tiebreak: the larger of points/projected points (not the same unit, but
+ * within a tier "the bigger of what we know about this player" is a fine
+ * single-expression signal), then full_name.
+ */
+const RELEVANCE_TIER_SQL = sql`CASE
+  WHEN ${players.position} IN ('QB','RB','WR','TE','K')
+    AND (COALESCE(${players.pointsPpr}, 0) > 0 OR COALESCE(${players.projPointsPpr}, 0) > 0)
+    THEN 0
+  WHEN ${players.position} IN ('QB','RB','WR','TE','K')
+    AND ${players.status} = 'Active' AND ${players.nflTeam} IS NOT NULL
+    THEN 1
+  WHEN ${players.position} IN ('QB','RB','WR','TE','K')
+    AND ${players.status} = 'Active'
+    THEN 2
+  ELSE 3
+END`;
+
+const RELEVANCE_TIEBREAK_SQL = sql`GREATEST(COALESCE(${players.pointsPpr}, 0), COALESCE(${players.projPointsPpr}, 0)) DESC`;
+
 export type PlayerSearchResult = {
   id: string;
   fullName: string | null;
@@ -127,7 +162,7 @@ export async function searchPlayers(
   query: string
 ): Promise<PlayerSearchResult[]> {
   try {
-    const normalizedQuery = query.toLowerCase().replace(/[^a-z\s]/g, "").trim();
+    const normalizedQuery = normalizePlayerSearchQuery(query);
 
     if (!normalizedQuery) return [];
 
@@ -157,6 +192,7 @@ export async function searchPlayers(
         })
         .from(players)
         .where(like(players.searchFullName, searchPattern))
+        .orderBy(RELEVANCE_TIER_SQL, RELEVANCE_TIEBREAK_SQL, players.fullName)
         .limit(50);
 
       return rows.map((r) => ({
@@ -194,8 +230,11 @@ export async function searchPlayers(
       .leftJoin(franchises, eq(rosterPlayers.franchiseId, franchises.id))
       .where(like(players.searchFullName, searchPattern))
       .orderBy(
-        // Prioritize rostered players first, then alphabetical
+        // Prioritize rostered players first, then relevance tier, then the
+        // within-tier tiebreak, then alphabetical as the stable final key.
         sql`CASE WHEN ${franchises.id} IS NOT NULL THEN 0 ELSE 1 END`,
+        RELEVANCE_TIER_SQL,
+        RELEVANCE_TIEBREAK_SQL,
         players.fullName
       )
       .limit(50);
