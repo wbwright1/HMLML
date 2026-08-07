@@ -81,10 +81,7 @@ test.describe("Site search — API contract", () => {
     request,
   }) => {
     // "call" matches two real seeded franchises by name: "Better call Hall"
-    // and "Better call Myballs". Franchise abbreviations are unpopulated in
-    // this league's data today (all null), so abbreviation matching can't be
-    // exercised against real data; the route's `abbr.includes(needle)` check
-    // against `?? ""` is unchanged by this PR and untouched code.
+    // and "Better call Myballs".
     const res = await request.get("/api/search?q=call");
     expect(res.ok()).toBeTruthy();
     const body = await res.json();
@@ -94,6 +91,47 @@ test.describe("Site search — API contract", () => {
         f.name.toLowerCase().includes("call")
       )
     ).toBe(true);
+  });
+
+  // Real franchise abbreviations, populated by the daily sync from the
+  // word-initial acronym rule. These are exact, unique values: each query must
+  // resolve to exactly one team.
+  const ABBREVIATION_CASES: [string, string][] = [
+    ["TTT", "the-tokyo-thunderbirds"],
+    ["OMM", "of-mice-and-mendoza"],
+    ["PTP", "pay-the-price"],
+    ["LDL", "latter-day-lamb-special"],
+    ["BGS", "bucky-s-general-store"],
+    ["OG", "olave-garden"],
+  ];
+
+  test("every franchise carries a well-formed abbreviation", async ({
+    request,
+  }) => {
+    // Search by a substring every team name shares is impossible, so probe the
+    // abbreviations themselves: each must come back non-null and 2-3 chars.
+    for (const [abbr, slug] of ABBREVIATION_CASES) {
+      const res = await request.get(`/api/search?q=${abbr}`);
+      expect(res.ok()).toBeTruthy();
+      const body = await res.json();
+      const match = body.data.franchises.find(
+        (f: { slug: string }) => f.slug === slug
+      );
+      expect(match, `expected ${abbr} to match ${slug}`).toBeTruthy();
+      expect(match.abbreviation).toBe(abbr);
+      expect(match.abbreviation).toMatch(/^[A-Z0-9]{2,3}$/);
+    }
+  });
+
+  test("abbreviation search is case-insensitive", async ({ request }) => {
+    for (const [abbr, slug] of ABBREVIATION_CASES) {
+      const res = await request.get(`/api/search?q=${abbr.toLowerCase()}`);
+      expect(res.ok()).toBeTruthy();
+      const body = await res.json();
+      expect(
+        body.data.franchises.some((f: { slug: string }) => f.slug === slug)
+      ).toBe(true);
+    }
   });
 
   test("a symbol-only query returns an empty player list, not a 500", async ({
@@ -211,6 +249,36 @@ test.describe("Site search — desktop", () => {
       const logoBox = firstTeam.locator("span, img").first();
       await expect(logoBox).toBeVisible();
     }
+  });
+
+  test("typing a franchise abbreviation finds the team and navigates to it", async ({
+    page,
+  }) => {
+    // This is the case that could not pass before abbreviations were
+    // populated: "OMM" appears nowhere in "Of Mice and Mendoza".
+    await page.goto("/");
+    const input = desktopInput(page);
+    await input.click();
+    await input.fill("OMM");
+
+    const listbox = page.getByRole("listbox", { name: "Search results" });
+    await expect(listbox).toBeVisible();
+
+    const teamOption = listbox
+      .getByRole("group", { name: "Teams" })
+      .getByRole("option")
+      .first();
+    await expect(teamOption).toBeVisible();
+    await expect(teamOption).toContainText("Of Mice and Mendoza");
+    expect(await teamOption.getAttribute("href")).toBe(
+      "/teams/of-mice-and-mendoza"
+    );
+
+    await teamOption.click();
+    await page.waitForURL("**/teams/of-mice-and-mendoza");
+    await expect(
+      page.getByRole("heading", { name: /Of Mice and Mendoza/i }).first()
+    ).toBeVisible();
   });
 
   test("Escape closes the results listbox", async ({ page }) => {
