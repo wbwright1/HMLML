@@ -25,6 +25,85 @@ test.describe("Site search — API contract", () => {
     expect(body.data.franchises.length).toBeLessThanOrEqual(8);
     expect(body.data.players.length).toBeLessThanOrEqual(8);
   });
+
+  const FANTASY_POSITIONS = ["QB", "RB", "WR", "TE", "K"];
+
+  test("a full multi-word name matches, spaceless search_full_name style", async ({
+    request,
+  }) => {
+    // Headline regression: this query returns nothing on prod today because the
+    // old normalizer kept the space while search_full_name has none.
+    const res = await request.get("/api/search?q=Darius%20Cooper");
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(
+      body.data.players.some((p: { name: string }) => p.name === "Darius Cooper")
+    ).toBe(true);
+  });
+
+  test("a common single-word surname surfaces fantasy-relevant players ahead of the OL/IDP tail, within the 8-result cap", async ({
+    request,
+  }) => {
+    const res = await request.get("/api/search?q=cooper");
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    const players: { name: string; position: string | null }[] =
+      body.data.players;
+
+    expect(players.some((p) => p.name === "Darius Cooper")).toBe(true);
+
+    // No regression on the case that already worked: a single-word query
+    // still surfaces the well-known rostered player.
+    expect(players.some((p) => p.name === "Cooper Kupp")).toBe(true);
+
+    // Fantasy-relevant positions should lead; non-fantasy positions (OL/IDP)
+    // should not appear ahead of fantasy ones unless the list is shorter
+    // than 8 (asserted structurally, not as one exact permutation, so a
+    // future stats sync doesn't turn this into a flake).
+    const firstNonFantasyIndex = players.findIndex(
+      (p) => !p.position || !FANTASY_POSITIONS.includes(p.position)
+    );
+    if (firstNonFantasyIndex !== -1) {
+      const lastFantasyIndex = players
+        .map((p, i) => ({ i, isFantasy: !!p.position && FANTASY_POSITIONS.includes(p.position) }))
+        .filter((x) => x.isFantasy)
+        .map((x) => x.i)
+        .pop();
+      if (lastFantasyIndex !== undefined) {
+        expect(lastFantasyIndex).toBeLessThan(
+          players.length === 8 ? firstNonFantasyIndex + 1 : Infinity
+        );
+      }
+    }
+  });
+
+  test("a real multi-word franchise name still matches", async ({
+    request,
+  }) => {
+    // "call" matches two real seeded franchises by name: "Better call Hall"
+    // and "Better call Myballs". Franchise abbreviations are unpopulated in
+    // this league's data today (all null), so abbreviation matching can't be
+    // exercised against real data; the route's `abbr.includes(needle)` check
+    // against `?? ""` is unchanged by this PR and untouched code.
+    const res = await request.get("/api/search?q=call");
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.data.franchises.length).toBeGreaterThan(0);
+    expect(
+      body.data.franchises.some((f: { name: string }) =>
+        f.name.toLowerCase().includes("call")
+      )
+    ).toBe(true);
+  });
+
+  test("a symbol-only query returns an empty player list, not a 500", async ({
+    request,
+  }) => {
+    const res = await request.get("/api/search?q=%21%21%21");
+    expect(res.ok()).toBeTruthy();
+    const body = await res.json();
+    expect(body.data.players).toEqual([]);
+  });
 });
 
 test.describe("Site search — desktop", () => {
