@@ -35,6 +35,10 @@ import {
   buildTakenSet,
   resolveAbbreviation,
 } from "@/lib/franchise-abbreviations";
+import {
+  buildTakenColorSet,
+  resolveBrandingColor,
+} from "@/lib/franchise-colors";
 import { runAtomic } from "@/lib/db/atomic";
 
 // ---------------------------------------------------------------------------
@@ -283,18 +287,29 @@ async function syncUsersAndRosters(leagueId: string): Promise<SyncStepResult> {
 
     let rowCount = 0;
 
-    // Abbreviations are derived, not synced (Sleeper has no such field), so
-    // collision resolution must be deterministic: seed the taken set from the
-    // curated map plus everything already persisted, and walk rosters in a
-    // stable order so a re-run never reshuffles anyone's letters.
-    const persistedAbbreviations = await db
-      .select({ id: franchises.id, abbreviation: franchises.abbreviation })
+    // Abbreviations and branding colors are derived, not synced (Sleeper has
+    // no such fields), so collision resolution must be deterministic: seed the
+    // taken sets from the curated maps plus everything already persisted, and
+    // walk rosters in a stable order so a re-run never reshuffles anyone's
+    // letters or colors.
+    const persistedBranding = await db
+      .select({
+        id: franchises.id,
+        abbreviation: franchises.abbreviation,
+        brandingColor: franchises.brandingColor,
+      })
       .from(franchises);
     const abbreviationById = new Map(
-      persistedAbbreviations.map((f) => [f.id, f.abbreviation])
+      persistedBranding.map((f) => [f.id, f.abbreviation])
     );
     const takenAbbreviations = buildTakenSet(
-      persistedAbbreviations.map((f) => f.abbreviation)
+      persistedBranding.map((f) => f.abbreviation)
+    );
+    const colorById = new Map(
+      persistedBranding.map((f) => [f.id, f.brandingColor])
+    );
+    const takenColors = buildTakenColorSet(
+      persistedBranding.map((f) => f.brandingColor)
     );
 
     const orderedRosters = [...rosters].sort((a, b) =>
@@ -336,6 +351,14 @@ async function syncUsersAndRosters(leagueId: string): Promise<SyncStepResult> {
       takenAbbreviations.add(abbreviation);
       abbreviationById.set(franchiseId, abbreviation);
 
+      // Same dance for the branding color: release this franchise's own
+      // current color so it can keep it, then claim whatever it resolves to.
+      const ownColor = colorById.get(franchiseId);
+      if (ownColor) takenColors.delete(ownColor);
+      const brandingColor = resolveBrandingColor(franchiseId, takenColors);
+      takenColors.add(brandingColor);
+      colorById.set(franchiseId, brandingColor);
+
       // Upsert franchise (name = team name from Sleeper)
       await db
         .insert(franchises)
@@ -344,6 +367,7 @@ async function syncUsersAndRosters(leagueId: string): Promise<SyncStepResult> {
           slug,
           name: userData.teamName,
           abbreviation,
+          brandingColor,
           updatedAt: new Date(),
         })
         .onConflictDoUpdate({
@@ -352,6 +376,7 @@ async function syncUsersAndRosters(leagueId: string): Promise<SyncStepResult> {
             name: userData.teamName,
             slug,
             abbreviation,
+            brandingColor,
             updatedAt: new Date(),
           },
         });
