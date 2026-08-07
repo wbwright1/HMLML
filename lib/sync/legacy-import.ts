@@ -22,6 +22,10 @@ import {
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { derivePlayoffResults } from "@/lib/sync/derive-playoffs";
 import { resolveAvatarUrl } from "@/lib/sync/daily";
+import {
+  buildTakenSet,
+  resolveAbbreviation,
+} from "@/lib/franchise-abbreviations";
 import type { SleeperLeague } from "@/lib/sleeper-schemas";
 
 // ---------------------------------------------------------------------------
@@ -257,7 +261,24 @@ async function importUsersAndRosters(
   let franchiseCount = 0;
   let franchiseSeasonCount = 0;
 
-  for (const roster of rosters) {
+  // Same determinism contract as the daily sync: seed the taken set from the
+  // curated map plus everything already persisted, and walk rosters in a
+  // stable order so a re-import never reshuffles anyone's letters.
+  const persistedAbbreviations = await db
+    .select({ id: franchises.id, abbreviation: franchises.abbreviation })
+    .from(franchises);
+  const abbreviationById = new Map(
+    persistedAbbreviations.map((f) => [f.id, f.abbreviation])
+  );
+  const takenAbbreviations = buildTakenSet(
+    persistedAbbreviations.map((f) => f.abbreviation)
+  );
+
+  const orderedRosters = [...rosters].sort((a, b) =>
+    String(a.owner_id ?? "").localeCompare(String(b.owner_id ?? ""))
+  );
+
+  for (const roster of orderedRosters) {
     const ownerId = roster.owner_id;
     if (!ownerId) continue; // Skip unowned rosters
 
@@ -280,6 +301,18 @@ async function importUsersAndRosters(
     // Generate a collision-safe slug from team name
     const slug = await uniqueSlug(userData.teamName, franchiseId);
 
+    // Release this franchise's own current abbreviation so it can keep it,
+    // then claim whatever it resolves to.
+    const ownAbbreviation = abbreviationById.get(franchiseId);
+    if (ownAbbreviation) takenAbbreviations.delete(ownAbbreviation);
+    const abbreviation = resolveAbbreviation(
+      franchiseId,
+      userData.teamName,
+      takenAbbreviations
+    );
+    takenAbbreviations.add(abbreviation);
+    abbreviationById.set(franchiseId, abbreviation);
+
     // Upsert franchise (name = team name from Sleeper)
     await db
       .insert(franchises)
@@ -287,6 +320,7 @@ async function importUsersAndRosters(
         id: franchiseId,
         slug,
         name: userData.teamName,
+        abbreviation,
         updatedAt: new Date(),
       })
       .onConflictDoUpdate({
@@ -294,6 +328,7 @@ async function importUsersAndRosters(
         set: {
           name: userData.teamName,
           slug,
+          abbreviation,
           updatedAt: new Date(),
         },
       });
