@@ -12,7 +12,13 @@ import {
   getSeasonStandings,
   getAllSeasons,
 } from "@/lib/queries/seasons";
-import { getPlayoffLabel, getPlayoffBadgeVariant } from "@/lib/playoff-labels";
+import {
+  getPlayoffLabel,
+  getPlayoffBadgeVariant,
+  TOILET_BOWL_COPY,
+} from "@/lib/playoff-labels";
+import { getToiletBowlChampion } from "@/lib/queries/playoff-bracket";
+import { SNARKY_LABELS } from "@/lib/content";
 import { getMaxWeekForSeason } from "@/lib/queries/matchups";
 import { SeasonDetailNav } from "./season-detail-nav";
 
@@ -72,6 +78,10 @@ export default async function SeasonDetailPage({
     // Matchup data may not be available
   }
 
+  // Read, never re-derive: the champion of the inverted consolation bracket
+  // lives on seasons.toilet_bowl_franchise_id.
+  const toiletBowlChampion = await getToiletBowlChampion(season.id);
+
   const seasonYears = allSeasons.map((s) => s.seasonYear);
   // A season is legacy era if any franchise_season in it has the legacy flag set
   // (NOT based on previousLeagueId, which chains all Sleeper seasons)
@@ -128,6 +138,44 @@ export default async function SeasonDetailPage({
             <ChampionshipStars count={1} variant="hero" />
             <p className="text-h3 text-gold">{season.championName}</p>
             <SuperlativeBadge text="League Champion" variant="gold" />
+          </div>
+        )}
+
+        {/* The other end of the season: who sank through the Toilet Bowl. */}
+        {toiletBowlChampion && (
+          <div
+            data-testid="season-toilet-bowl-sting"
+            className="mt-4 card-surface card-tint-warm p-6 text-center space-y-3"
+          >
+            <div className="flex justify-center">
+              <FranchiseLogo
+                slug={toiletBowlChampion.franchiseSlug}
+                name={toiletBowlChampion.franchiseName}
+                abbreviation={toiletBowlChampion.franchiseAbbreviation ?? undefined}
+                brandingColor={toiletBowlChampion.franchiseBrandingColor ?? undefined}
+                avatarUrl={toiletBowlChampion.avatarUrl}
+                size="lg"
+                decorative
+              />
+            </div>
+            <p className="text-h3 text-accent-warm">
+              {toiletBowlChampion.franchiseName}
+            </p>
+            <p className="text-body-sm text-text-secondary max-w-prose mx-auto">
+              {TOILET_BOWL_COPY.explainer}
+            </p>
+            <div className="flex justify-center">
+              <SuperlativeBadge
+                text={SNARKY_LABELS.TOILET_BOWL_CHAMPION.displayText}
+                variant="brown"
+              />
+            </div>
+            <Link
+              href={`/playoffs/${year}`}
+              className="inline-flex text-body-sm font-medium text-accent-gold transition-all hover:brightness-110"
+            >
+              See the whole bracket &rarr;
+            </Link>
           </div>
         )}
       </PageSection>

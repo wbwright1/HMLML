@@ -25,6 +25,13 @@ export const seasons = pgTable(
     previousLeagueId: text("previous_league_id"),
     status: text("status"), // 'complete' | 'in_season' | 'pre_draft'
     championFranchiseId: text("champion_franchise_id"),
+    // Franchise that "won" the Toilet Bowl: the advancing team of the
+    // losers-bracket final (p === 1). In this league's consolation bracket you
+    // advance by LOSING, so this franchise finished dead last. Stored here
+    // rather than as a new franchise_seasons.playoff_result value so GOAT
+    // scoring and preseason power rankings (which read playoff_result) are
+    // untouched. Null until the losers final is played.
+    toiletBowlFranchiseId: text("toilet_bowl_franchise_id"),
     totalRosters: integer("total_rosters"),
     playoffWeekStart: integer("playoff_week_start"),
     settingsJson: jsonb("settings_json"),
@@ -215,6 +222,55 @@ export const matchups = pgTable(
     index("idx_matchups_season_week").on(table.seasonId, table.week),
     index("idx_matchups_franchise_id").on(table.franchiseId),
     index("idx_matchups_season_status").on(table.seasonId, table.status),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// playoff_bracket_matches
+// ---------------------------------------------------------------------------
+// One row per Sleeper bracket match, for both the winners (playoff) bracket
+// and the losers (Toilet Bowl) bracket. Persisted verbatim from Sleeper so the
+// bracket page renders real pairings instead of guessing them from flat
+// matchup rows.
+//
+// CRITICAL: the losers bracket is INVERTED. In this league's consolation
+// bracket a team advances by LOSING the game, and Sleeper still records the
+// advancing team in its `w` field. Verified across 2021-2025: 21/21 winners
+// matches have the higher scorer as `w`, and 26/26 losers matches have the
+// LOWER scorer as `w`. That is why this column is `advancing_roster_id` and
+// not `winner_roster_id`: never infer advancement by comparing points, and
+// never render a "W" next to the advancing team in a losers match.
+//
+// Scores are deliberately NOT denormalized here; matchups stays the single
+// source of truth and joins on (season_id, week, roster_id) where
+// week = seasons.playoff_week_start + round - 1.
+export const playoffBracketMatches = pgTable(
+  "playoff_bracket_matches",
+  {
+    id: serial("id").primaryKey(),
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id),
+    bracketType: text("bracket_type").notNull(), // 'winners' | 'losers'
+    round: integer("round").notNull(), // Sleeper `r`
+    matchNumber: integer("match_number").notNull(), // Sleeper `m`
+    placement: integer("placement"), // Sleeper `p` (winners: 1 = title game; losers: 1 = Toilet Bowl final)
+    team1RosterId: integer("team1_roster_id"), // Sleeper `t1` when numeric
+    team2RosterId: integer("team2_roster_id"), // Sleeper `t2` when numeric
+    team1FromMatch: integer("team1_from_match"), // referenced match when `t1` is an object ref
+    team2FromMatch: integer("team2_from_match"), // referenced match when `t2` is an object ref
+    advancingRosterId: integer("advancing_roster_id"), // Sleeper `w` (the LOWER scorer in losers matches)
+    eliminatedRosterId: integer("eliminated_roster_id"), // Sleeper `l`
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_playoff_bracket_matches_season_id").on(table.seasonId),
+    uniqueIndex("idx_playoff_bracket_matches_unique").on(
+      table.seasonId,
+      table.bracketType,
+      table.matchNumber,
+    ),
   ],
 );
 
@@ -612,6 +668,9 @@ export type NewFranchiseSeason = typeof franchiseSeasons.$inferInsert;
 
 export type Matchup = typeof matchups.$inferSelect;
 export type NewMatchup = typeof matchups.$inferInsert;
+
+export type PlayoffBracketMatch = typeof playoffBracketMatches.$inferSelect;
+export type NewPlayoffBracketMatch = typeof playoffBracketMatches.$inferInsert;
 
 export type Player = typeof players.$inferSelect;
 export type NewPlayer = typeof players.$inferInsert;

@@ -101,6 +101,12 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
     description: 'Franchise with the largest gap between optimal lineup and actual lineup score (biggest underperformer)',
     tone: 'sting',
   },
+  TOILET_BOWL_CHAMPION: {
+    key: 'TOILET_BOWL_CHAMPION',
+    displayText: 'Toilet Bowl Champion',
+    description: 'Franchise that lost its way through the entire consolation bracket and finished dead last',
+    tone: 'sting',
+  },
   BLOWOUT_BAIT: {
     key: 'BLOWOUT_BAIT',
     displayText: 'Blowout Bait',

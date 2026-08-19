@@ -7,6 +7,9 @@ import { PlayerLoreCards } from "@/components/player-lore-cards";
 import { TrophyCase } from "@/components/trophy-case";
 import { getGoatLadder, GOAT_WEIGHTS, type GoatEntry } from "@/lib/queries/goat";
 import { GOAT_ARCHETYPE_LABELS } from "@/lib/goat-content";
+import { getAllToiletBowlChampions } from "@/lib/queries/playoff-bracket";
+import { TOILET_BOWL_COPY } from "@/lib/playoff-labels";
+import { SNARKY_LABELS } from "@/lib/content";
 
 export const dynamic = "force-dynamic";
 
@@ -224,6 +227,8 @@ export default async function HallOfFamePage() {
     // DB may not be connected in dev.
   }
 
+  const toiletBowlChampions = await getAllToiletBowlChampions();
+
   if (ladder.length === 0) {
     return (
       <>
@@ -301,6 +306,58 @@ export default async function HallOfFamePage() {
           three seasons toward the most recent. Only completed seasons count.
         </p>
       </section>
+
+      {/* The Shame Wing: the receipts nobody frames. One entry per season's
+          Toilet Bowl champion, read straight off
+          seasons.toilet_bowl_franchise_id. Renders nothing until a losers
+          bracket final has actually been played. */}
+      {toiletBowlChampions.length > 0 && (
+        <section
+          data-testid="hall-of-shame-toilet-bowl"
+          className="pb-12 md:pb-16 space-y-3"
+        >
+          <div className="pb-2">
+            <p className="text-kicker text-accent-warm mb-1.5">Module</p>
+            <h2 className="text-h2 text-text-primary">The Basement</h2>
+            <p className="text-body-sm text-text-tertiary mt-1">
+              {TOILET_BOWL_COPY.explainer} These are the franchises that got
+              there.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {toiletBowlChampions.map((champion, i) => (
+              <ScrollReveal key={champion.seasonYear} delay={i * 40}>
+                <Link
+                  href={`/playoffs/${champion.seasonYear}`}
+                  className="card-surface card-tint-warm flex h-full items-center gap-3 p-4 transition-colors hover:border-border-strong"
+                >
+                  <FranchiseLogo
+                    slug={champion.franchiseSlug}
+                    name={champion.franchiseName}
+                    abbreviation={champion.franchiseAbbreviation ?? undefined}
+                    brandingColor={champion.franchiseBrandingColor ?? undefined}
+                    avatarUrl={champion.avatarUrl}
+                    size="md"
+                    decorative
+                  />
+                  <div className="min-w-0">
+                    <p className="font-mono text-body font-bold tabular-nums leading-none text-accent-warm">
+                      {champion.seasonYear}
+                    </p>
+                    <p className="truncate text-body-sm text-text-primary mt-1">
+                      {champion.franchiseName}
+                    </p>
+                    <p className="text-[10px] uppercase tracking-[0.12em] text-text-tertiary mt-0.5">
+                      {SNARKY_LABELS.TOILET_BOWL_CHAMPION.displayText}
+                    </p>
+                  </div>
+                </Link>
+              </ScrollReveal>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* The Player Wing: the hardware and the legends behind it, in one
           module. Yearly Hardware (commissioner-decided season honors: MVP /

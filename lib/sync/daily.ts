@@ -29,6 +29,7 @@ import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { loadSeasonScoringSettings } from "@/lib/queries/seasons";
 import { computeProjectedPoints } from "@/lib/lineup-slots";
 import { derivePlayoffResults } from "@/lib/sync/derive-playoffs";
+import { persistBracketMatches } from "@/lib/sync/playoff-brackets";
 import { buildMemberFranchiseMap } from "@/lib/sync/member-franchise";
 import { resolveDivisionName } from "@/lib/divisions";
 import {
@@ -1086,6 +1087,16 @@ async function syncPlayoffBracket(leagueId: string): Promise<SyncStepResult> {
         })
         .where(eq(seasons.id, seasonRecord.id));
     }
+
+    // Persist the raw bracket (both sides) plus the Toilet Bowl champion in one
+    // transaction, so the bracket page renders real pairings instead of
+    // guessing them from flat matchup rows.
+    rowCount += await persistBracketMatches(
+      seasonRecord.id,
+      winnersResult.data,
+      losersResult.data,
+      results.toiletBowlChampionFranchiseId,
+    );
 
     const durationMs = Date.now() - startTime;
     await logSyncComplete(logId, "success", rowCount);

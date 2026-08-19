@@ -21,6 +21,7 @@ import { getFranchiseAwards } from "@/lib/queries/awards";
 import { FranchiseCornerstoneCard } from "@/components/franchise-cornerstone-card";
 import { FranchiseTrophyCase } from "@/components/franchise-trophy-case";
 import { buildFranchiseTrophies } from "@/lib/franchise-trophies";
+import { getToiletBowlChampionsByFranchise } from "@/lib/queries/playoff-bracket";
 import { getPlayoffLabel, getPlayoffBadgeVariant } from "@/lib/playoff-labels";
 import { EmptyState } from "@/components/empty-state";
 
@@ -97,13 +98,16 @@ export default async function FranchiseDetailPage({
   };
   let cornerstones: Awaited<ReturnType<typeof getFranchiseCornerstone>> = [];
   let franchiseAwards: Awaited<ReturnType<typeof getFranchiseAwards>> = [];
+  let toiletBowlSeasons: number[] = [];
   try {
-    [rivalries, extremes, cornerstones, franchiseAwards] = await Promise.all([
-      getRivalries(),
-      getFranchiseExtremes(franchise.id),
-      getFranchiseCornerstone(franchise.id),
-      getFranchiseAwards(franchise.id),
-    ]);
+    [rivalries, extremes, cornerstones, franchiseAwards, toiletBowlSeasons] =
+      await Promise.all([
+        getRivalries(),
+        getFranchiseExtremes(franchise.id),
+        getFranchiseCornerstone(franchise.id),
+        getFranchiseAwards(franchise.id),
+        getToiletBowlChampionsByFranchise(franchise.id),
+      ]);
   } catch {
     // DB may not be connected in dev
   }
@@ -136,6 +140,7 @@ export default async function FranchiseDetailPage({
   const trophies = buildFranchiseTrophies(
     franchise.seasonHistory,
     franchiseAwards,
+    toiletBowlSeasons,
   );
 
   // Best-to-worst grid, tagging only the genuinely lopsided extremes.

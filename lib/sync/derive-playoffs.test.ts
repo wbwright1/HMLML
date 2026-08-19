@@ -157,3 +157,51 @@ describe("derivePlayoffResults - graceful mid-season / edge cases", () => {
     expect(franchiseResults.get("f7")).toBe("toilet_bowl");
   });
 });
+
+describe("derivePlayoffResults - toilet bowl champion", () => {
+  it("crowns the advancing team of the p=1 losers final, not the higher scorer", () => {
+    // Real 2023 losers bracket (league 916853033424773120). Roster 11 scored
+    // 109.22 and roster 9 scored 119.98; Sleeper records 11 as `w` because the
+    // bracket is inverted, so 11 is the Toilet Bowl champion.
+    const losers: SleeperBracketMatch[] = [
+      { m: 1, r: 1, l: 4, w: 5, t1: 4, t2: 5 },
+      { m: 2, r: 1, l: 10, w: 11, t1: 10, t2: 11 },
+      { m: 3, r: 2, l: 5, w: 9, t1: 9, t2: 5 },
+      { m: 4, r: 2, l: 2, w: 11, t1: 2, t2: 11 },
+      { p: 5, m: 5, r: 2, l: 4, w: 10, t1: 4, t2: 10 },
+      { p: 1, m: 6, r: 3, l: 9, w: 11, t1: 9, t2: 11 },
+      { p: 3, m: 7, r: 3, l: 5, w: 2, t1: 5, t2: 2 },
+    ];
+    const mapping = makeMapping([2, 4, 5, 9, 10, 11]);
+    const { toiletBowlChampionFranchiseId, franchiseResults } =
+      derivePlayoffResults([], losers, mapping);
+    expect(toiletBowlChampionFranchiseId).toBe("f11");
+    // Both finalists still carry the toilet_bowl playoff_result: unchanged.
+    expect(franchiseResults.get("f11")).toBe("toilet_bowl");
+    expect(franchiseResults.get("f9")).toBe("toilet_bowl");
+  });
+
+  it("crowns nobody when the p=1 final is seeded but unplayed", () => {
+    const losers: SleeperBracketMatch[] = [
+      { m: 1, r: 1, t1: 7, t2: 8, w: 7, l: 8 },
+      { m: 2, r: 2, p: 1, t1: 8, t2: 10, w: null, l: null },
+    ];
+    const mapping = makeMapping([7, 8, 10]);
+    const { toiletBowlChampionFranchiseId } = derivePlayoffResults(
+      [],
+      losers,
+      mapping
+    );
+    expect(toiletBowlChampionFranchiseId).toBeNull();
+  });
+
+  it("crowns nobody with no losers bracket at all", () => {
+    const mapping = makeMapping([1, 2, 3, 4, 5, 6]);
+    const { toiletBowlChampionFranchiseId } = derivePlayoffResults(
+      winners6,
+      [],
+      mapping
+    );
+    expect(toiletBowlChampionFranchiseId).toBeNull();
+  });
+});

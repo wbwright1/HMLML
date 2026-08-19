@@ -21,6 +21,7 @@ import {
 } from "@/lib/sleeper";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { derivePlayoffResults } from "@/lib/sync/derive-playoffs";
+import { persistBracketMatches } from "@/lib/sync/playoff-brackets";
 import { resolveAvatarUrl } from "@/lib/sync/daily";
 import {
   buildTakenSet,
@@ -788,8 +789,17 @@ async function importPlayoffBracket(
       .where(eq(seasons.id, seasonDbId));
   }
 
+  // Persist the raw bracket (both sides) plus the Toilet Bowl champion, using
+  // the same helper the daily sync calls so the two paths cannot drift.
+  const bracketRows = await persistBracketMatches(
+    seasonDbId,
+    winnersResult.data,
+    losersResult.data,
+    results.toiletBowlChampionFranchiseId
+  );
+
   console.log(
-    `[legacy-import] Playoff bracket: champion=${results.championFranchiseId ?? "TBD"}, runner_up=${results.runnerUpFranchiseId ?? "TBD"}, ${results.franchiseResults.size} results`
+    `[legacy-import] Playoff bracket: champion=${results.championFranchiseId ?? "TBD"}, runner_up=${results.runnerUpFranchiseId ?? "TBD"}, toilet_bowl=${results.toiletBowlChampionFranchiseId ?? "TBD"}, ${results.franchiseResults.size} results, ${bracketRows} bracket rows`
   );
 }
 

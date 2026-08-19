@@ -13,6 +13,21 @@ interface FranchiseTrophyCaseProps {
 
 type ChampionshipTrophy = Extract<FranchiseTrophy, { kind: "championship" }>;
 type AwardTrophy = Extract<FranchiseTrophy, { kind: "award" }>;
+type ToiletBowlTrophy = Extract<FranchiseTrophy, { kind: "toiletBowl" }>;
+
+/** Plate for a Toilet Bowl "win": the year in rust, plus what it actually was. */
+function ToiletBowlPlate({ trophy }: { trophy: ToiletBowlTrophy }) {
+  return (
+    <div className="flex w-full flex-col items-center justify-center gap-0.5 text-center">
+      <span className="whitespace-nowrap font-mono text-[17px] font-bold text-accent-warm">
+        {trophy.seasonYear}
+      </span>
+      <span className="whitespace-nowrap text-[10.5px] text-text-tertiary">
+        Finished dead last
+      </span>
+    </div>
+  );
+}
 
 function ChampionshipPlate({ trophy }: { trophy: ChampionshipTrophy }) {
   const record = formatRecord(trophy.wins, trophy.losses, trophy.ties);
@@ -68,8 +83,22 @@ export function FranchiseTrophyCase({
           key={group.key}
           label={group.label}
           count={group.trophies.length}
+          tone={group.key === "toiletBowl" ? "shame" : "gold"}
         >
-          {group.key === "championship"
+          {group.key === "toiletBowl"
+            ? group.trophies.map((trophy) => {
+                const toiletTrophy = trophy as ToiletBowlTrophy;
+                return (
+                  <Medallion
+                    key={`toilet-${toiletTrophy.seasonYear}`}
+                    iconType={"toilet_bowl" satisfies MedallionIconType}
+                    href={`/playoffs/${toiletTrophy.seasonYear}`}
+                    ariaLabel={`Toilet Bowl Champion, ${toiletTrophy.seasonYear}, finished dead last. View playoffs.`}
+                    plate={<ToiletBowlPlate trophy={toiletTrophy} />}
+                  />
+                );
+              })
+            : group.key === "championship"
             ? group.trophies.map((trophy) => {
                 const champTrophy = trophy as ChampionshipTrophy;
                 return (

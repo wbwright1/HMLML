@@ -423,6 +423,7 @@ export async function getSeasonByYearSimple(year: number) {
         seasonYear: seasons.seasonYear,
         status: seasons.status,
         playoffWeekStart: seasons.playoffWeekStart,
+        totalRosters: seasons.totalRosters,
       })
       .from(seasons)
       .where(eq(seasons.seasonYear, year))
