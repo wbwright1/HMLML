@@ -2,7 +2,9 @@ import { notFound } from "next/navigation";
 import { PlayerProfile } from "@/components/player-profile/player-profile";
 import { getPlayerById } from "@/lib/queries/players";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 interface PlayerProfilePageProps {
   params: Promise<{ id: string }>;

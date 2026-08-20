@@ -8,7 +8,9 @@ import { getLatestSeason } from "@/lib/queries/matchups";
 import { getNflState } from "@/lib/queries/nfl-state";
 import { resolveHubSeasonType, isPreWeekOne, seasonTypeBadgeLabel } from "@/lib/hub/season-state";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export const metadata = {
   title: "League History | Harambe Memorial League Memorial League",

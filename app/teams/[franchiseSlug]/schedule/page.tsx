@@ -12,6 +12,10 @@ interface FranchiseSchedulePageProps {
   searchParams: Promise<{ season?: string }>;
 }
 
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
+
 export async function generateMetadata({ params }: FranchiseSchedulePageProps) {
   const { franchiseSlug } = await params;
 

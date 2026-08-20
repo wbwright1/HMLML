@@ -7,7 +7,9 @@ import { ScrollReveal } from "@/components/scroll-reveal";
 import { ScorePoller } from "./score-poller";
 import { getCurrentWeekMatchups } from "@/lib/queries/matchups";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export const metadata = {
   title: "Matchups | Harambe Memorial League Memorial League",

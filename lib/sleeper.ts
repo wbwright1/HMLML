@@ -207,11 +207,25 @@ export async function getLosersBracket(
   );
 }
 
-/** Fetch the current NFL state (season, week, etc.). Cached for 5 minutes. */
-export async function getNFLState(): Promise<
-  SleeperResult<SleeperNFLState>
-> {
-  return fetchSleeper("/state/nfl", SleeperNFLStateSchema, { revalidate: 300 });
+/** Default fetch-cache window for /state/nfl: fresh enough for the sync jobs
+ *  and the live-scores poller to see a week rollover promptly. */
+export const NFL_STATE_REVALIDATE_SECONDS = 300;
+
+/**
+ * Fetch the current NFL state (season, week, etc.). Cached for 5 minutes by
+ * default.
+ *
+ * `revalidate` is a parameter because a page's ISR window can never exceed the
+ * shortest fetch-cache window inside its render, and this fetch runs in the nav
+ * (root layout) on every page. Leaving it at 300 would silently pin every page
+ * on the site to a 5 minute revalidate instead of the intended hour. The page
+ * render path passes a longer window (lib/queries/nfl-state.ts); the sync jobs
+ * and the live poller keep the 5 minute default.
+ */
+export async function getNFLState(
+  revalidate: number = NFL_STATE_REVALIDATE_SECONDS
+): Promise<SleeperResult<SleeperNFLState>> {
+  return fetchSleeper("/state/nfl", SleeperNFLStateSchema, { revalidate });
 }
 
 /**

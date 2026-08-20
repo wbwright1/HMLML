@@ -12,7 +12,9 @@ import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getFranchiseDraftHistory, type DraftPickWithFranchise } from "@/lib/queries/drafts";
 import { EmptyState } from "@/components/empty-state";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 interface FranchiseDraftsPageProps {
   params: Promise<{ franchiseSlug: string }>;

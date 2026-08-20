@@ -12,6 +12,10 @@ interface SchedulePageProps {
   searchParams: Promise<{ season?: string }>;
 }
 
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
+
 export async function generateMetadata({ searchParams }: SchedulePageProps) {
   const { season } = await searchParams;
   const year = season ? parseInt(season, 10) : null;

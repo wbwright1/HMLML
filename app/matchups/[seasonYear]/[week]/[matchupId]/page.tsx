@@ -15,7 +15,9 @@ import { deriveLiveAside } from "@/lib/live-aside";
 import type { MatchupTeam, PairedMatchup } from "@/lib/queries/matchups";
 import type { MatchupLineups as MatchupLineupsData } from "@/lib/queries/player-points";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 interface MatchupDetailPageProps {
   params: Promise<{ seasonYear: string; week: string; matchupId: string }>;

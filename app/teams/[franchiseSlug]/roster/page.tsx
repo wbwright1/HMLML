@@ -20,7 +20,9 @@ import { getCurrentWeekPlayerStatusByPlayer } from "@/lib/queries/player-points"
 import { decideWeekDisplay } from "@/lib/game-status";
 import type { SeasonSegment } from "@/lib/season-segment";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 interface RosterPageProps {
   params: Promise<{ franchiseSlug: string }>;

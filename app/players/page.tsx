@@ -10,9 +10,12 @@ import {
 import { decideWeekDisplay } from "@/lib/game-status";
 import { getAwardsByPlayerIds } from "@/lib/queries/awards";
 import type { AwardChipData } from "@/components/award-chip";
+import { Suspense } from "react";
 import { PlayerTable, type PlayerRow } from "./player-table";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export const metadata = {
   title: "Players | Harambe Memorial League Memorial League",
@@ -20,13 +23,7 @@ export const metadata = {
     "Browse every player in the Harambe Memorial League Memorial League: sort by fantasy points, position, age, experience, and filter by team.",
 };
 
-interface PlayersPageProps {
-  searchParams: Promise<{ q?: string }>;
-}
-
-export default async function PlayersPage({ searchParams }: PlayersPageProps) {
-  const { q } = await searchParams;
-
+export default async function PlayersPage() {
   const [players, franchises, latestSeason, nflState, trendingPlayers] = await Promise.all([
     getAllPlayersWithStats(),
     getAllFranchiseNames(),
@@ -111,18 +108,21 @@ export default async function PlayersPage({ searchParams }: PlayersPageProps) {
         <aside className="lg:order-2">
           <TrendingRail players={trendingPlayers} />
         </aside>
-        <PlayerTable
-          players={playerRows}
-          franchises={franchises}
-          statsSeason={statsSeason}
-          projSeason={projSeason}
-          projLeads={projLeads}
-          currentWeek={currentWeek}
-          initialQuery={q ?? ""}
-          showWkColumn={showWkColumn}
-          showTrdColumn={showTrdColumn}
-          awardsByPlayerId={awardsByPlayerId}
-        />
+        {/* PlayerTable reads useSearchParams (?q= seeding), which requires a
+            Suspense boundary in a statically rendered route. */}
+        <Suspense fallback={null}>
+          <PlayerTable
+            players={playerRows}
+            franchises={franchises}
+            statsSeason={statsSeason}
+            projSeason={projSeason}
+            projLeads={projLeads}
+            currentWeek={currentWeek}
+            showWkColumn={showWkColumn}
+            showTrdColumn={showTrdColumn}
+            awardsByPlayerId={awardsByPlayerId}
+          />
+        </Suspense>
       </div>
     </section>
   );

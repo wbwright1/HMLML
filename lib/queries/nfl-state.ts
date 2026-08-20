@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { getNFLState } from "@/lib/sleeper";
+import { PAGE_REVALIDATE_SECONDS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { nflGames } from "@/lib/db/schema";
 import { and, eq, sql } from "drizzle-orm";
@@ -19,10 +20,18 @@ export interface NflState {
  *
  * Wrapped in React `cache()` so the nav and the page dedupe to a single call
  * per request (both resolve the same seasonal state).
+ *
+ * This is the page render path, so it pins the fetch cache to the same window
+ * the pages use (lib/cache.ts). A page's ISR window is capped by the shortest
+ * fetch-cache window inside its render, and the nav calls this from the root
+ * layout, so the default 5 minute window would hold every page on the site to a
+ * 5 minute revalidate. The sync jobs and the live poller still read the fresher
+ * default; a week rollover shows up here within the hour, which matches how
+ * stale the surrounding page content already is.
  */
 export const getNflState = cache(async function getNflState(): Promise<NflState | null> {
   try {
-    const result = await getNFLState();
+    const result = await getNFLState(PAGE_REVALIDATE_SECONDS);
 
     if ("error" in result) {
       console.error("[nfl-state] Failed to fetch NFL state:", result.error.message);

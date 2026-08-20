@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback, type KeyboardEvent } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 import { Search, ChevronUp, ChevronDown, ArrowUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -284,7 +285,6 @@ interface PlayerTableProps {
   projLeads?: boolean;
   /** Current NFL week (for the in-season WK column header); null outside the in-season segment. */
   currentWeek?: number | null;
-  initialQuery?: string;
   /**
    * Whether to render the merged in-season "WK" column: false offseason or
    * before the current week's data has synced. Never true when projLeads.
@@ -303,12 +303,16 @@ export function PlayerTable({
   projSeason = null,
   projLeads = false,
   currentWeek = null,
-  initialQuery = "",
   showWkColumn = false,
   showTrdColumn = false,
   awardsByPlayerId = {},
 }: PlayerTableProps) {
-  const [search, setSearch] = useState(initialQuery);
+  // Seeds the search box from ?q= (the ⌘K search deep-links here). Read on the
+  // client rather than as a server searchParams prop so the page itself stays
+  // statically rendered / ISR-cached; awaiting searchParams on the server would
+  // opt this route out of caching for the site's heaviest query set.
+  const searchParams = useSearchParams();
+  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
   const [posFilter, setPosFilter] = useState<PositionFilter>("ALL");
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>("FA");
   // Headline column and default sort:

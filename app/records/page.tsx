@@ -25,7 +25,9 @@ import { RecordsSeasonView } from "@/app/records/records-season-view";
 import type { LeaderboardEntry } from "@/lib/queries/records";
 import type { PlayoffProjection } from "@/lib/queries/divisions";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export const metadata = {
   title: "Records & Rankings | Harambe Memorial League Memorial League",

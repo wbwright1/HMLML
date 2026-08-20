@@ -14,6 +14,10 @@ import { getTradeValues } from "@/lib/queries/trade-values";
 import { getAllFranchises } from "@/lib/queries/franchises";
 import { getAllSeasons } from "@/lib/queries/seasons";
 
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
+
 export const metadata = {
   title: "Trade History | Harambe Memorial League Memorial League",
   description:

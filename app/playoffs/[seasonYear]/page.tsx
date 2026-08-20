@@ -18,7 +18,9 @@ import {
 import { SNARKY_LABELS } from "@/lib/content";
 import { TOILET_BOWL_COPY } from "@/lib/playoff-labels";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 interface PlayoffBracketPageProps {
   params: Promise<{ seasonYear: string }>;

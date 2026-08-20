@@ -8,7 +8,9 @@ import { EmptyState } from "@/components/empty-state";
 import { getRivalries } from "@/lib/queries/records";
 import type { RivalrySummary } from "@/lib/queries/records";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export const metadata = {
   title: "Rivalries | Harambe Memorial League Memorial League",

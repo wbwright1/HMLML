@@ -9,7 +9,9 @@ import { RegularSeasonHub } from "@/components/hub/regular-season-hub";
 import { PlayoffsHub } from "@/components/hub/playoffs-hub";
 import { OffseasonHub } from "@/components/hub/offseason-hub";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export default async function HomePage() {
   // Fetch NFL state and core data in parallel
