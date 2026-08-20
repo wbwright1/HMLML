@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useMemo, useCallback, type KeyboardEvent } from "react";
+import {
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  Suspense,
+  type KeyboardEvent,
+} from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
@@ -307,12 +314,7 @@ export function PlayerTable({
   showTrdColumn = false,
   awardsByPlayerId = {},
 }: PlayerTableProps) {
-  // Seeds the search box from ?q= (the ⌘K search deep-links here). Read on the
-  // client rather than as a server searchParams prop so the page itself stays
-  // statically rendered / ISR-cached; awaiting searchParams on the server would
-  // opt this route out of caching for the site's heaviest query set.
-  const searchParams = useSearchParams();
-  const [search, setSearch] = useState(() => searchParams.get("q") ?? "");
+  const [search, setSearch] = useState("");
   const [posFilter, setPosFilter] = useState<PositionFilter>("ALL");
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>("FA");
   // Headline column and default sort:
@@ -377,6 +379,15 @@ export function PlayerTable({
   const ptsLabel = statsSeason ? `${statsSeason} Pts` : "Pts";
 
   return (
+    <>
+      {/* ?q= seeding lives in a zero-UI child so that useSearchParams, which
+          forces client-side rendering for its whole Suspense boundary, cannot
+          pull the player table out of the statically rendered HTML. The
+          boundary below renders nothing, so there is no skeleton to show and
+          the full table is present on first paint. */}
+      <Suspense fallback={null}>
+        <SearchQuerySeed onSeed={setSearch} />
+      </Suspense>
     <div className="mt-8 space-y-6">
       {/* Filter row: position pills + search + roster select */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -708,6 +719,23 @@ export function PlayerTable({
           description={search ? `No players match "${search}". Check the spelling or try a different name.` : "No players match your filters."}
         />
       )}
-    </div>
+      </div>
+    </>
   );
+}
+
+/**
+ * Reads ?q= and hands it to the table's search state. Rendering nothing is the
+ * point: useSearchParams opts its Suspense boundary out of static rendering, so
+ * keeping it in a component with no output confines that cost to nothing.
+ */
+function SearchQuerySeed({ onSeed }: { onSeed: (value: string) => void }) {
+  const searchParams = useSearchParams();
+  const q = searchParams.get("q") ?? "";
+
+  useEffect(() => {
+    if (q) onSeed(q);
+  }, [q, onSeed]);
+
+  return null;
 }

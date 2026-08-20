@@ -10,7 +10,6 @@ import {
 import { decideWeekDisplay } from "@/lib/game-status";
 import { getAwardsByPlayerIds } from "@/lib/queries/awards";
 import type { AwardChipData } from "@/components/award-chip";
-import { Suspense } from "react";
 import { PlayerTable, type PlayerRow } from "./player-table";
 
 // ISR: rendered once, then served from cache until a successful sync calls
@@ -108,21 +107,17 @@ export default async function PlayersPage() {
         <aside className="lg:order-2">
           <TrendingRail players={trendingPlayers} />
         </aside>
-        {/* PlayerTable reads useSearchParams (?q= seeding), which requires a
-            Suspense boundary in a statically rendered route. */}
-        <Suspense fallback={null}>
-          <PlayerTable
-            players={playerRows}
-            franchises={franchises}
-            statsSeason={statsSeason}
-            projSeason={projSeason}
-            projLeads={projLeads}
-            currentWeek={currentWeek}
-            showWkColumn={showWkColumn}
-            showTrdColumn={showTrdColumn}
-            awardsByPlayerId={awardsByPlayerId}
-          />
-        </Suspense>
+        <PlayerTable
+          players={playerRows}
+          franchises={franchises}
+          statsSeason={statsSeason}
+          projSeason={projSeason}
+          projLeads={projLeads}
+          currentWeek={currentWeek}
+          showWkColumn={showWkColumn}
+          showTrdColumn={showTrdColumn}
+          awardsByPlayerId={awardsByPlayerId}
+        />
       </div>
     </section>
   );
