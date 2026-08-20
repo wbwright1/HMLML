@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
+import { getSql } from "./helpers/sql";
 import type { Page } from "@playwright/test";
-import { neon } from "@neondatabase/serverless";
 import { membersTableExists, memberFixtureScope } from "./helpers/seed-members";
 
 // Scope-isolated fixture: unique ids/codes/bodies so the parallel
@@ -75,7 +75,7 @@ test.describe("Claim flow", () => {
     await signInWith(page, fx.commishClaimCode);
 
     // Redirect target is exactly "/".
-    await page.waitForURL("http://localhost:3000/");
+    await page.waitForURL("/");
     await expect(crestLink(page)).toBeVisible();
 
     // /claim now shows the signed-in state with the franchise + a sign-out.
@@ -92,7 +92,7 @@ test.describe("Commish gate", () => {
     page,
   }) => {
     await signInWith(page, fx.memberClaimCode);
-    await page.waitForURL("http://localhost:3000/");
+    await page.waitForURL("/");
 
     await page.goto("/commish");
     // Gate redirects members back to /claim.
@@ -103,7 +103,7 @@ test.describe("Commish gate", () => {
     page,
   }) => {
     await signInWith(page, fx.commishClaimCode);
-    await page.waitForURL("http://localhost:3000/");
+    await page.waitForURL("/");
 
     await page.goto("/commish");
     await expect(page.getByRole("heading", { name: /members/i })).toBeVisible();
@@ -121,7 +121,7 @@ test.describe("Claim-code issue + redeem chain", () => {
     page,
   }) => {
     await signInWith(page, fx.commishClaimCode);
-    await page.waitForURL("http://localhost:3000/");
+    await page.waitForURL("/");
     await page.goto("/commish");
 
     // The member's management card (seeded with a code) shows a "Rotate" control.
@@ -144,7 +144,7 @@ test.describe("Claim-code issue + redeem chain", () => {
 
     // The NEW code signs the member in.
     await signInWith(page, newCode);
-    await page.waitForURL("http://localhost:3000/");
+    await page.waitForURL("/");
     await expect(crestLink(page)).toBeVisible();
   });
 });
@@ -154,10 +154,10 @@ test.describe("Moderation", () => {
     page,
   }) => {
     await signInWith(page, fx.commishClaimCode);
-    await page.waitForURL("http://localhost:3000/");
+    await page.waitForURL("/");
     await page.goto("/commish");
 
-    const sql = neon(process.env.POSTGRES_URL!);
+    const sql = getSql();
     const visibleCount = async () =>
       (
         (await sql`
