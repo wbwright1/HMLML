@@ -4,6 +4,10 @@ import { EmptyState } from "@/components/empty-state";
 import { LeagueTrophyShelf } from "@/components/league-trophy-shelf";
 import { getTrophyCase } from "@/lib/queries/records";
 import { getAwardsHonorRoll } from "@/lib/queries/awards";
+import {
+  getAllToiletBowlChampions,
+  type ToiletBowlChampion,
+} from "@/lib/queries/playoff-bracket";
 import type { TrophyEntry } from "@/lib/queries/records";
 import type { AwardsHonorRoll } from "@/lib/queries/awards";
 
@@ -16,10 +20,14 @@ export const metadata = {
 };
 
 export default async function TrophyCasePage() {
-  const [trophiesResult, rollResult] = await Promise.allSettled([
+  const [trophiesResult, rollResult, toiletResult] = await Promise.allSettled([
     getTrophyCase(),
     getAwardsHonorRoll(),
+    getAllToiletBowlChampions(),
   ]);
+
+  const toiletBowlChampions: ToiletBowlChampion[] =
+    toiletResult.status === "fulfilled" ? toiletResult.value : [];
 
   const trophies: TrophyEntry[] =
     trophiesResult.status === "fulfilled" ? trophiesResult.value : [];
@@ -34,7 +42,10 @@ export default async function TrophyCasePage() {
         };
 
   const championships = trophies.filter((t) => t.championName != null);
-  const isEmpty = championships.length === 0 && roll.groups.length === 0;
+  const isEmpty =
+    championships.length === 0 &&
+    roll.groups.length === 0 &&
+    toiletBowlChampions.length === 0;
 
   return (
     <>
@@ -56,7 +67,11 @@ export default async function TrophyCasePage() {
             actionHref="/seasons"
           />
         ) : (
-          <LeagueTrophyShelf championships={championships} roll={roll} />
+          <LeagueTrophyShelf
+            championships={championships}
+            roll={roll}
+            toiletBowlChampions={toiletBowlChampions}
+          />
         )}
       </PageSection>
     </>

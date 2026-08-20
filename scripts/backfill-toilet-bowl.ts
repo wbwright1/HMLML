@@ -7,6 +7,14 @@
  * Previously the loser of the highest-`p` losers match was mis-tagged as the
  * single `toilet_bowl` team. This corrects franchise_seasons in the live DB.
  *
+ * SPENT: this script has been run against the live DB and is kept only for the
+ * record. It also predates the discovery that the losers bracket is INVERTED
+ * (you advance by LOSING, and Sleeper records the advancing team in `w`), so
+ * do not treat its wording as a description of the current model. The single
+ * last-place franchise now lives in seasons.toilet_bowl_franchise_id, written
+ * by scripts/backfill-playoff-brackets.ts and the daily sync. Nothing here
+ * touches that column.
+ *
  * It only writes rows whose playoff_result actually changes, and logs every
  * before/after transition. It never rewrites champion/runner_up assignments
  * silently: any diff touching those results is flagged loudly (none expected,

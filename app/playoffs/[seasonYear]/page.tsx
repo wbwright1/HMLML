@@ -1,5 +1,4 @@
 import { notFound } from "next/navigation";
-import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
@@ -8,13 +7,16 @@ import { ChampionshipStars } from "@/components/championship-stars";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { EmptyState } from "@/components/empty-state";
+import { PlayoffBracketRounds } from "@/components/playoff-bracket-rounds";
+import { getSeasonByYearSimple } from "@/lib/queries/matchups";
 import {
-  getPlayoffMatchups,
-  getSeasonByYearSimple,
-  getFranchisePlayoffResults,
-  type PairedMatchup,
-  type MatchupTeam,
-} from "@/lib/queries/matchups";
+  getSeasonBracket,
+  getSeasonChampion,
+  getToiletBowlChampion,
+  type ToiletBowlChampion,
+} from "@/lib/queries/playoff-bracket";
+import { SNARKY_LABELS } from "@/lib/content";
+import { TOILET_BOWL_COPY } from "@/lib/playoff-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -28,256 +30,6 @@ export async function generateMetadata({ params }: PlayoffBracketPageProps) {
     title: `${seasonYear} Playoffs | Harambe Memorial League Memorial League`,
     description: `Playoff results for the ${seasonYear} Harambe Memorial League Memorial League season.`,
   };
-}
-
-// ---------------------------------------------------------------------------
-// Helpers — extract key matchups + podium from flat data
-// ---------------------------------------------------------------------------
-
-interface FranchiseInfo {
-  franchiseId: string;
-  name: string;
-  slug: string;
-  abbreviation: string | null;
-  brandingColor: string | null;
-  avatarUrl: string | null;
-}
-
-function teamToFranchiseInfo(team: MatchupTeam): FranchiseInfo {
-  return {
-    franchiseId: team.franchiseId,
-    name: team.franchiseName,
-    slug: team.franchiseSlug,
-    abbreviation: team.franchiseAbbreviation,
-    brandingColor: team.franchiseBrandingColor,
-    avatarUrl: team.avatarUrl,
-  };
-}
-
-/**
- * Build a lookup of franchiseId → FranchiseInfo from all matchup data.
- */
-function buildFranchiseLookup(
-  playoffData: Map<number, PairedMatchup[]>
-): Map<string, FranchiseInfo> {
-  const lookup = new Map<string, FranchiseInfo>();
-  for (const matchups of playoffData.values()) {
-    for (const m of matchups) {
-      if (!lookup.has(m.homeTeam.franchiseId)) {
-        lookup.set(m.homeTeam.franchiseId, teamToFranchiseInfo(m.homeTeam));
-      }
-      if (!lookup.has(m.awayTeam.franchiseId)) {
-        lookup.set(m.awayTeam.franchiseId, teamToFranchiseInfo(m.awayTeam));
-      }
-    }
-  }
-  return lookup;
-}
-
-/**
- * Find the championship matchup: the game in the final week where the
- * champion and runner-up played each other.
- */
-function findChampionshipMatchup(
-  playoffData: Map<number, PairedMatchup[]>,
-  championId: string | null,
-  runnerUpId: string | null
-): PairedMatchup | null {
-  if (!championId && !runnerUpId) return null;
-
-  const weeks = Array.from(playoffData.keys()).sort((a, b) => a - b);
-  if (weeks.length === 0) return null;
-
-  // Search from the final week backwards
-  for (let i = weeks.length - 1; i >= 0; i--) {
-    const matchups = playoffData.get(weeks[i]) ?? [];
-    for (const m of matchups) {
-      const ids = new Set([m.homeTeam.franchiseId, m.awayTeam.franchiseId]);
-      if (
-        (championId && ids.has(championId)) &&
-        (runnerUpId && ids.has(runnerUpId))
-      ) {
-        return m;
-      }
-    }
-  }
-
-  // Fallback: if we only have champion, find their last matchup
-  if (championId) {
-    const lastWeek = weeks[weeks.length - 1];
-    const matchups = playoffData.get(lastWeek) ?? [];
-    for (const m of matchups) {
-      if (
-        m.homeTeam.franchiseId === championId ||
-        m.awayTeam.franchiseId === championId
-      ) {
-        return m;
-      }
-    }
-  }
-
-  return null;
-}
-
-/**
- * Find 3rd place: the semifinal loser who is NOT the runner-up.
- * We identify SF matchups by finding games where the champion or
- * runner-up won — their opponents are the true semifinal losers.
- * If both are found, the one with the higher score is "3rd place".
- */
-function findThirdPlace(
-  playoffData: Map<number, PairedMatchup[]>,
-  championId: string | null,
-  runnerUpId: string | null
-): FranchiseInfo | null {
-  if (!championId && !runnerUpId) return null;
-
-  const weeks = Array.from(playoffData.keys()).sort((a, b) => a - b);
-  if (weeks.length < 2) return null;
-
-  // Semifinal week is the second-to-last week
-  const sfWeek = weeks[weeks.length - 2];
-  const sfMatchups = playoffData.get(sfWeek) ?? [];
-
-  // Only look at matchups that contain the champion or runner-up —
-  // those are the actual semifinal games (not consolation filler).
-  const finalistIds = new Set(
-    [championId, runnerUpId].filter((id): id is string => id !== null)
-  );
-
-  const sfLosers: { info: FranchiseInfo; points: number }[] = [];
-
-  for (const m of sfMatchups) {
-    const homeIsFinalist = finalistIds.has(m.homeTeam.franchiseId);
-    const awayIsFinalist = finalistIds.has(m.awayTeam.franchiseId);
-    if (!homeIsFinalist && !awayIsFinalist) continue;
-
-    const isComplete =
-      m.status === "complete" ||
-      (m.homeTeam.points > 0 && m.awayTeam.points > 0);
-    if (!isComplete) continue;
-
-    // The loser of this matchup is the non-finalist (SF loser)
-    const loser = homeIsFinalist ? m.awayTeam : m.homeTeam;
-
-    // Don't include the finalist themselves if they lost this matchup
-    if (finalistIds.has(loser.franchiseId)) continue;
-
-    sfLosers.push({
-      info: teamToFranchiseInfo(loser),
-      points: loser.points,
-    });
-  }
-
-  if (sfLosers.length === 0) return null;
-
-  // Pick the loser with the higher score as "3rd place"
-  sfLosers.sort((a, b) => b.points - a.points);
-  return sfLosers[0].info;
-}
-
-// ---------------------------------------------------------------------------
-// UI Components
-// ---------------------------------------------------------------------------
-
-function MatchupCard({
-  matchup,
-  seasonYear,
-  highlight,
-}: {
-  matchup: PairedMatchup;
-  seasonYear: number;
-  highlight?: "championship";
-}) {
-  const { homeTeam, awayTeam } = matchup;
-  const isComplete =
-    matchup.status === "complete" || (homeTeam.points > 0 && awayTeam.points > 0);
-  const homeWins = isComplete && homeTeam.points > awayTeam.points;
-  const awayWins = isComplete && awayTeam.points > homeTeam.points;
-  const isChamp = highlight === "championship";
-
-  return (
-    <Link
-      href={`/seasons/${seasonYear}/week/${matchup.week}`}
-      className={`block w-full rounded-lg border bg-surface transition-colors hover:border-border-strong overflow-hidden ${
-        isChamp ? "border-accent-gold/30 ring-1 ring-accent-gold/20" : "border-border"
-      }`}
-    >
-      <TeamRow team={homeTeam} isWinner={homeWins} accent={isChamp ? "championship" : "default"} />
-      <div className="h-px bg-divider" />
-      <TeamRow team={awayTeam} isWinner={awayWins} accent={isChamp ? "championship" : "default"} />
-    </Link>
-  );
-}
-
-function TeamRow({
-  team,
-  isWinner,
-  accent = "default",
-}: {
-  team: MatchupTeam;
-  isWinner: boolean;
-  accent?: "championship" | "default";
-}) {
-  const bg =
-    isWinner && accent === "championship"
-      ? "bg-accent-gold-light"
-      : isWinner
-        ? "bg-surface-muted"
-        : "";
-
-  return (
-    <div className={`flex items-center gap-3 px-4 py-3 ${bg}`}>
-      <FranchiseIdentity
-        franchise={{
-          slug: team.franchiseSlug,
-          name: team.franchiseName,
-          abbreviation: team.franchiseAbbreviation ?? undefined,
-          brandingColor: team.franchiseBrandingColor ?? undefined,
-          avatarUrl: team.avatarUrl,
-        }}
-        variant="compact"
-      />
-      <span
-        className={`font-mono tabular-nums text-sm shrink-0 ml-auto ${
-          isWinner ? "font-bold text-text-primary" : "text-text-tertiary"
-        }`}
-      >
-        {team.points > 0 ? team.points.toFixed(1) : "-"}
-      </span>
-    </div>
-  );
-}
-
-function PodiumEntry({
-  franchise,
-  label,
-  badge,
-}: {
-  franchise: FranchiseInfo;
-  label: string;
-  badge: { text: string; variant: "gold" | "silver" | "green" | "neutral" | "brown" };
-}) {
-  return (
-    <div className="card-surface flex items-center gap-3 px-4 py-3">
-      <FranchiseIdentity
-        franchise={{
-          slug: franchise.slug,
-          name: franchise.name,
-          abbreviation: franchise.abbreviation ?? undefined,
-          brandingColor: franchise.brandingColor ?? undefined,
-          avatarUrl: franchise.avatarUrl,
-        }}
-        variant="compact"
-      />
-      <div className="flex items-center gap-2 shrink-0 ml-auto">
-        <span className="text-caption text-text-tertiary hidden sm:inline">
-          {label}
-        </span>
-        <SuperlativeBadge text={badge.text} variant={badge.variant} />
-      </div>
-    </div>
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -300,54 +52,18 @@ export default async function PlayoffBracketPage({
   }
   if (!season) notFound();
 
-  let playoffData: Awaited<ReturnType<typeof getPlayoffMatchups>> = new Map();
-  let playoffResults = new Map<string, string>();
+  const [bracket, toiletBowlChampion, champion] = await Promise.all([
+    getSeasonBracket(season.id, season.playoffWeekStart, season.totalRosters),
+    getToiletBowlChampion(season.id),
+    getSeasonChampion(season.id),
+  ]);
 
-  try {
-    [playoffData, playoffResults] = await Promise.all([
-      getPlayoffMatchups(season.id, season.playoffWeekStart),
-      getFranchisePlayoffResults(season.id),
-    ]);
-  } catch {
-    /* Playoff data may not be available */
-  }
-
-  // Build franchise lookup from matchup data
-  const franchiseLookup = buildFranchiseLookup(playoffData);
-
-  // Find key franchise IDs from playoff results
-  let championId: string | null = null;
-  let runnerUpId: string | null = null;
-  // The Toilet Bowl is the losers-bracket final; BOTH finalists carry the
-  // `toilet_bowl` result, so collect all of them (not a single team).
-  const toiletBowlIds: string[] = [];
-
-  for (const [fId, result] of playoffResults) {
-    if (result === "champion") championId = fId;
-    if (result === "runner_up") runnerUpId = fId;
-    if (result === "toilet_bowl") toiletBowlIds.push(fId);
-  }
-
-  // Find the championship matchup
-  const championshipMatchup = findChampionshipMatchup(
-    playoffData,
-    championId,
-    runnerUpId
-  );
-
-  // Resolve franchise info
-  const championInfo = championId ? franchiseLookup.get(championId) : null;
-  const runnerUpInfo = runnerUpId ? franchiseLookup.get(runnerUpId) : null;
-  const toiletBowlInfos = toiletBowlIds
-    .map((id) => franchiseLookup.get(id))
-    .filter((info): info is FranchiseInfo => info != null);
-
-  // Find 3rd place from semifinal losers
-  const thirdPlaceInfo = findThirdPlace(playoffData, championId, runnerUpId);
-
-  const hasData =
-    championshipMatchup || championInfo || runnerUpInfo ||
-    toiletBowlInfos.length > 0 || playoffData.size > 0;
+  const hasBracket = bracket.winners.length > 0 || bracket.losers.length > 0;
+  // Three distinct states, never collapsed into one: the bracket read failed,
+  // the season genuinely has no bracket, or we have one. A failed read must not
+  // claim the playoffs never happened, and neither case may hide the champion
+  // or the Toilet Bowl sting, which come from their own queries.
+  const showEmptyState = !hasBracket && !bracket.unavailable;
 
   return (
     <>
@@ -356,121 +72,142 @@ export default async function PlayoffBracketPage({
           <BackLink href={`/seasons/${year}`} label={`${year} Season`} />
         </div>
 
-        {/* Champion hero */}
-        {championInfo && (
+        {/* Champion hero, with the crest this franchise wore that season. */}
+        {champion && (
           <ScrollReveal>
             <div className="mt-6 card-surface card-tint-gold p-8 text-center space-y-3">
-              <p className="text-kicker text-gold mb-1">
-                Champion
-              </p>
+              <p className="text-kicker text-gold mb-1">Champion</p>
               <div className="flex justify-center">
                 <FranchiseLogo
-                  slug={championInfo.slug}
-                  name={championInfo.name}
-                  abbreviation={championInfo.abbreviation ?? undefined}
-                  brandingColor={championInfo.brandingColor ?? undefined}
-                  avatarUrl={championInfo.avatarUrl}
+                  slug={champion.franchiseSlug}
+                  name={champion.franchiseName}
+                  abbreviation={champion.franchiseAbbreviation ?? undefined}
+                  brandingColor={champion.franchiseBrandingColor ?? undefined}
+                  avatarUrl={champion.avatarUrl}
                   size="xl"
                   decorative
                 />
               </div>
-              <p className="text-h1 text-gold">{championInfo.name}</p>
+              <p className="text-h1 text-gold">{champion.franchiseName}</p>
               <ChampionshipStars count={1} variant="hero" />
             </div>
           </ScrollReveal>
         )}
       </PageSection>
 
-      {!hasData ? (
+      {showEmptyState ? (
         <section className="pb-8 md:pb-12">
           <EmptyState
             icon="calendar"
             title="No Playoff Data"
-            description={`No playoff data available for the ${year} season.`}
+            description={`No bracket has been recorded for the ${year} season.`}
             actionLabel={`Back to ${year} season`}
             actionHref={`/seasons/${year}`}
           />
         </section>
       ) : (
-        <section className="pb-8 md:pb-12 space-y-6">
-          {/* Championship matchup */}
-          {championshipMatchup && (
+        <section className="pb-8 md:pb-12 space-y-10">
+          {/* Calm degradation: the bracket read failed, but the champion and
+              the Toilet Bowl sting below come from their own queries and are
+              still worth showing. */}
+          {bracket.unavailable && (
+            <div className="card-surface p-6">
+              <p className="text-body text-text-secondary">
+                Something went wrong loading the bracket. We&rsquo;re showing
+                the last available data.
+              </p>
+            </div>
+          )}
+
+          {/* Winners bracket */}
+          {bracket.winners.length > 0 && (
             <ScrollReveal delay={80}>
-              <div className="space-y-3">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-[0.18em] text-accent-gold">
-                    Championship
-                  </h3>
-                  <span className="text-caption text-text-tertiary">
-                    Week <span className="font-mono tabular-nums">{championshipMatchup.week}</span>
-                  </span>
-                  <SuperlativeBadge text="Title Game" variant="gold" />
+              <div className="space-y-4">
+                <div>
+                  <p className="text-kicker text-accent-gold mb-1.5">
+                    The Bracket
+                  </p>
+                  <h2 className="text-h2 text-text-primary">
+                    Chasing the Ring
+                  </h2>
                 </div>
-                <div className="max-w-lg">
-                  <MatchupCard
-                    matchup={championshipMatchup}
-                    seasonYear={year}
-                    highlight="championship"
-                  />
-                </div>
+                <PlayoffBracketRounds
+                  rounds={bracket.winners}
+                  bracketType="winners"
+                  seasonYear={year}
+                />
               </div>
             </ScrollReveal>
           )}
 
-          {/* Podium: Runner-up + 3rd place */}
-          {(runnerUpInfo || thirdPlaceInfo) && (
+          {/* Toilet Bowl */}
+          {bracket.losers.length > 0 && (
             <ScrollReveal delay={160}>
-              <div className="space-y-3 max-w-lg">
-                {runnerUpInfo && (
-                  <PodiumEntry
-                    franchise={runnerUpInfo}
-                    label="Runner-Up"
-                    badge={{ text: "2nd", variant: "silver" }}
-                  />
-                )}
-                {thirdPlaceInfo && (
-                  <PodiumEntry
-                    franchise={thirdPlaceInfo}
-                    label="Third Place"
-                    badge={{ text: "3rd", variant: "green" }}
-                  />
-                )}
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="h-px flex-1 bg-divider" />
+                  <h2 className="text-kicker whitespace-nowrap">
+                    {TOILET_BOWL_COPY.heading}
+                  </h2>
+                  <div className="h-px flex-1 bg-divider" />
+                </div>
+                <p className="text-body-sm text-text-secondary max-w-prose">
+                  {TOILET_BOWL_COPY.explainer}
+                </p>
+                <PlayoffBracketRounds
+                  rounds={bracket.losers}
+                  bracketType="losers"
+                  seasonYear={year}
+                />
               </div>
             </ScrollReveal>
           )}
 
-          {/* Toilet Bowl (losers-bracket final; both finalists) */}
-          {toiletBowlInfos.length > 0 && (
-            <ScrollReveal delay={240}>
-              <div className="flex items-center gap-3 mb-4">
-                <div className="h-px flex-1 bg-divider" />
-                <h2 className="text-kicker whitespace-nowrap">
-                  Toilet Bowl
-                </h2>
-                <div className="h-px flex-1 bg-divider" />
-              </div>
-              <div className="card-surface card-tint-warm p-6 text-center space-y-3 max-w-lg">
-                <div className="text-3xl" aria-hidden="true">
-                  🚽
-                </div>
-                <p className="text-caption text-accent-warm">
-                  Losers-Bracket Final
-                </p>
-                <div className="space-y-2">
-                  {toiletBowlInfos.map((info) => (
-                    <p key={info.slug} className="text-h3 text-text-primary">
-                      {info.name}
-                    </p>
-                  ))}
-                </div>
-                <div className="flex justify-center">
-                  <SuperlativeBadge text="Toilet Bowl" variant="brown" />
-                </div>
-              </div>
-            </ScrollReveal>
-          )}
+        </section>
+      )}
+
+      {/* The sting: the team that sank all the way to the bottom. Rendered
+          outside the bracket gate on purpose. It reads
+          seasons.toilet_bowl_franchise_id, so it stays true even when the
+          bracket rows are missing or unreadable. */}
+      {toiletBowlChampion && (
+        <section className="pb-8 md:pb-12">
+          <ScrollReveal delay={240}>
+            <ToiletBowlStingCard champion={toiletBowlChampion} />
+          </ScrollReveal>
         </section>
       )}
     </>
+  );
+}
+
+/**
+ * Sting card for the Toilet Bowl champion: warm-tint surface, rust accent, the
+ * centralized snarky label. Only rendered for a decided final.
+ */
+function ToiletBowlStingCard({ champion }: { champion: ToiletBowlChampion }) {
+  const label = SNARKY_LABELS.TOILET_BOWL_CHAMPION;
+
+  return (
+    <div
+      data-testid="toilet-bowl-sting"
+      className="card-surface card-tint-warm max-w-lg space-y-4 p-6"
+    >
+      <p className="text-kicker text-accent-warm">
+        {TOILET_BOWL_COPY.championKicker}
+      </p>
+      <FranchiseIdentity
+        franchise={{
+          slug: champion.franchiseSlug,
+          name: champion.franchiseName,
+          abbreviation: champion.franchiseAbbreviation ?? undefined,
+          brandingColor: champion.franchiseBrandingColor ?? undefined,
+          avatarUrl: champion.avatarUrl,
+        }}
+        variant="compact"
+      />
+      <p className="text-body-sm text-text-secondary">{label.description}.</p>
+      <SuperlativeBadge text={label.displayText} variant="brown" />
+    </div>
   );
 }

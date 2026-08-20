@@ -1,27 +1,47 @@
 import Link from "next/link";
 import { PlayerHeadshot } from "@/components/player-headshot";
-import { MedallionIcon, type MedallionIconType } from "@/lib/medallion-icons";
+import {
+  MedallionIcon,
+  isShameMedallion,
+  type MedallionIconType,
+} from "@/lib/medallion-icons";
+
+/** Gold for real hardware, tarnished rust for hardware nobody wanted. */
+export type MedallionTone = "gold" | "shame";
 
 interface MedallionShelfProps {
   label: string;
   count: number;
+  tone?: MedallionTone;
   children: React.ReactNode;
 }
 
 /**
  * One "shelf" of medallions for a single award type: a labeled header row
  * (award name + mono count), a free-scrolling strip of medallion items, and a
- * gold gradient line underneath. Server component, zero client JS.
+ * gradient line underneath. Server component, zero client JS. The shame tone
+ * swaps gold for rust, keeping the geometry identical.
  */
-export function MedallionShelf({ label, count, children }: MedallionShelfProps) {
+export function MedallionShelf({
+  label,
+  count,
+  tone = "gold",
+  children,
+}: MedallionShelfProps) {
+  const isShame = tone === "shame";
   return (
     <div>
       <div className="flex items-center gap-2">
-        <span className="text-kicker">{label}</span>
+        <span className={`text-kicker ${isShame ? "text-accent-warm" : ""}`}>
+          {label}
+        </span>
         <span className="font-mono text-[11px] text-text-muted">×{count}</span>
       </div>
       <div className="medallion-strip no-scrollbar">{children}</div>
-      <div className="medallion-shelf-line" />
+      <div
+        className="medallion-shelf-line"
+        data-tone={isShame ? "shame" : undefined}
+      />
     </div>
   );
 }
@@ -40,6 +60,7 @@ interface MedallionProps {
  * inside the plate.
  */
 export function Medallion({ iconType, href, ariaLabel, plate }: MedallionProps) {
+  const tone = isShameMedallion(iconType) ? "shame" : undefined;
   const content = (
     <>
       <div className="medallion-spotlight" aria-hidden="true" />
@@ -58,6 +79,7 @@ export function Medallion({ iconType, href, ariaLabel, plate }: MedallionProps) 
         prefetch={false}
         aria-label={ariaLabel}
         className="medallion-item"
+        data-tone={tone}
       >
         {content}
       </Link>
@@ -65,7 +87,12 @@ export function Medallion({ iconType, href, ariaLabel, plate }: MedallionProps) 
   }
 
   return (
-    <div role="group" aria-label={ariaLabel} className="medallion-item">
+    <div
+      role="group"
+      aria-label={ariaLabel}
+      className="medallion-item"
+      data-tone={tone}
+    >
       {content}
     </div>
   );

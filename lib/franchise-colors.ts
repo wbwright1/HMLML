@@ -12,8 +12,8 @@
  * ink on the color means **every palette entry must clear WCAG 4.5:1 against
  * the canvas `#1A1613`**, which also satisfies the 3:1 graphical-object floor
  * for the other three consumers (the crest ring in `franchise-identity.tsx`,
- * the team stripe in `matchup-row.tsx`, the bracket border in
- * `playoff-bracket-card.tsx`). A dark franchise color is not an option while
+ * the team stripe in `matchup-row.tsx`, the bracket rows in
+ * `playoff-bracket-rounds.tsx`). A dark franchise color is not an option while
  * the monogram is drawn in canvas ink.
  *
  * ## How the palette was built

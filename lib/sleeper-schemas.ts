@@ -190,6 +190,16 @@ export type SleeperNFLState = z.infer<typeof SleeperNFLStateSchema>;
 
 // ─── Bracket Match ───────────────────────────────────────────────────────────
 
+/** {"w":3} / {"l":3}: the match a bracket slot is fed from. */
+const MatchFeederSchema = z
+  .object({
+    w: z.number().nullable().optional(),
+    l: z.number().nullable().optional(),
+  })
+  .passthrough()
+  .nullable()
+  .optional();
+
 export const SleeperBracketMatchSchema = z
   .object({
     m: z.number(), // match number
@@ -199,6 +209,12 @@ export const SleeperBracketMatchSchema = z
     l: z.number().nullable().optional(), // losing roster_id
     t1: z.union([z.number(), z.object({}).passthrough()]).nullable().optional(), // team 1 roster_id (or object ref)
     t2: z.union([z.number(), z.object({}).passthrough()]).nullable().optional(), // team 2 roster_id (or object ref)
+    // Sleeper reports the feeder match as a sibling field, not inside t1/t2:
+    // {"t1_from":{"w":3}} means "team 1 is whoever advanced out of match 3",
+    // {"l":3} means "whoever was eliminated in match 3". Present on later-round
+    // matches even once t1/t2 have resolved to real roster ids.
+    t1_from: MatchFeederSchema,
+    t2_from: MatchFeederSchema,
   })
   .passthrough();
 

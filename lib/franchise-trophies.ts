@@ -5,6 +5,7 @@
 // filler.
 
 import type { AwardEntry } from "@/lib/queries/awards";
+import { SNARKY_LABELS } from "@/lib/content";
 import {
   AWARD_METADATA,
   isAwardType,
@@ -29,6 +30,12 @@ export type FranchiseTrophy =
       ties: number | null;
     }
   | {
+      // Not hardware anybody wanted, but the project treats bad outcomes with
+      // the same design care as wins, so it earns a shelf.
+      kind: "toiletBowl";
+      seasonYear: number;
+    }
+  | {
       kind: "award";
       seasonYear: number;
       awardType: AwardType;
@@ -48,6 +55,11 @@ export type FranchiseTrophy =
 export function buildFranchiseTrophies(
   seasonHistory: FranchiseTrophySeason[],
   awards: AwardEntry[],
+  /**
+   * Season years this franchise "won" the Toilet Bowl, i.e. finished dead
+   * last. Sourced from seasons.toilet_bowl_franchise_id; never re-derived.
+   */
+  toiletBowlSeasons: number[] = [],
 ): FranchiseTrophy[] {
   const championships: FranchiseTrophy[] = seasonHistory
     .filter((s) => s.playoffResult === "champion")
@@ -78,10 +90,30 @@ export function buildFranchiseTrophies(
         ),
   );
 
-  return [...championships, ...playerAwards];
+  const toiletBowls: FranchiseTrophy[] = [...toiletBowlSeasons]
+    .sort((a, b) => b - a)
+    .map((seasonYear) => ({ kind: "toiletBowl", seasonYear }));
+
+  return [...championships, ...playerAwards, ...toiletBowls];
 }
 
-export type FranchiseTrophyGroupKey = "championship" | AwardType;
+/**
+ * How many pieces of real hardware a franchise owns. Toilet Bowl entries are
+ * shame, not hardware: they are displayed in the trophy case (the project
+ * treats bad outcomes with the same design care as wins) but they must never
+ * inflate a "N pieces of hardware" count or make an empty trophy case look
+ * stocked.
+ */
+export function countFranchiseHardware(trophies: FranchiseTrophy[]): number {
+  return trophies.filter((t) => t.kind !== "toiletBowl").length;
+}
+
+/** Count of shame entries, reported separately from hardware. */
+export function countFranchiseShame(trophies: FranchiseTrophy[]): number {
+  return trophies.filter((t) => t.kind === "toiletBowl").length;
+}
+
+export type FranchiseTrophyGroupKey = "championship" | "toiletBowl" | AwardType;
 
 export interface FranchiseTrophyGroup {
   key: FranchiseTrophyGroupKey;
@@ -120,6 +152,16 @@ export function groupFranchiseTrophies(
         trophies: matches,
       });
     }
+  }
+
+  // Shame hardware goes last: the trophy case leads with what was won.
+  const toiletBowls = trophies.filter((t) => t.kind === "toiletBowl");
+  if (toiletBowls.length > 0) {
+    groups.push({
+      key: "toiletBowl",
+      label: SNARKY_LABELS.TOILET_BOWL_CHAMPION.displayText,
+      trophies: toiletBowls,
+    });
   }
 
   return groups;

@@ -29,6 +29,7 @@ import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { loadSeasonScoringSettings } from "@/lib/queries/seasons";
 import { computeProjectedPoints } from "@/lib/lineup-slots";
 import { derivePlayoffResults } from "@/lib/sync/derive-playoffs";
+import { persistBracketMatches } from "@/lib/sync/playoff-brackets";
 import { buildMemberFranchiseMap } from "@/lib/sync/member-franchise";
 import { resolveDivisionName } from "@/lib/divisions";
 import {
@@ -1002,17 +1003,13 @@ async function syncPlayoffBracket(leagueId: string): Promise<SyncStepResult> {
     const league = leagueResult.data;
     const seasonYear = parseInt(league.season, 10);
 
-    // Only derive playoff results if the season is complete
-    if (league.status !== "complete") {
-      const durationMs = Date.now() - startTime;
-      await logSyncComplete(logId, "success", 0);
-      return {
-        dataType: "playoffs",
-        status: "success",
-        rowCount: 0,
-        durationMs,
-      };
-    }
+    // A season that is not yet complete still gets its BRACKET persisted: the
+    // playoffs page has to render live and TBD matches while they are being
+    // played, and an early return here would leave it empty for the entire
+    // postseason. What stays gated on `complete` is the derived
+    // franchise_seasons.playoff_result, which is only meaningful once the
+    // bracket has finished resolving.
+    const isComplete = league.status === "complete";
 
     // Get the season record
     const [seasonRecord] = await db
@@ -1064,28 +1061,46 @@ async function syncPlayoffBracket(leagueId: string): Promise<SyncStepResult> {
       rosterToFranchise
     );
 
-    // Update franchise_seasons.playoffResult for each roster
     let rowCount = 0;
-    for (const [franchiseId, playoffResult] of results.franchiseResults) {
-      await db
-        .update(franchiseSeasons)
-        .set({ playoffResult, updatedAt: new Date() })
-        .where(
-          sql`${franchiseSeasons.franchiseId} = ${franchiseId} AND ${franchiseSeasons.seasonId} = ${seasonRecord.id}`
-        );
-      rowCount++;
+
+    // Derived standings-facing results only once the season has finished.
+    // Sleeper serves a pre-seeded bracket SHELL for an upcoming season, and a
+    // half-played one mid-postseason; neither may write playoff_result.
+    if (isComplete) {
+      // Update franchise_seasons.playoffResult for each roster
+      for (const [franchiseId, playoffResult] of results.franchiseResults) {
+        await db
+          .update(franchiseSeasons)
+          .set({ playoffResult, updatedAt: new Date() })
+          .where(
+            sql`${franchiseSeasons.franchiseId} = ${franchiseId} AND ${franchiseSeasons.seasonId} = ${seasonRecord.id}`
+          );
+        rowCount++;
+      }
+
+      // Update seasons.championFranchiseId
+      if (results.championFranchiseId) {
+        await db
+          .update(seasons)
+          .set({
+            championFranchiseId: results.championFranchiseId,
+            updatedAt: new Date(),
+          })
+          .where(eq(seasons.id, seasonRecord.id));
+      }
     }
 
-    // Update seasons.championFranchiseId
-    if (results.championFranchiseId) {
-      await db
-        .update(seasons)
-        .set({
-          championFranchiseId: results.championFranchiseId,
-          updatedAt: new Date(),
-        })
-        .where(eq(seasons.id, seasonRecord.id));
-    }
+    // Persist the raw bracket (both sides) plus the Toilet Bowl champion in one
+    // transaction, so the bracket page renders real pairings instead of
+    // guessing them from flat matchup rows. Runs for in-progress seasons too;
+    // deriveToiletBowlChampion returns null until the p=1 final is decided, so
+    // an unfinished season stores its TBD bracket and crowns nobody.
+    rowCount += await persistBracketMatches(
+      seasonRecord.id,
+      winnersResult.data,
+      losersResult.data,
+      results.toiletBowlChampionFranchiseId,
+    );
 
     const durationMs = Date.now() - startTime;
     await logSyncComplete(logId, "success", rowCount);

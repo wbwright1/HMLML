@@ -1,4 +1,5 @@
 import type { SleeperBracketMatch } from "@/lib/sleeper-schemas";
+import { deriveToiletBowlChampion } from "@/lib/playoff-bracket";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -9,6 +10,13 @@ export interface PlayoffResults {
   championFranchiseId: string | null;
   /** franchise_id (owner_id) of the runner-up, or null if not yet determined */
   runnerUpFranchiseId: string | null;
+  /**
+   * franchise_id of the Toilet Bowl champion: the team that ADVANCED out of
+   * the losers-bracket final and therefore finished dead last. Null while the
+   * final is unplayed. Distinct from the `toilet_bowl` playoff_result, which
+   * both finalists carry.
+   */
+  toiletBowlChampionFranchiseId: string | null;
   /** Map of franchise_id → playoff result string */
   franchiseResults: Map<string, string>;
 }
@@ -71,6 +79,13 @@ export function derivePlayoffResults(
   }
 
   // --- Losers bracket ---
+  // THE INVERSION: this league's consolation bracket advances the team that
+  // LOSES. Sleeper still records the advancing team in `w`, so in every losers
+  // match `w` is the LOWER scorer (verified 26/26 across 2021-2025, while the
+  // winners bracket is normal 21/21). Never compare points to decide who moved
+  // on here. The `w` of the `p === 1` match is therefore the team that sank all
+  // the way to last place: the Toilet Bowl champion.
+  //
   // The league's "Toilet Bowl" is the losers-bracket FINAL: the `p === 1`
   // match in Sleeper's losers_bracket. BOTH participants of that match carry
   // the `toilet_bowl` result (it is an appearance in the Toilet Bowl, not a
@@ -117,5 +132,15 @@ export function derivePlayoffResults(
     }
   }
 
-  return { championFranchiseId, runnerUpFranchiseId, franchiseResults };
+  const toiletBowlChampionFranchiseId = deriveToiletBowlChampion(
+    losersBracket,
+    rosterToFranchise,
+  );
+
+  return {
+    championFranchiseId,
+    runnerUpFranchiseId,
+    toiletBowlChampionFranchiseId,
+    franchiseResults,
+  };
 }

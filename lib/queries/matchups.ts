@@ -122,37 +122,6 @@ export function pairMatchupRows(
   return paired;
 }
 
-// ---------------------------------------------------------------------------
-// Playoff result helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Returns a map of franchiseId → playoffResult for a given season.
- * Used to separate winners bracket from losers/consolation bracket.
- */
-export async function getFranchisePlayoffResults(
-  seasonId: number
-): Promise<Map<string, string>> {
-  const results = new Map<string, string>();
-  try {
-    const rows = await db
-      .select({
-        franchiseId: franchiseSeasons.franchiseId,
-        playoffResult: franchiseSeasons.playoffResult,
-      })
-      .from(franchiseSeasons)
-      .where(eq(franchiseSeasons.seasonId, seasonId));
-
-    for (const row of rows) {
-      if (row.playoffResult) {
-        results.set(row.franchiseId, row.playoffResult);
-      }
-    }
-  } catch (e) {
-    console.error("[matchups] getFranchisePlayoffResults error:", e);
-  }
-  return results;
-}
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -276,99 +245,6 @@ export const getCurrentWeekMatchups = cache(async function getCurrentWeekMatchup
   }
 });
 
-/**
- * Returns playoff matchups for a season, grouped by week.
- *
- * Uses two strategies:
- * 1. Primary: matchups with `isPlayoff = true`
- * 2. Fallback: matchups from weeks >= `playoffWeekStart`
- *
- * The fallback handles cases where the `isPlayoff` flag was never set
- * (e.g. sync timing, legacy data) but the season has a known playoff start week.
- */
-export async function getPlayoffMatchups(
-  seasonId: number,
-  playoffWeekStart?: number | null
-): Promise<Map<number, PairedMatchup[]>> {
-  const selectFields = {
-    id: matchups.id,
-    matchupId: matchups.matchupId,
-    week: matchups.week,
-    seasonId: matchups.seasonId,
-    franchiseId: matchups.franchiseId,
-    rosterId: matchups.rosterId,
-    points: matchups.points,
-    isWinner: matchups.isWinner,
-    isPlayoff: matchups.isPlayoff,
-    status: matchups.status,
-    franchiseName: franchises.name,
-    franchiseSlug: franchises.slug,
-    franchiseAbbreviation: franchises.abbreviation,
-    franchiseBrandingColor: franchises.brandingColor,
-    avatarUrl: franchiseSeasons.avatarUrl,
-  };
-
-  const franchiseSeasonJoin = and(
-    eq(franchiseSeasons.franchiseId, matchups.franchiseId),
-    eq(franchiseSeasons.seasonId, matchups.seasonId)
-  );
-
-  try {
-    // Primary: query by isPlayoff flag
-    let rows = await db
-      .select(selectFields)
-      .from(matchups)
-      .innerJoin(franchises, eq(matchups.franchiseId, franchises.id))
-      .leftJoin(franchiseSeasons, franchiseSeasonJoin)
-      .where(
-        and(eq(matchups.seasonId, seasonId), eq(matchups.isPlayoff, true))
-      );
-
-    // Fallback: if no rows found and we have a playoffWeekStart, query by week
-    if (rows.length === 0 && playoffWeekStart && playoffWeekStart > 0) {
-      rows = await db
-        .select(selectFields)
-        .from(matchups)
-        .innerJoin(franchises, eq(matchups.franchiseId, franchises.id))
-        .leftJoin(franchiseSeasons, franchiseSeasonJoin)
-        .where(
-          and(
-            eq(matchups.seasonId, seasonId),
-            gte(matchups.week, playoffWeekStart)
-          )
-        );
-    }
-
-    // See getMatchupsByWeek: coalesce to each franchise's latest known avatar
-    // so past playoff weeks still show a real crest, applied before pairing.
-    const fallbackAvatars = await getLatestAvatarUrls(
-      rows.map((r) => r.franchiseId)
-    );
-    const rowsWithAvatars = rows.map((row) => ({
-      ...row,
-      avatarUrl: row.avatarUrl ?? fallbackAvatars.get(row.franchiseId) ?? null,
-    }));
-
-    // Group rows by week, then pair within each week
-    const byWeek = new Map<number, typeof rowsWithAvatars>();
-    for (const row of rowsWithAvatars) {
-      if (!byWeek.has(row.week)) {
-        byWeek.set(row.week, []);
-      }
-      byWeek.get(row.week)!.push(row);
-    }
-
-    const result = new Map<number, PairedMatchup[]>();
-    for (const [week, weekRows] of byWeek) {
-      result.set(week, pairMatchupRows(weekRows));
-    }
-
-    return result;
-  } catch (e) {
-    console.error("[matchups] getPlayoffMatchups error:", e);
-    return new Map();
-  }
-}
 
 /**
  * Returns the highest week number that has matchup data for a season.
@@ -423,6 +299,7 @@ export async function getSeasonByYearSimple(year: number) {
         seasonYear: seasons.seasonYear,
         status: seasons.status,
         playoffWeekStart: seasons.playoffWeekStart,
+        totalRosters: seasons.totalRosters,
       })
       .from(seasons)
       .where(eq(seasons.seasonYear, year))
