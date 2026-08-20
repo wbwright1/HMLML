@@ -7,7 +7,7 @@ interface WeekBannerProps {
   state: "game-window" | "pre-kickoff" | "complete" | "playoff";
   gamesInProgress?: number;
   kickoffTime?: string; // "SUN 1PM ET"
-  playoffRound?: string; // "Wild Card Round" | "Semifinal" | "Championship"
+  playoffRound?: string; // from getWinnersRoundNames(): "Wild Card Round" | "Semifinals" | "Championship"
 }
 
 export function WeekBanner({

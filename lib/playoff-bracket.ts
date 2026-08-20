@@ -87,6 +87,29 @@ export function normalizeBracketMatches(
 }
 
 /**
+ * Winners-bracket round names, indexed from the END of the bracket (0 = the
+ * final). Counting backwards is what makes the 3-round (6-team, two byes) and
+ * 2-round (4-team) shapes both label correctly.
+ *
+ * Round 1 of a 6-team bracket is a WILD CARD ROUND, not quarterfinals: only
+ * four teams play and the top two seeds are on bye. This is the single source
+ * of these names site-wide; the hub's playoff banner reads them from here too,
+ * so the same round can never be called two different things.
+ */
+export const WINNERS_ROUND_NAMES_FROM_END = [
+  "Championship",
+  "Semifinals",
+  "Wild Card Round",
+] as const;
+
+/** Winners-bracket round names in playing order for a bracket of N rounds. */
+export function getWinnersRoundNames(totalRounds: number): string[] {
+  return Array.from({ length: totalRounds }, (_, i) =>
+    getRoundLabel("winners", i + 1, totalRounds),
+  );
+}
+
+/**
  * Names a round group from the END of the bracket so both the 3-round (6-team)
  * and 2-round (4-team) shapes label correctly.
  */
@@ -101,10 +124,7 @@ export function getRoundLabel(
     return fromEnd === 0 ? "Toilet Bowl Final" : `Toilet Bowl Round ${round}`;
   }
 
-  if (fromEnd === 0) return "Championship";
-  if (fromEnd === 1) return "Semifinals";
-  if (fromEnd === 2) return "Quarterfinals";
-  return `Round ${round}`;
+  return WINNERS_ROUND_NAMES_FROM_END[fromEnd] ?? `Round ${round}`;
 }
 
 /**

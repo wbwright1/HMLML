@@ -6,6 +6,7 @@ import { WeekBanner } from "@/components/week-banner";
 import { ScorePoller } from "@/app/matchups/score-poller";
 import { getCurrentWeekMatchups, getLatestSeason } from "@/lib/queries/matchups";
 import { GameCard } from "@/components/hub/shared";
+import { getWinnersRoundNames } from "@/lib/playoff-bracket";
 
 export async function PlayoffsHub({
   matchupData,
@@ -22,10 +23,12 @@ export async function PlayoffsHub({
   const seasonYear = matchupData?.seasonYear ?? latestSeason?.seasonYear ?? new Date().getFullYear();
   const gamesInProgress = matchupData?.matchups.filter((m) => m.status === "in_progress").length ?? 0;
 
-  // Determine playoff round name
+  // Determine playoff round name. Names come from lib/playoff-bracket.ts so
+  // the hub banner and the bracket page cannot call the same round two
+  // different things.
   const playoffWeekStart = latestSeason?.playoffWeekStart ?? 15;
   const roundOffset = week - playoffWeekStart;
-  const roundNames = ["Wild Card Round", "Semifinal", "Championship"];
+  const roundNames = getWinnersRoundNames(3);
   const playoffRound = roundNames[Math.min(roundOffset, roundNames.length - 1)] ?? `Playoff Week ${week}`;
 
   return (

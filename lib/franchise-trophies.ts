@@ -97,6 +97,22 @@ export function buildFranchiseTrophies(
   return [...championships, ...playerAwards, ...toiletBowls];
 }
 
+/**
+ * How many pieces of real hardware a franchise owns. Toilet Bowl entries are
+ * shame, not hardware: they are displayed in the trophy case (the project
+ * treats bad outcomes with the same design care as wins) but they must never
+ * inflate a "N pieces of hardware" count or make an empty trophy case look
+ * stocked.
+ */
+export function countFranchiseHardware(trophies: FranchiseTrophy[]): number {
+  return trophies.filter((t) => t.kind !== "toiletBowl").length;
+}
+
+/** Count of shame entries, reported separately from hardware. */
+export function countFranchiseShame(trophies: FranchiseTrophy[]): number {
+  return trophies.filter((t) => t.kind === "toiletBowl").length;
+}
+
 export type FranchiseTrophyGroupKey = "championship" | "toiletBowl" | AwardType;
 
 export interface FranchiseTrophyGroup {

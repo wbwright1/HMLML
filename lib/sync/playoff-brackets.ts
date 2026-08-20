@@ -34,6 +34,12 @@ export async function persistBracketMatches(
     ...normalizeBracketMatches(losers, "losers"),
   ];
 
+  // Refuse to destroy good data on an empty fetch. Sleeper serving zero bracket
+  // matches (a transient blip, or a league whose brackets are not up yet) must
+  // not delete the stored bracket and null out a real Toilet Bowl champion.
+  // A genuinely empty bracket has nothing worth writing anyway.
+  if (rows.length === 0) return 0;
+
   const now = new Date();
 
   const values = rows.map((row) => ({
@@ -54,13 +60,16 @@ export async function persistBracketMatches(
 
   // Leads with the delete so it only commits alongside its replacement, per
   // the runAtomic contract.
+  //
+  // toiletBowlFranchiseId is written even when null, deliberately: the bracket
+  // rows we just wrote are the authority, so a season whose p=1 final is not
+  // decided must not keep a stale champion from an earlier state. The guard
+  // above is what prevents an empty fetch from reaching this point.
   await runAtomic((tx) => [
     tx
       .delete(playoffBracketMatches)
       .where(eq(playoffBracketMatches.seasonId, seasonId)),
-    ...(values.length > 0
-      ? [tx.insert(playoffBracketMatches).values(values)]
-      : []),
+    tx.insert(playoffBracketMatches).values(values),
     tx
       .update(seasons)
       .set({ toiletBowlFranchiseId, updatedAt: now })

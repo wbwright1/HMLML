@@ -1,6 +1,8 @@
 import { Medallion, MedallionShelf, PlayerAwardPlate } from "@/components/medallion-shelf";
 import { formatRecord, getBowlName } from "@/lib/bowl-names";
 import {
+  countFranchiseHardware,
+  countFranchiseShame,
   groupFranchiseTrophies,
   type FranchiseTrophy,
 } from "@/lib/franchise-trophies";
@@ -75,6 +77,8 @@ export function FranchiseTrophyCase({
   if (trophies.length === 0) return null;
 
   const groups = groupFranchiseTrophies(trophies);
+  const hardwareCount = countFranchiseHardware(trophies);
+  const shameCount = countFranchiseShame(trophies);
 
   return (
     <div data-testid="franchise-trophy-case" className="space-y-6">
@@ -137,9 +141,15 @@ export function FranchiseTrophyCase({
         </MedallionShelf>
       ))}
 
+      {/* Hardware and shame are counted separately: a Toilet Bowl finish is
+          displayed with the same care as a ring, but it is not hardware. */}
       <span className="sr-only">
-        {franchiseName}&rsquo;s trophy case, {trophies.length} piece
-        {trophies.length !== 1 ? "s" : ""} of hardware.
+        {franchiseName}&rsquo;s trophy case, {hardwareCount} piece
+        {hardwareCount !== 1 ? "s" : ""} of hardware
+        {shameCount > 0
+          ? `, plus ${shameCount} Toilet Bowl finish${shameCount !== 1 ? "es" : ""}`
+          : ""}
+        .
       </span>
     </div>
   );

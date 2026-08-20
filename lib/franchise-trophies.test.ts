@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   buildFranchiseTrophies,
+  countFranchiseHardware,
+  countFranchiseShame,
   groupFranchiseTrophies,
   type FranchiseTrophySeason,
 } from "@/lib/franchise-trophies";
@@ -147,5 +149,67 @@ describe("groupFranchiseTrophies", () => {
     const groups = groupFranchiseTrophies(trophies);
     expect(groups).toHaveLength(1);
     expect(groups[0].key).toBe("rookie_of_year");
+  });
+});
+
+describe("Toilet Bowl entries are shame, not hardware", () => {
+  it("appends toilet bowl entries last, season-descending", () => {
+    const trophies = buildFranchiseTrophies(
+      [season({ seasonYear: 2022, playoffResult: "champion" })],
+      [],
+      [2021, 2024, 2023],
+    );
+    expect(trophies.map((t) => t.kind)).toEqual([
+      "championship",
+      "toiletBowl",
+      "toiletBowl",
+      "toiletBowl",
+    ]);
+    expect(
+      trophies.filter((t) => t.kind === "toiletBowl").map((t) => t.seasonYear),
+    ).toEqual([2024, 2023, 2021]);
+  });
+
+  it("groups toilet bowls into their own group, after the hardware", () => {
+    const trophies = buildFranchiseTrophies(
+      [season({ seasonYear: 2022, playoffResult: "champion" })],
+      [],
+      [2023],
+    );
+    const groups = groupFranchiseTrophies(trophies);
+    expect(groups.map((g) => g.key)).toEqual(["championship", "toiletBowl"]);
+    expect(groups[1].label).toBe("Toilet Bowl Champion");
+  });
+
+  it("does NOT count toilet bowls as hardware", () => {
+    const trophies = buildFranchiseTrophies(
+      [season({ seasonYear: 2022, playoffResult: "champion" })],
+      [award({ id: 1, seasonYear: 2023 })],
+      [2021, 2024],
+    );
+    expect(trophies).toHaveLength(4);
+    // The ring and the MVP are hardware. The two Toilet Bowls are not.
+    expect(countFranchiseHardware(trophies)).toBe(2);
+    expect(countFranchiseShame(trophies)).toBe(2);
+  });
+
+  it("reports zero hardware for a franchise that has only toilet bowls", () => {
+    const trophies = buildFranchiseTrophies([], [], [2023, 2024]);
+    expect(trophies).toHaveLength(2);
+    expect(countFranchiseHardware(trophies)).toBe(0);
+    expect(countFranchiseShame(trophies)).toBe(2);
+    // Still displayed: the case renders, it just is not called hardware.
+    expect(groupFranchiseTrophies(trophies).map((g) => g.key)).toEqual([
+      "toiletBowl",
+    ]);
+  });
+
+  it("defaults to no toilet bowls when the argument is omitted", () => {
+    const trophies = buildFranchiseTrophies(
+      [season({ seasonYear: 2022, playoffResult: "champion" })],
+      [],
+    );
+    expect(countFranchiseShame(trophies)).toBe(0);
+    expect(countFranchiseHardware(trophies)).toBe(1);
   });
 });

@@ -15,6 +15,7 @@ import {
   seasons,
 } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
+import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 import {
   getMatchPlacementLabel,
   getRoundLabel,
@@ -43,7 +44,8 @@ export interface BracketMatchView {
   matchNumber: number;
   bracketType: BracketType;
   round: number;
-  week: number;
+  /** Null when the season has no playoff_week_start to anchor rounds to. */
+  week: number | null;
   placement: number | null;
   /** "Championship" / "3rd Place Game" / "Toilet Bowl Final", or null. */
   placementLabel: string | null;
@@ -58,7 +60,7 @@ export interface BracketMatchView {
 
 export interface BracketRound {
   round: number;
-  week: number;
+  week: number | null;
   label: string;
   matches: BracketMatchView[];
 }
@@ -66,9 +68,17 @@ export interface BracketRound {
 export interface SeasonBracket {
   winners: BracketRound[];
   losers: BracketRound[];
+  /**
+   * True when the bracket could not be read at all (DB unreachable / query
+   * threw). Distinct from a season that genuinely has no bracket rows: callers
+   * must show a calm "last available data" notice rather than claiming the
+   * playoffs never happened.
+   */
+  unavailable: boolean;
 }
 
-export interface ToiletBowlChampion {
+/** A franchise identity attributed to one specific season. */
+export interface SeasonFranchiseEntry {
   seasonYear: number;
   franchiseId: string;
   franchiseName: string;
@@ -78,7 +88,18 @@ export interface ToiletBowlChampion {
   avatarUrl: string | null;
 }
 
-const EMPTY_BRACKET: SeasonBracket = { winners: [], losers: [] };
+export type ToiletBowlChampion = SeasonFranchiseEntry;
+
+const EMPTY_BRACKET: SeasonBracket = {
+  winners: [],
+  losers: [],
+  unavailable: false,
+};
+const UNAVAILABLE_BRACKET: SeasonBracket = {
+  winners: [],
+  losers: [],
+  unavailable: true,
+};
 
 // ---------------------------------------------------------------------------
 // Season bracket
@@ -94,8 +115,9 @@ export const getSeasonBracket = cache(async function getSeasonBracket(
   playoffWeekStart: number | null,
   totalRosters: number | null,
 ): Promise<SeasonBracket> {
-  if (playoffWeekStart == null) return EMPTY_BRACKET;
-
+  // A null playoffWeekStart is NOT a reason to hide the bracket. It only means
+  // rounds cannot be anchored to weeks, so weeks and score joins are skipped
+  // and the matches render without their deep links.
   try {
     const bracketRows = await db
       .select()
@@ -146,9 +168,24 @@ export const getSeasonBracket = cache(async function getSeasonBracket(
       pointsByWeekRoster.set(`${row.week}:${row.rosterId}`, row.points);
     }
 
+    // Crest fallback: a season with no franchise_seasons.avatar_url of its own
+    // falls back to the franchise's most recent crest, matching every peer
+    // surface (getTrophyCase, the matchup queries, the awards honor roll).
+    const missingAvatarIds = [...identityByRoster.values()]
+      .filter((identity) => identity.avatarUrl == null)
+      .map((identity) => identity.franchiseId);
+    if (missingAvatarIds.length > 0) {
+      const fallbacks = await getLatestAvatarUrls(missingAvatarIds);
+      for (const identity of identityByRoster.values()) {
+        if (identity.avatarUrl == null) {
+          identity.avatarUrl = fallbacks.get(identity.franchiseId) ?? null;
+        }
+      }
+    }
+
     function buildTeam(
       rosterId: number | null,
-      week: number,
+      week: number | null,
       advancingRosterId: number | null,
     ): BracketTeam | null {
       if (rosterId == null) return null;
@@ -157,7 +194,7 @@ export const getSeasonBracket = cache(async function getSeasonBracket(
       return {
         rosterId,
         ...identity,
-        points: pointsByWeekRoster.get(`${week}:${rosterId}`) ?? null,
+        points: week == null ? null : pointsByWeekRoster.get(`${week}:${rosterId}`) ?? null,
         advanced: advancingRosterId != null && advancingRosterId === rosterId,
       };
     }
@@ -170,7 +207,10 @@ export const getSeasonBracket = cache(async function getSeasonBracket(
       const byRound = new Map<number, BracketMatchView[]>();
 
       for (const row of sideRows) {
-        const week = roundToWeek(row.round, playoffWeekStart!);
+        const week =
+          playoffWeekStart == null
+            ? null
+            : roundToWeek(row.round, playoffWeekStart);
         const view: BracketMatchView = {
           matchNumber: row.matchNumber,
           bracketType: type,
@@ -193,21 +233,30 @@ export const getSeasonBracket = cache(async function getSeasonBracket(
         .sort((a, b) => a[0] - b[0])
         .map(([round, matches]) => ({
           round,
-          week: roundToWeek(round, playoffWeekStart!),
+          week:
+            playoffWeekStart == null
+              ? null
+              : roundToWeek(round, playoffWeekStart),
           label: getRoundLabel(type, round, totalRounds),
           matches: matches.sort((a, b) => a.matchNumber - b.matchNumber),
         }));
     }
 
-    return { winners: buildSide("winners"), losers: buildSide("losers") };
+    return {
+      winners: buildSide("winners"),
+      losers: buildSide("losers"),
+      unavailable: false,
+    };
   } catch (e) {
+    // Surfaced as "we're showing the last available data", never as "this
+    // season had no playoffs".
     console.error("[playoff-bracket] getSeasonBracket error:", e);
-    return EMPTY_BRACKET;
+    return UNAVAILABLE_BRACKET;
   }
 });
 
 // ---------------------------------------------------------------------------
-// Toilet Bowl champions
+// Season-scoped champions (both ends of the season)
 // ---------------------------------------------------------------------------
 
 const CHAMPION_FIELDS = {
@@ -220,7 +269,54 @@ const CHAMPION_FIELDS = {
   avatarUrl: franchiseSeasons.avatarUrl,
 };
 
-const championAvatarJoin = and(
+/**
+ * Fills in a most-recent crest for any row whose own season had no avatar,
+ * matching every peer surface. The season's own crest always wins, so the
+ * identity stays season-attributed rather than "whatever they look like now".
+ */
+async function withAvatarFallback<T extends SeasonFranchiseEntry>(
+  rows: T[],
+): Promise<T[]> {
+  const missing = rows.filter((r) => r.avatarUrl == null).map((r) => r.franchiseId);
+  if (missing.length === 0) return rows;
+  const fallbacks = await getLatestAvatarUrls(missing);
+  return rows.map((row) =>
+    row.avatarUrl == null
+      ? { ...row, avatarUrl: fallbacks.get(row.franchiseId) ?? null }
+      : row,
+  );
+}
+
+/**
+ * The season's league champion, with that season's own crest. Deliberately not
+ * sourced from the league-wide getTrophyCase(), whose crest is "the franchise's
+ * latest avatar" rather than the one it wore that year.
+ */
+export const getSeasonChampion = cache(async function getSeasonChampion(
+  seasonId: number,
+): Promise<SeasonFranchiseEntry | null> {
+  try {
+    const rows = await db
+      .select(CHAMPION_FIELDS)
+      .from(seasons)
+      .innerJoin(franchises, eq(franchises.id, seasons.championFranchiseId))
+      .leftJoin(
+        franchiseSeasons,
+        and(
+          eq(franchiseSeasons.franchiseId, seasons.championFranchiseId),
+          eq(franchiseSeasons.seasonId, seasons.id),
+        ),
+      )
+      .where(eq(seasons.id, seasonId));
+    const [row] = await withAvatarFallback(rows);
+    return row ?? null;
+  } catch (e) {
+    console.error("[playoff-bracket] getSeasonChampion error:", e);
+    return null;
+  }
+});
+
+const toiletBowlAvatarJoin = and(
   eq(franchiseSeasons.franchiseId, seasons.toiletBowlFranchiseId),
   eq(franchiseSeasons.seasonId, seasons.id),
 );
@@ -230,12 +326,13 @@ export const getToiletBowlChampion = cache(async function getToiletBowlChampion(
   seasonId: number,
 ): Promise<ToiletBowlChampion | null> {
   try {
-    const [row] = await db
+    const rows = await db
       .select(CHAMPION_FIELDS)
       .from(seasons)
       .innerJoin(franchises, eq(franchises.id, seasons.toiletBowlFranchiseId))
-      .leftJoin(franchiseSeasons, championAvatarJoin)
+      .leftJoin(franchiseSeasons, toiletBowlAvatarJoin)
       .where(eq(seasons.id, seasonId));
+    const [row] = await withAvatarFallback(rows);
     return row ?? null;
   } catch (e) {
     console.error("[playoff-bracket] getToiletBowlChampion error:", e);
@@ -251,8 +348,9 @@ export const getAllToiletBowlChampions = cache(
         .select(CHAMPION_FIELDS)
         .from(seasons)
         .innerJoin(franchises, eq(franchises.id, seasons.toiletBowlFranchiseId))
-        .leftJoin(franchiseSeasons, championAvatarJoin);
-      return rows.sort((a, b) => b.seasonYear - a.seasonYear);
+        .leftJoin(franchiseSeasons, toiletBowlAvatarJoin);
+      const withAvatars = await withAvatarFallback(rows);
+      return withAvatars.sort((a, b) => b.seasonYear - a.seasonYear);
     } catch (e) {
       console.error("[playoff-bracket] getAllToiletBowlChampions error:", e);
       return [];

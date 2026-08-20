@@ -9,9 +9,9 @@ import { ScrollReveal } from "@/components/scroll-reveal";
 import { EmptyState } from "@/components/empty-state";
 import { PlayoffBracketRounds } from "@/components/playoff-bracket-rounds";
 import { getSeasonByYearSimple } from "@/lib/queries/matchups";
-import { getTrophyCase } from "@/lib/queries/records";
 import {
   getSeasonBracket,
+  getSeasonChampion,
   getToiletBowlChampion,
   type ToiletBowlChampion,
 } from "@/lib/queries/playoff-bracket";
@@ -52,17 +52,18 @@ export default async function PlayoffBracketPage({
   }
   if (!season) notFound();
 
-  const [bracket, toiletBowlChampion, trophies] = await Promise.all([
+  const [bracket, toiletBowlChampion, champion] = await Promise.all([
     getSeasonBracket(season.id, season.playoffWeekStart, season.totalRosters),
     getToiletBowlChampion(season.id),
-    getTrophyCase().catch(() => []),
+    getSeasonChampion(season.id),
   ]);
 
-  const championEntry = trophies.find(
-    (t) => t.seasonYear === year && t.championName != null,
-  );
-
   const hasBracket = bracket.winners.length > 0 || bracket.losers.length > 0;
+  // Three distinct states, never collapsed into one: the bracket read failed,
+  // the season genuinely has no bracket, or we have one. A failed read must not
+  // claim the playoffs never happened, and neither case may hide the champion
+  // or the Toilet Bowl sting, which come from their own queries.
+  const showEmptyState = !hasBracket && !bracket.unavailable;
 
   return (
     <>
@@ -71,30 +72,30 @@ export default async function PlayoffBracketPage({
           <BackLink href={`/seasons/${year}`} label={`${year} Season`} />
         </div>
 
-        {/* Champion hero */}
-        {championEntry && (
+        {/* Champion hero, with the crest this franchise wore that season. */}
+        {champion && (
           <ScrollReveal>
             <div className="mt-6 card-surface card-tint-gold p-8 text-center space-y-3">
               <p className="text-kicker text-gold mb-1">Champion</p>
               <div className="flex justify-center">
                 <FranchiseLogo
-                  slug={championEntry.championSlug!}
-                  name={championEntry.championName!}
-                  abbreviation={championEntry.championAbbreviation ?? undefined}
-                  brandingColor={championEntry.championBrandingColor ?? undefined}
-                  avatarUrl={championEntry.championAvatarUrl}
+                  slug={champion.franchiseSlug}
+                  name={champion.franchiseName}
+                  abbreviation={champion.franchiseAbbreviation ?? undefined}
+                  brandingColor={champion.franchiseBrandingColor ?? undefined}
+                  avatarUrl={champion.avatarUrl}
                   size="xl"
                   decorative
                 />
               </div>
-              <p className="text-h1 text-gold">{championEntry.championName}</p>
+              <p className="text-h1 text-gold">{champion.franchiseName}</p>
               <ChampionshipStars count={1} variant="hero" />
             </div>
           </ScrollReveal>
         )}
       </PageSection>
 
-      {!hasBracket ? (
+      {showEmptyState ? (
         <section className="pb-8 md:pb-12">
           <EmptyState
             icon="calendar"
@@ -106,6 +107,18 @@ export default async function PlayoffBracketPage({
         </section>
       ) : (
         <section className="pb-8 md:pb-12 space-y-10">
+          {/* Calm degradation: the bracket read failed, but the champion and
+              the Toilet Bowl sting below come from their own queries and are
+              still worth showing. */}
+          {bracket.unavailable && (
+            <div className="card-surface p-6">
+              <p className="text-body text-text-secondary">
+                Something went wrong loading the bracket. We&rsquo;re showing
+                the last available data.
+              </p>
+            </div>
+          )}
+
           {/* Winners bracket */}
           {bracket.winners.length > 0 && (
             <ScrollReveal delay={80}>
@@ -150,12 +163,18 @@ export default async function PlayoffBracketPage({
             </ScrollReveal>
           )}
 
-          {/* The sting: the team that sank all the way to the bottom */}
-          {toiletBowlChampion && (
-            <ScrollReveal delay={240}>
-              <ToiletBowlStingCard champion={toiletBowlChampion} />
-            </ScrollReveal>
-          )}
+        </section>
+      )}
+
+      {/* The sting: the team that sank all the way to the bottom. Rendered
+          outside the bracket gate on purpose. It reads
+          seasons.toilet_bowl_franchise_id, so it stays true even when the
+          bracket rows are missing or unreadable. */}
+      {toiletBowlChampion && (
+        <section className="pb-8 md:pb-12">
+          <ScrollReveal delay={240}>
+            <ToiletBowlStingCard champion={toiletBowlChampion} />
+          </ScrollReveal>
         </section>
       )}
     </>

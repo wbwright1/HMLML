@@ -72,9 +72,11 @@ function BracketRoundGroup({
     <div className="card-surface p-4 md:p-5">
       <div className="mb-4 flex items-baseline justify-between gap-3">
         <h3 className="text-kicker whitespace-nowrap">{round.label}</h3>
-        <span className="text-caption whitespace-nowrap text-text-tertiary">
-          Week <span className="font-mono tabular-nums">{round.week}</span>
-        </span>
+        {round.week != null && (
+          <span className="text-caption whitespace-nowrap text-text-tertiary">
+            Week <span className="font-mono tabular-nums">{round.week}</span>
+          </span>
+        )}
       </div>
       <div className="space-y-3">
         {round.matches.map((match) => (
@@ -140,8 +142,9 @@ function BracketMatchCard({
     </div>
   );
 
-  // Only link out once the week has real games behind it.
-  if (!match.team1 && !match.team2) return body;
+  // Only link out once the week has real games behind it, and only when the
+  // season anchors rounds to weeks at all.
+  if (match.week == null || (!match.team1 && !match.team2)) return body;
 
   return (
     <Link
@@ -225,7 +228,12 @@ function BracketTeamRow({
                 : "text-text-tertiary"
           }`}
         >
-          {team.points != null && team.points > 0 ? team.points.toFixed(2) : "-"}
+          {/* A decided match shows its score even if it really was 0.00; an
+              undecided one only shows a score once there is one, so scheduled
+              rows do not all read "0.00". */}
+          {team.points != null && (match.decided || team.points > 0)
+            ? team.points.toFixed(2)
+            : "-"}
         </span>
       </div>
     </div>

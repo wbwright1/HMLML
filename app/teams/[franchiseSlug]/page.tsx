@@ -20,7 +20,10 @@ import { getFranchiseCornerstone } from "@/lib/queries/franchise-players";
 import { getFranchiseAwards } from "@/lib/queries/awards";
 import { FranchiseCornerstoneCard } from "@/components/franchise-cornerstone-card";
 import { FranchiseTrophyCase } from "@/components/franchise-trophy-case";
-import { buildFranchiseTrophies } from "@/lib/franchise-trophies";
+import {
+  buildFranchiseTrophies,
+  countFranchiseHardware,
+} from "@/lib/franchise-trophies";
 import { getToiletBowlChampionsByFranchise } from "@/lib/queries/playoff-bracket";
 import { getPlayoffLabel, getPlayoffBadgeVariant } from "@/lib/playoff-labels";
 import { EmptyState } from "@/components/empty-state";
@@ -142,6 +145,7 @@ export default async function FranchiseDetailPage({
     franchiseAwards,
     toiletBowlSeasons,
   );
+  const hardwareCount = countFranchiseHardware(trophies);
 
   // Best-to-worst grid, tagging only the genuinely lopsided extremes.
   const gridRows: H2HGridRow[] = [...myRivalries]
@@ -419,9 +423,14 @@ export default async function FranchiseDetailPage({
         )}
       </PageSection>
 
-      {/* Trophy Case — merged championships + player-level league awards */}
+      {/* Trophy Case: championships + player-level league awards, plus Toilet
+          Bowl finishes. A franchise with nothing but Toilet Bowls still gets a
+          case, but it is not announced as "Hardware", because it isn't. */}
       {trophies.length > 0 && (
-        <PageSection label="Hardware" title="Trophy Case">
+        <PageSection
+          label={hardwareCount > 0 ? "Hardware" : "Receipts"}
+          title={hardwareCount > 0 ? "Trophy Case" : "The Case"}
+        >
           <ScrollReveal>
             <FranchiseTrophyCase
               trophies={trophies}

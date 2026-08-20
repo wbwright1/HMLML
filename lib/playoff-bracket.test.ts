@@ -5,6 +5,7 @@ import {
   deriveToiletBowlChampion,
   getMatchPlacementLabel,
   getRoundLabel,
+  getWinnersRoundNames,
   normalizeBracketMatches,
   roundToWeek,
 } from "@/lib/playoff-bracket";
@@ -218,9 +219,20 @@ describe("normalizeBracketMatches", () => {
 
 describe("getRoundLabel", () => {
   it("names the 3-round winners bracket from the end", () => {
-    expect(getRoundLabel("winners", 1, 3)).toBe("Quarterfinals");
+    // Round 1 of a 6-team bracket is a wild card round, not quarterfinals:
+    // only four teams play and the top two seeds are on bye.
+    expect(getRoundLabel("winners", 1, 3)).toBe("Wild Card Round");
     expect(getRoundLabel("winners", 2, 3)).toBe("Semifinals");
     expect(getRoundLabel("winners", 3, 3)).toBe("Championship");
+  });
+
+  it("names a 2-round winners bracket from the end too", () => {
+    expect(getRoundLabel("winners", 1, 2)).toBe("Semifinals");
+    expect(getRoundLabel("winners", 2, 2)).toBe("Championship");
+  });
+
+  it("falls back to a plain round number beyond the named rounds", () => {
+    expect(getRoundLabel("winners", 1, 4)).toBe("Round 1");
   });
 
   it("names the 2-round losers bracket without assuming three rounds", () => {
@@ -232,6 +244,24 @@ describe("getRoundLabel", () => {
     expect(getRoundLabel("losers", 1, 3)).toBe("Toilet Bowl Round 1");
     expect(getRoundLabel("losers", 2, 3)).toBe("Toilet Bowl Round 2");
     expect(getRoundLabel("losers", 3, 3)).toBe("Toilet Bowl Final");
+  });
+});
+
+describe("getWinnersRoundNames", () => {
+  it("returns the round names in playing order, one name per round", () => {
+    expect(getWinnersRoundNames(3)).toEqual([
+      "Wild Card Round",
+      "Semifinals",
+      "Championship",
+    ]);
+    expect(getWinnersRoundNames(2)).toEqual(["Semifinals", "Championship"]);
+  });
+
+  it("agrees with getRoundLabel, so the hub and the bracket page cannot drift", () => {
+    const names = getWinnersRoundNames(3);
+    for (let round = 1; round <= 3; round++) {
+      expect(names[round - 1]).toBe(getRoundLabel("winners", round, 3));
+    }
   });
 });
 

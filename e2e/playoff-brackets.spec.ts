@@ -38,9 +38,13 @@ test.describe("2023 playoff bracket (/playoffs/2023)", () => {
 
     // Rounds are labelled from the end of the bracket, with the week alongside.
     const winners = page.getByTestId("bracket-winners");
-    await expect(winners.getByText("Quarterfinals")).toBeVisible();
+    // Round 1 of a 6-team bracket is a wild card round (two byes), and the
+    // name matches the hub's playoff banner exactly: both read the round
+    // names from lib/playoff-bracket.ts.
+    await expect(winners.getByText("Wild Card Round")).toBeVisible();
     await expect(winners.getByText("Semifinals")).toBeVisible();
     await expect(winners.getByText("Championship").first()).toBeVisible();
+    await expect(winners.getByText("Quarterfinals")).toHaveCount(0);
   });
 
   test("the championship shows the real pairing, scores and winner", async ({
