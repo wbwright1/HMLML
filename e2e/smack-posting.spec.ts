@@ -61,12 +61,34 @@ async function signInAsMember(page: Page) {
   await page.waitForURL("http://localhost:3000/");
 }
 
-/** True when the current hub surfaces the smack section (composer OR ghost). */
+/**
+ * True when the current hub surfaces the smack section (composer OR ghost).
+ *
+ * MUST wait rather than count(): the slot is a client island that resolves the
+ * session from /api/session after hydration, so it is absent from first paint
+ * on every run. A count() probe therefore always saw 0 and skipped every test
+ * in this file, which is exactly the vacuous-test trap CLAUDE.md bans.
+ */
 async function smackSectionPresent(page: Page): Promise<boolean> {
-  const hasComposer = (await composer(page).count()) > 0;
-  const hasGhost =
-    (await page.getByText(/Got something to say/i).count()) > 0;
-  return hasComposer || hasGhost;
+  const slot = page
+    .locator('textarea[name="body"]')
+    .or(page.getByText(/Got something to say/i));
+  try {
+    await slot.first().waitFor({ state: "visible", timeout: 10_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Waits for the signed-in composer specifically (island swap completed). */
+async function composerReady(page: Page): Promise<boolean> {
+  try {
+    await composer(page).first().waitFor({ state: "visible", timeout: 10_000 });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 test.describe("Signed-out", () => {
@@ -93,7 +115,7 @@ test.describe("Composer", () => {
     await signInAsMember(page);
     await page.goto("/");
     test.skip(
-      (await composer(page).count()) === 0,
+      !(await composerReady(page)),
       "current hub state does not surface the smack composer",
     );
 
@@ -128,11 +150,25 @@ test.describe("Composer", () => {
   test("the seeded hidden post never renders in the public feed", async ({
     page,
   }) => {
+    // The hub is ISR-cached and was prerendered at build time, BEFORE this
+    // file's fixture rows existed, so asserting absence against that HTML
+    // proves nothing. Posting through the real composer runs postSmack, which
+    // calls revalidatePath("/"), so the assertions below run against a hub
+    // that has genuinely re-rendered from the current smack_posts rows.
+    await signInAsMember(page);
     await page.goto("/");
     test.skip(
-      !(await smackSectionPresent(page)),
-      "current hub state does not surface the smack feed",
+      !(await composerReady(page)),
+      "current hub state does not surface the smack composer",
     );
+
+    const marker = `e2e moderation probe ${Date.now()}`;
+    await composer(page).first().fill(marker);
+    await page.getByRole("button", { name: /^post$/i }).first().click();
+
+    // The marker rendering is the proof the feed is showing live rows; only
+    // then does the hidden post's absence mean anything.
+    await expect(page.getByText(marker).first()).toBeVisible();
     await expect(page.getByText(fx.hiddenBody)).toHaveCount(0);
   });
 
@@ -142,7 +178,7 @@ test.describe("Composer", () => {
     await signInAsMember(page);
     await page.goto("/");
     test.skip(
-      (await composer(page).count()) === 0,
+      !(await composerReady(page)),
       "current hub state does not surface the smack composer",
     );
 
