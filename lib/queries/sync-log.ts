@@ -82,6 +82,36 @@ export async function getLatestSync(syncType?: string, dataType?: string) {
 }
 
 /**
+ * Gets the most recent successful sync log entry for a given syncType +
+ * dataType pair (e.g. the last successful hourly transactions sync).
+ *
+ * Distinct from getLatestSuccessfulSync, which matches on dataType alone and so
+ * cannot tell an hourly run from a daily one. The offseason hourly throttle
+ * needs that distinction, and it must key off a real data type rather than the
+ * throttle's own "skipped" rows, or every skip would push the timestamp forward
+ * and the sync would never run again.
+ */
+export async function getLatestSuccessfulSyncRun(
+  syncType: string,
+  dataType: string
+) {
+  const [entry] = await db
+    .select()
+    .from(syncLog)
+    .where(
+      and(
+        eq(syncLog.syncType, syncType),
+        eq(syncLog.dataType, dataType),
+        eq(syncLog.status, "success")
+      )
+    )
+    .orderBy(desc(syncLog.startedAt))
+    .limit(1);
+
+  return entry ?? null;
+}
+
+/**
  * Gets the most recent successful sync log entry for a given dataType.
  * Useful for the SyncTimestamp component.
  */
