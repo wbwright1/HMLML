@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { LivePill, type LivePillProps } from "@/components/live-pill";
+import type { LivePillProps } from "@/components/live-pill";
+import { LivePillIsland } from "@/components/nav/live-pill-island";
 import { NavCrestIsland } from "@/components/nav/nav-crest-island";
 import { SearchCommand } from "@/components/search/search-command";
 
@@ -23,7 +24,7 @@ export function MobileHeader({ livePill }: MobileHeaderProps) {
         HMLML
       </Link>
       <div className="flex items-center gap-1.5">
-        <LivePill {...livePill} format="compact" />
+        <LivePillIsland initial={livePill} format="compact" />
         <SearchCommand variant="mobile" trigger="icon" />
         <NavCrestIsland variant="mobile" />
       </div>

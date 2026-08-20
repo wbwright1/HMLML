@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { NavPills } from "@/components/nav/nav-pills";
 import { SearchCommand } from "@/components/search/search-command";
-import { LivePill, type LivePillProps } from "@/components/live-pill";
+import type { LivePillProps } from "@/components/live-pill";
+import { LivePillIsland } from "@/components/nav/live-pill-island";
 import { NavCrestIsland } from "@/components/nav/nav-crest-island";
 
 interface TopbarProps {
@@ -27,7 +28,7 @@ export function Topbar({ livePill }: TopbarProps) {
 
         <div className="ml-auto flex items-center gap-2 xl:gap-3">
           <SearchCommand variant="desktop" />
-          <LivePill {...livePill} />
+          <LivePillIsland initial={livePill} />
           <NavCrestIsland variant="topbar" />
         </div>
       </div>
