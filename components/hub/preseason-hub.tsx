@@ -3,11 +3,10 @@ import { KickoffCountdown } from "@/components/kickoff-countdown";
 import { DraftCountdown } from "@/components/draft-countdown";
 import {
   SmackFeed,
-  SmackComposerSlot,
   smackItemsFromPosts,
   smackItemsFromSeeds,
 } from "@/components/smack-feed";
-import { getSessionMember } from "@/lib/auth";
+import { SmackComposerSlot } from "@/components/smack-composer-slot";
 import { getRecentSmackPosts, anySmackPostsExist } from "@/lib/queries/smack";
 import { EmptyState } from "@/components/empty-state";
 import { DivisionFieldCard } from "@/components/hub/division-field-card";
@@ -130,12 +129,9 @@ export async function PreseasonHub({
   // but are all hidden, moderation must NOT resurrect the seeds. Member and
   // smack are settled independently so one failing (e.g. the members/smack
   // tables not existing yet on a pre-0008 DB) never blanks the other.
-  const [memberResult, smackResult] = await Promise.allSettled([
-    getSessionMember(),
+  const [smackResult] = await Promise.allSettled([
     Promise.all([getRecentSmackPosts(3), anySmackPostsExist()]),
   ]);
-  const sessionMember =
-    memberResult.status === "fulfilled" ? memberResult.value : null;
   const [realSmack, anySmack] =
     smackResult.status === "fulfilled" ? smackResult.value : [[], false];
 
@@ -143,7 +139,6 @@ export async function PreseasonHub({
   const smackItems = smackFromDesk
     ? smackItemsFromSeeds(editorial.smackPosts.slice(0, 3))
     : smackItemsFromPosts(realSmack);
-  const canPost = Boolean(sessionMember?.franchiseId);
 
   const hasField = field.divisions.length > 0;
 
@@ -302,7 +297,7 @@ export async function PreseasonHub({
               The Smack Feed
             </ModuleLabel>
             <div className="space-y-3">
-              <SmackComposerSlot canPost={canPost} />
+              <SmackComposerSlot />
               {smackItems.length > 0 ? (
                 <SmackFeed items={smackItems} />
               ) : (

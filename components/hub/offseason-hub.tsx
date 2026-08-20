@@ -15,17 +15,16 @@ import {
 import { ReigningHonors } from "@/components/hub/reigning-honors";
 import {
   SmackFeed,
-  SmackComposerSlot,
   smackItemsFromPosts,
   smackItemsFromSeeds,
 } from "@/components/smack-feed";
+import { SmackComposerSlot } from "@/components/smack-composer-slot";
 import { getSeasonStandings, getLastCompletedSeason } from "@/lib/queries/seasons";
 import { getLeagueAtAGlance } from "@/lib/queries/homepage";
 import { getOffseasonRecap, getRecentTransactions } from "@/lib/queries/offseason";
 import { getAllFranchises } from "@/lib/queries/franchises";
 import { getHubEditorial } from "@/lib/content";
 import { getPublishedHubContent } from "@/lib/queries/hub-content";
-import { getSessionMember } from "@/lib/auth";
 import { getRecentSmackPosts, anySmackPostsExist } from "@/lib/queries/smack";
 import type { getLatestSeason } from "@/lib/queries/matchups";
 
@@ -124,12 +123,9 @@ export async function OffseasonHub({
   // posts only stand in when the board is genuinely empty. The section is shown
   // only when there is something real to show (member posts OR generated smack),
   // so a quiet offseason keeps the static recap layout untouched.
-  const [memberResult, smackResult] = await Promise.allSettled([
-    getSessionMember(),
+  const [smackResult] = await Promise.allSettled([
     Promise.all([getRecentSmackPosts(4), anySmackPostsExist()]),
   ]);
-  const sessionMember =
-    memberResult.status === "fulfilled" ? memberResult.value : null;
   const [realSmack, anySmack] =
     smackResult.status === "fulfilled" ? smackResult.value : [[], false];
   const smackFromDesk = realSmack.length === 0 && !anySmack;
@@ -137,7 +133,6 @@ export async function OffseasonHub({
   const smackItems = smackFromDesk
     ? smackItemsFromSeeds(editorial.smackPosts.slice(0, 4))
     : smackItemsFromPosts(realSmack);
-  const canPost = Boolean(sessionMember?.franchiseId);
 
   // Champion banner data from the completed season
   const championStandings = completedStandings.length > 0 ? completedStandings : standings;
@@ -289,7 +284,7 @@ export async function OffseasonHub({
             title="The Smack Feed"
           >
             <div className="space-y-3">
-              <SmackComposerSlot canPost={canPost} />
+              <SmackComposerSlot />
               {smackItems.length > 0 ? (
                 <SmackFeed
                   items={smackItems}

@@ -3,11 +3,10 @@ import { EditorialBody } from "@/components/editorial-emphasis";
 import { KickoffCountdown } from "@/components/kickoff-countdown";
 import {
   SmackFeed,
-  SmackComposerSlot,
   smackItemsFromPosts,
   smackItemsFromSeeds,
 } from "@/components/smack-feed";
-import { getSessionMember } from "@/lib/auth";
+import { SmackComposerSlot } from "@/components/smack-composer-slot";
 import { getRecentSmackPosts, anySmackPostsExist } from "@/lib/queries/smack";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { GameOfTheWeekCard } from "@/components/hub/game-of-the-week-card";
@@ -70,12 +69,9 @@ export async function BetweenWeeksHub({
   // but are all hidden, moderation must NOT resurrect the seeds. Member and
   // smack are settled independently so one failing (e.g. the members/smack
   // tables not existing yet on a pre-0008 DB) never blanks the other.
-  const [memberResult, smackResult] = await Promise.allSettled([
-    getSessionMember(),
+  const [smackResult] = await Promise.allSettled([
     Promise.all([getRecentSmackPosts(4), anySmackPostsExist()]),
   ]);
-  const sessionMember =
-    memberResult.status === "fulfilled" ? memberResult.value : null;
   const [realSmack, anySmack] =
     smackResult.status === "fulfilled" ? smackResult.value : [[], false];
 
@@ -83,7 +79,6 @@ export async function BetweenWeeksHub({
   const smackItems = smackFromDesk
     ? smackItemsFromSeeds(editorial.smackPosts)
     : smackItemsFromPosts(realSmack);
-  const canPost = Boolean(sessionMember?.franchiseId);
 
   // Standings lookup for records, points-for, and division identity.
   const standingBy = new Map(standings.map((s) => [s.franchiseId, s]));
@@ -261,7 +256,7 @@ export async function BetweenWeeksHub({
                     : "the league"}
               </p>
             </div>
-            <SmackComposerSlot canPost={canPost} />
+            <SmackComposerSlot />
             {smackItems.length > 0 ? (
               <SmackFeed
                 items={smackItems}

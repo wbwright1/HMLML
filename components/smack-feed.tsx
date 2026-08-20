@@ -1,6 +1,4 @@
-import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
-import { SmackComposer } from "@/components/smack-composer";
 import { formatRelativeTime } from "@/lib/relative-time";
 import type { SmackPost } from "@/lib/content";
 import type { RecentSmackPost } from "@/lib/queries/smack";
@@ -57,24 +55,6 @@ export function smackItemsFromSeeds(
     postedAt: s.postedAt,
     authorName: null,
   }));
-}
-
-/**
- * Renders the composer for a signed-in member who controls a franchise, or a
- * one-line ghost prompt inviting signed-out visitors to claim their team. Sits
- * above the feed on both hubs; sized to fit the 340px rail and the two-up grid.
- */
-export function SmackComposerSlot({ canPost }: { canPost: boolean }) {
-  if (canPost) return <SmackComposer />;
-  return (
-    <Link
-      href="/claim"
-      className="card-surface block p-4 text-body-sm text-text-tertiary transition-colors duration-150 hover:text-text-secondary"
-    >
-      Got something to say?{" "}
-      <span className="font-semibold text-accent-gold">Claim your team.</span>
-    </Link>
-  );
 }
 
 interface SmackFeedProps {
