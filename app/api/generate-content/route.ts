@@ -14,6 +14,7 @@ import {
   countTransactionsSyncedSince,
 } from "@/lib/queries/content-activity";
 import { shouldGenerateOffseason } from "@/lib/content-gen/activity-gate";
+import { revalidateSite } from "@/lib/revalidate";
 
 export const maxDuration = 300;
 
@@ -242,6 +243,10 @@ async function runGeneration(request: NextRequest) {
       startedAt,
       completedAt: new Date(),
     });
+
+    // New hub content is rendered output, so drop the ISR cache. The two skip
+    // paths above return before this and deliberately leave the cache intact.
+    revalidateSite("generate-content");
 
     return NextResponse.json({
       data: {

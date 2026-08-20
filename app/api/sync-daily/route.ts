@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runDailySync } from "@/lib/sync/daily";
+import { revalidateSite } from "@/lib/revalidate";
 
 export const maxDuration = 300;
 
@@ -24,6 +25,9 @@ export async function GET(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Fresh data landed (fully or partially), so drop the ISR cache.
+    revalidateSite("sync-daily");
 
     return NextResponse.json({
       ok: true,
