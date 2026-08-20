@@ -14,9 +14,10 @@ import { getTradeValues } from "@/lib/queries/trade-values";
 import { getAllFranchises } from "@/lib/queries/franchises";
 import { getAllSeasons } from "@/lib/queries/seasons";
 
-// ISR: rendered once, then served from cache until a successful sync calls
-// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
-export const revalidate = 3600;
+// Dynamically rendered: ?season= and ?team= narrow the server-rendered trade list, and awaiting searchParams opts a route out
+// of static rendering, so a `revalidate` export here would be inert. Caching
+// these needs unstable_cache around the queries (tracked as follow-up work;
+// mind that it serializes Date fields to strings behind unchanged types).
 
 export const metadata = {
   title: "Trade History | Harambe Memorial League Memorial League",

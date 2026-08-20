@@ -22,9 +22,10 @@ import {
   type PositionCounts,
 } from "@/lib/draft-board";
 
-// ISR: rendered once, then served from cache until a successful sync calls
-// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
-export const revalidate = 3600;
+// Dynamically rendered: ?round= filters the server-rendered board, and awaiting searchParams opts a route out
+// of static rendering, so a `revalidate` export here would be inert. Caching
+// these needs unstable_cache around the queries (tracked as follow-up work;
+// mind that it serializes Date fields to strings behind unchanged types).
 
 interface DraftDetailPageProps {
   params: Promise<{ seasonYear: string }>;
