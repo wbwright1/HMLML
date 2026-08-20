@@ -33,9 +33,12 @@ export async function GET(request: Request) {
   const query = parsed.data;
   const needle = query.toLowerCase();
 
+  // Search on the normalized term so "Mahomes" and "mahomes" share one cache
+  // entry (searchPlayers is cached per-argument). The Zod schema above bounds
+  // the key space by construction: trimmed, 2-60 chars.
   const [allFranchises, playerRows] = await Promise.all([
     getAllFranchises(),
-    searchPlayers(query),
+    searchPlayers(needle),
   ]);
 
   const franchises = (allFranchises ?? [])

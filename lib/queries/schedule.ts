@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { cachedQuery } from "@/lib/cache";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { matchups, franchises, franchiseSeasons } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
@@ -39,7 +40,7 @@ export interface FranchiseScheduleWeek {
  * full-season schedule view. Shares pairMatchupRows with lib/queries/matchups.ts
  * so pairing logic isn't duplicated.
  */
-export async function getSeasonSchedule(
+async function getSeasonScheduleUncached(
   seasonId: number
 ): Promise<Map<number, PairedMatchup[]>> {
   try {
@@ -112,7 +113,7 @@ export async function getSeasonSchedule(
  * status, result (W/L/T), and upcoming/live flags. Built from the same
  * `matchups` rows as the league-wide schedule (no separate data source).
  */
-export async function getFranchiseSchedule(
+async function getFranchiseScheduleUncached(
   franchiseId: string,
   seasonId: number
 ): Promise<FranchiseScheduleWeek[]> {
@@ -225,3 +226,22 @@ export async function getFranchiseSchedule(
     return [];
   }
 }
+
+/**
+ * Cached wrapper (#209). Stores ENTRIES, not the Map: unstable_cache serializes
+ * through JSON, where a Map becomes {} and silently loses the entire schedule.
+ * cachedQuery's JsonSafe guard rejects the Map outright, so the conversion is
+ * explicit here and the Map is rebuilt below, leaving callers unchanged.
+ * Cleared by revalidateSite().
+ */
+const getSeasonScheduleEntries = cachedQuery(
+  ["season-schedule"],
+  async (seasonId: number) => [...(await getSeasonScheduleUncached(seasonId))],
+);
+
+export async function getSeasonSchedule(seasonId: number) {
+  return new Map(await getSeasonScheduleEntries(seasonId));
+}
+
+/** Cached wrapper (#209): see lib/cache.ts. Cleared by revalidateSite(). */
+export const getFranchiseSchedule = cachedQuery(["franchise-schedule"], getFranchiseScheduleUncached);

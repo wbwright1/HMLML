@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { cachedQuery } from "@/lib/cache";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { db } from "@/lib/db";
 import { seasons, franchises, franchiseSeasons } from "@/lib/db/schema";
@@ -10,7 +11,7 @@ import { resolveOwnerName, resolveCoOwnerNames } from "@/lib/owner-names";
  * Includes champion franchise info when available.
  * Uses a single query with a LEFT JOIN to avoid N+1.
  */
-export async function getAllSeasons() {
+async function getAllSeasonsUncached() {
   try {
     const rows = await db
       .select({
@@ -206,4 +207,15 @@ export const getSeasonStandings = cache(async function getSeasonStandings(season
     console.error("[seasons] getSeasonStandings error:", e);
     return [];
   }
+});
+
+/**
+ * Cached wrapper (#209). The row's createdAt/updatedAt are dropped rather than
+ * cached: unstable_cache round-trips through JSON, which would hand callers a
+ * string behind a type still claiming Date. Nothing reads them, and cachedQuery's
+ * JsonSafe guard rejects the shape until they are gone. Cleared by revalidateSite().
+ */
+export const getAllSeasons = cachedQuery(["all-seasons"], async () => {
+  const rows = await getAllSeasonsUncached();
+  return rows.map(({ createdAt: _c, updatedAt: _u, ...rest }) => rest);
 });

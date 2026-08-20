@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { hubContent } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
+import { cachedQuery } from "@/lib/cache";
 
 // ---------------------------------------------------------------------------
 // Trade verdicts (read side)
@@ -21,7 +22,7 @@ import { and, eq } from "drizzle-orm";
  * any DB error (including the table not existing yet) it returns an empty map so
  * the trades page simply renders without verdicts.
  */
-export async function getTradeVerdicts(): Promise<Map<string, string>> {
+async function getTradeVerdictEntriesUncached(): Promise<[string, string][]> {
   const verdicts = new Map<string, string>();
   try {
     const rows = await db
@@ -44,5 +45,23 @@ export async function getTradeVerdicts(): Promise<Map<string, string>> {
     // Benign when hub_content has not been migrated yet; other errors are surfaced.
     console.error("[trade-verdicts] getTradeVerdicts error:", e);
   }
-  return verdicts;
+  // Entries, not the Map: unstable_cache round-trips through JSON, where a Map
+  // serializes to {} and silently loses every verdict. cachedQuery's JsonSafe
+  // guard rejects the Map outright, so the conversion is explicit here and the
+  // Map is rebuilt below, leaving the public signature (and /trades) unchanged.
+  return [...verdicts];
+}
+
+const getTradeVerdictEntries = cachedQuery(
+  ["trade-verdicts"],
+  getTradeVerdictEntriesUncached,
+);
+
+/**
+ * Returns a map of transaction id (as string) -> verdict body for every
+ * published trade_verdict row. See the cached entries function above for why
+ * the cache stores entries rather than the Map itself.
+ */
+export async function getTradeVerdicts(): Promise<Map<string, string>> {
+  return new Map(await getTradeVerdictEntries());
 }

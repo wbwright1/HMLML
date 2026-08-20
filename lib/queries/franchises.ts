@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { cachedQuery } from "@/lib/cache";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { db } from "@/lib/db";
 import {
@@ -20,7 +21,7 @@ import { resolveOwnerName, resolveCoOwnerNames } from "@/lib/owner-names";
  * Wrapped in React `cache()` so repeated calls within the same request (e.g.
  * a page body plus generateMetadata) dedupe to a single set of queries.
  */
-export const getAllFranchises = cache(async function getAllFranchises() {
+const getAllFranchisesUncached = cache(async function getAllFranchises() {
   try {
     const rowsQuery = db
       .select({
@@ -132,7 +133,7 @@ export async function getFranchiseCrestById(franchiseId: string) {
  * Wrapped in React `cache()` so generateMetadata + the page body dedupe to a
  * single set of queries per request.
  */
-export const getFranchiseBySlug = cache(async function getFranchiseBySlug(
+const getFranchiseBySlugUncached = cache(async function getFranchiseBySlug(
   slug: string
 ) {
   try {
@@ -265,3 +266,21 @@ export async function getFranchiseRoster(
     return null;
   }
 }
+
+/** Cached wrapper (#209): see lib/cache.ts. Cleared by revalidateSite(). */
+export const getAllFranchises = cachedQuery(["all-franchises"], getAllFranchisesUncached);
+
+/**
+ * Cached wrapper (#209). createdAt/updatedAt are dropped for the same reason as
+ * getAllSeasons: JSON round-tripping would turn them into strings behind a Date
+ * type, and no caller reads them. Cleared by revalidateSite().
+ */
+export const getFranchiseBySlug = cachedQuery(
+  ["franchise-by-slug"],
+  async (slug: string) => {
+    const row = await getFranchiseBySlugUncached(slug);
+    if (!row) return null;
+    const { createdAt: _c, updatedAt: _u, ...rest } = row;
+    return rest;
+  },
+);

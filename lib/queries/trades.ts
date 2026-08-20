@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { cachedQuery } from "@/lib/cache";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { transactions, franchiseSeasons, franchises, players, seasons, draftPicks } from "@/lib/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
@@ -327,7 +328,7 @@ async function getDraftPickIndex(
  * at sync time (lib/sleeper-schemas.ts) and is not stored, so FAAB amounts
  * involved in a trade cannot be displayed. Out of scope for this page.
  */
-export async function getTrades({
+async function getTradesUncached({
   seasonId,
   franchiseId,
 }: GetTradesParams = {}): Promise<Trade[]> {
@@ -562,3 +563,6 @@ export async function getTrades({
     return [];
   }
 }
+
+/** Cached wrapper (#209): see lib/cache.ts. Cleared by revalidateSite(). */
+export const getTrades = cachedQuery(["trades"], getTradesUncached);

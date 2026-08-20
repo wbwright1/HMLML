@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { cachedQuery } from "@/lib/cache";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { db } from "@/lib/db";
 import {
@@ -270,7 +271,7 @@ export async function getMaxWeekForSeason(seasonId: number): Promise<number> {
  *
  * Wrapped in React `cache()` so the nav and the page share one call per request.
  */
-export const getLatestSeason = cache(async function getLatestSeason() {
+const getLatestSeasonUncached = cache(async function getLatestSeason() {
   try {
     const [latest] = await db
       .select({
@@ -293,7 +294,7 @@ export const getLatestSeason = cache(async function getLatestSeason() {
 /**
  * Returns the season record for a given year.
  */
-export async function getSeasonByYearSimple(year: number) {
+async function getSeasonByYearSimpleUncached(year: number) {
   try {
     const [season] = await db
       .select({
@@ -313,3 +314,9 @@ export async function getSeasonByYearSimple(year: number) {
     return null;
   }
 }
+
+/** Cached wrapper (#209): see lib/cache.ts. Cleared by revalidateSite(). */
+export const getLatestSeason = cachedQuery(["latest-season"], getLatestSeasonUncached);
+
+/** Cached wrapper (#209): see lib/cache.ts. Cleared by revalidateSite(). */
+export const getSeasonByYearSimple = cachedQuery(["season-by-year"], getSeasonByYearSimpleUncached);
