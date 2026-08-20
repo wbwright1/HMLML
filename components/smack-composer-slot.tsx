@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
 import { SmackComposer } from "@/components/smack-composer";
+import { useSessionMember } from "@/components/use-session-member";
 
 /**
  * Session-gated slot above the smack feed: the composer for a signed-in member
@@ -18,26 +18,9 @@ import { SmackComposer } from "@/components/smack-composer";
  * signed-in member's composer swaps in once /api/session resolves.
  */
 export function SmackComposerSlot() {
-  const [canPost, setCanPost] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-
-    fetch("/api/session", { credentials: "same-origin" })
-      .then((res) => (res.ok ? res.json() : { data: null }))
-      .then((body: { data?: { franchiseSlug: string | null } | null }) => {
-        if (!active) return;
-        setCanPost(Boolean(body?.data?.franchiseSlug));
-      })
-      .catch(() => {
-        if (!active) return;
-        setCanPost(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
+  const session = useSessionMember();
+  const canPost =
+    session.status === "ready" && Boolean(session.member?.franchiseSlug);
 
   if (canPost) return <SmackComposer />;
 

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { NavCrest, type NavCrestMember } from "@/components/nav/nav-crest";
+import { NavCrest } from "@/components/nav/nav-crest";
+import { useSessionMember } from "@/components/use-session-member";
 
 interface NavCrestIslandProps {
   variant?: "topbar" | "mobile";
@@ -16,36 +16,26 @@ interface NavCrestIslandProps {
  * silently defeats ISR everywhere. Fetching it here keeps the rest of the nav,
  * and therefore every page, cacheable.
  *
- * While the fetch is in flight the crest's 32px box is reserved so the header
- * does not shift when the session resolves.
+ * The loading placeholder reserves the box of the SIGNED-OUT rendering, not the
+ * crest's, because signed out is the common case (crawlers and logged-out
+ * visitors); matching it means no layout shift for almost every viewer.
  */
 export function NavCrestIsland({ variant = "topbar" }: NavCrestIslandProps) {
-  const [state, setState] = useState<
-    { status: "loading" } | { status: "ready"; member: NavCrestMember | null }
-  >({ status: "loading" });
+  const session = useSessionMember();
 
-  useEffect(() => {
-    let active = true;
-
-    fetch("/api/session", { credentials: "same-origin" })
-      .then((res) => (res.ok ? res.json() : { data: null }))
-      .then((body: { data?: NavCrestMember | null }) => {
-        if (!active) return;
-        setState({ status: "ready", member: body?.data ?? null });
-      })
-      .catch(() => {
-        if (!active) return;
-        setState({ status: "ready", member: null });
-      });
-
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  if (state.status === "loading") {
-    return <div aria-hidden="true" className="size-8 shrink-0" />;
+  if (session.status === "loading") {
+    // Desktop signed-out renders a "Claim your team" pill; mobile renders
+    // nothing. Mirror each so the header does not shift when the fetch lands.
+    if (variant === "mobile") return null;
+    return (
+      <span
+        aria-hidden="true"
+        className="shrink-0 whitespace-nowrap rounded-full border border-transparent px-3 py-1.5 text-caption font-semibold text-transparent"
+      >
+        Claim your team
+      </span>
+    );
   }
 
-  return <NavCrest member={state.member} variant={variant} />;
+  return <NavCrest member={session.member} variant={variant} />;
 }
