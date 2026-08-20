@@ -22,8 +22,9 @@ Harambe Memorial League Memorial League (HMLML) Website: a public-facing Next.js
 
 ## Key Architecture Decisions
 - Full-stack in one Next.js project; API routes handle sync endpoints, React Server Components handle all pages
-- **Server components by default, small enumerated set of client islands** -- pages/layouts stay RSC; `"use client"` is limited to this list: the live score poller, the search command (⌘K / mobile dock search), the nav pills active-state, the season/franchise pickers, the player table (filter/sort), the draft countdown, the kickoff countdown, the smack composer, the commish claim-code reveal, the player-profile modal shell, the trades page deep-link scroll-focus island, and the mobile nav scroll-chrome wrapper. Everything else ships zero client JS.
-- **No caching in Phase 1** -- direct Postgres queries on every request; 12-user scale doesn't warrant caching; ISR available later
+- **Server components by default, small enumerated set of client islands** -- pages/layouts stay RSC; `"use client"` is limited to this list: the live score poller, the search command (⌘K / mobile dock search), the nav pills active-state, the season/franchise pickers, the player table (filter/sort), the draft countdown, the kickoff countdown, the smack composer, the commish claim-code reveal, the player-profile modal shell, the trades page deep-link scroll-focus island, the mobile nav scroll-chrome wrapper, the nav crest island, and the smack composer slot (the last two resolve the session client-side so the server tree stays cacheable). Everything else ships zero client JS.
+- **Sync-driven ISR, not per-request queries** -- every public page declares `export const revalidate = 3600` and is served from the ISR cache; each successful sync run (sync-daily, sync-hourly, generate-content) calls `revalidatePath("/", "layout")` via `lib/revalidate.ts`, so pages refresh when data lands rather than on a timer. League data only changes when a sync runs, so this is exactly as correct as querying per request and far cheaper (the previous `force-dynamic` everywhere was exhausting Neon's transfer quota on crawler traffic). Time windows and the revalidate constant live in `lib/cache.ts`. Deliberately still dynamic: `/claim` and `/commish` (authenticated), `/api/live-scores` (the poller), `/api/session`, `app/test/error-trigger`, and the intercepted player modal route.
+- **Never read `cookies()`/`headers()` in a layout or in anything a layout renders** -- a dynamic API anywhere in the render tree opts the WHOLE route out of static generation, and from the root layout that silently defeats ISR on every page of the site. Session-dependent chrome is a client island fed by `/api/session` instead (`components/nav/nav-crest-island.tsx`, `components/smack-composer-slot.tsx`). For the same reason, a page's effective revalidate window is capped by the shortest `next: { revalidate }` fetch inside its render, so keep page-path Sleeper fetches at the page window (see `lib/queries/nfl-state.ts`).
 - **Correctness over performance** -- at 12 users, correct data matters more than speed
 - **Forward-compatible schema, not overbuilt code** -- schema accommodates Phase 2+ without gymnastics; application code only builds Phase 1
 - No authentication in Phase 1; fully public; Phase 2 adds commish admin login (likely Auth.js)
@@ -104,7 +105,10 @@ All sync functions follow this pattern:
 3. Validate response with Zod schema
 4. Write to Postgres in a transaction (atomic per data type)
 5. Log result to `sync_log` (success/failure, row count, duration, errors)
-6. Return HTTP status code
+6. On success (including partial success), call `revalidateSite()` from `lib/revalidate.ts` so the ISR cache picks up the new data; never let a revalidation failure fail the sync
+7. Return HTTP status code
+
+The hourly sync throttles itself in the offseason (`shouldSkipHourlySync` in `lib/sync/hourly.ts`): out of season, a run whose last successful hourly sync is under 6 hours old logs a `skipped` row to `sync_log` and returns 200 without syncing. It throttles rather than stopping, because this is a dynasty league and trades, waivers and roster moves happen year-round. The cron itself stays hourly.
 
 ## Domain-Specific Rules
 
