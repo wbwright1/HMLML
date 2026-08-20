@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
@@ -478,7 +479,8 @@ export default async function PowerRankingsPage() {
 
   try {
     view = await getPowerRankingsView();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected
   }
 

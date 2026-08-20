@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { db } from "@/lib/db";
 import { seasons } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
@@ -38,7 +39,8 @@ export default async function DraftsPage() {
         upcomingSeasonYear = latestSeason.seasonYear;
       }
     }
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

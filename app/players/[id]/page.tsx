@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { PlayerProfile } from "@/components/player-profile/player-profile";
 import { getPlayerById } from "@/lib/queries/players";
 
@@ -18,7 +19,8 @@ export async function generateMetadata({ params }: PlayerProfilePageProps) {
   let player: Awaited<ReturnType<typeof getPlayerById>> = null;
   try {
     player = await getPlayerById(id);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

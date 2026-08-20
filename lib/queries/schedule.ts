@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { matchups, franchises, franchiseSeasons } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { pairMatchupRows, type PairedMatchup } from "@/lib/queries/matchups";
@@ -100,6 +101,7 @@ export async function getSeasonSchedule(
     // Sort by week ascending for stable iteration by callers.
     return new Map([...result.entries()].sort((a, b) => a[0] - b[0]));
   } catch (e) {
+    rethrowUnlessTolerable(e);
     console.error("[schedule] getSeasonSchedule error:", e);
     return new Map();
   }
@@ -218,6 +220,7 @@ export async function getFranchiseSchedule(
     weeks.sort((a, b) => a.week - b.week);
     return weeks;
   } catch (e) {
+    rethrowUnlessTolerable(e);
     console.error("[schedule] getFranchiseSchedule error:", e);
     return [];
   }

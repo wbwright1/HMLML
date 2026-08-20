@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import {
   players,
   rosterPlayers,
@@ -240,7 +241,8 @@ export async function searchPlayers(
       .limit(50);
 
     return rows;
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return [];
   }
 }
@@ -314,7 +316,8 @@ export async function getAllPlayersWithStats(): Promise<RosteredPlayer[]> {
       .orderBy(desc(players.pointsPpr));
 
     return rows;
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return [];
   }
 }
@@ -410,7 +413,8 @@ export async function getPlayerById(
       .limit(1);
 
     return row ?? null;
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return null;
   }
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { PageSection } from "@/components/page-section";
 import { SectionHeader } from "@/components/section-header";
 import { FranchiseLogo } from "@/components/franchise-logo";
@@ -230,7 +231,8 @@ export default async function RecordsPage() {
       projection = await getPlayoffProjection(latestSeason.id);
       projectionSeasonYear = latestSeason.seasonYear;
     }
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected
   }
 

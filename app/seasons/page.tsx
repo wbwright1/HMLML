@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { getAllSeasons, getSeasonStandings } from "@/lib/queries/seasons";
@@ -23,7 +24,8 @@ export default async function SeasonsPage() {
 
   try {
     seasons = await getAllSeasons();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev, fall through to empty state
   }
 

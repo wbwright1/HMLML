@@ -1,4 +1,5 @@
 import { getCurrentWeekMatchups, getLatestSeason } from "@/lib/queries/matchups";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { getSeasonStandings } from "@/lib/queries/seasons";
 import { getNflState } from "@/lib/queries/nfl-state";
 import { computeIsBetweenWeeks, getNextKickoff } from "@/lib/queries/kickoff";
@@ -30,7 +31,8 @@ export default async function HomePage() {
     if (latestSeason) {
       standings = await getSeasonStandings(latestSeason.id);
     }
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB or API may not be connected in dev
   }
 

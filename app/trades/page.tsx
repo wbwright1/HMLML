@@ -1,4 +1,5 @@
 import { PageSection } from "@/components/page-section";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
 import { EmptyState } from "@/components/empty-state";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -40,7 +41,8 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
       getAllFranchises(),
       getAllSeasons(),
     ]);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

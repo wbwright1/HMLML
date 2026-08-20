@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { db } from "@/lib/db";
 import {
   matchups,
@@ -283,7 +284,8 @@ export const getLatestSeason = cache(async function getLatestSeason() {
       .limit(1);
 
     return latest ?? null;
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return null;
   }
 });
@@ -306,7 +308,8 @@ export async function getSeasonByYearSimple(year: number) {
       .limit(1);
 
     return season ?? null;
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return null;
   }
 }

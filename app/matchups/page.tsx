@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { PageSection } from "@/components/page-section";
 import { EmptyState } from "@/components/empty-state";
 import { MatchupRow } from "@/components/matchup-row";
@@ -22,7 +23,8 @@ export default async function MatchupsPage() {
 
   try {
     data = await getCurrentWeekMatchups();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

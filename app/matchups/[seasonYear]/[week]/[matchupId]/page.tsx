@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { MatchupLiveScore } from "@/components/matchup-live-score";
@@ -46,7 +47,8 @@ export default async function MatchupDetailPage({
   let season: Awaited<ReturnType<typeof getSeasonByYearSimple>> = null;
   try {
     season = await getSeasonByYearSimple(year);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected
   }
   if (!season) {

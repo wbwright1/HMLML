@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { db } from "@/lib/db";
 import { seasons, franchises, franchiseSeasons } from "@/lib/db/schema";
 import { eq, desc, asc, sql } from "drizzle-orm";
@@ -35,6 +36,7 @@ export async function getAllSeasons() {
 
     return rows;
   } catch (e) {
+    rethrowUnlessTolerable(e);
     console.error("[seasons] getAllSeasons error:", e);
     return [];
   }

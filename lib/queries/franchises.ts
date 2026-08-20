@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { db } from "@/lib/db";
 import {
   franchises,
@@ -88,7 +89,8 @@ export const getAllFranchises = cache(async function getAllFranchises() {
       totalPointsScored: Number(r.totalPointsScored ?? 0),
       championships: r.championships,
     }));
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return null;
   }
 });
@@ -207,7 +209,8 @@ export const getFranchiseBySlug = cache(async function getFranchiseBySlug(
       totalPointsScored,
       championships,
     };
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return null;
   }
 });

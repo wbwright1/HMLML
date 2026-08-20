@@ -1,4 +1,5 @@
 import { PageSection } from "@/components/page-section";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { SeasonTimelineCard } from "@/components/season-timeline-card";
 import { EmptyState } from "@/components/empty-state";
@@ -23,7 +24,8 @@ export default async function HistoryPage() {
 
   try {
     timelineData = await getSeasonTimelineData();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected
   }
 

@@ -1,4 +1,5 @@
 import { cache } from "react";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { db } from "@/lib/db";
 import {
   franchises,
@@ -538,7 +539,8 @@ export async function getHeadToHead(
     }
 
     return { wins, losses, ties, streak };
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return { wins: 0, losses: 0, ties: 0, streak: null };
   }
 }
@@ -580,7 +582,8 @@ export async function getHeadToHeadHistory(
           : null,
       isPlayoff: Boolean(g.isPlayoff),
     }));
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return [];
   }
 }
@@ -1261,7 +1264,8 @@ export const getAllFranchiseOptions = cache(async function getAllFranchiseOption
       brandingColor: r.brandingColor ?? undefined,
       avatarUrl: avatarUrls.get(r.id) ?? null,
     }));
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return [];
   }
 });

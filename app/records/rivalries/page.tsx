@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
@@ -23,7 +24,8 @@ export default async function RivalriesPage() {
 
   try {
     rivalries = await getRivalries();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected
   }
 

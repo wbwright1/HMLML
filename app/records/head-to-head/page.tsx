@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { H2HHero } from "@/components/h2h-hero";
@@ -35,7 +36,8 @@ export default async function HeadToHeadPage({
   let franchises: Awaited<ReturnType<typeof getAllFranchiseOptions>> = [];
   try {
     franchises = await getAllFranchiseOptions();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected
   }
 

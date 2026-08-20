@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { PageSection } from "@/components/page-section";
 import { MatchupRow } from "@/components/matchup-row";
@@ -41,7 +42,8 @@ export default async function WeekResultsPage({
 
   try {
     season = await getSeasonByYearSimple(year);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected
   }
 

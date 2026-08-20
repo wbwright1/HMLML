@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { db } from "@/lib/db";
@@ -62,7 +63,8 @@ export default async function DraftDetailPage({
 
   try {
     draftData = await getDraftBySeasonYear(year);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

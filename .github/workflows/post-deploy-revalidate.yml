@@ -1,0 +1,38 @@
+name: Post-deploy Revalidate
+# `next build` is deliberately tolerant of a database outage (a data problem
+# must never block a deploy), so a build that ran during one can prerender
+# empty-state HTML. Dropping the ISR cache as soon as the production deploy
+# reports success means the next request re-renders against a healthy database
+# instead of the site serving hollow pages until the next sync. See #211.
+on:
+  deployment_status:
+  workflow_dispatch:
+jobs:
+  revalidate:
+    if: github.event_name == 'workflow_dispatch' || (github.event.deployment_status.state == 'success' && github.event.deployment_status.environment == 'Production')
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Trigger revalidation
+        run: |
+          HTTP=$(curl -sS -w '%{http_code}' -o resp.json --max-time 55 \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            https://hmlml.app/api/revalidate)
+          echo "HTTP $HTTP"; cat resp.json || true
+          if [ "$HTTP" != "200" ]; then echo "Non-2xx from revalidate"; exit 1; fi
+          if [ "$(jq -r '.data.revalidated' resp.json)" != "true" ]; then echo "Revalidation did not report success"; exit 1; fi
+      - name: File issue on failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          TITLE="Post-deploy revalidation failing"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          NUMBER=$(gh issue list --search "$TITLE in:title" --state open --json number --jq '.[0].number')
+          if [ -n "$NUMBER" ]; then
+            gh issue comment "$NUMBER" --body "Post-deploy revalidation failed again: $RUN_URL"
+          else
+            gh issue create --title "$TITLE" --body "The post-deploy revalidation hook failed: $RUN_URL"
+          fi

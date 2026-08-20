@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -225,7 +226,8 @@ export default async function HallOfFamePage() {
   let ladder: GoatEntry[] = [];
   try {
     ladder = await getGoatLadder();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev.
   }
 

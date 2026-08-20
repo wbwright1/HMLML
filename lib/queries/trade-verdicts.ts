@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { hubContent } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 
@@ -39,6 +40,7 @@ export async function getTradeVerdicts(): Promise<Map<string, string>> {
       if (row.refKey && row.body) verdicts.set(row.refKey, row.body);
     }
   } catch (e) {
+    rethrowUnlessTolerable(e);
     // Benign when hub_content has not been migrated yet; other errors are surfaced.
     console.error("[trade-verdicts] getTradeVerdicts error:", e);
   }

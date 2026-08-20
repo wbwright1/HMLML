@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import {
   draftPicks,
   seasons,
@@ -208,6 +209,7 @@ export async function getDraftBySeasonYear(
 
     return { seasonYear: year, drafts };
   } catch (e) {
+    rethrowUnlessTolerable(e);
     console.error("[drafts] getDraftBySeasonYear error:", e);
     return null;
   }

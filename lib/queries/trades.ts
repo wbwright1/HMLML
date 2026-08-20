@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { transactions, franchiseSeasons, franchises, players, seasons, draftPicks } from "@/lib/db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { isVoidedPick } from "@/lib/voided-picks";
@@ -556,6 +557,7 @@ export async function getTrades({
 
     return result;
   } catch (error) {
+    rethrowUnlessTolerable(error);
     console.error("[trades] getTrades error:", error);
     return [];
   }

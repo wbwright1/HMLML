@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
@@ -56,7 +57,8 @@ export default async function SeasonDetailPage({
       getSeasonByYear(year),
       getAllSeasons(),
     ]);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 
