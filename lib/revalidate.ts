@@ -1,5 +1,5 @@
-import { revalidatePath } from "next/cache";
-import { SITE_REVALIDATE_PATH } from "@/lib/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { SITE_REVALIDATE_PATH, LEAGUE_DATA_TAG } from "@/lib/cache";
 
 /**
  * Invalidates every ISR-cached page after a sync has landed new data.
@@ -17,8 +17,15 @@ import { SITE_REVALIDATE_PATH } from "@/lib/cache";
 export function revalidateSite(source: string): void {
   try {
     revalidatePath(SITE_REVALIDATE_PATH, "layout");
+    // revalidatePath clears the full-route cache but NOT unstable_cache Data
+    // Cache entries; those need their tag. The wrapped queries serve the
+    // searchParams-driven pages, which have no route cache to clear.
+    // "max" is the cache-life profile Next 16 requires as the second argument:
+    // it covers the longest-lived entries, so the purge can never be narrower
+    // than what we actually wrote.
+    revalidateTag(LEAGUE_DATA_TAG, "max");
   } catch (e) {
     const message = e instanceof Error ? e.message : "Unknown error";
-    console.error(`[${source}] revalidatePath failed (data still synced):`, message);
+    console.error(`[${source}] revalidation failed (data still synced):`, message);
   }
 }
