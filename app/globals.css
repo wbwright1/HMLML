@@ -726,7 +726,9 @@
         font-weight: 600;
         letter-spacing: 0.14em;
         text-transform: uppercase;
-        color: var(--text-muted);
+        /* AA-safe: --text-muted (dim) is decorative-only per CLAUDE.md, and
+           these run at 8.5-12.5px. */
+        color: var(--text-tertiary);
         white-space: nowrap;
     }
     .bracket-colhead b {
@@ -808,7 +810,7 @@
     .bracket-score {
         font-size: 10.5px;
         font-variant-numeric: tabular-nums;
-        color: var(--text-muted);
+        color: var(--text-tertiary);
         flex: none;
     }
     .bracket-row[data-state="advanced"] .bracket-score {
@@ -837,12 +839,12 @@
         flex: none;
         font-size: 8px;
         letter-spacing: 0.05em;
-        color: var(--text-muted);
+        color: var(--text-tertiary);
     }
     .bracket-sub {
         font-size: 10px;
         font-style: italic;
-        color: var(--text-muted);
+        color: var(--text-tertiary);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -954,7 +956,7 @@
         .bracket-lane {
             display: grid;
             grid-template-columns: repeat(var(--bk-cols), var(--bk-col));
-            gap: 0 0;
+            gap: 10px 0;
             align-items: start;
         }
         .bracket-lane > * {

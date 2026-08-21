@@ -93,6 +93,16 @@ export function PlayoffBracketStage({
   const isToiletBowl = bracketType === "losers";
   const bowlName = getBowlName(seasonYear);
 
+  // Placement games sit under the column of the round they were played in; a
+  // round with more than one of them gets a second lane row.
+  const usedRowsByColumn = new Map<number, number>();
+  const laneSlots = stage.placementMatches.map((match) => {
+    const column = getPlacementColumn(stage, match);
+    const row = (usedRowsByColumn.get(column) ?? 0) + 1;
+    usedRowsByColumn.set(column, row);
+    return { match, column, row };
+  });
+
   return (
     <div
       data-testid={`bracket-${bracketType}`}
@@ -242,13 +252,13 @@ export function PlayoffBracketStage({
               { "--bk-cols": stage.columnCount } as CSSProperties
             }
           >
-            {stage.placementMatches.map((match) => (
+            {laneSlots.map(({ match, column, row }) => (
               <div
                 key={`placement-${match.matchNumber}`}
-                style={{
-                  gridColumn: getPlacementColumn(stage, match) + 1,
-                  gridRow: 1,
-                }}
+                // Explicit row per column occurrence: two placement games in
+                // the same round (a wider bracket side) stack under it rather
+                // than landing on top of each other.
+                style={{ gridColumn: column + 1, gridRow: row }}
               >
                 <BracketPlacementCell
                   match={match}

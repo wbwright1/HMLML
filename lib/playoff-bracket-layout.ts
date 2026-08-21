@@ -117,6 +117,52 @@ export function getAdvancingTeam(match: BracketMatchView): BracketTeam | null {
   return null;
 }
 
+/**
+ * One elbow: a stub out of the feeder's right edge, a vertical join in the
+ * gutter, and a stub into the destination's left edge. The base hairline and
+ * the gold/rust road overlay are the same three segments drawn twice, so the
+ * road can never desync from the line underneath it.
+ */
+function pushElbow(
+  connectors: BracketConnector[],
+  keyBase: string,
+  column: number,
+  childUnits: number,
+  parentUnits: number,
+  onRoad: boolean,
+): void {
+  const suffix = onRoad ? "-road" : "";
+  connectors.push(
+    {
+      key: `${keyBase}${suffix}-out`,
+      orientation: "h",
+      column,
+      fromUnits: childUnits,
+      toUnits: childUnits,
+      segment: "out",
+      onRoad,
+    },
+    {
+      key: `${keyBase}${suffix}-join`,
+      orientation: "v",
+      column,
+      fromUnits: Math.min(childUnits, parentUnits),
+      toUnits: Math.max(childUnits, parentUnits),
+      segment: "out",
+      onRoad,
+    },
+    {
+      key: `${keyBase}${suffix}-in`,
+      orientation: "h",
+      column,
+      fromUnits: parentUnits,
+      toUnits: parentUnits,
+      segment: "in",
+      onRoad,
+    },
+  );
+}
+
 /** The other side of a decided match. */
 export function getEliminatedTeam(match: BracketMatchView): BracketTeam | null {
   if (!match.decided) return null;
@@ -351,68 +397,13 @@ export function buildBracketStage(rounds: BracketRound[]): BracketStage {
 
   for (const edge of edges) {
     const { childColumn, childUnits, parentUnits, keyBase } = edge;
-    connectors.push(
-      {
-        key: `${keyBase}-out`,
-        orientation: "h",
-        column: childColumn,
-        fromUnits: childUnits,
-        toUnits: childUnits,
-        segment: "out",
-        onRoad: false,
-      },
-      {
-        key: `${keyBase}-join`,
-        orientation: "v",
-        column: childColumn,
-        fromUnits: Math.min(childUnits, parentUnits),
-        toUnits: Math.max(childUnits, parentUnits),
-        segment: "out",
-        onRoad: false,
-      },
-      {
-        key: `${keyBase}-in`,
-        orientation: "h",
-        column: childColumn,
-        fromUnits: parentUnits,
-        toUnits: parentUnits,
-        segment: "in",
-        onRoad: false,
-      },
-    );
+    pushElbow(connectors, keyBase, childColumn, childUnits, parentUnits, false);
 
     // The road: only the exact path the champion (or sinker) travelled, and
-    // only ever from the stored advancement, never from the scores.
+    // only ever from the stored advancement, never from the scores. It is the
+    // same elbow drawn again in gold/rust, so it cannot drift off the hairline.
     if (championRosterId != null && edge.outRosterId === championRosterId) {
-      connectors.push(
-        {
-          key: `${keyBase}-road-out`,
-          orientation: "h",
-          column: childColumn,
-          fromUnits: childUnits,
-          toUnits: childUnits,
-          segment: "out",
-          onRoad: true,
-        },
-        {
-          key: `${keyBase}-road-join`,
-          orientation: "v",
-          column: childColumn,
-          fromUnits: Math.min(childUnits, parentUnits),
-          toUnits: Math.max(childUnits, parentUnits),
-          segment: "out",
-          onRoad: true,
-        },
-        {
-          key: `${keyBase}-road-in`,
-          orientation: "h",
-          column: childColumn,
-          fromUnits: parentUnits,
-          toUnits: parentUnits,
-          segment: "in",
-          onRoad: true,
-        },
-      );
+      pushElbow(connectors, keyBase, childColumn, childUnits, parentUnits, true);
     }
   }
 
@@ -423,26 +414,17 @@ export function buildBracketStage(rounds: BracketRound[]): BracketStage {
   const hasCapsule = Boolean(finalMatch?.decided && champion && finalCell);
 
   if (finalCell && hasCapsule) {
-    connectors.push(
-      {
-        key: `${prefix}-capsule`,
+    for (const onRoad of [false, true]) {
+      connectors.push({
+        key: `${prefix}-capsule${onRoad ? "-road" : ""}`,
         orientation: "h",
         column: finalCell.column,
         fromUnits: finalCell.topUnits,
         toUnits: finalCell.topUnits,
         segment: "capsule",
-        onRoad: false,
-      },
-      {
-        key: `${prefix}-capsule-road`,
-        orientation: "h",
-        column: finalCell.column,
-        fromUnits: finalCell.topUnits,
-        toUnits: finalCell.topUnits,
-        segment: "capsule",
-        onRoad: true,
-      },
-    );
+        onRoad,
+      });
+    }
   }
 
   return {
