@@ -8,7 +8,7 @@ import { ChampionshipStars } from "@/components/championship-stars";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { EmptyState } from "@/components/empty-state";
-import { PlayoffBracketRounds } from "@/components/playoff-bracket-rounds";
+import { PlayoffBracketStage } from "@/components/playoff-bracket-stage";
 import { getSeasonByYearSimple } from "@/lib/queries/matchups";
 import {
   getSeasonBracket,
@@ -17,6 +17,7 @@ import {
   type ToiletBowlChampion,
 } from "@/lib/queries/playoff-bracket";
 import { SNARKY_LABELS } from "@/lib/content";
+import { getBowlName } from "@/lib/bowl-names";
 import { TOILET_BOWL_COPY } from "@/lib/playoff-labels";
 
 // ISR: rendered once, then served from cache until a successful sync calls
@@ -69,9 +70,13 @@ export default async function PlayoffBracketPage({
   // or the Toilet Bowl sting, which come from their own queries.
   const showEmptyState = !hasBracket && !bracket.unavailable;
 
+  // Legacy seasons predate the HMLML Bowl naming, so they keep the plain title.
+  const bowlName = getBowlName(year);
+  const pageTitle = bowlName ? `The road to ${bowlName}.` : "Playoff Results.";
+
   return (
     <>
-      <PageSection label={`${year} Season`} title="Playoff Results.">
+      <PageSection label={`${year} Season`} title={pageTitle}>
         <div className="flex flex-wrap items-center gap-4">
           <BackLink href={`/seasons/${year}`} label={`${year} Season`} />
         </div>
@@ -123,10 +128,12 @@ export default async function PlayoffBracketPage({
             </div>
           )}
 
-          {/* Winners bracket */}
+          {/* Winners bracket. The reveal wraps the header only: an animated
+              transform host around an overflow-x scroller has broken scrolling
+              on this site before. */}
           {bracket.winners.length > 0 && (
-            <ScrollReveal delay={80}>
-              <div className="space-y-4">
+            <div className="space-y-4">
+              <ScrollReveal delay={80}>
                 <div>
                   <p className="text-kicker text-accent-gold mb-1.5">
                     The Bracket
@@ -135,36 +142,40 @@ export default async function PlayoffBracketPage({
                     Chasing the Ring
                   </h2>
                 </div>
-                <PlayoffBracketRounds
-                  rounds={bracket.winners}
-                  bracketType="winners"
-                  seasonYear={year}
-                />
-              </div>
-            </ScrollReveal>
+              </ScrollReveal>
+              <PlayoffBracketStage
+                rounds={bracket.winners}
+                bracketType="winners"
+                seasonYear={year}
+                totalRosters={season.totalRosters}
+              />
+            </div>
           )}
 
           {/* Toilet Bowl */}
           {bracket.losers.length > 0 && (
-            <ScrollReveal delay={160}>
-              <div className="space-y-4">
-                <div className="flex items-center gap-3">
-                  <div className="h-px flex-1 bg-divider" />
-                  <h2 className="text-kicker whitespace-nowrap">
-                    {TOILET_BOWL_COPY.heading}
-                  </h2>
-                  <div className="h-px flex-1 bg-divider" />
+            <div className="space-y-4">
+              <ScrollReveal delay={160}>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-px flex-1 bg-divider" />
+                    <h2 className="text-kicker whitespace-nowrap">
+                      {TOILET_BOWL_COPY.heading}
+                    </h2>
+                    <div className="h-px flex-1 bg-divider" />
+                  </div>
+                  <p className="text-body-sm text-text-secondary max-w-prose">
+                    {TOILET_BOWL_COPY.explainer}
+                  </p>
                 </div>
-                <p className="text-body-sm text-text-secondary max-w-prose">
-                  {TOILET_BOWL_COPY.explainer}
-                </p>
-                <PlayoffBracketRounds
-                  rounds={bracket.losers}
-                  bracketType="losers"
-                  seasonYear={year}
-                />
-              </div>
-            </ScrollReveal>
+              </ScrollReveal>
+              <PlayoffBracketStage
+                rounds={bracket.losers}
+                bracketType="losers"
+                seasonYear={year}
+                totalRosters={season.totalRosters}
+              />
+            </div>
           )}
 
         </section>
