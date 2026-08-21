@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
-import { LiveIndicator } from "@/components/live-indicator";
+import { MatchupLiveScore } from "@/components/matchup-live-score";
 import { MatchupLineups } from "@/components/matchup-lineups";
 import {
   getMatchupsByWeek,
@@ -15,7 +16,9 @@ import { deriveLiveAside } from "@/lib/live-aside";
 import type { MatchupTeam, PairedMatchup } from "@/lib/queries/matchups";
 import type { MatchupLineups as MatchupLineupsData } from "@/lib/queries/player-points";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 interface MatchupDetailPageProps {
   params: Promise<{ seasonYear: string; week: string; matchupId: string }>;
@@ -44,7 +47,8 @@ export default async function MatchupDetailPage({
   let season: Awaited<ReturnType<typeof getSeasonByYearSimple>> = null;
   try {
     season = await getSeasonByYearSimple(year);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected
   }
   if (!season) {
@@ -156,20 +160,21 @@ export default async function MatchupDetailPage({
                 Rivalry Week
               </span>
             )}
-            <p className="text-stat text-4xl md:text-5xl whitespace-nowrap">
-              <span className={isUpcoming ? "text-text-muted" : homeWins ? "text-text-primary" : "text-text-tertiary"}>
-                {isUpcoming ? "--" : homeTeam.points.toFixed(1)}
-              </span>
-              <span className="text-text-muted mx-2">&middot;</span>
-              <span className={isUpcoming ? "text-text-muted" : awayWins ? "text-text-primary" : "text-text-tertiary"}>
-                {isUpcoming ? "--" : awayTeam.points.toFixed(1)}
-              </span>
-            </p>
-            {isLive ? (
-              <LiveIndicator />
-            ) : (
-              <span className="text-kicker">{isComplete ? "Final" : "Upcoming"}</span>
-            )}
+            {/* Score + live chrome are a client island so an in-progress game
+                stays current on this ISR-cached page. Server values seed it, so
+                first paint (and no-JS) matches what the cache holds. */}
+            <MatchupLiveScore
+              seasonYear={year}
+              week={week}
+              matchupId={matchupId}
+              initialHomePoints={homeTeam.points}
+              initialAwayPoints={awayTeam.points}
+              initialStatus={
+                isComplete ? "complete" : isLive ? "in_progress" : "scheduled"
+              }
+              homeIsWinner={homeTeam.isWinner === true}
+              awayIsWinner={awayTeam.isWinner === true}
+            />
             {aside && (
               <span className="font-serif italic text-body-sm text-accent-warm">
                 {aside}

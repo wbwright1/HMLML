@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { db } from "@/lib/db";
@@ -22,7 +23,10 @@ import {
   type PositionCounts,
 } from "@/lib/draft-board";
 
-export const dynamic = "force-dynamic";
+// Dynamically rendered: ?round= filters the server-rendered board, and awaiting searchParams opts a route out
+// of static rendering, so a `revalidate` export here would be inert. Caching
+// these needs unstable_cache around the queries (tracked as follow-up work;
+// mind that it serializes Date fields to strings behind unchanged types).
 
 interface DraftDetailPageProps {
   params: Promise<{ seasonYear: string }>;
@@ -59,7 +63,8 @@ export default async function DraftDetailPage({
 
   try {
     draftData = await getDraftBySeasonYear(year);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

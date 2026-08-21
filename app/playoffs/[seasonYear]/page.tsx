@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
@@ -18,7 +19,9 @@ import {
 import { SNARKY_LABELS } from "@/lib/content";
 import { TOILET_BOWL_COPY } from "@/lib/playoff-labels";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 interface PlayoffBracketPageProps {
   params: Promise<{ seasonYear: string }>;
@@ -47,7 +50,8 @@ export default async function PlayoffBracketPage({
   let season: Awaited<ReturnType<typeof getSeasonByYearSimple>> = null;
   try {
     season = await getSeasonByYearSimple(year);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     /* DB may not be connected */
   }
   if (!season) notFound();

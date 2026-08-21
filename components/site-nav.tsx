@@ -12,8 +12,6 @@ import { Topbar } from "@/components/nav/topbar";
 import { MobileHeader } from "@/components/nav/mobile-header";
 import { MobileDock } from "@/components/nav/mobile-dock";
 import { ScrollChrome } from "@/components/nav/scroll-chrome";
-import { getSessionMember } from "@/lib/auth";
-import type { NavCrestMember } from "@/components/nav/nav-crest";
 
 /**
  * Resolves the seasonal / live LivePill state server-side (no client polling in
@@ -104,42 +102,23 @@ async function resolveLivePill(): Promise<LivePillProps> {
   }
 }
 
-/**
- * Resolves the current session to the minimal crest shape, degrading to null on
- * any failure (e.g. the members table not existing yet before migration 0008)
- * so the nav always renders.
- */
-async function resolveNavMember(): Promise<NavCrestMember | null> {
-  try {
-    const member = await getSessionMember();
-    if (!member) return null;
-    return {
-      franchiseSlug: member.franchiseSlug,
-      franchiseName: member.franchiseName,
-      franchiseAvatarUrl: member.franchiseAvatarUrl,
-      displayName: member.displayName,
-    };
-  } catch {
-    return null;
-  }
-}
-
 export async function SiteNav() {
-  const [livePill, member] = await Promise.all([
-    resolveLivePill(),
-    resolveNavMember(),
-  ]);
+  // NOTE: everything resolved here must stay free of cookies()/headers().
+  // A dynamic API in the root layout opts every route on the site out of static
+  // rendering, which silently defeats ISR sitewide. The session-dependent crest
+  // is a client island (components/nav/nav-crest-island.tsx) for that reason.
+  const livePill = await resolveLivePill();
 
   return (
     <>
       {/* display:contents — landmark without a box, so the sticky bars resolve
           their sticky context against <body>, not a height-limited wrapper. */}
       <header className="contents">
-        <Topbar livePill={livePill} member={member} />
+        <Topbar livePill={livePill} />
         {/* The mobile header stays pinned; only the bottom dock hides on
             scroll (per league feedback, the header is wanted at all times). */}
         <div className="sticky top-0 z-40 backdrop-blur-md lg:hidden">
-          <MobileHeader livePill={livePill} member={member} />
+          <MobileHeader livePill={livePill} />
         </div>
       </header>
       <ScrollChrome className="fixed inset-x-0 bottom-0 z-40 lg:hidden chrome-bottom">

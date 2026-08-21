@@ -5,31 +5,7 @@ import { eq, and, desc, ne } from "drizzle-orm";
 import { getLeagueMatchups, getNFLState } from "@/lib/sleeper";
 import { getLatestSuccessfulSync } from "@/lib/queries/sync-log";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
-
-/**
- * Determines if it's currently a game window.
- * NFL games typically occur:
- * - Thursday 8pm ET
- * - Sunday 1pm-11pm ET
- * - Monday 8pm ET
- * We use a broad window approach.
- */
-function isCurrentlyGameWindow(): boolean {
-  // Use Intl-based ET calculation so DST is handled correctly on any server
-  const etString = new Date().toLocaleString("en-US", {
-    timeZone: "America/New_York",
-  });
-  const etDate = new Date(etString);
-  const etHour = etDate.getHours();
-  const day = etDate.getDay();
-
-  if (day === 4 && etHour >= 19) return true;
-  if (day === 0 && etHour >= 11) return true;
-  if (day === 1 && etHour >= 19) return true;
-  if (day === 6 && etHour >= 13) return true;
-
-  return false;
-}
+import { isPlausibleGameWindow } from "@/lib/game-window";
 
 const NFL_STATE_CACHE_MS = 25_000; // Cache NFL state fetches in-memory
 
@@ -188,7 +164,7 @@ export async function GET() {
     // phase. The cheap day/hour check short-circuits first, so we only fetch
     // NFL state (cached in-memory) when a poll actually lands in a window.
     const gameWindow =
-      isCurrentlyGameWindow() && (await isRegularOrPostSeason());
+      isPlausibleGameWindow() && (await isRegularOrPostSeason());
 
     // During game windows, refresh scores from Sleeper if stale. Use the
     // league id stored on the latest season row, not the env var: the sync
@@ -238,8 +214,18 @@ export async function GET() {
       const [home, away] = [...pair].sort((a, b) =>
         a.rosterId.localeCompare(b.rosterId)
       );
+      // Pair status: complete only when BOTH sides are final; live as soon as
+      // either side is in progress. Consumers (the nav live pill, the matchup
+      // detail poller) key their live chrome off this.
+      const pairStatus =
+        home.status === "complete" && away.status === "complete"
+          ? "complete"
+          : home.status === "in_progress" || away.status === "in_progress"
+            ? "in_progress"
+            : "scheduled";
       scores.push({
         matchupId,
+        status: pairStatus,
         homeTeamId: home.franchiseId,
         homeTeamName: home.franchiseName,
         homeScore: home.points ?? 0,
@@ -253,6 +239,7 @@ export async function GET() {
       data: {
         scores,
         isGameWindow: gameWindow,
+        liveCount: scores.filter((s) => s.status === "in_progress").length,
         week: currentWeek,
         seasonYear: latestSeason.seasonYear,
       },

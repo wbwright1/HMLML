@@ -20,12 +20,26 @@ export function getDbDriver(): DbDriver {
 // neon-http driver's HTTPS endpoint. Needed on machines where outbound 443 to
 // the Neon endpoint is blocked (local dev/E2E); Vercel keeps the default.
 // The two drivers share the Drizzle query API, so the cast is safe for our usage.
+/** True for a loopback Postgres host (local dev / E2E). */
+function isLocalPostgres(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return false;
+  }
+}
+
 function createDb(): NeonHttpDatabase<typeof schema> {
   const url = process.env.POSTGRES_URL!;
   if (process.env.POSTGRES_DRIVER === "pg") {
     const pool = new Pool({
       connectionString: url.replace("&channel_binding=require", ""),
-      ssl: { rejectUnauthorized: true },
+      // Local Postgres does not serve SSL, and POSTGRES_DRIVER=pg exists
+      // precisely for local dev/E2E; requiring it there made the documented
+      // local path fail with "The server does not support SSL connections".
+      // Anything non-local still requires a verified certificate.
+      ssl: isLocalPostgres(url) ? false : { rejectUnauthorized: true },
     });
     return drizzlePg(pool, { schema }) as unknown as NeonHttpDatabase<typeof schema>;
   }

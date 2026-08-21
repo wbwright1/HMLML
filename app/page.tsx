@@ -1,4 +1,5 @@
 import { getCurrentWeekMatchups, getLatestSeason } from "@/lib/queries/matchups";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { getSeasonStandings } from "@/lib/queries/seasons";
 import { getNflState } from "@/lib/queries/nfl-state";
 import { computeIsBetweenWeeks, getNextKickoff } from "@/lib/queries/kickoff";
@@ -9,7 +10,9 @@ import { RegularSeasonHub } from "@/components/hub/regular-season-hub";
 import { PlayoffsHub } from "@/components/hub/playoffs-hub";
 import { OffseasonHub } from "@/components/hub/offseason-hub";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export default async function HomePage() {
   // Fetch NFL state and core data in parallel
@@ -28,7 +31,8 @@ export default async function HomePage() {
     if (latestSeason) {
       standings = await getSeasonStandings(latestSeason.id);
     }
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB or API may not be connected in dev
   }
 

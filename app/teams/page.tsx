@@ -1,11 +1,14 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { EmptyState } from "@/components/empty-state";
 import { getAllFranchises } from "@/lib/queries/franchises";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export const metadata = {
   title: "Franchises | Harambe Memorial League Memorial League",
@@ -18,7 +21,8 @@ export default async function TeamsPage() {
 
   try {
     franchises = await getAllFranchises();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

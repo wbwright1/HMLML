@@ -1,4 +1,5 @@
 import { PageSection } from "@/components/page-section";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
 import { EmptyState } from "@/components/empty-state";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -13,6 +14,11 @@ import { getTradeGrades } from "@/lib/queries/trade-grades";
 import { getTradeValues } from "@/lib/queries/trade-values";
 import { getAllFranchises } from "@/lib/queries/franchises";
 import { getAllSeasons } from "@/lib/queries/seasons";
+
+// Dynamically rendered: ?season= and ?team= narrow the server-rendered trade list, and awaiting searchParams opts a route out
+// of static rendering, so a `revalidate` export here would be inert. Caching
+// these needs unstable_cache around the queries (tracked as follow-up work;
+// mind that it serializes Date fields to strings behind unchanged types).
 
 export const metadata = {
   title: "Trade History | Harambe Memorial League Memorial League",
@@ -35,7 +41,8 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
       getAllFranchises(),
       getAllSeasons(),
     ]);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

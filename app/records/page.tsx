@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { PageSection } from "@/components/page-section";
 import { SectionHeader } from "@/components/section-header";
 import { FranchiseLogo } from "@/components/franchise-logo";
@@ -25,7 +26,9 @@ import { RecordsSeasonView } from "@/app/records/records-season-view";
 import type { LeaderboardEntry } from "@/lib/queries/records";
 import type { PlayoffProjection } from "@/lib/queries/divisions";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export const metadata = {
   title: "Records & Rankings | Harambe Memorial League Memorial League",
@@ -228,7 +231,8 @@ export default async function RecordsPage() {
       projection = await getPlayoffProjection(latestSeason.id);
       projectionSeasonYear = latestSeason.seasonYear;
     }
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected
   }
 

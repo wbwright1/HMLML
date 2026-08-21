@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -11,7 +12,9 @@ import { getAllToiletBowlChampions } from "@/lib/queries/playoff-bracket";
 import { TOILET_BOWL_COPY } from "@/lib/playoff-labels";
 import { SNARKY_LABELS } from "@/lib/content";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export const metadata = {
   title: "The Hall of Fame & Shame | Harambe Memorial League Memorial League",
@@ -223,7 +226,8 @@ export default async function HallOfFamePage() {
   let ladder: GoatEntry[] = [];
   try {
     ladder = await getGoatLadder();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev.
   }
 

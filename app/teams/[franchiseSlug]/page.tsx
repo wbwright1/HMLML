@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
@@ -34,7 +35,9 @@ function ordinal(n: number): string {
   return `${n}${s[(v - 20) % 10] ?? s[v] ?? s[0]}`;
 }
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 interface FranchiseDetailPageProps {
   params: Promise<{ franchiseSlug: string }>;
@@ -46,7 +49,8 @@ export async function generateMetadata({ params }: FranchiseDetailPageProps) {
   let franchise: Awaited<ReturnType<typeof getFranchiseBySlug>> = null;
   try {
     franchise = await getFranchiseBySlug(franchiseSlug);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 
@@ -69,7 +73,8 @@ export default async function FranchiseDetailPage({
 
   try {
     franchise = await getFranchiseBySlug(franchiseSlug);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

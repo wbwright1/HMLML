@@ -1,7 +1,15 @@
 "use client";
 
-import { useState, useMemo, useCallback, type KeyboardEvent } from "react";
+import {
+  useState,
+  useMemo,
+  useCallback,
+  useEffect,
+  Suspense,
+  type KeyboardEvent,
+} from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 
 import { Search, ChevronUp, ChevronDown, ArrowUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
@@ -284,7 +292,6 @@ interface PlayerTableProps {
   projLeads?: boolean;
   /** Current NFL week (for the in-season WK column header); null outside the in-season segment. */
   currentWeek?: number | null;
-  initialQuery?: string;
   /**
    * Whether to render the merged in-season "WK" column: false offseason or
    * before the current week's data has synced. Never true when projLeads.
@@ -303,12 +310,11 @@ export function PlayerTable({
   projSeason = null,
   projLeads = false,
   currentWeek = null,
-  initialQuery = "",
   showWkColumn = false,
   showTrdColumn = false,
   awardsByPlayerId = {},
 }: PlayerTableProps) {
-  const [search, setSearch] = useState(initialQuery);
+  const [search, setSearch] = useState("");
   const [posFilter, setPosFilter] = useState<PositionFilter>("ALL");
   const [rosterFilter, setRosterFilter] = useState<RosterFilter>("FA");
   // Headline column and default sort:
@@ -373,6 +379,15 @@ export function PlayerTable({
   const ptsLabel = statsSeason ? `${statsSeason} Pts` : "Pts";
 
   return (
+    <>
+      {/* ?q= seeding lives in a zero-UI child so that useSearchParams, which
+          forces client-side rendering for its whole Suspense boundary, cannot
+          pull the player table out of the statically rendered HTML. The
+          boundary below renders nothing, so there is no skeleton to show and
+          the full table is present on first paint. */}
+      <Suspense fallback={null}>
+        <SearchQuerySeed onSeed={setSearch} />
+      </Suspense>
     <div className="mt-8 space-y-6">
       {/* Filter row: position pills + search + roster select */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -704,6 +719,23 @@ export function PlayerTable({
           description={search ? `No players match "${search}". Check the spelling or try a different name.` : "No players match your filters."}
         />
       )}
-    </div>
+      </div>
+    </>
   );
+}
+
+/**
+ * Reads ?q= and hands it to the table's search state. Rendering nothing is the
+ * point: useSearchParams opts its Suspense boundary out of static rendering, so
+ * keeping it in a component with no output confines that cost to nothing.
+ */
+function SearchQuerySeed({ onSeed }: { onSeed: (value: string) => void }) {
+  const searchParams = useSearchParams();
+  const q = searchParams.get("q") ?? "";
+
+  useEffect(() => {
+    if (q) onSeed(q);
+  }, [q, onSeed]);
+
+  return null;
 }

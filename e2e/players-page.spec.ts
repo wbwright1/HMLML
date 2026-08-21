@@ -220,15 +220,17 @@ test.describe("Players page", () => {
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
 
-    // First, discover a real player name to deep-link with.
+    // First, discover a real player name to deep-link with. The table is
+    // server-rendered into the static shell, so wait for it rather than
+    // returning early on a count() that has not settled: the early return
+    // made the whole deep-link assertion below vacuous.
     await page.goto("/players");
     const rows = page.locator("table tbody tr");
-    const count = await rows.count();
-    if (count === 0) return;
+    await expect(rows.first()).toBeVisible();
 
     const firstName = await rows.first().locator("p").first().textContent();
-    if (!firstName) return;
-    const query = firstName.trim().split(/\s+/)[0];
+    expect(firstName, "expected a player name in the first row").toBeTruthy();
+    const query = firstName!.trim().split(/\s+/)[0];
 
     await page.goto(`/players?q=${encodeURIComponent(query)}`);
 
@@ -274,7 +276,7 @@ test.describe("Players page", () => {
       await page.goto("/players");
 
       const rows = page.locator("table tbody tr");
-      if ((await rows.count()) === 0) return;
+      await expect(rows.first()).toBeVisible();
 
       const ptsHeader = page.locator("th", { hasText: "PTS" });
       await expect(ptsHeader).toBeVisible();
@@ -303,7 +305,7 @@ test.describe("Players page", () => {
       await page.goto("/players");
 
       const rows = page.locator("table tbody tr");
-      if ((await rows.count()) === 0) return;
+      await expect(rows.first()).toBeVisible();
 
       const scrollContainer = page.locator("div.overflow-x-auto");
 
@@ -331,7 +333,7 @@ test.describe("Players page", () => {
       await page.goto("/players");
 
       const rows = page.locator("table tbody tr");
-      if ((await rows.count()) === 0) return;
+      await expect(rows.first()).toBeVisible();
 
       const firstCell = rows.first().locator("td").first();
       const position = await firstCell.evaluate(
@@ -350,11 +352,12 @@ test.describe("Players page", () => {
       await page.goto("/players");
 
       const rows = page.locator("table tbody tr");
-      if ((await rows.count()) === 0) return;
+      await expect(rows.first()).toBeVisible();
 
       // The first (sticky Player) cell is capped at max-w-[168px] on mobile so
       // the headshot + truncated name can't eat the whole viewport.
       const firstCell = rows.first().locator("td").first();
+      await expect(firstCell).toBeVisible();
       const width = await firstCell.evaluate(
         (el) => el.getBoundingClientRect().width
       );

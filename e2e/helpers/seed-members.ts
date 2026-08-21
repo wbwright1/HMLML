@@ -1,4 +1,4 @@
-import { neon } from "@neondatabase/serverless";
+import { getSql } from "./sql";
 import { hashClaimCode } from "../../lib/auth-crypto";
 
 // Member-identity e2e fixture. Each spec file creates its OWN scope
@@ -28,10 +28,6 @@ function scopedCode(scope: string, role: string): string {
   }
   const s = chars.join("");
   return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`;
-}
-
-function getSql() {
-  return neon(process.env.POSTGRES_URL!);
 }
 
 /** True if the members table exists in the connected DB (migration 0008 applied

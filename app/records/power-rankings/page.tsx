@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
@@ -12,7 +13,9 @@ import {
   type PreseasonPowerEntry,
 } from "@/lib/queries/preseason-power";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export const metadata = {
   title: "Power Rankings | Harambe Memorial League Memorial League",
@@ -476,7 +479,8 @@ export default async function PowerRankingsPage() {
 
   try {
     view = await getPowerRankingsView();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected
   }
 

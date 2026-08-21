@@ -1,4 +1,6 @@
 import { db } from "@/lib/db";
+import { cachedQuery } from "@/lib/cache";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import {
   draftPicks,
   seasons,
@@ -116,7 +118,7 @@ export async function getDraftsByYear(): Promise<DraftSummary[]> {
 // getDraftBySeasonYear — full draft with all picks for a season
 // ---------------------------------------------------------------------------
 
-export async function getDraftBySeasonYear(
+async function getDraftBySeasonYearUncached(
   year: number
 ): Promise<{
   seasonYear: number;
@@ -208,6 +210,7 @@ export async function getDraftBySeasonYear(
 
     return { seasonYear: year, drafts };
   } catch (e) {
+    rethrowUnlessTolerable(e);
     console.error("[drafts] getDraftBySeasonYear error:", e);
     return null;
   }
@@ -313,3 +316,6 @@ export async function getFranchiseDraftHistory(
     return [];
   }
 }
+
+/** Cached wrapper (#209): see lib/cache.ts. Cleared by revalidateSite(). */
+export const getDraftBySeasonYear = cachedQuery(["draft-by-season-year"], getDraftBySeasonYearUncached);

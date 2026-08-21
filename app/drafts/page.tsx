@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { db } from "@/lib/db";
 import { seasons } from "@/lib/db/schema";
 import { desc } from "drizzle-orm";
@@ -8,7 +9,9 @@ import { ScrollReveal } from "@/components/scroll-reveal";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { getDraftsByYear } from "@/lib/queries/drafts";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export const metadata = {
   title: "Drafts | Harambe Memorial League Memorial League",
@@ -36,7 +39,8 @@ export default async function DraftsPage() {
         upcomingSeasonYear = latestSeason.seasonYear;
       }
     }
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

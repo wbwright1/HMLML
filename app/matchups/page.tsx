@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { PageSection } from "@/components/page-section";
 import { EmptyState } from "@/components/empty-state";
 import { MatchupRow } from "@/components/matchup-row";
@@ -7,7 +8,9 @@ import { ScrollReveal } from "@/components/scroll-reveal";
 import { ScorePoller } from "./score-poller";
 import { getCurrentWeekMatchups } from "@/lib/queries/matchups";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export const metadata = {
   title: "Matchups | Harambe Memorial League Memorial League",
@@ -20,7 +23,8 @@ export default async function MatchupsPage() {
 
   try {
     data = await getCurrentWeekMatchups();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

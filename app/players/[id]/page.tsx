@@ -1,8 +1,12 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { PlayerProfile } from "@/components/player-profile/player-profile";
 import { getPlayerById } from "@/lib/queries/players";
 
-export const dynamic = "force-dynamic";
+// Dynamically rendered: ?season= drives the value chart query, and awaiting searchParams opts a route out
+// of static rendering, so a `revalidate` export here would be inert. Caching
+// these needs unstable_cache around the queries (tracked as follow-up work;
+// mind that it serializes Date fields to strings behind unchanged types).
 
 interface PlayerProfilePageProps {
   params: Promise<{ id: string }>;
@@ -15,7 +19,8 @@ export async function generateMetadata({ params }: PlayerProfilePageProps) {
   let player: Awaited<ReturnType<typeof getPlayerById>> = null;
   try {
     player = await getPlayerById(id);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

@@ -1,4 +1,6 @@
 import { cache } from "react";
+import { cachedQuery } from "@/lib/cache";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { db } from "@/lib/db";
 import {
   franchises,
@@ -453,7 +455,7 @@ export async function getCareerStats(
 // 4.4 — Head-to-Head
 // ---------------------------------------------------------------------------
 
-export async function getHeadToHead(
+async function getHeadToHeadUncached(
   franchiseIdA: string,
   franchiseIdB: string
 ): Promise<HeadToHeadRecord> {
@@ -538,12 +540,13 @@ export async function getHeadToHead(
     }
 
     return { wins, losses, ties, streak };
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return { wins: 0, losses: 0, ties: 0, streak: null };
   }
 }
 
-export async function getHeadToHeadHistory(
+async function getHeadToHeadHistoryUncached(
   franchiseIdA: string,
   franchiseIdB: string
 ): Promise<HeadToHeadGame[]> {
@@ -580,7 +583,8 @@ export async function getHeadToHeadHistory(
           : null,
       isPlayoff: Boolean(g.isPlayoff),
     }));
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return [];
   }
 }
@@ -1231,7 +1235,7 @@ export async function getTrophyCase(): Promise<TrophyEntry[]> {
 // Helpers — Get all franchise options (for selectors)
 // ---------------------------------------------------------------------------
 
-export const getAllFranchiseOptions = cache(async function getAllFranchiseOptions(): Promise<
+const getAllFranchiseOptionsUncached = cache(async function getAllFranchiseOptions(): Promise<
   {
     id: string;
     slug: string;
@@ -1261,7 +1265,8 @@ export const getAllFranchiseOptions = cache(async function getAllFranchiseOption
       brandingColor: r.brandingColor ?? undefined,
       avatarUrl: avatarUrls.get(r.id) ?? null,
     }));
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return [];
   }
 });
@@ -1282,3 +1287,12 @@ export async function getSeasonYears(): Promise<number[]> {
     return [];
   }
 }
+
+/** Cached wrapper (#209): see lib/cache.ts. Cleared by revalidateSite(). */
+export const getAllFranchiseOptions = cachedQuery(["franchise-options"], getAllFranchiseOptionsUncached);
+
+/** Cached wrapper (#209): see lib/cache.ts. Cleared by revalidateSite(). */
+export const getHeadToHead = cachedQuery(["head-to-head"], getHeadToHeadUncached);
+
+/** Cached wrapper (#209): see lib/cache.ts. Cleared by revalidateSite(). */
+export const getHeadToHeadHistory = cachedQuery(["head-to-head-history"], getHeadToHeadHistoryUncached);

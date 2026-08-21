@@ -11,7 +11,9 @@ import {
 import type { TrophyEntry } from "@/lib/queries/records";
 import type { AwardsHonorRoll } from "@/lib/queries/awards";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export const metadata = {
   title: "Trophy Case | Harambe Memorial League Memorial League",

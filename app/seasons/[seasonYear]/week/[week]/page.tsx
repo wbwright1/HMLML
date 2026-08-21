@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { PageSection } from "@/components/page-section";
 import { MatchupRow } from "@/components/matchup-row";
@@ -10,7 +11,9 @@ import {
   getSeasonByYearSimple,
 } from "@/lib/queries/matchups";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 interface WeekResultsPageProps {
   params: Promise<{ seasonYear: string; week: string }>;
@@ -39,7 +42,8 @@ export default async function WeekResultsPage({
 
   try {
     season = await getSeasonByYearSimple(year);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected
   }
 

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
@@ -22,7 +23,9 @@ import { SNARKY_LABELS } from "@/lib/content";
 import { getMaxWeekForSeason } from "@/lib/queries/matchups";
 import { SeasonDetailNav } from "./season-detail-nav";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 interface SeasonDetailPageProps {
   params: Promise<{ seasonYear: string }>;
@@ -54,7 +57,8 @@ export default async function SeasonDetailPage({
       getSeasonByYear(year),
       getAllSeasons(),
     ]);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
@@ -12,7 +13,9 @@ import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getFranchiseDraftHistory, type DraftPickWithFranchise } from "@/lib/queries/drafts";
 import { EmptyState } from "@/components/empty-state";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 interface FranchiseDraftsPageProps {
   params: Promise<{ franchiseSlug: string }>;
@@ -24,7 +27,8 @@ export async function generateMetadata({ params }: FranchiseDraftsPageProps) {
   let franchise: Awaited<ReturnType<typeof getFranchiseBySlug>> = null;
   try {
     franchise = await getFranchiseBySlug(franchiseSlug);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 
@@ -47,7 +51,8 @@ export default async function FranchiseDraftsPage({
 
   try {
     franchise = await getFranchiseBySlug(franchiseSlug);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 
@@ -59,7 +64,8 @@ export default async function FranchiseDraftsPage({
 
   try {
     draftHistory = await getFranchiseDraftHistory(franchise.id);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // Draft data may not be available
   }
 

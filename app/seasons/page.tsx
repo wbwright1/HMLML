@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { getAllSeasons, getSeasonStandings } from "@/lib/queries/seasons";
@@ -8,7 +9,9 @@ import { SeasonNavigator } from "./season-navigator";
 import { getNflState } from "@/lib/queries/nfl-state";
 import { resolveHubSeasonType, isPreWeekOne, seasonTypeBadgeLabel } from "@/lib/hub/season-state";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 export const metadata = {
   title: "League History | Harambe Memorial League Memorial League",
@@ -21,7 +24,8 @@ export default async function SeasonsPage() {
 
   try {
     seasons = await getAllSeasons();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev, fall through to empty state
   }
 

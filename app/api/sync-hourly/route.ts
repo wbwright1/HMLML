@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { runHourlySync } from "@/lib/sync/hourly";
+import { revalidateSite } from "@/lib/revalidate";
 
 export const maxDuration = 60;
 
@@ -25,6 +26,11 @@ export async function GET(request: NextRequest) {
         { error: "All hourly sync steps failed", summary },
         { status: 500 }
       );
+    }
+
+    // A throttled offseason run wrote nothing, so leave the cache alone.
+    if (!summary.skipped) {
+      revalidateSite("sync-hourly");
     }
 
     return NextResponse.json({

@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseLogo } from "@/components/franchise-logo";
@@ -20,7 +21,9 @@ import { getCurrentWeekPlayerStatusByPlayer } from "@/lib/queries/player-points"
 import { decideWeekDisplay } from "@/lib/game-status";
 import type { SeasonSegment } from "@/lib/season-segment";
 
-export const dynamic = "force-dynamic";
+// ISR: rendered once, then served from cache until a successful sync calls
+// revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+export const revalidate = 3600;
 
 interface RosterPageProps {
   params: Promise<{ franchiseSlug: string }>;
@@ -32,7 +35,8 @@ export async function generateMetadata({ params }: RosterPageProps) {
   let franchise: Awaited<ReturnType<typeof getFranchiseBySlug>> = null;
   try {
     franchise = await getFranchiseBySlug(franchiseSlug);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 
@@ -355,7 +359,8 @@ export default async function RosterPage({ params }: RosterPageProps) {
 
   try {
     franchise = await getFranchiseBySlug(franchiseSlug);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { revalidateSite } from "@/lib/revalidate";
 import {
   getSessionMember,
   rotateClaimCode,
@@ -45,7 +46,12 @@ export async function issueClaimCodeAction(
   return { memberId, code, error: null };
 }
 
-/** Hides or unhides a smack post for moderation, then refreshes the console. */
+/**
+ * Hides or unhides a smack post for moderation, then refreshes the console AND
+ * the public site: the hub renders the smack feed from the ISR cache, so
+ * without a site-wide revalidation a moderated post would keep showing to
+ * everyone for up to the full revalidate window.
+ */
 export async function setPostHiddenAction(formData: FormData): Promise<void> {
   await requireCommish();
 
@@ -55,4 +61,5 @@ export async function setPostHiddenAction(formData: FormData): Promise<void> {
 
   await setPostHidden(postId, hidden);
   revalidatePath("/commish");
+  revalidateSite("commish-moderation");
 }

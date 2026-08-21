@@ -33,7 +33,11 @@ import type {
 } from "@/lib/sleeper-schemas";
 import { mapWeekStatRow } from "@/lib/player-stats-map";
 import { alignStarterSlots, computeProjectedPoints } from "@/lib/lineup-slots";
-import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
+import {
+  logSyncStart,
+  logSyncComplete,
+  getLatestSuccessfulSyncRun,
+} from "@/lib/queries/sync-log";
 import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
 import { resolveDivisionName } from "@/lib/divisions";
 import { runAtomic } from "@/lib/db/atomic";
@@ -64,6 +68,37 @@ export interface HourlySyncSummary {
   season: string;
   week: number;
   results: SyncStepResult[];
+  /** True when the offseason throttle turned this run into a no-op. */
+  skipped?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Offseason throttle
+// ---------------------------------------------------------------------------
+
+/** Minimum gap between hourly syncs while the NFL is in its offseason. */
+export const OFFSEASON_SYNC_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Decides whether an hourly run should no-op.
+ *
+ * This is a dynasty league: trades, waivers and roster moves happen year-round,
+ * and the offseason hub, transaction activity and trades page are all built on
+ * that data. So the offseason is throttled, never switched off; 5 of every 6
+ * invocations become a single cheap query instead of a full sync.
+ *
+ * Pure so it can be unit tested (see hourly.test.ts).
+ */
+export function shouldSkipHourlySync(
+  seasonType: string,
+  lastSuccessAt: Date | null,
+  now: Date,
+  intervalMs: number = OFFSEASON_SYNC_INTERVAL_MS
+): boolean {
+  if (seasonType !== "off") return false;
+  // No prior success (fresh DB, or the last runs all failed): always run.
+  if (!lastSuccessAt) return false;
+  return now.getTime() - lastSuccessAt.getTime() < intervalMs;
 }
 
 // ---------------------------------------------------------------------------
@@ -1086,6 +1121,46 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
   }
 
   const nflState = resolved.state;
+
+  // Offseason throttle. The cron stays hourly (the endpoint knows the real NFL
+  // state; a cron expression would need hardcoded month boundaries that drift),
+  // but out of season most invocations become one cheap lookup and a logged
+  // no-op. Skips are logged to sync_log so a throttled cron is observable
+  // rather than looking like one that stopped firing, and they are logged under
+  // their own data type so they never satisfy the freshness check below.
+  // Defensive: a throttle lookup is an optimization, never a reason to fail the
+  // run. If the query errors, fall through and sync as normal.
+  const lastHourly = await getLatestSuccessfulSyncRun(
+    "hourly",
+    "transactions"
+  ).catch(() => null);
+  if (shouldSkipHourlySync(nflState.season_type, lastHourly?.startedAt ?? null, new Date())) {
+    const skipLogId = await logSyncStart("hourly", "skipped");
+    await logSyncComplete(skipLogId, "success", 0, undefined, {
+      reason: "offseason-throttle",
+      seasonType: nflState.season_type,
+      lastSuccessAt: lastHourly?.startedAt?.toISOString() ?? null,
+      intervalMs: OFFSEASON_SYNC_INTERVAL_MS,
+    });
+
+    return {
+      startedAt,
+      completedAt: new Date().toISOString(),
+      season: nflState.season,
+      week: nflState.week,
+      skipped: true,
+      results: [
+        {
+          dataType: "nfl_state",
+          status: "success",
+          rowCount: 0,
+          durationMs: 0,
+          note: `Offseason throttle: last successful hourly sync was under ${OFFSEASON_SYNC_INTERVAL_MS / 3_600_000}h ago, skipping.`,
+        },
+      ],
+    };
+  }
+
   const seasonYear = parseInt(nflState.season, 10);
   const currentWeek = nflState.week;
   const nflStateNote = resolved.fromFallback

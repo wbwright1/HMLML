@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { H2HHero } from "@/components/h2h-hero";
@@ -12,7 +13,10 @@ import {
 import { EmptyState } from "@/components/empty-state";
 import { FranchisePairSelector } from "@/app/records/head-to-head/franchise-selector";
 
-export const dynamic = "force-dynamic";
+// Dynamically rendered: ?a= and ?b= drive the pairing query, and awaiting searchParams opts a route out
+// of static rendering, so a `revalidate` export here would be inert. Caching
+// these needs unstable_cache around the queries (tracked as follow-up work;
+// mind that it serializes Date fields to strings behind unchanged types).
 
 export const metadata = {
   title: "Head-to-Head Records | Harambe Memorial League Memorial League",
@@ -32,7 +36,8 @@ export default async function HeadToHeadPage({
   let franchises: Awaited<ReturnType<typeof getAllFranchiseOptions>> = [];
   try {
     franchises = await getAllFranchiseOptions();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected
   }
 

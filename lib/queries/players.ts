@@ -1,4 +1,6 @@
 import { db } from "@/lib/db";
+import { cachedQuery } from "@/lib/cache";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import {
   players,
   rosterPlayers,
@@ -158,7 +160,7 @@ export type PlayerSearchResult = {
  * Returns player info + current roster owner (joined via roster_players -> franchises
  * for the latest season). Limited to 50 results.
  */
-export async function searchPlayers(
+async function searchPlayersUncached(
   query: string
 ): Promise<PlayerSearchResult[]> {
   try {
@@ -240,7 +242,8 @@ export async function searchPlayers(
       .limit(50);
 
     return rows;
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return [];
   }
 }
@@ -314,7 +317,8 @@ export async function getAllPlayersWithStats(): Promise<RosteredPlayer[]> {
       .orderBy(desc(players.pointsPpr));
 
     return rows;
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return [];
   }
 }
@@ -344,7 +348,7 @@ export async function getAllFranchiseNames(): Promise<
 /**
  * Get a single player by ID, with current roster owner info.
  */
-export async function getPlayerById(
+async function getPlayerByIdUncached(
   playerId: string
 ): Promise<PlayerSearchResult | null> {
   try {
@@ -410,7 +414,14 @@ export async function getPlayerById(
       .limit(1);
 
     return row ?? null;
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return null;
   }
 }
+
+/** Cached wrapper (#209): see lib/cache.ts. Cleared by revalidateSite(). */
+export const getPlayerById = cachedQuery(["player-by-id"], getPlayerByIdUncached);
+
+/** Cached wrapper (#209): see lib/cache.ts. Cleared by revalidateSite(). */
+export const searchPlayers = cachedQuery(["search-players"], searchPlayersUncached);
