@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseLogo } from "@/components/franchise-logo";
@@ -23,7 +24,8 @@ export async function generateMetadata({ params }: FranchiseSchedulePageProps) {
   let franchise: Awaited<ReturnType<typeof getFranchiseBySlug>> = null;
   try {
     franchise = await getFranchiseBySlug(franchiseSlug);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 
@@ -48,7 +50,8 @@ export default async function FranchiseSchedulePage({
 
   try {
     franchise = await getFranchiseBySlug(franchiseSlug);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 
@@ -73,7 +76,8 @@ export default async function FranchiseSchedulePage({
         franchise.id,
         latestSeason.seasonId
       );
-    } catch {
+    } catch (e) {
+      rethrowUnlessTolerable(e);
       // Schedule data may not be available
     }
   }

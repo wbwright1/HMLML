@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
@@ -26,7 +27,8 @@ export async function generateMetadata({ params }: FranchiseDraftsPageProps) {
   let franchise: Awaited<ReturnType<typeof getFranchiseBySlug>> = null;
   try {
     franchise = await getFranchiseBySlug(franchiseSlug);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 
@@ -49,7 +51,8 @@ export default async function FranchiseDraftsPage({
 
   try {
     franchise = await getFranchiseBySlug(franchiseSlug);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may not be connected in dev
   }
 
@@ -61,7 +64,8 @@ export default async function FranchiseDraftsPage({
 
   try {
     draftHistory = await getFranchiseDraftHistory(franchise.id);
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // Draft data may not be available
   }
 

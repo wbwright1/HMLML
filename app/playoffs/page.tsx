@@ -1,4 +1,5 @@
 import { redirect, notFound } from "next/navigation";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { getLatestSeason } from "@/lib/queries/matchups";
 
 // ISR: rendered once, then served from cache until a successful sync calls
@@ -11,7 +12,8 @@ export default async function PlayoffsIndexPage() {
   let latestSeason: Awaited<ReturnType<typeof getLatestSeason>> = null;
   try {
     latestSeason = await getLatestSeason();
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     // DB may be unavailable in dev
   }
 
