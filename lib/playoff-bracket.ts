@@ -160,7 +160,8 @@ export function getMatchPlacementLabel(
   return `${ordinal(totalRosters - placement)} Place Game`;
 }
 
-function ordinal(n: number): string {
+/** "1st", "2nd", "12th": shared with the bracket's champion capsule. */
+export function ordinal(n: number): string {
   const mod100 = n % 100;
   if (mod100 >= 11 && mod100 <= 13) return `${n}th`;
   switch (n % 10) {

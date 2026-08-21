@@ -163,38 +163,66 @@ test.describe("bracket shape regressions", () => {
     await expect(page.getByTestId("bracket-winners")).toBeVisible();
     await expect(page.getByTestId("bracket-losers")).toBeVisible();
 
-    // Unresolved slots say TBD and name the match that feeds them.
-    await expect(page.getByText("TBD from match 3").first()).toBeVisible();
+    // Unresolved slots name the match that feeds them, and say "Sinker" in
+    // the Toilet Bowl, where the team that arrives is the one that lost.
+    await expect(page.getByText("Winner of Match 3").first()).toBeVisible();
+    await expect(page.getByText("Sinker of Match 3").first()).toBeVisible();
 
     // Nothing is decided, so no advancement badges and no champion.
     await expect(page.getByText("SANK")).toHaveCount(0);
     await expect(page.getByTestId("toilet-bowl-sting")).toHaveCount(0);
+
+    // An undecided final gets no road and no capsule.
+    await expect(page.locator("[data-road]")).toHaveCount(0);
+    await expect(page.getByTestId("bracket-capsule-winners")).toHaveCount(0);
+    await expect(page.getByTestId("bracket-capsule-losers")).toHaveCount(0);
   });
 });
 
 test.describe("mobile layout", () => {
   test.use({ viewport: { width: 375, height: 812 } });
 
-  test("rounds stack vertically with no horizontal page scroll", async ({
+  test("the bracket scrolls inside its own track, not the page", async ({
     page,
   }) => {
     await page.goto("/playoffs/2023");
-    await expect(page.getByTestId("bracket-winners")).toBeVisible();
+    const winners = page.getByTestId("bracket-winners");
+    await expect(winners).toBeVisible();
 
+    // A bracket is the sanctioned exception to the no-horizontal-scroll rule,
+    // and the scroll must stay inside the track.
     const scrollWidth = await page.evaluate(() => document.body.scrollWidth);
     expect(scrollWidth).toBeLessThanOrEqual(375);
 
-    // Round groups are stacked: each round card starts below the previous one.
-    const rounds = page
-      .getByTestId("bracket-winners")
-      .locator("> div.card-surface");
-    await expect(rounds).toHaveCount(3);
+    const track = winners.locator(".bracket-track");
+    await expect(track).toBeVisible();
+    const scrollable = await track.evaluate(
+      (el) => el.scrollWidth > el.clientWidth,
+    );
+    expect(scrollable).toBe(true);
 
-    const first = await rounds.nth(0).boundingBox();
-    const second = await rounds.nth(1).boundingBox();
-    expect(first).not.toBeNull();
-    expect(second).not.toBeNull();
-    expect(second!.y).toBeGreaterThan(first!.y + first!.height - 1);
+    // The swipe hint points at what is off screen.
+    await expect(winners.getByText("Swipe to follow the road")).toBeVisible();
+    await expect(
+      page.getByTestId("bracket-losers").getByText("Swipe to follow the drain"),
+    ).toBeVisible();
+  });
+
+  test("placement games stack full width below the track", async ({ page }) => {
+    await page.goto("/playoffs/2023");
+
+    const winners = page.getByTestId("bracket-winners");
+    const track = winners.locator(".bracket-track");
+    const lane = page.getByTestId("bracket-placement-lane-winners");
+    await expect(lane).toBeVisible();
+
+    const trackBox = await track.boundingBox();
+    const laneBox = await lane.boundingBox();
+    expect(trackBox).not.toBeNull();
+    expect(laneBox).not.toBeNull();
+    expect(laneBox!.y).toBeGreaterThan(trackBox!.y + trackBox!.height - 1);
+    // Full width cards, not 248px bracket cells.
+    expect(laneBox!.width).toBeGreaterThan(300);
   });
 });
 
@@ -247,5 +275,153 @@ test.describe("#201: the Toilet Bowl champion across the shame surfaces", () => 
     await expect(trophyCase).toBeVisible();
     await expect(trophyCase.getByText("Toilet Bowl Champion")).toBeVisible();
     await expect(trophyCase).toContainText("Finished dead last");
+  });
+});
+
+
+// ============================================================================
+// Issue #215: the bracket page is a real left-to-right bracket ("The Road").
+// 2025 is the reference season: Olave Garden won HMLML Bowl V, Latter Day Lamb
+// Special sank to the bottom of the Toilet Bowl.
+// ============================================================================
+
+test.describe("#215: 2025 renders as a true bracket", () => {
+  test("rounds are columns that converge left to right", async ({ page }) => {
+    await page.goto("/playoffs/2025");
+
+    const stage = page.getByTestId("bracket-winners").locator(".bracket-stage");
+    await expect(stage).toBeVisible();
+
+    const boxes = await stage.locator(".bracket-cell").evaluateAll((els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        return { x: Math.round(r.x), y: Math.round(r.y) };
+      }),
+    );
+    expect(boxes.length).toBeGreaterThanOrEqual(7);
+
+    const columns = [...new Set(boxes.map((b) => b.x))].sort((a, b) => a - b);
+    // Three rounds: wild card, semifinals, championship.
+    expect(columns).toHaveLength(3);
+
+    // Four round-1 slots at four distinct heights in the leftmost column...
+    const firstColumn = boxes
+      .filter((b) => b.x === columns[0])
+      .sort((a, b) => a.y - b.y);
+    expect(firstColumn).toHaveLength(4);
+    expect(new Set(firstColumn.map((b) => b.y)).size).toBe(4);
+
+    // ...two semifinals to their right, each centered between its feeders...
+    const secondColumn = boxes
+      .filter((b) => b.x === columns[1])
+      .sort((a, b) => a.y - b.y);
+    expect(secondColumn).toHaveLength(2);
+    expect(secondColumn[0].y).toBeGreaterThan(firstColumn[0].y);
+    expect(secondColumn[0].y).toBeLessThan(firstColumn[1].y);
+
+    // ...and a single final to the right of those.
+    const thirdColumn = boxes.filter((b) => b.x === columns[2]);
+    expect(thirdColumn).toHaveLength(1);
+    expect(columns[2]).toBeGreaterThan(columns[1]);
+
+    // Connectors are drawn between the columns.
+    expect(await stage.locator(".bracket-line").count()).toBeGreaterThan(0);
+  });
+
+  test("byes are dashed pass-through cells with the full footprint", async ({
+    page,
+  }) => {
+    await page.goto("/playoffs/2025");
+
+    const byes = page
+      .getByTestId("bracket-winners")
+      .getByTestId("bracket-cell-winners-bye");
+    await expect(byes).toHaveCount(2);
+    await expect(byes.first()).toContainText("First-round bye");
+
+    const style = await byes.first().evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { borderStyle: cs.borderTopStyle, height: cs.height };
+    });
+    expect(style.borderStyle).toBe("dashed");
+
+    const matchHeight = await page
+      .getByTestId("bracket-match-winners-1")
+      .evaluate((el) => getComputedStyle(el).height);
+    expect(style.height).toBe(matchHeight);
+  });
+
+  test("the champion's road is traced in gold and ends in a capsule", async ({
+    page,
+  }) => {
+    await page.goto("/playoffs/2025");
+
+    const winners = page.getByTestId("bracket-winners");
+    // The road exists only because the final is decided.
+    expect(
+      await winners.locator('[data-road="winners"]').count(),
+    ).toBeGreaterThan(0);
+
+    const capsule = page.getByTestId("bracket-capsule-winners");
+    await expect(capsule).toBeVisible();
+    await expect(capsule).toContainText("2025 Champion");
+    await expect(capsule).toContainText("Olave Garden");
+    await expect(capsule).toContainText("HMLML Bowl V");
+
+    // The page leads with the bowl name too.
+    await expect(page.getByText("The road to HMLML Bowl V.")).toBeVisible();
+  });
+
+  test("the Toilet Bowl traces the drain in rust and crowns the sinker", async ({
+    page,
+  }) => {
+    await page.goto("/playoffs/2025");
+
+    const losers = page.getByTestId("bracket-losers");
+    expect(await losers.locator('[data-road="losers"]').count()).toBeGreaterThan(
+      0,
+    );
+    // Gold is reserved for the real title: no gold road in the Toilet Bowl.
+    await expect(losers.locator('[data-road="winners"]')).toHaveCount(0);
+
+    const capsule = page.getByTestId("bracket-capsule-losers");
+    await expect(capsule).toBeVisible();
+    await expect(capsule).toContainText("Toilet Bowl Champion");
+    await expect(capsule).toContainText("Latter Day Lamb Special");
+    await expect(capsule).toContainText("12th of 12");
+    await expect(capsule).toContainText("in the final");
+  });
+
+  test("placement games live in the lane, never in the bracket columns", async ({
+    page,
+  }) => {
+    await page.goto("/playoffs/2025");
+
+    const lane = page.getByTestId("bracket-placement-lane-winners");
+    await expect(lane).toBeVisible();
+    await expect(lane).toContainText("Placement Games");
+    await expect(lane).toContainText("3rd Place Game");
+    await expect(lane).toContainText("5th Place Game");
+
+    // The bracket columns themselves carry no placement game.
+    const stage = page.getByTestId("bracket-winners").locator(".bracket-stage");
+    await expect(stage).not.toContainText("3rd Place Game");
+    await expect(stage).not.toContainText("5th Place Game");
+
+    // The lane sits below the bracket stage, not beside it.
+    const stageBox = await stage.boundingBox();
+    const laneBox = await lane.boundingBox();
+    expect(laneBox!.y).toBeGreaterThan(stageBox!.y);
+  });
+
+  test("cells keep their week deep links", async ({ page }) => {
+    await page.goto("/playoffs/2025");
+
+    const link = page
+      .getByTestId("bracket-winners")
+      .locator('a[href^="/seasons/2025/week/"]')
+      .first();
+    await link.click();
+    await expect(page).toHaveURL(/\/seasons\/2025\/week\/\d+/);
   });
 });

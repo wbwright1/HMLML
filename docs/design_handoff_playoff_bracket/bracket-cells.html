@@ -1,0 +1,123 @@
+<!-- @dsCard group="Playoff Bracket" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>HMLML Bracket Match Cell — States</title>
+<style>
+  :root{
+    --canvas:#1A1613; --surface:rgba(255,255,255,.045); --surface-muted:rgba(255,255,255,.07);
+    --border:rgba(255,255,255,.08); --border-strong:rgba(255,255,255,.14); --divider:rgba(255,255,255,.05);
+    --ink:#F2EADC; --body:#B8B0A0; --muted:#98917F; --dim:#6E6759;
+    --gold:#E2B858; --gold-l:rgba(226,184,88,.13);
+    --warm:#C97C6A; --warm-l:rgba(201,124,106,.14);
+    --serif:Georgia,'Times New Roman',serif;
+    --sans:-apple-system,'Segoe UI',Helvetica,Arial,sans-serif;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#0F0D0B;font-family:var(--sans);color:var(--body);padding:32px;display:flex;justify-content:center}
+  .shell{width:620px;background:var(--canvas);border:1px solid var(--border);border-radius:14px;padding:40px 44px 48px;box-shadow:0 24px 60px rgba(0,0,0,.3)}
+  .kicker{font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:var(--muted)}
+  h1{font-family:var(--serif);font-style:italic;font-weight:400;font-size:28px;color:var(--ink);margin:8px 0 28px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:28px 32px}
+  .state .lbl{font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
+  .state .note{font-size:11px;color:var(--dim);margin-top:8px;line-height:1.5}
+
+  .cell{width:248px;border:1px solid var(--border);border-radius:10px;
+        background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));overflow:hidden}
+  .cell.final{border-color:rgba(226,184,88,.3);box-shadow:0 0 0 1px rgba(226,184,88,.2)}
+  .trow{display:flex;align-items:center;gap:8px;height:37px;padding:0 12px}
+  .trow + .trow{border-top:1px solid var(--divider)}
+  .trow.adv{background:var(--surface-muted)}
+  .trow.sank{background:var(--warm-l)}
+  .seed{font-family:var(--mono);font-size:10px;color:var(--dim);width:12px;text-align:right;flex:none}
+  .tdot{width:8px;height:8px;border-radius:50%;flex:none}
+  .tname{font-size:12.5px;color:var(--body);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;flex:1}
+  .adv .tname,.sank .tname{color:var(--ink);font-weight:700}
+  .score{font-family:var(--mono);font-size:12.5px;font-variant-numeric:tabular-nums;color:var(--dim);flex:none}
+  .adv .score{color:var(--ink);font-weight:700}
+  .sank .score{color:var(--warm);font-weight:700}
+  .badge{flex:none;font-size:8.5px;font-weight:700;letter-spacing:.08em;border-radius:4px;padding:2px 5px}
+  .badge.w{color:var(--gold);background:var(--gold-l)}
+  .badge.s{color:var(--warm);background:var(--warm-l)}
+  .outlbl{flex:none;font-size:9px;letter-spacing:.06em;color:var(--dim)}
+  .bye-sub{font-size:11px;font-style:italic;color:var(--dim)}
+  .cell.bye{border-style:dashed;background:none}
+  .tbd .tname{color:var(--dim);font-style:italic;font-weight:400}
+
+  .cap{width:248px;border-radius:12px;padding:16px 18px;position:relative;
+       display:flex;flex-direction:column;gap:5px;
+       border:1px solid rgba(226,184,88,.35);background:linear-gradient(180deg,rgba(226,184,88,.13),rgba(226,184,88,.04))}
+  .cap.rust{border-color:rgba(201,124,106,.35);background:linear-gradient(180deg,rgba(201,124,106,.14),rgba(201,124,106,.04))}
+  .cap .k{font-size:9.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--gold)}
+  .cap.rust .k{color:var(--warm)}
+  .cap .nm{font-family:var(--serif);font-style:italic;font-size:21px;color:var(--ink)}
+  .cap .sub{font-size:11px;color:var(--muted)}
+  .cap .sub b{font-family:var(--mono);font-weight:700;color:var(--body)}
+</style>
+</head>
+<body>
+<div class="shell">
+  <div class="kicker">Component · Tier 1</div>
+  <h1>Bracket match cell, every state.</h1>
+
+  <div class="grid">
+    <div class="state">
+      <div class="lbl">Decided · winners bracket</div>
+      <div class="cell">
+        <div class="trow adv"><span class="seed">1</span><span class="tdot" style="background:#908440"></span><span class="tname">Olave Garden</span><span class="badge w">W</span><span class="score">230.88</span></div>
+        <div class="trow"><span class="seed">4</span><span class="tdot" style="background:#A2C4B1"></span><span class="tname">Foopus</span><span class="outlbl">OUT</span><span class="score">202.88</span></div>
+      </div>
+      <div class="note">Winner: raised row, bold ink, gold "W" badge. Loser: dim score, "OUT" text label. Never color alone.</div>
+    </div>
+
+    <div class="state">
+      <div class="lbl">Decided · Toilet Bowl (inverted)</div>
+      <div class="cell">
+        <div class="trow"><span class="seed"></span><span class="tdot" style="background:#BCCD8B"></span><span class="tname">Of Mice and Mendoza</span><span class="outlbl">ESCAPED</span><span class="score">145.96</span></div>
+        <div class="trow sank"><span class="seed"></span><span class="tdot" style="background:#94B1EB"></span><span class="tname">Watson Love Diggs</span><span class="badge s">SANK</span><span class="score">137.30</span></div>
+      </div>
+      <div class="note">The LOWER scorer advances: rust-tint row, "SANK" badge, rust score. Higher scorer "ESCAPED". No W/L glyphs here.</div>
+    </div>
+
+    <div class="state">
+      <div class="lbl">First-round bye</div>
+      <div class="cell bye">
+        <div class="trow"><span class="seed">2</span><span class="tdot" style="background:#679ACA"></span><span class="tname" style="color:var(--ink);font-weight:700">McCarthyism</span></div>
+        <div class="trow"><span class="seed"></span><span class="bye-sub">First-round bye</span></div>
+      </div>
+      <div class="note">Dashed border, no fill, no score. Same footprint as a match cell so the bracket geometry holds; its connector runs straight through.</div>
+    </div>
+
+    <div class="state">
+      <div class="lbl">Upcoming · TBD feeder</div>
+      <div class="cell">
+        <div class="trow tbd"><span class="seed"></span><span class="tdot" style="background:rgba(255,255,255,.12)"></span><span class="tname">Winner of Match 2</span><span class="score">–</span></div>
+        <div class="trow adv" style="background:none"><span class="seed">1</span><span class="tdot" style="background:#908440"></span><span class="tname" style="font-weight:400;color:var(--body)">Olave Garden</span><span class="score">–</span></div>
+      </div>
+      <div class="note">Empty slot names its feeder ("Winner of Match 2" / "Loser of…" in the Toilet Bowl), dim italic, hollow dot, en-dash score.</div>
+    </div>
+
+    <div class="state">
+      <div class="lbl">Championship cell</div>
+      <div class="cell final">
+        <div class="trow adv"><span class="seed">1</span><span class="tdot" style="background:#908440"></span><span class="tname">Olave Garden</span><span class="badge w">W</span><span class="score">180.34</span></div>
+        <div class="trow"><span class="seed">6</span><span class="tdot" style="background:#F4D3C1"></span><span class="tname">Vanilla Vick</span><span class="outlbl">OUT</span><span class="score">129.16</span></div>
+      </div>
+      <div class="note">Gold hairline ring. The Toilet Bowl final gets the same ring in rust; gold is reserved for the real title.</div>
+    </div>
+
+    <div class="state">
+      <div class="lbl">Champion capsule (terminus)</div>
+      <div class="cap">
+        <div class="k">2025 Champion</div>
+        <div class="nm">Olave Garden</div>
+        <div class="sub">HMLML Bowl V · <b>180.34–129.16</b></div>
+      </div>
+      <div class="note">Sits at the end of the champion's gold road. Rust variant reads "Toilet Bowl Champion · 12th of 12" with the double-chevron drain glyph.</div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
