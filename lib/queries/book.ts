@@ -9,56 +9,30 @@ import {
   playerWeekPoints,
   players,
   rosterPlayers,
+  seasons,
 } from "@/lib/db/schema";
-import { and, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
+import { getNflState } from "@/lib/queries/nfl-state";
+import type {
+  BookChip,
+  BookGame,
+  BookGameStatus,
+  BookSide,
+  MemberBookPick,
+} from "@/lib/book/shared";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-export interface BookSide {
-  rosterId: string;
-  franchiseId: string;
-  name: string;
-  slug: string;
-  abbreviation: string | null;
-  brandingColor: string | null;
-  avatarUrl: string | null;
-  record: string;
-  /** Home perspective is stored; each side carries the number as IT reads. */
-  spread: number;
-  moneyline: number;
-  points: number;
-  projected: number | null;
-}
-
-export type BookGameStatus = "open" | "live" | "final";
-
-export interface BookGame {
-  matchupId: number;
-  seasonId: number;
-  week: number;
-  status: BookGameStatus;
-  /** Home-perspective spread, exactly as stored. */
-  spread: number;
-  home: BookSide;
-  away: BookSide;
-  /** Weekday label of the first kickoff this game rides on, e.g. "SUN". Null when unknown. */
-  kickoffLabel: string | null;
-  /** Which side is covering right now (live) or covered (final). Null before kickoff. */
-  coveringSide: "home" | "away" | null;
-  homePicks: number;
-  awayPicks: number;
-}
-
-export interface MemberBookPick {
-  matchupId: number;
-  side: "home" | "away";
-  spreadAtPick: number;
-  mlAtPick: number;
-  lockedAt: string | null;
-}
+// The board shapes live in lib/book/shared.ts (the client island imports them,
+// and anything it touches must not pull lib/db into the browser bundle). They
+// are re-exported here so the server side keeps one import for "the book".
+export type {
+  BookSide,
+  BookGameStatus,
+  BookGame,
+  MemberBookPick,
+  BookChip,
+} from "@/lib/book/shared";
+export { MIN_PICKS_FOR_CONSENSUS } from "@/lib/book/shared";
 
 // ---------------------------------------------------------------------------
 // Pure helpers (unit-tested in book.test.ts)
@@ -66,13 +40,6 @@ export interface MemberBookPick {
 
 /** A season's projected points spread across a 17-game regular season. */
 export const REGULAR_SEASON_GAMES = 17;
-
-/**
- * Consensus is a claim about the league, so it stays hidden until enough
- * members have weighed in to make it one. Two people picking opposite sides is
- * not "50% of the league", and one person is definitely not 100% of it.
- */
-export const MIN_PICKS_FOR_CONSENSUS = 3;
 
 /** Pairs matchup rows into (home, away) with home pinned to the lower roster id. */
 export function pairRosterIds(rosterIds: string[]): [string, string] | null {
@@ -108,6 +75,113 @@ export function kickoffWeekday(gameDate: string | null | undefined): string | nu
   if (!m) return null;
   const day = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay();
   return WEEKDAYS[day] ?? null;
+}
+
+/**
+ * The three header chips.
+ *
+ * These are facts about the BOARD, not about you: /book is one cached page
+ * served to the whole league, so a personal ATS record could not live in it
+ * honestly (that belongs on the Tracking tab, behind a session). And per the
+ * superlatives rule, a chip only appears when it is a true claim, so an empty
+ * board produces no chips rather than a row of zeroes.
+ */
+export function buildBoardChips(games: BookGame[], week: number): BookChip[] {
+  if (games.length === 0) return [];
+
+  const chips: BookChip[] = [
+    {
+      label: "On the Board",
+      value: String(games.length),
+      context: `week ${week}`,
+    },
+  ];
+
+  const byMargin = [...games].sort(
+    (a, b) => Math.abs(b.spread) - Math.abs(a.spread),
+  );
+  const widest = byMargin[0];
+  const tightest = byMargin[byMargin.length - 1];
+
+  if (widest) {
+    const favorite = widest.spread < 0 ? widest.home : widest.away;
+    chips.push({
+      label: "Biggest Line",
+      value: Math.abs(widest.spread).toFixed(1),
+      context: favorite.abbreviation ?? favorite.name,
+    });
+  }
+
+  // Only a real second data point: with one game on the board the widest line
+  // IS the tightest line, and printing it twice is a fake stat.
+  if (tightest && tightest !== widest) {
+    chips.push({
+      label: "Coin Flip",
+      value: Math.abs(tightest.spread).toFixed(1),
+      context: `${tightest.home.abbreviation ?? tightest.home.name} vs ${
+        tightest.away.abbreviation ?? tightest.away.name
+      }`,
+    });
+  }
+
+  return chips;
+}
+
+// ---------------------------------------------------------------------------
+// Which week the board is showing
+// ---------------------------------------------------------------------------
+
+export interface BookWeek {
+  seasonId: number;
+  seasonYear: number;
+  week: number;
+}
+
+/**
+ * The fantasy week The Book trades, given the NFL state.
+ *
+ * In the regular season and playoffs that is simply the current week. Anywhere
+ * else on the calendar it is week 1, because Sleeper's preseason week counter
+ * counts PRESEASON weeks: in late August it reports week 3, and taking that at
+ * face value prices (and displays) fantasy week 3 while the league is waiting
+ * on week 1. Caught in verification, where the sync priced week 3 and the page
+ * showed week 1.
+ *
+ * Pure, and used by the page, the server action, AND the sync, so all three
+ * always agree on which week is on the board.
+ */
+export function bookWeekFor(
+  seasonType: string | null | undefined,
+  stateWeek: number,
+): number {
+  const inSeason = seasonType === "regular" || seasonType === "post";
+  return inSeason ? Math.max(1, stateWeek) : 1;
+}
+
+/**
+ * Resolves the season and week The Book is trading.
+ *
+ * Shared by the page and the server action so a pick can never be booked
+ * against a different week than the one the board rendered.
+ */
+export async function resolveBookWeek(): Promise<BookWeek | null> {
+  const [latest] = await db
+    .select({ id: seasons.id, seasonYear: seasons.seasonYear })
+    .from(seasons)
+    .orderBy(desc(seasons.seasonYear))
+    .limit(1);
+
+  if (!latest) return null;
+
+  const state = await getNflState();
+  // A state pointing at a different season is not this season's week.
+  const forThisSeason = state != null && state.season === String(latest.seasonYear);
+
+  return {
+    seasonId: latest.id,
+    seasonYear: latest.seasonYear,
+    week: forThisSeason ? bookWeekFor(state.seasonType, state.week) : 1,
+  };
 }
 
 // ---------------------------------------------------------------------------

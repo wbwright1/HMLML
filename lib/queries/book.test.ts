@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  bookWeekFor,
   chooseProjectedTotals,
   formatRecord,
   kickoffWeekday,
@@ -16,6 +17,25 @@ describe("pairRosterIds", () => {
   it("refuses anything that is not a clean pair", () => {
     expect(pairRosterIds(["3"])).toBeNull();
     expect(pairRosterIds(["3", "4", "5"])).toBeNull();
+  });
+});
+
+describe("bookWeekFor", () => {
+  it("trades the current week in the regular season and playoffs", () => {
+    expect(bookWeekFor("regular", 9)).toBe(9);
+    expect(bookWeekFor("post", 16)).toBe(16);
+  });
+
+  it("ignores the preseason week counter, which counts preseason weeks", () => {
+    // The bug this exists to prevent: in late August Sleeper reports week 3,
+    // which priced fantasy week 3 while the board displayed week 1.
+    expect(bookWeekFor("pre", 3)).toBe(1);
+    expect(bookWeekFor("off", 0)).toBe(1);
+    expect(bookWeekFor(null, 7)).toBe(1);
+  });
+
+  it("never returns week zero", () => {
+    expect(bookWeekFor("regular", 0)).toBe(1);
   });
 });
 

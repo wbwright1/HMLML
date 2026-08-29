@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
@@ -571,6 +572,18 @@ export default async function RosterPage({ params }: RosterPageProps) {
                   </>
                 )}
               </div>
+
+              {/*
+                The Book took the Players slot in the nav, so /players needs
+                doorways where someone is already thinking about players. A
+                roster is exactly that moment.
+              */}
+              <Link
+                href="/players"
+                className="mt-4 block border-t border-divider pt-3 text-body-sm font-semibold text-accent-gold transition-colors duration-150 hover:brightness-110"
+              >
+                All players in the league →
+              </Link>
             </aside>
           </ScrollReveal>
         </div>

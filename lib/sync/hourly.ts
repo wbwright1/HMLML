@@ -42,6 +42,7 @@ import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
 import { resolveDivisionName } from "@/lib/divisions";
 import { runAtomic } from "@/lib/db/atomic";
 import { repriceBookLines } from "@/lib/sync/book-lines";
+import { bookWeekFor } from "@/lib/queries/book";
 
 // Shape of the per-season settings blob stored in seasons.settings_json.
 interface SeasonSettingsJson {
@@ -997,10 +998,14 @@ async function syncPlayerWeekStats(
 async function syncBookLines(
   seasonId: number,
   seasonYear: number,
-  week: number
+  seasonType: string,
+  stateWeek: number
 ): Promise<SyncStepResult> {
   const startTime = Date.now();
   const logId = await logSyncStart("hourly", "book_lines");
+  // NOT the raw state week: in the preseason Sleeper counts preseason weeks, so
+  // this must resolve the same fantasy week the board displays (bookWeekFor).
+  const week = bookWeekFor(seasonType, stateWeek);
 
   try {
     const result = await repriceBookLines(seasonId, seasonYear, week);
@@ -1322,7 +1327,14 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
   // alongside. Wrapped so a pricing failure is a logged step result, never an
   // exception that takes the whole run's summary down.
   try {
-    stepResults.push(await syncBookLines(seasonId, seasonYear, currentWeek));
+    stepResults.push(
+      await syncBookLines(
+        seasonId,
+        seasonYear,
+        nflState.season_type,
+        currentWeek,
+      ),
+    );
   } catch (e) {
     stepResults.push({
       dataType: "book_lines",
