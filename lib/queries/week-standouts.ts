@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { playerWeekPoints, players, franchises } from "@/lib/db/schema";
+import { playerWeekPoints, players, franchises, matchups } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
@@ -42,7 +42,14 @@ const DUD_MIN_PROJECTED = 5;
  *   we fall back to the lowest-scoring starter overall so the slot is never
  *   empty when starters exist.
  *
- * Returns nulls (not throwing) when no started rows exist or the query fails.
+ * Gated on matchups.status = 'complete' (joined on season/week/roster): an
+ * unplayed week has started rows sitting at 0.0 points, and without this
+ * gate those rows would crown an arbitrary "Player of the Week" at 0.0
+ * before a single snap has been played. The game-state signal is the real
+ * matchup status field, never a "points are zero" heuristic.
+ *
+ * Returns nulls (not throwing) when no started rows exist, the week has not
+ * been played, or the query fails.
  */
 export async function getWeekStandouts(
   seasonId: number,
@@ -65,11 +72,20 @@ export async function getWeekStandouts(
       .from(playerWeekPoints)
       .leftJoin(players, eq(playerWeekPoints.playerId, players.id))
       .innerJoin(franchises, eq(playerWeekPoints.franchiseId, franchises.id))
+      .innerJoin(
+        matchups,
+        and(
+          eq(matchups.seasonId, playerWeekPoints.seasonId),
+          eq(matchups.week, playerWeekPoints.week),
+          eq(matchups.rosterId, playerWeekPoints.rosterId)
+        )
+      )
       .where(
         and(
           eq(playerWeekPoints.seasonId, seasonId),
           eq(playerWeekPoints.week, week),
-          eq(playerWeekPoints.started, true)
+          eq(playerWeekPoints.started, true),
+          eq(matchups.status, "complete")
         )
       );
 
