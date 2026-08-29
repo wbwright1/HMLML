@@ -84,6 +84,14 @@ describe("americanOdds", () => {
     expect(americanOdds(0.01)).toBeGreaterThan(0);
   });
 
+  it("holds the board inside the house limits, so no four-digit favorite posts", () => {
+    expect(americanOdds(0.999)).toBe(-1900);
+    expect(americanOdds(0.001)).toBe(1900);
+    for (let p = 0; p <= 1; p += 0.005) {
+      expect(Math.abs(americanOdds(p))).toBeLessThanOrEqual(1900);
+    }
+  });
+
   it("takes the house cut: both sides of a game imply more than 100%", () => {
     const homeProb = 0.62;
     const mlHome = americanOdds(homeProb);

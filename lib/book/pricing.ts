@@ -37,12 +37,19 @@ export const MIN_FAVORITE_ODDS = -105;
 export const MIN_UNDERDOG_ODDS = 100;
 
 /**
- * Implied probability is clamped below 1 before the odds conversion. The win
- * probability model already clamps to [0.01, 0.99]; multiplying 0.99 by the
- * overround would push past certainty and divide by a negative.
+ * The house's posted limits, as implied probability. Two jobs:
+ *
+ * 1. Safety. The win-probability model clamps to [0.01, 0.99], and multiplying
+ *    0.99 by the overround would push past certainty and flip the sign of the
+ *    conversion.
+ * 2. Sanity. A real book does not post -3200. Early in a week somebody always
+ *    has an unset lineup, and the resulting mismatch should read as "enormous
+ *    favorite", not as a broken number with four digits in it.
+ *
+ * 0.95 caps the board at -1900 / +1900.
  */
-const MAX_IMPLIED_PROB = 0.97;
-const MIN_IMPLIED_PROB = 0.01;
+const MAX_IMPLIED_PROB = 0.95;
+const MIN_IMPLIED_PROB = 0.05;
 
 export interface BookPrice {
   /** Home perspective, multiple of 0.5, never 0. */
