@@ -8,7 +8,7 @@ const EXPECTED = [
   { label: "Teams", href: "/teams" },
   { label: "Records", href: "/records" },
   { label: "Drafts", href: "/drafts" },
-  { label: "Players", href: "/players" },
+  { label: "The Book", href: "/book" },
 ];
 
 test.describe("Site Navigation — desktop topbar", () => {
