@@ -62,11 +62,25 @@ export async function BetweenWeeksHub({
   nextKickoff,
 }: BetweenWeeksHubProps) {
   const priorWeek = week > 1 ? week - 1 : week;
+
+  // League-wide games-played gate. At week 1 every franchise is 0-0-0, so a
+  // "1st in Division" or "first place on the line" claim would be fabricated
+  // (the sort has nothing real to sort on). Once any game has been played,
+  // division-leader claims are honest again. Computed from the standings prop
+  // up front so both the editorial blurb selection and the GOTW/division
+  // logic below share the same flag.
+  const anyGamesPlayed = standings.some(
+    (s) => (s.wins ?? 0) + (s.losses ?? 0) + (s.ties ?? 0) > 0
+  );
+
   // Between-weeks editorial is week-scoped (matchup angles, GOTW blurb, smack
   // feed for this week); DB content overlays the seeds when present.
+  // anyGamesPlayed picks the opener-appropriate seeded GOTW blurb so it never
+  // claims "first place on the line" before a single game has been played.
   const editorial = await getHubEditorial({
     seasonId: seasonId ?? undefined,
     week,
+    anyGamesPlayed,
   });
   const headline = betweenWeeksHeadline(nextKickoff);
 
@@ -92,14 +106,6 @@ export async function BetweenWeeksHub({
     const s = standingBy.get(id);
     return s ? `${s.wins ?? 0}-${s.losses ?? 0}` : "0-0";
   };
-
-  // League-wide games-played gate. At week 1 every franchise is 0-0-0, so a
-  // "1st in Division" or "first place on the line" claim would be fabricated
-  // (the sort has nothing real to sort on). Once any game has been played,
-  // division-leader claims are honest again.
-  const anyGamesPlayed = standings.some(
-    (s) => (s.wins ?? 0) + (s.losses ?? 0) + (s.ties ?? 0) > 0
-  );
 
   // Rail + division data (degrades to empty when the DB or week has nothing).
   let divisionLeaderStatus = new Map<string, string>();
@@ -314,7 +320,7 @@ export async function BetweenWeeksHub({
         </div>
 
         {/* Right rail: last week's receipts */}
-        <aside className="flex flex-col gap-8">
+        <aside className="hidden lg:flex lg:flex-col gap-8">
           {weeklySuperlatives && (
             <WeekInBooksCard week={priorWeek} superlatives={weeklySuperlatives} />
           )}

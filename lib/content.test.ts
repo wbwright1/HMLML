@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { SNARKY_LABELS } from './content';
+import { SNARKY_LABELS, getHubEditorial } from './content';
 import type { SnarkyLabel, LabelTone } from './content';
 
 const VALID_TONES: LabelTone[] = ['positive', 'sting', 'neutral'];
@@ -189,5 +189,36 @@ describe('UT-27: UPPER_SNAKE_CASE keys', () => {
     for (const label of Object.values(SNARKY_LABELS)) {
       expect(label.key).toMatch(pattern);
     }
+  });
+});
+
+// UT-28: getHubEditorial's seeded Game of the Week blurb is opener-aware
+// (issue #228). No seasonId is passed so this stays pure (no DB call).
+describe('UT-28: opener-aware seeded GOTW blurb', () => {
+  it('does not claim "first place" before any game has been played', async () => {
+    const editorial = await getHubEditorial({ anyGamesPlayed: false });
+    expect(editorial.matchupAngles.gameOfWeekBlurb.toLowerCase()).not.toContain(
+      'first place'
+    );
+  });
+
+  it('keeps the first-place blurb once games have been played', async () => {
+    const editorial = await getHubEditorial({ anyGamesPlayed: true });
+    expect(editorial.matchupAngles.gameOfWeekBlurb.toLowerCase()).toContain(
+      'first place'
+    );
+  });
+
+  it('defaults to the played-games blurb when anyGamesPlayed is omitted', async () => {
+    const editorial = await getHubEditorial({});
+    expect(editorial.matchupAngles.gameOfWeekBlurb.toLowerCase()).toContain(
+      'first place'
+    );
+  });
+
+  it('the opener variant carries no em-dashes', async () => {
+    const editorial = await getHubEditorial({ anyGamesPlayed: false });
+    expect(editorial.matchupAngles.gameOfWeekBlurb).not.toContain('—');
+    expect(editorial.matchupAngles.gameOfWeekBlurb).not.toContain('–');
   });
 });
