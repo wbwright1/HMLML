@@ -22,10 +22,24 @@ export interface GotwCandidate {
   matchupId: number;
   teamA: GotwTeam;
   teamB: GotwTeam;
+  /** Each team's projected starting total for this matchup, summed from the
+   * week's player_week_points pool. Used only when no games have been played
+   * yet (record-based ranking is meaningless at 0-0-0); undefined/omitted is
+   * treated as 0. */
+  projectedA?: number;
+  projectedB?: number;
 }
 
 function teamGames(t: GotwTeam): number {
   return t.wins + t.losses + t.ties;
+}
+
+function combinedProjected(c: GotwCandidate): number {
+  return (c.projectedA ?? 0) + (c.projectedB ?? 0);
+}
+
+function projectedCloseness(c: GotwCandidate): number {
+  return Math.abs((c.projectedA ?? 0) - (c.projectedB ?? 0));
 }
 
 /**
@@ -68,14 +82,39 @@ export function isDivisionGame(c: GotwCandidate): boolean {
  * rank by the two teams' combined record, breaking ties by how close the two
  * are, then by combined points-for, then matchupId for determinism. When no
  * division game is on the slate, the whole slate is the pool.
+ *
+ * When no games have been played yet (week 1: every candidate is 0-0-0), the
+ * record-based ranking has nothing to sort on and degrades to an arbitrary
+ * pick by matchupId. In that case rank by combined projected strength
+ * instead (highest first), breaking ties by how evenly matched the two
+ * projections are, then matchupId. `anyGamesPlayed` defaults to an
+ * auto-detection from the candidates' records so existing callers keep their
+ * current behavior unchanged.
  */
-export function selectGameOfTheWeek(candidates: GotwCandidate[]): number | null {
+export function selectGameOfTheWeek(
+  candidates: GotwCandidate[],
+  anyGamesPlayed?: boolean
+): number | null {
   if (candidates.length === 0) return null;
+
+  const played =
+    anyGamesPlayed ??
+    candidates.some((c) => teamGames(c.teamA) + teamGames(c.teamB) > 0);
 
   const divisionGames = candidates.filter(isDivisionGame);
   const pool = divisionGames.length > 0 ? divisionGames : candidates;
 
   const ranked = [...pool].sort((a, b) => {
+    if (!played) {
+      const projDiff = combinedProjected(b) - combinedProjected(a);
+      if (projDiff !== 0) return projDiff;
+
+      const closenessDiff = projectedCloseness(a) - projectedCloseness(b);
+      if (closenessDiff !== 0) return closenessDiff;
+
+      return a.matchupId - b.matchupId;
+    }
+
     const winPctDiff = combinedWinPct(b) - combinedWinPct(a);
     if (winPctDiff !== 0) return winPctDiff;
 
@@ -169,11 +208,19 @@ export function formatSlateH2H(h2h: H2HInput): string {
 }
 
 /**
- * The Game of the Week kicker's second clause, kept truthful and generic. When
- * either team leads its division we say first place is on the line; otherwise
- * we fall back to bragging rights so we never overstate the stakes.
+ * The Game of the Week kicker's second clause, kept truthful and generic.
+ * Before a single game has been played, "first place" and "bragging rights"
+ * are both fabrications (nobody has won or lost anything yet), so that case
+ * gets its own truthful branch. Once games exist: either team leading its
+ * division means first place is on the line; otherwise we fall back to
+ * bragging rights so we never overstate the stakes.
  */
-export function stakesClause(aLeadsDivision: boolean, bLeadsDivision: boolean): string {
+export function stakesClause(
+  aLeadsDivision: boolean,
+  bLeadsDivision: boolean,
+  anyGamesPlayed: boolean
+): string {
+  if (!anyGamesPlayed) return "Season openers";
   return aLeadsDivision || bLeadsDivision
     ? "First place on the line"
     : "Bragging rights on the line";
@@ -181,8 +228,29 @@ export function stakesClause(aLeadsDivision: boolean, bLeadsDivision: boolean): 
 
 /**
  * A truthful, records-based angle for a slate matchup when no editorial blurb
- * exists for the pair. Site voice, no em-dashes.
+ * exists for the pair. Site voice, no em-dashes. `kickoffWeekday` names the
+ * actual day the slate opens (e.g. "Wednesday" for the 2026 week-1 opener),
+ * never a hardcoded day.
  */
-export function genericSlateAngle(recordA: string, recordB: string): string {
-  return `${recordA} against ${recordB}. Somebody's number moves Thursday.`;
+export function genericSlateAngle(
+  recordA: string,
+  recordB: string,
+  kickoffWeekday: string
+): string {
+  return `${recordA} against ${recordB}. Somebody's number moves ${kickoffWeekday}.`;
+}
+
+const CHICAGO_TIME_ZONE = "America/Chicago";
+
+/**
+ * Full weekday name (e.g. "Wednesday") of a kickoff instant in the league's
+ * home timezone, for genericSlateAngle. Falls back to "kickoff" when there is
+ * no kickoff date to name a day from.
+ */
+export function kickoffWeekdayName(target: Date | null): string {
+  if (!target) return "kickoff";
+  return new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    timeZone: CHICAGO_TIME_ZONE,
+  }).format(target);
 }

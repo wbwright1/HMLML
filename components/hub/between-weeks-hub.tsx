@@ -17,7 +17,12 @@ import { getHeadToHead } from "@/lib/queries/records";
 import { getDivisionStandings } from "@/lib/queries/divisions";
 import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
 import { getWeekBenchLeader } from "@/lib/queries/lineup-efficiency";
-import { getWeekStandouts, type WeekStandout } from "@/lib/queries/week-standouts";
+import {
+  getWeekStarterPool,
+  getPlayersToWatchFromPool,
+  sumProjectedByFranchise,
+  type PlayerToWatch,
+} from "@/lib/queries/players-to-watch";
 import { getTrendingAddPlayers } from "@/lib/queries/player-points";
 import { getHubEditorial, matchupPairKey, type HubEditorial } from "@/lib/content";
 import {
@@ -27,6 +32,7 @@ import {
   formatSlateH2H,
   stakesClause,
   genericSlateAngle,
+  kickoffWeekdayName,
   type GotwCandidate,
 } from "@/lib/hub/between-weeks";
 
@@ -56,11 +62,25 @@ export async function BetweenWeeksHub({
   nextKickoff,
 }: BetweenWeeksHubProps) {
   const priorWeek = week > 1 ? week - 1 : week;
+
+  // League-wide games-played gate. At week 1 every franchise is 0-0-0, so a
+  // "1st in Division" or "first place on the line" claim would be fabricated
+  // (the sort has nothing real to sort on). Once any game has been played,
+  // division-leader claims are honest again. Computed from the standings prop
+  // up front so both the editorial blurb selection and the GOTW/division
+  // logic below share the same flag.
+  const anyGamesPlayed = standings.some(
+    (s) => (s.wins ?? 0) + (s.losses ?? 0) + (s.ties ?? 0) > 0
+  );
+
   // Between-weeks editorial is week-scoped (matchup angles, GOTW blurb, smack
   // feed for this week); DB content overlays the seeds when present.
+  // anyGamesPlayed picks the opener-appropriate seeded GOTW blurb so it never
+  // claims "first place on the line" before a single game has been played.
   const editorial = await getHubEditorial({
     seasonId: seasonId ?? undefined,
     week,
+    anyGamesPlayed,
   });
   const headline = betweenWeeksHeadline(nextKickoff);
 
@@ -93,10 +113,7 @@ export async function BetweenWeeksHub({
   let weeklySuperlatives: Awaited<ReturnType<typeof getWeeklySuperlatives>> | null =
     null;
   let benchLeader: Awaited<ReturnType<typeof getWeekBenchLeader>> = null;
-  let standouts: Awaited<ReturnType<typeof getWeekStandouts>> = {
-    playerOfWeek: null,
-    dudStarter: null,
-  };
+  let pool: Awaited<ReturnType<typeof getWeekStarterPool>> = [];
   let trending: Awaited<ReturnType<typeof getTrendingAddPlayers>> = [];
   const h2hByMatchup = new Map<
     number,
@@ -105,12 +122,20 @@ export async function BetweenWeeksHub({
 
   if (seasonId != null) {
     try {
-      const [divisions, superlatives, bench, weekStandouts, trend, ...h2hResults] =
+      // Week 1 has no completed prior week: asking "In The Books" or "Left On
+      // The Bench" about week 0 would either return null by luck or (if a
+      // future data change ever lets it) resurrect a false claim. Skip the
+      // fetches outright rather than relying on the empty-shape fallback.
+      const [divisions, superlatives, bench, weekPool, trend, ...h2hResults] =
         await Promise.all([
           getDivisionStandings(seasonId),
-          getWeeklySuperlatives(seasonId, priorWeek),
-          getWeekBenchLeader(seasonId, priorWeek),
-          getWeekStandouts(seasonId, priorWeek),
+          week === 1
+            ? Promise.resolve(null)
+            : getWeeklySuperlatives(seasonId, priorWeek),
+          week === 1
+            ? Promise.resolve(null)
+            : getWeekBenchLeader(seasonId, priorWeek),
+          getWeekStarterPool(seasonId, week),
           getTrendingAddPlayers(3),
           ...matchups.map((m) =>
             getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
@@ -119,19 +144,21 @@ export async function BetweenWeeksHub({
 
       weeklySuperlatives = superlatives;
       benchLeader = bench;
-      standouts = weekStandouts;
+      pool = weekPool;
       trending = trend;
 
-      for (const group of divisions) {
-        group.teams.forEach((t, i) => {
-          if (i === 0) {
-            leadsDivision.add(t.franchiseId);
-            divisionLeaderStatus.set(
-              t.franchiseId,
-              `1st in ${group.divisionName}`
-            );
-          }
-        });
+      if (anyGamesPlayed) {
+        for (const group of divisions) {
+          group.teams.forEach((t, i) => {
+            if (i === 0) {
+              leadsDivision.add(t.franchiseId);
+              divisionLeaderStatus.set(
+                t.franchiseId,
+                `1st in ${group.divisionName}`
+              );
+            }
+          });
+        }
       }
 
       matchups.forEach((m, i) => {
@@ -142,7 +169,10 @@ export async function BetweenWeeksHub({
     }
   }
 
-  // Game of the Week selection from the current slate.
+  // Game of the Week selection from the current slate. Projected totals come
+  // from the same starter pool Players to Watch scores over, so no extra
+  // query; they only drive the ranking when anyGamesPlayed is false.
+  const projectedByFranchise = sumProjectedByFranchise(pool);
   const candidates: GotwCandidate[] = matchups.map((m) => {
     const a = standingBy.get(m.homeTeam.franchiseId);
     const b = standingBy.get(m.awayTeam.franchiseId);
@@ -162,12 +192,29 @@ export async function BetweenWeeksHub({
         pointsFor: Number(b?.pointsScored ?? 0),
         division: b?.division ?? null,
       },
+      projectedA: projectedByFranchise.get(m.homeTeam.franchiseId) ?? 0,
+      projectedB: projectedByFranchise.get(m.awayTeam.franchiseId) ?? 0,
     };
   });
 
-  const gotwId = selectGameOfTheWeek(candidates);
+  const gotwId = selectGameOfTheWeek(candidates, anyGamesPlayed);
   const gameOfWeek = matchups.find((m) => m.matchupId === gotwId) ?? null;
   const restOfSlate = matchups.filter((m) => m.matchupId !== gotwId);
+  const kickoffWeekday = kickoffWeekdayName(nextKickoff);
+
+  // Players to Watch: the pre-kickoff replacement for the retrospective
+  // "Standouts" rail. Uses the same pool fetched above; empty (never
+  // "Standouts") when the pool is empty or nothing carries a projection.
+  let playersToWatch: PlayerToWatch[] = [];
+  if (seasonId != null && pool.length > 0) {
+    try {
+      playersToWatch = await getPlayersToWatchFromPool(pool, seasonId, week, {
+        featuredMatchupId: gotwId,
+      });
+    } catch {
+      // The rail is optional content; absence is fine.
+    }
+  }
 
   return (
     <>
@@ -209,6 +256,7 @@ export async function BetweenWeeksHub({
               avatarOf={(id) => standingBy.get(id)?.avatarUrl ?? null}
               divisionLeaderStatus={divisionLeaderStatus}
               leadsDivision={leadsDivision}
+              anyGamesPlayed={anyGamesPlayed}
               editorial={editorial}
             />
           )}
@@ -226,7 +274,8 @@ export async function BetweenWeeksHub({
                     ] ??
                     genericSlateAngle(
                       record(m.homeTeam.franchiseId),
-                      record(m.awayTeam.franchiseId)
+                      record(m.awayTeam.franchiseId),
+                      kickoffWeekday
                     );
                   return (
                     <SlateCard
@@ -271,13 +320,13 @@ export async function BetweenWeeksHub({
         </div>
 
         {/* Right rail: last week's receipts */}
-        <aside className="flex flex-col gap-8">
+        <aside className="hidden lg:flex lg:flex-col gap-8">
           {weeklySuperlatives && (
             <WeekInBooksCard week={priorWeek} superlatives={weeklySuperlatives} />
           )}
           {benchLeader && <BenchCallout leader={benchLeader} />}
-          {(standouts.playerOfWeek || standouts.dudStarter) && (
-            <StandoutsCard week={priorWeek} standouts={standouts} />
+          {playersToWatch.length > 0 && (
+            <PlayersToWatchCard week={week} players={playersToWatch} />
           )}
           {trending.length > 0 && <TrendingCard players={trending} />}
         </aside>
@@ -299,6 +348,7 @@ function GameOfWeekSection({
   avatarOf,
   divisionLeaderStatus,
   leadsDivision,
+  anyGamesPlayed,
   editorial,
 }: {
   matchup: PairedMatchup;
@@ -309,6 +359,7 @@ function GameOfWeekSection({
   avatarOf: (id: string) => string | null;
   divisionLeaderStatus: Map<string, string>;
   leadsDivision: Set<string>;
+  anyGamesPlayed: boolean;
   editorial: HubEditorial;
 }) {
   const home = matchup.homeTeam;
@@ -329,7 +380,8 @@ function GameOfWeekSection({
   const kickerLead = divisionName ? `${divisionName} Rematch` : "Cross-Division";
   const stakes = stakesClause(
     leadsDivision.has(home.franchiseId),
-    leadsDivision.has(away.franchiseId)
+    leadsDivision.has(away.franchiseId),
+    anyGamesPlayed
   );
   const kicker = `${kickerLead} · ${stakes}`;
 
@@ -535,59 +587,58 @@ function BenchCallout({
   );
 }
 
-function StandoutRow({
-  standout,
-  tone,
-}: {
-  standout: WeekStandout;
-  tone: "gold" | "warm";
-}) {
-  const valueClass = tone === "warm" ? "text-accent-warm" : "text-text-primary";
+function PlayerToWatchRow({ player }: { player: PlayerToWatch }) {
   return (
     <div className="flex items-center gap-3">
       <PlayerHeadshot
-        playerId={standout.playerId}
-        name={standout.name}
+        playerId={player.playerId}
+        name={player.name}
         size={56}
-        nflTeam={standout.team}
+        nflTeam={player.team}
       />
       <div className="min-w-0 flex-1">
         <p className="text-body-sm font-semibold text-text-primary truncate">
-          {standout.name}
+          {player.name}
         </p>
-        <p className="text-caption text-text-tertiary">
-          {standout.team ?? "FA"} &middot; {standout.position ?? "?"}
+        <p className="text-caption text-text-tertiary truncate">
+          {player.team ?? "FA"} &middot; {player.position ?? "?"}
+        </p>
+        <p className="text-body-sm text-text-tertiary truncate">
+          Projected{" "}
+          <span className="text-stat tabular-nums text-text-secondary">
+            {player.projectedPoints.toFixed(1)}
+          </span>{" "}
+          &middot; {player.baselineLabel}
         </p>
       </div>
-      <span className={`text-stat tabular-nums text-h3 ${valueClass} shrink-0`}>
-        {standout.points.toFixed(1)}
-      </span>
     </div>
   );
 }
 
-function StandoutsCard({
+/**
+ * Pre-kickoff replacement for the retrospective "Standouts" rail. Every card
+ * is a true claim built from the current week's starter pool: this week's
+ * projection plus an honest prior-production baseline (never "Standouts"
+ * before a game has been played). Renders nothing when the list is empty.
+ */
+function PlayersToWatchCard({
   week,
-  standouts,
+  players,
 }: {
   week: number;
-  standouts: Awaited<ReturnType<typeof getWeekStandouts>>;
+  players: PlayerToWatch[];
 }) {
+  if (players.length === 0) return null;
   return (
     <section className="space-y-3">
-      <p className="text-kicker">Week {week} Standouts</p>
-      {standouts.playerOfWeek && (
-        <RailCard>
-          <p className="text-kicker text-accent-gold mb-3">Player of the Week</p>
-          <StandoutRow standout={standouts.playerOfWeek} tone="gold" />
-        </RailCard>
-      )}
-      {standouts.dudStarter && (
-        <RailCard>
-          <p className="text-kicker text-accent-warm mb-3">Dud Starter</p>
-          <StandoutRow standout={standouts.dudStarter} tone="warm" />
-        </RailCard>
-      )}
+      <p className="text-kicker">Players to Watch &middot; Week {week}</p>
+      <RailCard>
+        <div className="space-y-4 divide-y divide-divider [&>*:not(:first-child)]:pt-4">
+          {players.map((p) => (
+            <PlayerToWatchRow key={p.playerId} player={p} />
+          ))}
+        </div>
+      </RailCard>
     </section>
   );
 }

@@ -6,6 +6,7 @@ import {
   formatSlateH2H,
   stakesClause,
   genericSlateAngle,
+  kickoffWeekdayName,
   type GotwCandidate,
   type GotwTeam,
 } from "./between-weeks";
@@ -73,6 +74,29 @@ describe("selectGameOfTheWeek", () => {
     const first = candidate(3, t(), t());
     const second = candidate(1, t(), t());
     expect(selectGameOfTheWeek([first, second])).toBe(1);
+  });
+
+  it("ranks by combined projected strength when no games have been played", () => {
+    const zero = () => team(0, 0, 0, null);
+    const low = { matchupId: 1, teamA: zero(), teamB: zero(), projectedA: 90, projectedB: 88 };
+    const high = { matchupId: 2, teamA: zero(), teamB: zero(), projectedA: 120, projectedB: 118 };
+    expect(selectGameOfTheWeek([low, high])).toBe(2);
+  });
+
+  it("breaks a projected-strength tie by projection closeness, then matchupId", () => {
+    const zero = () => team(0, 0, 0, null);
+    const lopsided = { matchupId: 1, teamA: zero(), teamB: zero(), projectedA: 150, projectedB: 90 };
+    const even = { matchupId: 2, teamA: zero(), teamB: zero(), projectedA: 120, projectedB: 120 };
+    // Both total 240; the more evenly matched pairing wins.
+    expect(selectGameOfTheWeek([lopsided, even])).toBe(2);
+  });
+
+  it("honors an explicit anyGamesPlayed override over record auto-detection", () => {
+    // Records suggest games have been played, but the override says otherwise;
+    // projected strength should drive the ranking.
+    const a = { matchupId: 1, teamA: team(3, 0, 400, null), teamB: team(0, 3, 300, null), projectedA: 80, projectedB: 80 };
+    const b = { matchupId: 2, teamA: team(1, 2, 350, null), teamB: team(2, 1, 340, null), projectedA: 100, projectedB: 100 };
+    expect(selectGameOfTheWeek([a, b], false)).toBe(2);
   });
 });
 
@@ -148,15 +172,41 @@ describe("formatSlateH2H", () => {
   });
 });
 
-describe("stakesClause and genericSlateAngle", () => {
+describe("stakesClause", () => {
   it("promises first place when a team leads its division", () => {
-    expect(stakesClause(true, false)).toBe("First place on the line");
-    expect(stakesClause(false, false)).toBe("Bragging rights on the line");
+    expect(stakesClause(true, false, true)).toBe("First place on the line");
+    expect(stakesClause(false, false, true)).toBe("Bragging rights on the line");
   });
 
-  it("builds a truthful records-based angle", () => {
-    expect(genericSlateAngle("6-3", "5-4")).toBe(
+  it("calls it a season opener when no games have been played, even with a division-leader flag set", () => {
+    expect(stakesClause(true, false, false)).toBe("Season openers");
+    expect(stakesClause(false, false, false)).toBe("Season openers");
+  });
+});
+
+describe("genericSlateAngle", () => {
+  it("builds a truthful records-based angle using the passed weekday", () => {
+    expect(genericSlateAngle("6-3", "5-4", "Thursday")).toBe(
       "6-3 against 5-4. Somebody's number moves Thursday."
     );
+  });
+
+  it("renders a non-Thursday weekday when passed one", () => {
+    expect(genericSlateAngle("0-0", "0-0", "Wednesday")).toBe(
+      "0-0 against 0-0. Somebody's number moves Wednesday."
+    );
+  });
+});
+
+describe("kickoffWeekdayName", () => {
+  it("names the weekday of a kickoff instant in the league's home timezone", () => {
+    // Chicago is UTC-5 (CDT) in September; 05:00 UTC on 2026-09-09 is
+    // midnight Chicago local time on that same date, a Wednesday (the 2026
+    // week-1 slate opens that day).
+    expect(kickoffWeekdayName(new Date("2026-09-09T05:00:00Z"))).toBe("Wednesday");
+  });
+
+  it("falls back gracefully when there is no kickoff date", () => {
+    expect(kickoffWeekdayName(null)).toBe("kickoff");
   });
 });

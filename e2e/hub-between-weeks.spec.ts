@@ -95,6 +95,65 @@ test.describe("Between-Weeks Hub (1d)", () => {
     expect(text).not.toContain("–"); // en dash
   });
 
+  test("T06: pre-kickoff rail shows Players to Watch, never Standouts", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    if (!(await isBetweenWeeks(page))) {
+      test.skip();
+      return;
+    }
+    const main = page.locator("main");
+    const text = await main.innerText();
+    expect(text).not.toContain("Standouts");
+    // Only assert the heading exists when the rail actually has picks; an
+    // empty result renders nothing, which is also correct behavior.
+    const hasPlayersToWatch = /Players to Watch/i.test(text);
+    if (hasPlayersToWatch) {
+      await expect(
+        page.getByText(/Players to Watch/i).first()
+      ).toBeVisible();
+    }
+  });
+
+  test("T07: no duplicate <h2> section headings in <main>", async ({ page }) => {
+    await page.goto("/");
+    if (!(await isBetweenWeeks(page))) {
+      test.skip();
+      return;
+    }
+    const headings = await page.locator("main h2").allInnerTexts();
+    const normalized = headings.map((h) => h.trim()).filter(Boolean);
+    expect(new Set(normalized).size).toBe(normalized.length);
+  });
+
+  test("T08: no fabricated division-leader claim while the Game of the Week teams are both 0-0", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    if (!(await isBetweenWeeks(page))) {
+      test.skip();
+      return;
+    }
+    // Scope to the Game of the Week card's own season records (not the
+    // all-time head-to-head badge, which is a different, always-nonzero
+    // number even at week 1): both teams reading 0-0 there means the league
+    // has played zero games, so no "1st in Division" claim should exist
+    // anywhere in <main>.
+    const gotwHeading = page.getByText("Game of the Week", { exact: true });
+    if ((await gotwHeading.count()) === 0) return;
+    const gotwCard = gotwHeading.locator("xpath=following-sibling::*[1]");
+    const recordSpans = gotwCard.locator("span.text-stat");
+    const records = await recordSpans.allInnerTexts();
+    const seasonRecords = records.filter((r) => /^\d+-\d+$/.test(r.trim()));
+    const bothZero =
+      seasonRecords.length >= 2 && seasonRecords.every((r) => r.trim() === "0-0");
+    if (bothZero) {
+      const text = await page.locator("main").innerText();
+      expect(text).not.toContain("1st in Division");
+    }
+  });
+
   test("T05: mobile keeps the top of the funnel and hides the rail", async ({
     page,
   }) => {

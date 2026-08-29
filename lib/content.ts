@@ -488,6 +488,18 @@ const MATCHUP_ANGLES: MatchupTrashAngles = Object.freeze({
     'First place on the line and a week that actually matters. Two teams, one slate, and receipts to settle by Thursday night.',
 });
 
+// Before a single game has been played (week 1, pre-kickoff), "first place"
+// is a fabrication: every team is 0-0-0. This opener-appropriate variant
+// makes the same "this is the marquee matchup" claim without inventing
+// stakes that do not exist yet.
+const GAME_OF_WEEK_BLURB_OPENER =
+  'Nobody has a record yet, but this is the matchup the whole league circled first. Two teams, one slate, and the first receipts of the year up for grabs.';
+
+const MATCHUP_ANGLES_OPENER: MatchupTrashAngles = Object.freeze({
+  byPair: Object.freeze({}),
+  gameOfWeekBlurb: GAME_OF_WEEK_BLURB_OPENER,
+});
+
 // The smack feed is authored by the site's own "Site Desk", NOT by member
 // franchises: we do not put fabricated quotes in a real team's mouth. Every
 // post shares the Site Desk identity (a neutral gold crest) and speaks as the
@@ -540,14 +552,22 @@ function buildSmackPosts(now: number): readonly SmackPost[] {
 }
 
 /** The seeded editorial defaults, stamped for `now`. Always the fallback. */
-function seededEditorial(now: number): HubEditorial {
+/**
+ * `anyGamesPlayed` picks which seeded gameOfWeekBlurb ships: the default
+ * "first place on the line" line once the league has played a game, or the
+ * opener-appropriate variant before any game has been played (true claims
+ * only; see GAME_OF_WEEK_BLURB_OPENER). Defaults to true so callers that
+ * omit it (there are none left in this codebase, but the type is exported)
+ * keep the pre-existing behavior.
+ */
+function seededEditorial(now: number, anyGamesPlayed = true): HubEditorial {
   return {
     divisions: DIVISION_EDITORIAL,
     divisionFallback: DIVISION_FALLBACK,
     burningQuestions: BURNING_QUESTIONS,
     boldPredictions: BOLD_PREDICTIONS,
     offseasonReceipts: OFFSEASON_RECEIPTS,
-    matchupAngles: MATCHUP_ANGLES,
+    matchupAngles: anyGamesPlayed ? MATCHUP_ANGLES : MATCHUP_ANGLES_OPENER,
     smackPosts: buildSmackPosts(now),
     heroDek: null,
   };
@@ -682,6 +702,14 @@ export interface HubEditorialOptions {
   week?: number | null;
   /** Injectable clock for the relative smack-post timestamps. */
   now?: number;
+  /**
+   * Whether the league has played at least one game this season. Picks the
+   * seeded GOTW blurb: the opener-appropriate variant when false (never
+   * claims "first place on the line" before any game exists), the default
+   * variant when true or omitted. A published DB blurb (game_of_week_blurb
+   * hub_content) still overrides either seed, same as before.
+   */
+  anyGamesPlayed?: boolean;
 }
 
 /**
@@ -698,7 +726,7 @@ export async function getHubEditorial(
   opts: HubEditorialOptions = {},
 ): Promise<HubEditorial> {
   const now = opts.now ?? Date.now();
-  const seeds = seededEditorial(now);
+  const seeds = seededEditorial(now, opts.anyGamesPlayed ?? true);
 
   if (opts.seasonId == null) return seeds;
 
