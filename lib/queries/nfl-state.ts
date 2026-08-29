@@ -15,6 +15,29 @@ export interface NflState {
 }
 
 /**
+ * Preview/dev-only NFL state override, so a Vercel preview deployment can
+ * simulate a season phase (e.g. "regular season, week 1, nothing played yet")
+ * without waiting for the real calendar. Format: "<type>:<week>[:<season>]",
+ * e.g. NFL_STATE_OVERRIDE=regular:1 or regular:1:2026. Ignored in production
+ * (VERCEL_ENV === "production") and when unset or malformed, so it can never
+ * lie on the live site.
+ */
+function parseNflStateOverride(): NflState | null {
+  if (process.env.VERCEL_ENV === "production") return null;
+  const raw = process.env.NFL_STATE_OVERRIDE;
+  if (!raw) return null;
+
+  const m = /^(pre|regular|post|off):(\d{1,2})(?::(\d{4}))?$/.exec(raw.trim());
+  if (!m) return null;
+
+  return {
+    seasonType: m[1] as NflSeasonType,
+    week: Number(m[2]),
+    season: m[3] ?? String(new Date().getFullYear()),
+  };
+}
+
+/**
  * Fetches the current NFL state from the Sleeper API.
  * Returns null if the API call fails or validation fails.
  *
@@ -30,6 +53,9 @@ export interface NflState {
  * stale the surrounding page content already is.
  */
 export const getNflState = cache(async function getNflState(): Promise<NflState | null> {
+  const override = parseNflStateOverride();
+  if (override) return override;
+
   try {
     const result = await getNFLState(PAGE_REVALIDATE_SECONDS);
 
