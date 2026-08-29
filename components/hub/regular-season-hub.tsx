@@ -356,7 +356,10 @@ export async function RegularSeasonHub({
               weeklySuperlatives.lowestScorer ||
               weeklyCoachingMalpractice) && (
               <ScrollReveal>
-                <PageSection label="This Week's Damage" title="Superlatives">
+                <PageSection
+                  label={`Week ${completedWeek}`}
+                  title="This Week's Damage"
+                >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {weeklySuperlatives.closestWin && (
                       <WeeklySuperlativeCard
@@ -418,7 +421,7 @@ export async function RegularSeasonHub({
           {/* Season Superlatives */}
           {superlatives && (
             <ScrollReveal>
-              <PageSection label="Season Stats" title="Superlatives">
+              <PageSection label="Season Stats" title="The Season Ledger">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                   {superlatives.highestScore && (
                     <StatHero
