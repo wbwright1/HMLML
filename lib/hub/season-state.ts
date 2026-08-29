@@ -10,11 +10,19 @@ export function resolveHubSeasonType({
   dbSeasonStatus,
   hasLiveMatchups,
   nothingPlayedYet,
+  weekOneLeadWindow,
 }: {
   nflSeasonType: NflSeasonType | null;
   dbSeasonStatus: string | null;
   hasLiveMatchups: boolean;
   nothingPlayedYet: boolean;
+  /**
+   * True from the Sunday before the week-1 kickoff onward (or forced via the
+   * preview NFL_STATE_OVERRIDE). Suppresses the "everyone's 0-0" demotion so
+   * kickoff week shows the regular-season hub, not the preseason one.
+   * Source: isWeekOneLeadWindowActive (lib/queries/nfl-state.ts).
+   */
+  weekOneLeadWindow: boolean;
 }): NflSeasonType {
   let seasonType: NflSeasonType;
   if (nflSeasonType === "regular") {
@@ -35,7 +43,7 @@ export function resolveHubSeasonType({
     seasonType = "off";
   }
 
-  if (seasonType === "regular" && !hasLiveMatchups && nothingPlayedYet) {
+  if (seasonType === "regular" && !hasLiveMatchups && nothingPlayedYet && !weekOneLeadWindow) {
     seasonType = "pre";
   }
 

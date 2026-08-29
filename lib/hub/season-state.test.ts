@@ -9,6 +9,7 @@ describe("resolveHubSeasonType", () => {
         dbSeasonStatus: null,
         hasLiveMatchups: true,
         nothingPlayedYet: false,
+        weekOneLeadWindow: false,
       })
     ).toBe("regular");
   });
@@ -20,6 +21,7 @@ describe("resolveHubSeasonType", () => {
         dbSeasonStatus: null,
         hasLiveMatchups: false,
         nothingPlayedYet: false,
+        weekOneLeadWindow: false,
       })
     ).toBe("post");
   });
@@ -31,6 +33,7 @@ describe("resolveHubSeasonType", () => {
         dbSeasonStatus: "in_season",
         hasLiveMatchups: false,
         nothingPlayedYet: false,
+        weekOneLeadWindow: false,
       })
     ).toBe("pre");
   });
@@ -42,6 +45,7 @@ describe("resolveHubSeasonType", () => {
         dbSeasonStatus: "in_season",
         hasLiveMatchups: false,
         nothingPlayedYet: false,
+        weekOneLeadWindow: false,
       })
     ).toBe("regular");
     expect(
@@ -50,6 +54,7 @@ describe("resolveHubSeasonType", () => {
         dbSeasonStatus: "pre_draft",
         hasLiveMatchups: false,
         nothingPlayedYet: false,
+        weekOneLeadWindow: false,
       })
     ).toBe("pre");
     expect(
@@ -58,6 +63,7 @@ describe("resolveHubSeasonType", () => {
         dbSeasonStatus: "complete",
         hasLiveMatchups: false,
         nothingPlayedYet: false,
+        weekOneLeadWindow: false,
       })
     ).toBe("pre");
   });
@@ -69,6 +75,7 @@ describe("resolveHubSeasonType", () => {
         dbSeasonStatus: null,
         hasLiveMatchups: false,
         nothingPlayedYet: false,
+        weekOneLeadWindow: false,
       })
     ).toBe("off");
   });
@@ -80,6 +87,31 @@ describe("resolveHubSeasonType", () => {
         dbSeasonStatus: null,
         hasLiveMatchups: false,
         nothingPlayedYet: true,
+        weekOneLeadWindow: false,
+      })
+    ).toBe("pre");
+  });
+
+  it("keeps regular during the week-one lead window even when everyone is 0-0", () => {
+    expect(
+      resolveHubSeasonType({
+        nflSeasonType: "regular",
+        dbSeasonStatus: "in_season",
+        hasLiveMatchups: false,
+        nothingPlayedYet: true,
+        weekOneLeadWindow: true,
+      })
+    ).toBe("regular");
+  });
+
+  it("lead window alone never promotes a real preseason state", () => {
+    expect(
+      resolveHubSeasonType({
+        nflSeasonType: "pre",
+        dbSeasonStatus: "in_season",
+        hasLiveMatchups: false,
+        nothingPlayedYet: true,
+        weekOneLeadWindow: true,
       })
     ).toBe("pre");
   });
@@ -91,6 +123,7 @@ describe("resolveHubSeasonType", () => {
         dbSeasonStatus: null,
         hasLiveMatchups: true,
         nothingPlayedYet: true,
+        weekOneLeadWindow: false,
       })
     ).toBe("regular");
   });

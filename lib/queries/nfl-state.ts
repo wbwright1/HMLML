@@ -4,7 +4,11 @@ import { PAGE_REVALIDATE_SECONDS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { nflGames } from "@/lib/db/schema";
 import { and, eq, sql } from "drizzle-orm";
-import { resolveSeasonSegment, type SeasonSegment } from "@/lib/season-segment";
+import {
+  isWithinWeekOneLeadWindow,
+  resolveSeasonSegment,
+  type SeasonSegment,
+} from "@/lib/season-segment";
 
 export type NflSeasonType = "pre" | "regular" | "post" | "off";
 
@@ -17,23 +21,29 @@ export interface NflState {
 /**
  * Preview/dev-only NFL state override, so a Vercel preview deployment can
  * simulate a season phase (e.g. "regular season, week 1, nothing played yet")
- * without waiting for the real calendar. Format: "<type>:<week>[:<season>]",
- * e.g. NFL_STATE_OVERRIDE=regular:1 or regular:1:2026. Ignored in production
- * (VERCEL_ENV === "production") and when unset or malformed, so it can never
- * lie on the live site.
+ * without waiting for the real calendar. Format:
+ * "<type>:<week>[:<season>][:force]", e.g. NFL_STATE_OVERRIDE=regular:1 or
+ * regular:1:2026:force. The trailing ":force" also treats the week-one lead
+ * window as active (see isWeekOneLeadWindowActive), so a preview can show the
+ * regular-season hub before the real calendar reaches the Sunday before
+ * kickoff. Ignored in production (VERCEL_ENV === "production") and when unset
+ * or malformed, so it can never lie on the live site.
  */
-function parseNflStateOverride(): NflState | null {
+function parseNflStateOverride(): { state: NflState; forceLeadWindow: boolean } | null {
   if (process.env.VERCEL_ENV === "production") return null;
   const raw = process.env.NFL_STATE_OVERRIDE;
   if (!raw) return null;
 
-  const m = /^(pre|regular|post|off):(\d{1,2})(?::(\d{4}))?$/.exec(raw.trim());
+  const m = /^(pre|regular|post|off):(\d{1,2})(?::(\d{4}))?(?::(force))?$/.exec(raw.trim());
   if (!m) return null;
 
   return {
-    seasonType: m[1] as NflSeasonType,
-    week: Number(m[2]),
-    season: m[3] ?? String(new Date().getFullYear()),
+    state: {
+      seasonType: m[1] as NflSeasonType,
+      week: Number(m[2]),
+      season: m[3] ?? String(new Date().getFullYear()),
+    },
+    forceLeadWindow: m[4] === "force",
   };
 }
 
@@ -52,9 +62,24 @@ function parseNflStateOverride(): NflState | null {
  * default; a week rollover shows up here within the hour, which matches how
  * stale the surrounding page content already is.
  */
+/**
+ * True once the site should present as "kickoff week": from the Sunday before
+ * the earliest week-1 game onward (isWithinWeekOneLeadWindow), or immediately
+ * when a ":force" NFL_STATE_OVERRIDE is active (preview/dev only). Shared by
+ * the hub and the nav so they flip to the regular-season view on the same
+ * request. React-cache()'d per request; a DB failure reads as "not yet".
+ */
+export const isWeekOneLeadWindowActive = cache(async function isWeekOneLeadWindowActive(
+  seasonYear: number
+): Promise<boolean> {
+  if (parseNflStateOverride()?.forceLeadWindow) return true;
+  const week1Date = await getWeek1EarliestGameDate(seasonYear);
+  return isWithinWeekOneLeadWindow(week1Date, new Date());
+});
+
 export const getNflState = cache(async function getNflState(): Promise<NflState | null> {
   const override = parseNflStateOverride();
-  if (override) return override;
+  if (override) return override.state;
 
   try {
     const result = await getNFLState(PAGE_REVALIDATE_SECONDS);
@@ -71,6 +96,15 @@ export const getNflState = cache(async function getNflState(): Promise<NflState 
     const seasonType: NflSeasonType = validTypes.includes(season_type as NflSeasonType)
       ? (season_type as NflSeasonType)
       : "off";
+
+    // Kickoff-week normalization: Sleeper's season_type can lag "pre" right up
+    // to opening night, but from the Sunday before the week-1 kickoff the site
+    // should already present as regular season, week 1 (regular-season hub,
+    // week-1 matchup slate, in-season player tables). Only "pre" is promoted;
+    // post/off are real signals we never rewrite.
+    if (seasonType === "pre" && (await isWeekOneLeadWindowActive(Number(season)))) {
+      return { seasonType: "regular", week: 1, season };
+    }
 
     return {
       seasonType,

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   parseGameDate,
   resolveSeasonSegment,
+  isWithinWeekOneLeadWindow,
   KICKOFF_LEAD_DAYS,
 } from "./season-segment";
 
@@ -137,5 +138,48 @@ describe("resolveSeasonSegment", () => {
         now: daysBefore(0),
       })
     ).toBe("in_season");
+  });
+});
+
+describe("isWithinWeekOneLeadWindow", () => {
+  // 2026 week 1 opens Wednesday 2026-09-09; the window opens Sunday 2026-09-06.
+  const wednesdayKickoff = "2026-09-09";
+
+  it("is false before the Sunday preceding kickoff", () => {
+    expect(
+      isWithinWeekOneLeadWindow(wednesdayKickoff, new Date("2026-09-05T23:59:59Z"))
+    ).toBe(false);
+  });
+
+  it("opens at UTC midnight on the Sunday preceding kickoff", () => {
+    expect(
+      isWithinWeekOneLeadWindow(wednesdayKickoff, new Date("2026-09-06T00:00:00Z"))
+    ).toBe(true);
+  });
+
+  it("stays open through kickoff day and beyond", () => {
+    expect(
+      isWithinWeekOneLeadWindow(wednesdayKickoff, new Date("2026-09-09T12:00:00Z"))
+    ).toBe(true);
+    expect(
+      isWithinWeekOneLeadWindow(wednesdayKickoff, new Date("2026-10-01T00:00:00Z"))
+    ).toBe(true);
+  });
+
+  it("anchors a Thursday kickoff to the same week's Sunday", () => {
+    // 2025-09-04 was a Thursday; its preceding Sunday is 2025-08-31.
+    expect(isWithinWeekOneLeadWindow("2025-09-04", new Date("2025-08-30T12:00:00Z"))).toBe(false);
+    expect(isWithinWeekOneLeadWindow("2025-09-04", new Date("2025-08-31T00:00:00Z"))).toBe(true);
+  });
+
+  it("anchors a Sunday kickoff to the previous Sunday", () => {
+    // 2026-09-13 is a Sunday; the window opens 2026-09-06.
+    expect(isWithinWeekOneLeadWindow("2026-09-13", new Date("2026-09-05T12:00:00Z"))).toBe(false);
+    expect(isWithinWeekOneLeadWindow("2026-09-13", new Date("2026-09-06T00:00:00Z"))).toBe(true);
+  });
+
+  it("is false with no week-1 schedule date", () => {
+    expect(isWithinWeekOneLeadWindow(null, new Date("2026-09-08T00:00:00Z"))).toBe(false);
+    expect(isWithinWeekOneLeadWindow("not-a-date", new Date("2026-09-08T00:00:00Z"))).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import { getNflState } from "@/lib/queries/nfl-state";
+import { getNflState, isWeekOneLeadWindowActive } from "@/lib/queries/nfl-state";
 import { getLatestSeason, getCurrentWeekMatchups } from "@/lib/queries/matchups";
 import { getSeasonStandings } from "@/lib/queries/seasons";
 import { computeIsBetweenWeeks, getNextKickoff } from "@/lib/queries/kickoff";
@@ -47,11 +47,19 @@ async function resolveLivePill(): Promise<LivePillProps> {
       : [];
     const nothingPlayedYet = isPreWeekOne(standings);
 
+    // Same kickoff-week window as app/page.tsx (shared React-cache'd read), so
+    // the pill flips to the WK 1 state on the same request the hub does.
+    const windowSeasonYear =
+      latestSeason?.seasonYear ?? (nflState ? Number(nflState.season) : null);
+    const weekOneLeadWindow =
+      windowSeasonYear != null && (await isWeekOneLeadWindowActive(windowSeasonYear));
+
     const seasonType = resolveHubSeasonType({
       nflSeasonType,
       dbSeasonStatus: dbStatus,
       hasLiveMatchups,
       nothingPlayedYet,
+      weekOneLeadWindow,
     });
 
     // Live state only during the games window of the regular season or playoffs;
