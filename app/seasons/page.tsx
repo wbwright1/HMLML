@@ -6,7 +6,7 @@ import { getAllSeasons, getSeasonStandings } from "@/lib/queries/seasons";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { EmptyState } from "@/components/empty-state";
 import { SeasonNavigator } from "./season-navigator";
-import { getNflState } from "@/lib/queries/nfl-state";
+import { getNflState, isWeekOneLeadWindowActive } from "@/lib/queries/nfl-state";
 import { resolveHubSeasonType, isPreWeekOne, seasonTypeBadgeLabel } from "@/lib/hub/season-state";
 
 // ISR: rendered once, then served from cache until a successful sync calls
@@ -45,6 +45,7 @@ export default async function SeasonsPage() {
         dbSeasonStatus: latestSeason.status,
         hasLiveMatchups: false,
         nothingPlayedYet: isPreWeekOne(standings),
+        weekOneLeadWindow: await isWeekOneLeadWindowActive(latestSeason.seasonYear),
       });
       latestSeasonBadge = seasonTypeBadgeLabel(seasonType);
     } catch {

@@ -1,7 +1,7 @@
 import { getCurrentWeekMatchups, getLatestSeason } from "@/lib/queries/matchups";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { getSeasonStandings } from "@/lib/queries/seasons";
-import { getNflState } from "@/lib/queries/nfl-state";
+import { getNflState, isWeekOneLeadWindowActive } from "@/lib/queries/nfl-state";
 import { computeIsBetweenWeeks, getNextKickoff } from "@/lib/queries/kickoff";
 import { resolveHubSeasonType, isPreWeekOne } from "@/lib/hub/season-state";
 import type { NflSeasonType } from "@/lib/queries/nfl-state";
@@ -42,11 +42,19 @@ export default async function HomePage() {
   // in progress renders the preseason hub, not an empty regular-season hub.
   const nothingPlayedYet = isPreWeekOne(standings);
 
+  // Kickoff-week window: from the Sunday before the week-1 kickoff, the 0-0
+  // demotion above stops firing and the regular-season hub takes over.
+  const windowSeasonYear =
+    latestSeason?.seasonYear ?? (nflState ? Number(nflState.season) : null);
+  const weekOneLeadWindow =
+    windowSeasonYear != null && (await isWeekOneLeadWindowActive(windowSeasonYear));
+
   const seasonType = resolveHubSeasonType({
     nflSeasonType: nflState?.seasonType ?? null,
     dbSeasonStatus: latestSeason?.status ?? null,
     hasLiveMatchups,
     nothingPlayedYet,
+    weekOneLeadWindow,
   });
 
   const isGameWindow = seasonType === "regular" && hasLiveMatchups;

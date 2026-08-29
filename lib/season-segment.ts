@@ -44,6 +44,26 @@ export function parseGameDate(value: string | null | undefined): Date | null {
 }
 
 /**
+ * True once we've reached the Sunday (UTC) before the earliest week-1 game.
+ * This is the hub's "kickoff week" window: from that Sunday on, the site
+ * presents as regular season (week banner, kickoff countdown, standings)
+ * even though every team is still 0-0. Sunday rather than Monday because
+ * week 1 can open on a Wednesday (2026 does). A kickoff that itself falls
+ * on a Sunday anchors to the previous Sunday. Null/unparseable date: false
+ * (no week-1 schedule rows means the window can never fire).
+ */
+export function isWithinWeekOneLeadWindow(
+  week1EarliestGameDate: string | null,
+  now: Date
+): boolean {
+  const week1 = parseGameDate(week1EarliestGameDate);
+  if (!week1) return false;
+  const weekday = week1.getUTCDay(); // Sun=0 .. Sat=6
+  const daysBack = weekday === 0 ? 7 : weekday;
+  return now.getTime() >= week1.getTime() - daysBack * DAY_MS;
+}
+
+/**
  * Resolves the season segment. See the module header for the three cases and
  * the boundaries. When nfl_games has no week-1 rows (week1EarliestGameDate is
  * null) the 5-day rule cannot fire, so in-season falls back to season_type

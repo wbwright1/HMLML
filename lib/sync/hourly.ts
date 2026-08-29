@@ -361,7 +361,8 @@ async function syncMatchupScores(
   leagueId: string,
   seasonId: number,
   seasonYear: number,
-  currentWeek: number
+  currentWeek: number,
+  nflSeasonType: string
 ): Promise<SyncStepResult> {
   const startTime = Date.now();
   const logId = await logSyncStart("hourly", "matchups");
@@ -491,7 +492,15 @@ async function syncMatchupScores(
     // the (now final) points, so a game that reached this path with a null
     // winner does not stay winnerless. Ties (equal points) leave is_winner
     // null, which reads correctly as "no winner" downstream.
-    if (currentWeek > 1) {
+    //
+    // Only meaningful once the NFL regular season has started: during the
+    // preseason, Sleeper's state week counts PRESEASON weeks (e.g. week 3 in
+    // late August), and treating those as "prior regular-season weeks" stamped
+    // unplayed league weeks 1-2 complete at 0.0-0.0 (found Aug 2026 via the
+    // week-1 preview simulation). The main loop above self-heals any rows that
+    // were wrongly completed, since it re-derives status every run.
+    const regularSeasonStarted = nflSeasonType === "regular" || nflSeasonType === "post";
+    if (regularSeasonStarted && currentWeek > 1) {
       // Fetch the full prior-week pairing set (regardless of status) so each
       // matchup has both sides available to compare, then update only rows
       // that still need it.
@@ -1227,7 +1236,7 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
   const results = await Promise.allSettled([
     syncTransactions(leagueId, seasonId, currentWeek),
     syncRostersAndPicks(leagueId, seasonId),
-    syncMatchupScores(leagueId, seasonId, seasonYear, currentWeek),
+    syncMatchupScores(leagueId, seasonId, seasonYear, currentWeek, nflState.season_type),
     syncPlayerWeekPoints(leagueId, seasonId, seasonYear, currentWeek),
     syncPlayerWeekStats(seasonId, seasonYear, currentWeek),
   ]);

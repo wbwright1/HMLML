@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { seasons, syncLog } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
-import { getNflState, type NflSeasonType } from "@/lib/queries/nfl-state";
+import {
+  getNflState,
+  isWeekOneLeadWindowActive,
+  type NflSeasonType,
+} from "@/lib/queries/nfl-state";
 import { getMatchupsByWeek } from "@/lib/queries/matchups";
 import { getSeasonStandings } from "@/lib/queries/seasons";
 import { resolveHubSeasonType, isPreWeekOne } from "@/lib/hub/season-state";
@@ -98,6 +102,7 @@ async function resolveTarget(request: NextRequest): Promise<RunTarget | null> {
       dbSeasonStatus: seasonRow.status ?? null,
       hasLiveMatchups,
       nothingPlayedYet,
+      weekOneLeadWindow: await isWeekOneLeadWindowActive(seasonRow.seasonYear),
     });
   }
 
