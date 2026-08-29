@@ -599,7 +599,11 @@ test.describe("Root Layout", () => {
     let paddingBottom = await page
       .locator("footer")
       .evaluate((el) => parseFloat(window.getComputedStyle(el).paddingBottom));
-    expect(paddingBottom).toBeGreaterThanOrEqual(140);
+    // SiteFooter reserves dock clearance with
+    // pb-[calc(env(safe-area-inset-bottom)+96px)], so 96 is the true floor:
+    // headless Chrome reports a 0 safe-area inset, while a device with a home
+    // indicator adds its inset on top of the 96.
+    expect(paddingBottom).toBeGreaterThanOrEqual(96);
 
     await page.setViewportSize(DESKTOP);
     await page.goto("/");
