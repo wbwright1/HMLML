@@ -633,6 +633,179 @@ export const playerValues = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// book_lines
+// ---------------------------------------------------------------------------
+// The Book: one priced line per fantasy matchup per week. Computed by the
+// hourly sync from projected starter totals (lib/book/pricing.ts) and repriced
+// in place until the game locks at kickoff; nothing here is ever computed at
+// render time.
+//
+// home/away are OUR convention, not Sleeper's (fantasy has no venue): the
+// lower roster_id (numerically) is always "home", so the same pairing prices
+// the same way every run. `spread` is from the home side's perspective, always
+// a multiple of 0.5 and never exactly 0, which makes a push impossible by
+// construction. Moneylines are American odds, integers.
+//
+// homeProjected/awayProjected are the inputs that produced the price, kept so a
+// line can be explained (and audited) after the projections behind it move.
+export const bookLines = pgTable(
+  "book_lines",
+  {
+    id: serial("id").primaryKey(),
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id),
+    week: integer("week").notNull(),
+    matchupId: integer("matchup_id").notNull(), // Sleeper pairing ID
+    homeRosterId: text("home_roster_id").notNull(), // lower roster_id
+    awayRosterId: text("away_roster_id").notNull(),
+    spread: real("spread").notNull(), // home perspective, ±0.5 granularity, never 0
+    mlHome: integer("ml_home").notNull(),
+    mlAway: integer("ml_away").notNull(),
+    homeProjected: real("home_projected"),
+    awayProjected: real("away_projected"),
+    pricedAt: timestamp("priced_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_book_lines_season_week_matchup").on(
+      table.seasonId,
+      table.week,
+      table.matchupId,
+    ),
+    index("idx_book_lines_season_week").on(table.seasonId, table.week),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// book_picks
+// ---------------------------------------------------------------------------
+// A member's side on one game. spreadAtPick/mlAtPick SNAPSHOT the line as it
+// stood when the pick was made, so later repricing never moves a booked bet.
+// lockedAt is set when the member locks their slip early; an unlocked pick
+// still locks implicitly at kickoff (game status, never a clock guess), so a
+// null lockedAt does not mean "still editable".
+//
+// Grading is query-time from completed matchups against the snapshotted spread
+// (correctness over performance at 12 users), so there is no result column.
+export const bookPicks = pgTable(
+  "book_picks",
+  {
+    id: serial("id").primaryKey(),
+    memberId: integer("member_id")
+      .notNull()
+      .references(() => members.id),
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id),
+    week: integer("week").notNull(),
+    matchupId: integer("matchup_id").notNull(),
+    side: text("side").notNull(), // 'home' | 'away'
+    spreadAtPick: real("spread_at_pick").notNull(), // home perspective, as booked
+    mlAtPick: integer("ml_at_pick").notNull(), // the picked side's moneyline
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_book_picks_member_season_week_matchup").on(
+      table.memberId,
+      table.seasonId,
+      table.week,
+      table.matchupId,
+    ),
+    index("idx_book_picks_season_week").on(table.seasonId, table.week),
+    index("idx_book_picks_member").on(table.memberId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// book_props
+// ---------------------------------------------------------------------------
+// Weekly over/under props (the Props tab, epic item 3). Created here in the
+// same migration as the lines so props cost one confirm, not two.
+//
+// subjectType/subjectId say what the number is about ('franchise' + franchise
+// id, 'player' + Sleeper player id, or 'league' with a null subject). result is
+// null until the Tuesday grading pass fills it in from actuals.
+export const bookProps = pgTable(
+  "book_props",
+  {
+    id: serial("id").primaryKey(),
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id),
+    week: integer("week").notNull(),
+    kind: text("kind").notNull(), // e.g. 'franchise_points' | 'player_points' | 'league_total'
+    subjectType: text("subject_type").notNull(), // 'franchise' | 'player' | 'league'
+    subjectId: text("subject_id"), // franchise id / player id; null for league-wide
+    question: text("question").notNull(),
+    line: real("line").notNull(),
+    overOdds: integer("over_odds").notNull(),
+    underOdds: integer("under_odds").notNull(),
+    snark: text("snark"),
+    result: text("result"), // 'over' | 'under' | 'push' | null (ungraded)
+    actualValue: real("actual_value"),
+    gradedAt: timestamp("graded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_book_props_season_week_kind_subject").on(
+      table.seasonId,
+      table.week,
+      table.kind,
+      table.subjectType,
+      table.subjectId,
+    ),
+    index("idx_book_props_season_week").on(table.seasonId, table.week),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// book_prop_picks
+// ---------------------------------------------------------------------------
+// A member's over/under on one prop, with the odds snapshotted at pick time
+// for the same reason book_picks snapshots the spread.
+export const bookPropPicks = pgTable(
+  "book_prop_picks",
+  {
+    id: serial("id").primaryKey(),
+    memberId: integer("member_id")
+      .notNull()
+      .references(() => members.id),
+    propId: integer("prop_id")
+      .notNull()
+      .references(() => bookProps.id),
+    side: text("side").notNull(), // 'over' | 'under'
+    oddsAtPick: integer("odds_at_pick").notNull(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_book_prop_picks_member_prop").on(
+      table.memberId,
+      table.propId,
+    ),
+    index("idx_book_prop_picks_prop").on(table.propId),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // sync_log
 // ---------------------------------------------------------------------------
 export const syncLog = pgTable(
@@ -713,3 +886,15 @@ export type NewLeagueAward = typeof leagueAwards.$inferInsert;
 
 export type PlayerValue = typeof playerValues.$inferSelect;
 export type NewPlayerValue = typeof playerValues.$inferInsert;
+
+export type BookLine = typeof bookLines.$inferSelect;
+export type NewBookLine = typeof bookLines.$inferInsert;
+
+export type BookPick = typeof bookPicks.$inferSelect;
+export type NewBookPick = typeof bookPicks.$inferInsert;
+
+export type BookProp = typeof bookProps.$inferSelect;
+export type NewBookProp = typeof bookProps.$inferInsert;
+
+export type BookPropPick = typeof bookPropPicks.$inferSelect;
+export type NewBookPropPick = typeof bookPropPicks.$inferInsert;
