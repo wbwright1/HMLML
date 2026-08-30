@@ -2,6 +2,7 @@ import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { SyncTimestamp } from "@/components/sync-timestamp";
 import { BookTabs } from "@/components/book/book-tabs";
 import { BoardIsland } from "@/components/book/board-island";
+import { TrackingPane } from "@/components/book/tracking-pane";
 import { BOOK_COPY } from "@/lib/book/shared";
 import {
   buildBoardChips,
@@ -10,6 +11,14 @@ import {
   type BookChip,
   type BookGame,
 } from "@/lib/queries/book";
+import {
+  getSeasonAtsLeaderboard,
+  getStreakWatch,
+  getWhoPickedWhomGrid,
+  type AtsLeaderboardRow,
+  type StreakTile,
+  type WhoPickedWhomData,
+} from "@/lib/queries/book-tracking";
 
 // ISR: rendered once, then served from cache until a successful sync calls
 // revalidatePath("/", "layout"). The hourly sync re-prices the lines and
@@ -26,16 +35,20 @@ export const metadata = {
 export default async function BookPage() {
   let week = 1;
   let games: BookGame[] = [];
+  let leaderboard: AtsLeaderboardRow[] = [];
+  let grid: WhoPickedWhomData = { header: [], rows: [] };
+  let streakTiles: StreakTile[] = [];
 
   try {
     const bookWeek = await resolveBookWeek();
     if (bookWeek) {
       week = bookWeek.week;
-      games = await getBookBoard(
-        bookWeek.seasonId,
-        bookWeek.seasonYear,
-        bookWeek.week,
-      );
+      [games, leaderboard, grid, streakTiles] = await Promise.all([
+        getBookBoard(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week),
+        getSeasonAtsLeaderboard(bookWeek.seasonId),
+        getWhoPickedWhomGrid(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week),
+        getStreakWatch(bookWeek.seasonId),
+      ]);
     }
   } catch (e) {
     // An empty board cached as a "successful" render would serve a dead
@@ -44,6 +57,7 @@ export default async function BookPage() {
   }
 
   const chips = buildBoardChips(games, week);
+  const hasTrackingData = leaderboard.length > 0 || grid.header.length > 0;
 
   return (
     <div className="pb-12">
@@ -52,10 +66,16 @@ export default async function BookPage() {
       <BookTabs
         board={<BoardIsland games={games} week={week} />}
         tracking={
-          <ComingSoonPane
-            kicker="Tracking"
-            line={BOOK_COPY.trackingSoon}
-          />
+          hasTrackingData ? (
+            <TrackingPane
+              leaderboard={leaderboard}
+              grid={grid}
+              streakTiles={streakTiles}
+              week={week}
+            />
+          ) : (
+            <ComingSoonPane kicker="Tracking" line={BOOK_COPY.trackingSoon} />
+          )
         }
         props={
           <ComingSoonPane kicker="Props" line={BOOK_COPY.propsSoon} rules />
