@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
-import { bookLines, matchups } from "@/lib/db/schema";
-import { and, eq } from "drizzle-orm";
+import { bookLines, matchups, type NewBookLine } from "@/lib/db/schema";
+import { and, eq, sql } from "drizzle-orm";
 import { priceGame } from "@/lib/book/pricing";
 import {
   getRosterKickoffStates,
@@ -59,9 +59,10 @@ export async function repriceBookLines(
   const projections = await getWeekProjectedTotals(seasonId, seasonYear, week);
   const kickoffs = await getRosterKickoffStates(seasonId, seasonYear, week);
 
-  let rowCount = 0;
+  const priced: NewBookLine[] = [];
   let lockedSkipped = 0;
   let unpriceable = 0;
+  const pricedAt = new Date();
 
   for (const [matchupId, rosterIds] of byMatchup) {
     const pair = pairRosterIds(rosterIds);
@@ -88,37 +89,44 @@ export async function repriceBookLines(
 
     const price = priceGame(homeProjected, awayProjected);
 
+    priced.push({
+      seasonId,
+      week,
+      matchupId,
+      homeRosterId,
+      awayRosterId,
+      spread: price.spread,
+      mlHome: price.mlHome,
+      mlAway: price.mlAway,
+      homeProjected,
+      awayProjected,
+      pricedAt,
+    });
+  }
+
+  // One statement for the whole week, not a loop of upserts: writes are atomic
+  // per data type (CLAUDE.md), and a per-game loop that dies halfway leaves the
+  // board half re-priced, with some games carrying this hour's numbers and some
+  // carrying last hour's. `excluded` is the row Postgres was about to insert,
+  // so each conflicting row takes its own new price rather than a shared one.
+  if (priced.length > 0) {
     await db
       .insert(bookLines)
-      .values({
-        seasonId,
-        week,
-        matchupId,
-        homeRosterId,
-        awayRosterId,
-        spread: price.spread,
-        mlHome: price.mlHome,
-        mlAway: price.mlAway,
-        homeProjected,
-        awayProjected,
-        pricedAt: new Date(),
-      })
+      .values(priced)
       .onConflictDoUpdate({
         target: [bookLines.seasonId, bookLines.week, bookLines.matchupId],
         set: {
-          homeRosterId,
-          awayRosterId,
-          spread: price.spread,
-          mlHome: price.mlHome,
-          mlAway: price.mlAway,
-          homeProjected,
-          awayProjected,
-          pricedAt: new Date(),
+          homeRosterId: sql`excluded.home_roster_id`,
+          awayRosterId: sql`excluded.away_roster_id`,
+          spread: sql`excluded.spread`,
+          mlHome: sql`excluded.ml_home`,
+          mlAway: sql`excluded.ml_away`,
+          homeProjected: sql`excluded.home_projected`,
+          awayProjected: sql`excluded.away_projected`,
+          pricedAt: sql`excluded.priced_at`,
         },
       });
-
-    rowCount++;
   }
 
-  return { rowCount, lockedSkipped, unpriceable };
+  return { rowCount: priced.length, lockedSkipped, unpriceable };
 }
