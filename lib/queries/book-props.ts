@@ -18,9 +18,12 @@ import {
   parsePairSubject,
   PROP_GROUP,
   PROP_ORDER,
+  PROP_SUBJECT_SHAPE,
+  propDisplay,
   propLineUnit,
   propSideLabels,
 } from "@/lib/book/props";
+import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
 import { formatMoneyline, payoutLabel } from "@/lib/book/pricing";
 import {
   DEFAULT_STAKE,
@@ -58,15 +61,8 @@ export async function isWeekLocked(
 // History: what chooseCeilingThreshold and the Ceiling Watch snark line need
 // ---------------------------------------------------------------------------
 
-/**
- * Trailing-two-season weekly team scores (regular season and playoffs both
- * count; this is about scoring volatility, not standings), feeding
- * chooseCeilingThreshold's percentile. Only COMPLETE matchups count: a
- * scheduled or in-progress row's points are a snapshot, not a final score.
- */
-export async function getHistoricalWeeklyScores(
-  seasonId: number,
-): Promise<number[]> {
+/** The season ids inside the trailing-two-season window ending at `seasonId`. */
+async function trailingSeasonIds(seasonId: number): Promise<number[]> {
   const [current] = await db
     .select({ seasonYear: seasons.seasonYear })
     .from(seasons)
@@ -74,7 +70,7 @@ export async function getHistoricalWeeklyScores(
     .limit(1);
   if (!current) return [];
 
-  const seasonRows = await db
+  const rows = await db
     .select({ id: seasons.id })
     .from(seasons)
     .where(
@@ -83,43 +79,32 @@ export async function getHistoricalWeeklyScores(
         sql`${seasons.seasonYear} <= ${current.seasonYear}`,
       ),
     );
-  const seasonIds = seasonRows.map((r) => r.id);
-  if (seasonIds.length === 0) return [];
+  return rows.map((r) => r.id);
+}
 
-  const rows = await db
-    .select({ points: matchups.points })
-    .from(matchups)
-    .where(
-      and(inArray(matchups.seasonId, seasonIds), eq(matchups.status, "complete")),
-    );
-
-  return rows.map((r) => r.points ?? 0);
+export interface HistoricalOutcomes {
+  /** One value per roster-week: what Ceiling Watch's percentile is taken from. */
+  scores: number[];
+  /** One value per matchup: what the Blowout Special's percentile is taken from. */
+  margins: number[];
 }
 
 /**
- * Trailing-two-season weekly matchup MARGINS, feeding chooseBlowoutThreshold's
- * percentile. Same window and the same complete-only discipline as
- * getHistoricalWeeklyScores, one value per matchup rather than per roster.
+ * Trailing-two-season scoring history: every complete roster-week's points and
+ * every complete matchup's margin, from ONE fetch.
+ *
+ * Both thresholds want the same rows over the same window (regular season and
+ * playoffs both count; this is about scoring volatility, not standings), and
+ * this is a multi-thousand-row read over Neon HTTP, so pulling it twice per
+ * hourly run is exactly the kind of thing that has burned this project's
+ * transfer quota before. Only COMPLETE matchups count: a scheduled or
+ * in-progress row's points are a snapshot, not a final score.
  */
-export async function getHistoricalMargins(seasonId: number): Promise<number[]> {
-  const [current] = await db
-    .select({ seasonYear: seasons.seasonYear })
-    .from(seasons)
-    .where(eq(seasons.id, seasonId))
-    .limit(1);
-  if (!current) return [];
-
-  const seasonRows = await db
-    .select({ id: seasons.id })
-    .from(seasons)
-    .where(
-      and(
-        sql`${seasons.seasonYear} >= ${current.seasonYear - 2}`,
-        sql`${seasons.seasonYear} <= ${current.seasonYear}`,
-      ),
-    );
-  const seasonIds = seasonRows.map((r) => r.id);
-  if (seasonIds.length === 0) return [];
+export async function getHistoricalOutcomes(
+  seasonId: number,
+): Promise<HistoricalOutcomes> {
+  const seasonIds = await trailingSeasonIds(seasonId);
+  if (seasonIds.length === 0) return { scores: [], margins: [] };
 
   const rows = await db
     .select({
@@ -134,10 +119,13 @@ export async function getHistoricalMargins(seasonId: number): Promise<number[]> 
     );
 
   const sides = new Map<string, number[]>();
+  const scores: number[] = [];
   for (const row of rows) {
+    const points = row.points ?? 0;
+    scores.push(points);
     const key = `${row.seasonId}:${row.week}:${row.matchupId}`;
     const list = sides.get(key) ?? [];
-    list.push(row.points ?? 0);
+    list.push(points);
     sides.set(key, list);
   }
 
@@ -146,7 +134,8 @@ export async function getHistoricalMargins(seasonId: number): Promise<number[]> 
     if (pair.length !== 2) continue;
     margins.push(Math.abs(pair[0] - pair[1]));
   }
-  return margins;
+
+  return { scores, margins };
 }
 
 /** This season's highest single-week team score, for the Ceiling Watch snark line. */
@@ -179,8 +168,6 @@ export interface WeekActuals {
   maxPoints: number;
   /** matchupId -> the winning side's margin of victory (always >= 0). */
   marginByMatchup: Map<number, number>;
-  /** rosterId -> points. Team totals and the Upset Special read this. */
-  pointsByRoster: Map<string, number>;
   /** franchiseId -> points. What a franchise-keyed prop grades against. */
   pointsByFranchise: Map<string, number>;
   /** matchupId -> both sides, so the Upset Special can tell them apart. */
@@ -215,7 +202,6 @@ export async function getWeekActuals(
       totalPoints: 0,
       maxPoints: 0,
       marginByMatchup: new Map(),
-      pointsByRoster: new Map(),
       pointsByFranchise: new Map(),
       rosterPointsByMatchup: new Map(),
       maxMargin: 0,
@@ -225,16 +211,14 @@ export async function getWeekActuals(
   const complete = rows.every((r) => r.status === "complete");
 
   const byMatchup = new Map<number, { rosterId: string; points: number }[]>();
-  const pointsByRoster = new Map<string, number>();
   const pointsByFranchise = new Map<string, number>();
   for (const row of rows) {
     const list = byMatchup.get(row.matchupId) ?? [];
     list.push({ rosterId: row.rosterId, points: row.points ?? 0 });
     byMatchup.set(row.matchupId, list);
-    // Every per-roster and per-franchise number comes off the SAME matchups
-    // rows the league total and the week max do, so a team total can never
-    // disagree with the League Total about what somebody scored.
-    pointsByRoster.set(row.rosterId, row.points ?? 0);
+    // Every per-franchise number comes off the SAME matchups rows the league
+    // total and the week max do, so a team total can never disagree with the
+    // League Total about what somebody scored.
     pointsByFranchise.set(row.franchiseId, row.points ?? 0);
   }
 
@@ -264,7 +248,6 @@ export async function getWeekActuals(
     totalPoints,
     maxPoints,
     marginByMatchup,
-    pointsByRoster,
     pointsByFranchise,
     rosterPointsByMatchup,
     maxMargin,
@@ -316,7 +299,7 @@ export async function getWeekPlayerActuals(
 // Slate inputs: what the generator needs to build the expanded week
 // ---------------------------------------------------------------------------
 
-export interface StarterProjection {
+export interface PlayerProjection {
   playerId: string;
   rosterId: string;
   franchiseId: string;
@@ -324,24 +307,30 @@ export interface StarterProjection {
   name: string;
   position: string | null;
   nflTeam: string | null;
+  /** Whether he is in the lineup this week. Candidates require it; identity does not. */
+  started: boolean;
 }
 
 /**
- * Every projected STARTER for a week, with the player's identity attached.
+ * Every projected player for a week, starters flagged, with identity attached.
  *
- * Starters only: a bench player's projection is not a bet anybody would take,
- * and the projection itself is what the whole slate is priced from.
+ * Deliberately not filtered to starters in SQL even though only starters are
+ * candidates: a player prop posted on Tuesday stays posted even if his manager
+ * benches him on Sunday, and the one-prop-per-franchise rule has to know which
+ * franchise that BENCHED player belongs to, or a teammate slips through and the
+ * franchise ends up with two props.
  */
-export async function getWeekStarterProjections(
+export async function getWeekPlayerProjections(
   seasonId: number,
   week: number,
-): Promise<StarterProjection[]> {
+): Promise<PlayerProjection[]> {
   const rows = await db
     .select({
       playerId: playerWeekPoints.playerId,
       rosterId: playerWeekPoints.rosterId,
       franchiseId: playerWeekPoints.franchiseId,
       projected: playerWeekPoints.projectedPoints,
+      started: playerWeekPoints.started,
       name: players.fullName,
       position: players.position,
       nflTeam: players.nflTeam,
@@ -352,7 +341,6 @@ export async function getWeekStarterProjections(
       and(
         eq(playerWeekPoints.seasonId, seasonId),
         eq(playerWeekPoints.week, week),
-        eq(playerWeekPoints.started, true),
         isNotNull(playerWeekPoints.projectedPoints),
       ),
     );
@@ -367,34 +355,40 @@ export async function getWeekStarterProjections(
       name: r.name ?? `Player ${r.playerId}`,
       position: r.position,
       nflTeam: r.nflTeam,
+      started: r.started,
     }));
 }
 
+export interface ExistingProp {
+  id: number;
+  kind: string;
+  subjectId: string | null;
+  line: number;
+}
+
 /**
- * The subject ids already posted for each kind this week, in the order they
- * were first posted (row id ascending).
+ * The props already posted for this week, oldest first.
  *
  * This is the input that makes repricing sticky: whatever is already on the
- * board stays on the board, because a member may already have picked it.
+ * board stays on the board, because a member may already have picked it. It
+ * also carries each row's stored LINE, so a threshold chosen once on the
+ * creating run is reused rather than recomputed from history that a late stat
+ * correction could have moved under a booked pick.
  */
-export async function getExistingPropSubjects(
+export async function getExistingProps(
   seasonId: number,
   week: number,
-): Promise<Map<string, string[]>> {
-  const rows = await db
-    .select({ id: bookProps.id, kind: bookProps.kind, subjectId: bookProps.subjectId })
+): Promise<ExistingProp[]> {
+  return db
+    .select({
+      id: bookProps.id,
+      kind: bookProps.kind,
+      subjectId: bookProps.subjectId,
+      line: bookProps.line,
+    })
     .from(bookProps)
     .where(and(eq(bookProps.seasonId, seasonId), eq(bookProps.week, week)))
     .orderBy(bookProps.id);
-
-  const map = new Map<string, string[]>();
-  for (const row of rows) {
-    if (row.subjectId == null) continue;
-    const list = map.get(row.kind) ?? [];
-    list.push(row.subjectId);
-    map.set(row.kind, list);
-  }
-  return map;
 }
 
 // ---------------------------------------------------------------------------
@@ -453,27 +447,45 @@ const PROP_LABELS: Record<PropKind, string> = {
   franchise_matchbet: "Franchise Matchbet",
 };
 
-/** The subject ids one row refers to, whatever shape its kind stores them in. */
+/**
+ * The subject ids one row refers to, driven by PROP_SUBJECT_SHAPE so this and
+ * resolveSubject below cannot disagree about what a kind's subject_id holds.
+ * The switch is exhaustive over the shape union, so a new shape is a compile
+ * error rather than a card that silently renders a bare id.
+ */
 function subjectRefs(
   kind: PropKind,
   subjectId: string | null,
 ): { players: string[]; franchises: string[]; rosters: string[] } {
+  const none = { players: [], franchises: [], rosters: [] };
   const pair = parsePairSubject(subjectId);
-  switch (kind) {
-    case "player_points":
-      return { players: subjectId ? [subjectId] : [], franchises: [], rosters: [] };
-    case "team_total":
-      return { players: [], franchises: subjectId ? [subjectId] : [], rosters: [] };
-    case "player_matchbet":
-      return { players: pair ? [pair[0], pair[1]] : [], franchises: [], rosters: [] };
-    case "franchise_matchbet":
-      return { players: [], franchises: pair ? [pair[0], pair[1]] : [], rosters: [] };
-    case "upset_special":
-      // Stored as "<matchupId>~<dogRosterId>": only the roster half names anyone.
-      return { players: [], franchises: [], rosters: pair ? [pair[1]] : [] };
-    default:
-      return { players: [], franchises: [], rosters: [] };
+  const shape = PROP_SUBJECT_SHAPE[kind];
+  switch (shape) {
+    case "player":
+      return { ...none, players: subjectId ? [subjectId] : [] };
+    case "franchise":
+      return { ...none, franchises: subjectId ? [subjectId] : [] };
+    case "player_pair":
+      return { ...none, players: pair ? [pair[0], pair[1]] : [] };
+    case "franchise_pair":
+      return { ...none, franchises: pair ? [pair[0], pair[1]] : [] };
+    case "matchup_dog":
+      // "<matchupId>~<dogRosterId>": only the roster half names anybody.
+      return { ...none, rosters: pair ? [pair[1]] : [] };
+    case "none":
+    case "matchup":
+      return none;
+    default: {
+      const exhaustive: never = shape;
+      return exhaustive;
+    }
   }
+}
+
+/** Whether a kind's card is meaningless without a resolved subject. */
+function subjectIsRequired(kind: PropKind): boolean {
+  const shape = PROP_SUBJECT_SHAPE[kind];
+  return shape !== "none" && shape !== "matchup";
 }
 
 /**
@@ -507,46 +519,41 @@ export async function getBookProps(
     refs.rosters.forEach((id) => rosterIds.add(id));
   }
 
-  const rosterToFranchise = new Map<string, string>();
-  if (rosterIds.size > 0) {
-    const mapRows = await db
-      .select({
-        rosterId: franchiseSeasons.rosterId,
-        franchiseId: franchiseSeasons.franchiseId,
-      })
-      .from(franchiseSeasons)
-      .where(
-        and(
-          eq(franchiseSeasons.seasonId, seasonId),
-          inArray(franchiseSeasons.rosterId, [...rosterIds]),
-        ),
-      );
-    for (const r of mapRows) {
-      rosterToFranchise.set(r.rosterId, r.franchiseId);
-      franchiseIds.add(r.franchiseId);
-    }
+  // The roster map and the player lookup are independent, so they go together;
+  // the franchise lookup waits only because the roster map can add ids to it.
+  // The roster map is the SAME one the sync side builds, rather than a second
+  // inline join that could disagree about franchise identity.
+  const [rosterToFranchise, playerRows] = await Promise.all([
+    rosterIds.size > 0
+      ? getRosterToFranchiseMap(seasonId)
+      : Promise.resolve(new Map<string, string>()),
+    playerIds.size > 0
+      ? db
+          .select({
+            id: players.id,
+            fullName: players.fullName,
+            position: players.position,
+            nflTeam: players.nflTeam,
+          })
+          .from(players)
+          .where(inArray(players.id, [...playerIds]))
+      : Promise.resolve([]),
+  ]);
+
+  for (const rosterId of rosterIds) {
+    const franchiseId = rosterToFranchise.get(rosterId);
+    if (franchiseId) franchiseIds.add(franchiseId);
   }
 
   const playerById = new Map<string, BookPropEntity>();
-  if (playerIds.size > 0) {
-    const playerRows = await db
-      .select({
-        id: players.id,
-        fullName: players.fullName,
-        position: players.position,
-        nflTeam: players.nflTeam,
-      })
-      .from(players)
-      .where(inArray(players.id, [...playerIds]));
-    for (const p of playerRows) {
-      playerById.set(p.id, {
-        kind: "player",
-        playerId: p.id,
-        name: p.fullName ?? `Player ${p.id}`,
-        position: p.position,
-        nflTeam: p.nflTeam,
-      });
-    }
+  for (const p of playerRows) {
+    playerById.set(p.id, {
+      kind: "player",
+      playerId: p.id,
+      name: p.fullName ?? `Player ${p.id}`,
+      position: p.position,
+      nflTeam: p.nflTeam,
+    });
   }
 
   const franchiseById = new Map<string, BookPropEntity>();
@@ -573,32 +580,39 @@ export async function getBookProps(
     }
   }
 
+  /** Driven by the same registry subjectRefs uses, and exhaustive over it. */
   function resolveSubject(kind: PropKind, subjectId: string | null): BookPropSubject | null {
     const pair = parsePairSubject(subjectId);
-    switch (kind) {
-      case "player_points":
+    const shape = PROP_SUBJECT_SHAPE[kind];
+    switch (shape) {
+      case "player":
         return subjectId ? (playerById.get(subjectId) ?? null) : null;
-      case "team_total":
+      case "franchise":
         return subjectId ? (franchiseById.get(subjectId) ?? null) : null;
-      case "player_matchbet": {
+      case "player_pair": {
         if (!pair) return null;
         const a = playerById.get(pair[0]);
         const b = playerById.get(pair[1]);
         return a && b ? { kind: "pair", a, b } : null;
       }
-      case "franchise_matchbet": {
+      case "franchise_pair": {
         if (!pair) return null;
         const a = franchiseById.get(pair[0]);
         const b = franchiseById.get(pair[1]);
         return a && b ? { kind: "pair", a, b } : null;
       }
-      case "upset_special": {
+      case "matchup_dog": {
         if (!pair) return null;
         const franchiseId = rosterToFranchise.get(pair[1]);
         return franchiseId ? (franchiseById.get(franchiseId) ?? null) : null;
       }
-      default:
+      case "none":
+      case "matchup":
         return null;
+      default: {
+        const exhaustive: never = shape;
+        return exhaustive;
+      }
     }
   }
 
@@ -619,8 +633,15 @@ export async function getBookProps(
       id: row.id,
       kind,
       group: PROP_GROUP[kind] ?? "specials",
+      display: propDisplay(kind),
       label: PROP_LABELS[kind] ?? row.kind,
       question: row.question,
+      // A subject that cannot be resolved (a purged player id, a franchise that
+      // no longer exists) leaves the card with nothing to say about who it is
+      // about, and its two buttons would read "Over"/"Under" on a question that
+      // means nothing. The island renders it read-only instead of taking a
+      // pick nobody can interpret later.
+      subjectMissing: subjectIsRequired(kind) && subject === null,
       lineDisplay: formatPropLine(kind, row.line),
       lineUnit: propLineUnit(kind),
       subject,

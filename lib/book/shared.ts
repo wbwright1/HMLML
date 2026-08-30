@@ -14,8 +14,14 @@ export type { CoverResult };
 import { pickOutcome } from "@/lib/book/grading";
 
 /** Re-exported so the props island types picks and results from one place. */
-import type { PropGroup, PropKind, PropResult, PropSide } from "@/lib/book/props";
-export type { PropGroup, PropKind, PropResult, PropSide };
+import type {
+  PropDisplay,
+  PropGroup,
+  PropKind,
+  PropResult,
+  PropSide,
+} from "@/lib/book/props";
+export type { PropDisplay, PropGroup, PropKind, PropResult, PropSide };
 
 // ---------------------------------------------------------------------------
 // Board shapes
@@ -113,6 +119,13 @@ export interface BookPropView {
   kind: PropKind;
   /** Which section of the tab this card sits in. */
   group: PropGroup;
+  /** How the card is drawn. The League Total gets the full-width marquee. */
+  display: PropDisplay;
+  /**
+   * True when the kind needs a subject and it could not be resolved. The card
+   * still renders (the row is real and may carry picks) but takes no new ones.
+   */
+  subjectMissing: boolean;
   /** "Prop 01 · League Total", etc. */
   label: string;
   question: string;
@@ -306,8 +319,14 @@ export const BOOK_COPY = {
   teamTotalSnark: () =>
     "The projection likes them. Projections have been wrong before.",
   matchbetSnark: () => "One number each. No spread, no excuses.",
-  blowoutSnark: (threshold: number) =>
-    `Somebody in this league loses by ${threshold} most weeks. Pick whether it is this one.`,
+  /**
+   * Numeral-free on purpose. Snark renders in the serif and the question in
+   * Geist, and CLAUDE.md's three-font rule puts EVERY numeral in the mono face,
+   * so the threshold lives in the card's line (which is mono) and the prose
+   * never repeats it.
+   */
+  blowoutSnark: () =>
+    "Somebody in this league gets embarrassed most weeks. Pick whether it is this one.",
   upsetSnark: () =>
     "The projected doormat only has to win once to ruin somebody's month.",
   /** Section headers on the Props tab, in PROP_GROUP order. */
@@ -318,6 +337,9 @@ export const BOOK_COPY = {
     h2h: "Head to Head",
   } as Record<PropGroup, string>,
   propSlipEmpty: "Nothing on the slip yet.",
+  /** A posted prop whose subject no longer resolves. Calm, never panicked. */
+  propSubjectMissing:
+    "The Book cannot name this one any more. It stays on the board, closed.",
 } as const;
 
 // ---------------------------------------------------------------------------

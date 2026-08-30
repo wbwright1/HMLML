@@ -6,13 +6,13 @@ import { useSessionMember } from "@/components/use-session-member";
 import { togglePropPick } from "@/app/actions/book";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { PlayerHeadshot } from "@/components/player-headshot";
+import { PROP_GROUP_ORDER } from "@/lib/book/props";
 import {
   BOOK_COPY,
   DEFAULT_STAKE,
   type BookPropEntity,
   type BookPropView,
   type MemberPropPick,
-  type PropGroup,
   type PropSide,
 } from "@/lib/book/shared";
 
@@ -29,9 +29,6 @@ import {
  * Signed out, the tab is fully readable and completely inert: lines, odds,
  * and snark all render, there is just nothing to press.
  */
-
-/** Section order, top to bottom. Mirrors PROP_ORDER's grouping in props.ts. */
-const GROUP_ORDER: PropGroup[] = ["specials", "players", "teams", "h2h"];
 
 export function PropsIsland({
   props,
@@ -57,8 +54,23 @@ export function PropsIsland({
 
   const signedIn = session.status === "ready" && session.member !== null;
 
+  // Only picks on props that have NOT settled are still at risk: once a prop
+  // grades, the money is decided, and calling it "at risk" for the rest of the
+  // week would be a false claim about the member's slip.
+  const atRisk = useMemo(() => {
+    const ungraded = new Set(
+      props.filter((p) => p.result === null).map((p) => p.id),
+    );
+    let count = 0;
+    for (const propId of picks.keys()) if (ungraded.has(propId)) count++;
+    return count;
+  }, [props, picks]);
+
+  // Section order comes from the kind registry in lib, never a second list
+  // here: a group this file forgot to name would drop its cards off the tab
+  // while the slip strip above still counted them.
   const sections = useMemo(() => {
-    return GROUP_ORDER.map((group) => ({
+    return PROP_GROUP_ORDER.map((group) => ({
       group,
       label: BOOK_COPY.propGroupLabels[group],
       items: props.filter((p) => p.group === group),
@@ -152,7 +164,7 @@ export function PropsIsland({
         </p>
       )}
 
-      <SlipStrip total={props.length} picked={picks.size} signedIn={signedIn} />
+      <SlipStrip total={props.length} atRisk={atRisk} picked={picks.size} signedIn={signedIn} />
 
       {sections.map((section) => (
         <section key={section.group} className="flex flex-col gap-4">
@@ -163,27 +175,16 @@ export function PropsIsland({
             </span>
           </div>
           <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
-            {section.items.map((prop) =>
-              prop.kind === "league_total" ? (
-                <MarqueeCard
-                  key={prop.id}
-                  prop={prop}
-                  pick={picks.get(prop.id) ?? null}
-                  signedIn={signedIn}
-                  pending={pendingPropId === prop.id}
-                  onPick={onPick}
-                />
-              ) : (
-                <PropCard
-                  key={prop.id}
-                  prop={prop}
-                  pick={picks.get(prop.id) ?? null}
-                  signedIn={signedIn}
-                  pending={pendingPropId === prop.id}
-                  onPick={onPick}
-                />
-              ),
-            )}
+            {section.items.map((prop) => (
+              <PropCard
+                key={prop.id}
+                prop={prop}
+                pick={picks.get(prop.id) ?? null}
+                signedIn={signedIn}
+                pending={pendingPropId === prop.id}
+                onPick={onPick}
+              />
+            ))}
           </div>
         </section>
       ))}
@@ -200,10 +201,13 @@ export function PropsIsland({
 function SlipStrip({
   total,
   picked,
+  atRisk,
   signedIn,
 }: {
   total: number;
   picked: number;
+  /** Picks on props that have not graded yet. Settled is settled. */
+  atRisk: number;
   signedIn: boolean;
 }) {
   if (!signedIn) {
@@ -225,78 +229,31 @@ function SlipStrip({
         {total}
       </span>{" "}
       props picked
-      {picked > 0 ? (
+      {picked === 0 && (
+        <>
+          {" · "}
+          {BOOK_COPY.propSlipEmpty}
+        </>
+      )}
+      {atRisk > 0 && (
         <>
           {" · "}
           <span className="font-mono font-semibold tabular-nums text-accent-gold">
-            ${picked * DEFAULT_STAKE}
+            ${atRisk * DEFAULT_STAKE}
           </span>{" "}
           at risk
         </>
-      ) : (
-        <>{" · "}{BOOK_COPY.propSlipEmpty}</>
       )}
     </p>
   );
 }
 
 /**
- * The League Total, given the space it deserves: it is the one prop about the
- * whole league at once, and it is the screenshot the tab exists for.
+ * One prop card. The marquee variant (the League Total: the one prop about the
+ * whole league at once, and the screenshot the tab exists for) is the same
+ * component at a bigger size, so the two can never drift apart. Which variant
+ * a kind gets is decided in lib, not by matching on a kind name here.
  */
-function MarqueeCard({
-  prop,
-  pick,
-  signedIn,
-  pending,
-  onPick,
-}: {
-  prop: BookPropView;
-  pick: MemberPropPick | null;
-  signedIn: boolean;
-  pending: boolean;
-  onPick: (prop: BookPropView, side: PropSide) => void;
-}) {
-  const graded = prop.result !== null;
-
-  return (
-    <div
-      data-testid="prop-card"
-      data-prop-kind={prop.kind}
-      data-prop-graded={graded ? "true" : "false"}
-      className="card-surface card-glows relative overflow-hidden p-6 md:col-span-2"
-    >
-      <div className="mb-2 flex items-center justify-between gap-3">
-        <p className="text-kicker">{prop.label}</p>
-        <ResultBadge prop={prop} pick={pick} />
-      </div>
-      <p className="mb-1 text-body font-semibold text-text-primary">{prop.question}</p>
-      <p className="mb-4 flex items-baseline gap-2">
-        <span className="font-mono text-[40px] leading-none font-bold tabular-nums text-accent-gold">
-          {prop.lineDisplay}
-        </span>
-        {prop.lineUnit && (
-          <span className="text-caption text-text-tertiary">{prop.lineUnit}</span>
-        )}
-      </p>
-      <PropSides
-        prop={prop}
-        pick={pick}
-        signedIn={signedIn}
-        pending={pending}
-        onPick={onPick}
-      />
-      <GradedLine prop={prop} />
-      {prop.snark && (
-        <p className="mt-3 font-serif text-body italic text-text-tertiary">
-          {prop.snark}
-        </p>
-      )}
-      {graded && <span className="sr-only">This prop has been graded.</span>}
-    </div>
-  );
-}
-
 function PropCard({
   prop,
   pick,
@@ -310,25 +267,44 @@ function PropCard({
   pending: boolean;
   onPick: (prop: BookPropView, side: PropSide) => void;
 }) {
+  const graded = prop.result !== null;
+  const marquee = prop.display === "marquee";
+
   return (
     <div
       data-testid="prop-card"
       data-prop-kind={prop.kind}
-      data-prop-graded={prop.result !== null ? "true" : "false"}
-      className="card-surface p-5"
+      data-prop-graded={graded ? "true" : "false"}
+      className={
+        marquee
+          ? "card-surface card-glows relative overflow-hidden p-6 md:col-span-2"
+          : "card-surface p-5"
+      }
     >
-      <div className="mb-2.5 flex items-center justify-between gap-3">
+      <div
+        className={`flex items-center justify-between gap-3 ${marquee ? "mb-2" : "mb-2.5"}`}
+      >
         <p className="text-kicker">{prop.label}</p>
         <ResultBadge prop={prop} pick={pick} />
       </div>
 
       <SubjectIdentity prop={prop} />
 
-      <p className="mb-0.5 text-body-sm font-semibold text-text-primary">
+      <p
+        className={`font-semibold text-text-primary ${
+          marquee ? "mb-1 text-body" : "mb-0.5 text-body-sm"
+        }`}
+      >
         {prop.question}
       </p>
-      <p className="mb-3.5 flex items-baseline gap-1.5">
-        <span className="font-mono text-[28px] leading-none font-bold tabular-nums text-accent-gold">
+      <p
+        className={`flex items-baseline ${marquee ? "mb-4 gap-2" : "mb-3.5 gap-1.5"}`}
+      >
+        <span
+          className={`font-mono leading-none font-bold tabular-nums text-accent-gold ${
+            marquee ? "text-[40px]" : "text-[28px]"
+          }`}
+        >
           {prop.lineDisplay}
         </span>
         {prop.lineUnit && (
@@ -345,11 +321,23 @@ function PropCard({
       />
       <GradedLine prop={prop} />
 
+      {prop.subjectMissing && (
+        <p className="mt-3 text-body-sm text-text-tertiary">
+          {BOOK_COPY.propSubjectMissing}
+        </p>
+      )}
+
       {prop.snark && (
-        <p className="mt-3 font-serif text-body-sm italic text-text-tertiary">
+        <p
+          className={`mt-3 font-serif italic text-text-tertiary ${
+            marquee ? "text-body" : "text-body-sm"
+          }`}
+        >
           {prop.snark}
         </p>
       )}
+
+      {graded && <span className="sr-only">This prop has been graded.</span>}
     </div>
   );
 }
@@ -434,7 +422,10 @@ function PropSides({
   onPick: (prop: BookPropView, side: PropSide) => void;
 }) {
   const graded = prop.result !== null;
-  const interactive = signedIn && !graded;
+  // A card whose subject cannot be named is readable but closed: booking a
+  // pick on a question with no subject would leave a bet nobody can settle or
+  // even describe later.
+  const interactive = signedIn && !graded && !prop.subjectMissing;
 
   return (
     <div className="flex gap-2">
@@ -470,7 +461,10 @@ function PropSides({
 function GradedLine({ prop }: { prop: BookPropView }) {
   if (!prop.actualDisplay) return null;
   return (
-    <p className="mt-3 font-mono text-body-sm font-semibold tabular-nums text-text-secondary">
+    <p
+      data-testid="prop-actual"
+      className="mt-3 font-mono text-body-sm font-semibold tabular-nums text-text-secondary"
+    >
       {prop.actualDisplay}
     </p>
   );

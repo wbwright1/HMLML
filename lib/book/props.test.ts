@@ -6,7 +6,7 @@ import {
   formatOverUnderLine,
   formatPropLine,
   gradeCeilingWatch,
-  gradeLeagueTotal,
+  gradeOverUnderLine,
   gradeMercyLine,
   priceCeilingWatch,
   priceLeagueTotal,
@@ -14,25 +14,24 @@ import {
   probAnyoneOverThreshold,
   propSideLabels,
   toHalfInteger,
+  choosePercentileThreshold,
   chooseBlowoutThreshold,
   DEFAULT_BLOWOUT_THRESHOLD,
   encodePairSubject,
-  findBiggestUnderdog,
   formatPropActual,
   gradeBlowout,
   gradeMatchbet,
-  gradePlayerPoints,
-  gradeTeamTotal,
-  gradeUpset,
   parsePairSubject,
   PLAYER_UNCERTAINTY_SCALE,
   priceBlowoutSpecial,
   priceMatchbet,
   pricePlayerPoints,
   priceTeamTotal,
-  priceUpsetSpecial,
   PROP_GROUP,
   PROP_ORDER,
+  PROP_GROUP_ORDER,
+  propDisplay,
+  SCORE_UNCERTAINTY_SCALE,
   propLineUnit,
   selectStickySubjects,
 } from "./props";
@@ -52,7 +51,7 @@ describe("toHalfInteger", () => {
   });
 });
 
-describe("priceLeagueTotal / gradeLeagueTotal", () => {
+describe("priceLeagueTotal", () => {
   it("lines the combined projection and never pushes", () => {
     const totals = Array.from({ length: 12 }, (_, i) => 90 + i);
     const price = priceLeagueTotal(totals);
@@ -60,8 +59,8 @@ describe("priceLeagueTotal / gradeLeagueTotal", () => {
     expect(price.overOdds).toBe(-115);
     expect(price.underOdds).toBe(-105);
 
-    expect(gradeLeagueTotal(price.line + 0.1, price.line)).toBe("over");
-    expect(gradeLeagueTotal(price.line - 0.1, price.line)).toBe("under");
+    expect(gradeOverUnderLine(price.line + 0.1, price.line)).toBe("over");
+    expect(gradeOverUnderLine(price.line - 0.1, price.line)).toBe("under");
   });
 
   it("empty totals price a zero-ish line, not NaN", () => {
@@ -182,16 +181,16 @@ describe("presentation", () => {
 // The expanded slate (issue #239)
 // ===========================================================================
 
-describe("pricePlayerPoints / gradePlayerPoints", () => {
+describe("pricePlayerPoints", () => {
   it("lines the projection on the half-integer grid and never pushes", () => {
     for (const projected of [4, 8.2, 12.5, 19.99, 27.4]) {
       const price = pricePlayerPoints(projected);
       expect(price.line % 1).toBe(0.5);
-      expect(gradePlayerPoints(price.line + 0.01, price.line)).toBe("over");
-      expect(gradePlayerPoints(price.line - 0.01, price.line)).toBe("under");
+      expect(gradeOverUnderLine(price.line + 0.01, price.line)).toBe("over");
+      expect(gradeOverUnderLine(price.line - 0.01, price.line)).toBe("under");
       // The exact line is unreachable by construction, but the boundary must
       // still resolve one way rather than throw.
-      expect(gradePlayerPoints(price.line, price.line)).toBe("under");
+      expect(gradeOverUnderLine(price.line, price.line)).toBe("under");
     }
   });
 
@@ -214,12 +213,12 @@ describe("pricePlayerPoints / gradePlayerPoints", () => {
   });
 });
 
-describe("priceTeamTotal / gradeTeamTotal", () => {
+describe("priceTeamTotal", () => {
   it("lines a roster's projection on the half-integer grid", () => {
     const price = priceTeamTotal(118.3);
     expect(price.line).toBe(118.5);
-    expect(gradeTeamTotal(118.6, price.line)).toBe("over");
-    expect(gradeTeamTotal(118.4, price.line)).toBe("under");
+    expect(gradeOverUnderLine(118.6, price.line)).toBe("over");
+    expect(gradeOverUnderLine(118.4, price.line)).toBe("under");
   });
 
   it("is less confident than a player prop at the same rounding distance", () => {
@@ -295,17 +294,37 @@ describe("Blowout Special", () => {
   });
 });
 
+describe("choosePercentileThreshold", () => {
+  it("returns the fallback under the history minimum", () => {
+    expect(choosePercentileThreshold([], 0.9, 5, 40.5)).toBe(40.5);
+    expect(choosePercentileThreshold(Array(19).fill(30), 0.9, 5, 40.5)).toBe(40.5);
+  });
+
+  it("rounds the percentile to the requested multiple", () => {
+    const values = Array.from({ length: 100 }, (_, i) => i + 1);
+    expect(choosePercentileThreshold(values, 0.9, 10, 0) % 10).toBe(0);
+    expect(choosePercentileThreshold(values, 0.95, 5, 0) % 5).toBe(0);
+  });
+
+  it("backs both thresholds, so the two cannot define history differently", () => {
+    const scores = Array(100).fill(130);
+    expect(chooseCeilingThreshold(scores)).toBe(
+      choosePercentileThreshold(scores, 0.95, 10, DEFAULT_CEILING_THRESHOLD),
+    );
+  });
+});
+
 describe("Upset Special", () => {
   it("prices the dog as the dog", () => {
-    const price = priceUpsetSpecial(130, 95);
+    const price = priceMatchbet(95, 130, SCORE_UNCERTAINTY_SCALE);
     expect(price.overOdds).toBeGreaterThan(0);
     expect(price.underOdds).toBeLessThan(0);
   });
 
   it("grades the dog winning as YES, and a tie as a push", () => {
-    expect(gradeUpset(101, 100)).toBe("over");
-    expect(gradeUpset(99, 100)).toBe("under");
-    expect(gradeUpset(100, 100)).toBe("push");
+    expect(gradeMatchbet(101, 100)).toBe("over");
+    expect(gradeMatchbet(99, 100)).toBe("under");
+    expect(gradeMatchbet(100, 100)).toBe("push");
   });
 
   it("names the same matchup the Mercy Line does", () => {
@@ -313,9 +332,10 @@ describe("Upset Special", () => {
       { matchupId: 1, rosterA: "1", rosterB: "2", projA: 100, projB: 98 },
       { matchupId: 2, rosterA: "3", rosterB: "4", projA: 140, projB: 90 },
     ];
-    expect(findBiggestUnderdog(pairings)).toEqual(findBiggestFavorite(pairings));
-    expect(findBiggestUnderdog(pairings)?.dogRosterId).toBe("4");
-    expect(findBiggestUnderdog([])).toBeNull();
+    // The dog is the biggest favorite's opponent by construction, which is why
+    // the Upset Special reads its subject straight off findBiggestFavorite.
+    expect(findBiggestFavorite(pairings)?.dogRosterId).toBe("4");
+    expect(findBiggestFavorite(pairings)?.matchupId).toBe(2);
   });
 });
 
@@ -414,6 +434,23 @@ describe("expanded presentation", () => {
     );
     expect(formatPropActual("franchise_matchbet", 0, "push")).toBe("Dead even");
     expect(formatPropActual("upset_special", 0, "push")).toBe("Dead even");
+  });
+
+  it("derives the section order from the kind registry, every group once", () => {
+    expect(PROP_GROUP_ORDER).toEqual(["specials", "players", "teams", "h2h"]);
+    expect(new Set(PROP_GROUP_ORDER).size).toBe(PROP_GROUP_ORDER.length);
+    // Every kind's group has a section to land in, or its cards vanish.
+    for (const kind of Object.keys(PROP_ORDER) as (keyof typeof PROP_ORDER)[]) {
+      expect(PROP_GROUP_ORDER).toContain(PROP_GROUP[kind]);
+    }
+  });
+
+  it("gives the marquee to the League Total and only to it", () => {
+    expect(propDisplay("league_total")).toBe("marquee");
+    for (const kind of Object.keys(PROP_ORDER) as (keyof typeof PROP_ORDER)[]) {
+      if (kind === "league_total") continue;
+      expect(propDisplay(kind)).toBe("card");
+    }
   });
 
   it("groups and orders every kind exactly once", () => {
