@@ -491,6 +491,7 @@ export function buildPlayerMarket(
   candidates: FuturesCandidate[],
   listCount: number,
   temperature = PLAYER_SOFTMAX_TEMPERATURE,
+  keepIds: string[] = [],
 ): FuturesRow[] {
   if (candidates.length === 0) return [];
 
@@ -503,7 +504,15 @@ export function buildPlayerMarket(
     // Ties break on player id so a repriced board never reshuffles for free.
     .sort((a, b) => b.prob - a.prob || a.playerId.localeCompare(b.playerId));
 
-  const listed = priced.slice(0, Math.max(0, listCount));
+  // A candidate somebody has already bet on stays on the board even after he
+  // falls out of the top N. A book does not get to withdraw a market it has
+  // taken action on, and the row is also where the pick's grade is written, so
+  // dropping it would leave a member holding a ticket nothing ever settles.
+  const keep = new Set(keepIds);
+  const cut = Math.max(0, listCount);
+  const listed = priced.filter((p, i) => i < cut || keep.has(p.playerId));
+  const listedIds = new Set(listed.map((p) => p.playerId));
+
   const rows: FuturesRow[] = listed.map((p) => ({
     subjectType: "player",
     subjectId: p.playerId,
@@ -512,7 +521,7 @@ export function buildPlayerMarket(
   }));
 
   const fieldProb = priced
-    .slice(listed.length)
+    .filter((p) => !listedIds.has(p.playerId))
     .reduce((sum, p) => sum + p.prob, 0);
 
   if (fieldProb > 0) {
@@ -530,6 +539,42 @@ export function buildPlayerMarket(
 /** How many candidates a market lists before The Field. */
 export function candidateCountFor(market: FuturesMarket): number {
   return market === "roty" ? ROTY_CANDIDATE_COUNT : MVP_CANDIDATE_COUNT;
+}
+
+// ---------------------------------------------------------------------------
+// Team market rows
+// ---------------------------------------------------------------------------
+
+/**
+ * A team market as posted rows, translated from roster ids to franchise ids.
+ *
+ * The whole league is listed, including a team the simulation never once saw
+ * win: the board's dog cap is the honest way to say "this is not happening",
+ * and a franchise quietly missing from a market reads as a bug rather than as a
+ * price. There is no field row here for the same reason: on a twelve-team
+ * market, everybody is already on the board.
+ *
+ * A roster with no franchise mapping is dropped rather than posted under its
+ * numeric id, which would put a nameless row on a public board.
+ */
+export function buildTeamMarket(
+  probByRoster: Map<string, number>,
+  franchiseByRoster: Map<string, string>,
+): FuturesRow[] {
+  const rows: FuturesRow[] = [];
+  for (const [rosterId, prob] of probByRoster) {
+    const franchiseId = franchiseByRoster.get(rosterId);
+    if (!franchiseId) continue;
+    rows.push({
+      subjectType: "franchise",
+      subjectId: franchiseId,
+      prob,
+      odds: futuresOdds(prob),
+    });
+  }
+  // Ties break on franchise id, so a reprice that moved nothing reorders
+  // nothing either.
+  return rows.sort((a, b) => b.prob - a.prob || a.subjectId.localeCompare(b.subjectId));
 }
 
 // ---------------------------------------------------------------------------

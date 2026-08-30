@@ -353,6 +353,182 @@ export function picksForBoardWeek(
   return payload.picks;
 }
 
+// ---------------------------------------------------------------------------
+// Futures shapes
+// ---------------------------------------------------------------------------
+// Here for the same reason the board shapes are: the futures island imports
+// them, and anything it touches must not drag lib/db into the browser bundle.
+// (lib/book/futures.ts is safe for the island to import directly; it is pure
+// math with no database and no Sleeper.)
+
+import type {
+  FuturesMarket,
+  FuturesSubjectType,
+  FutureResult,
+} from "@/lib/book/futures";
+export type { FuturesMarket, FuturesSubjectType, FutureResult };
+
+export interface FuturesContextPart {
+  /** The numeral, mono. Empty when the part is prose only. */
+  stat: string;
+  label: string;
+}
+
+/** One priced row on a futures board: a franchise, a player, or The Field. */
+export interface FuturesEntry {
+  subjectType: FuturesSubjectType;
+  subjectId: string;
+  /** American odds, as posted. */
+  odds: number;
+  /** The fair (pre-overround) probability behind the price. */
+  prob: number;
+  name: string;
+  /** Franchise slug for team markets; null for players and The Field. */
+  slug: string | null;
+  abbreviation: string | null;
+  brandingColor: string | null;
+  /** Franchise crest or player headshot. Decorative; null is a monogram. */
+  imageUrl: string | null;
+  position: string | null;
+  nflTeam: string | null;
+  /**
+   * The attribution under the name, as stat/label pairs rather than a
+   * pre-formatted sentence: every numeral on this site renders in the mono
+   * face, so the card needs each number apart from its words to put it there.
+   * A pair with an empty stat is pure prose (The Field's line).
+   */
+  context: FuturesContextPart[];
+  /** How many members are holding this one. The league-consensus line. */
+  pickCount: number;
+  /** Filled in only after the season is graded. */
+  gradedResult: FutureResult | null;
+}
+
+export interface FuturesBoard {
+  market: FuturesMarket;
+  entries: FuturesEntry[];
+  /** The fantasy week this market's picks lock in. */
+  lockWeek: number;
+  /** True once that week has really kicked off (game status, never a clock). */
+  locked: boolean;
+}
+
+export interface MemberFuturePick {
+  market: FuturesMarket;
+  subjectId: string;
+  oddsAtPick: number;
+}
+
+/**
+ * The picks from an /api/book/future-picks payload, or null when they must be
+ * ignored.
+ *
+ * The season-scoped twin of picksForBoardWeek, and it exists for the same
+ * reason: /book is ISR-cached, so a visitor can hold last season's HTML while
+ * the API answers for the new one. Futures are keyed by market, and every
+ * season has a "champion" market, so a payload from the wrong season would line
+ * up perfectly against the board and paint last year's picks onto it.
+ */
+export function futurePicksForSeason(
+  payload: { picks: MemberFuturePick[]; seasonId: number | null } | null | undefined,
+  boardSeasonId: number | null,
+): MemberFuturePick[] | null {
+  if (!payload) return null;
+  if (boardSeasonId == null) return null;
+  if (payload.seasonId !== boardSeasonId) return null;
+  return payload.picks;
+}
+
+export interface FuturePickGuardFacts {
+  /** A priced row exists for this market and subject. */
+  subjectExists: boolean;
+  /** The market's lock week has kicked off. */
+  marketLocked: boolean;
+}
+
+/**
+ * Why a futures pick must be refused, or null when it may go through.
+ *
+ * Deliberately thinner than pickRejectionReason: futures carry no slip and no
+ * per-row lock, because a whole market locks at once. Kept pure and separate so
+ * the two ladders can never be confused for each other.
+ */
+export function futurePickRejectionReason(
+  facts: FuturePickGuardFacts,
+): string | null {
+  if (!facts.subjectExists) return BOOK_ERRORS.noFuture;
+  if (facts.marketLocked) return BOOK_ERRORS.futureLocked;
+  return null;
+}
+
+/**
+ * Every line the futures book speaks in. Per market, in one constant, for the
+ * same reason BOOK_COPY exists: snarky labels are content, not component
+ * internals.
+ *
+ * `rules` is the dashed house-rules footnote printed under each board, and it
+ * states the actual grading criterion, because a market nobody can check is not
+ * a market. The MVP and ROTY rules take the last regular-season week so the
+ * printed range is a true claim rather than a hardcoded guess.
+ */
+export const FUTURES_COPY = {
+  kicker: "Season-long markets",
+  title: "Futures.",
+  subline:
+    "Priced daily off real standings and real points. Picks lock and never move after.",
+  signedOut: "Claim your team to put a future on the board.",
+  emptyBoard: "No futures up yet. These post once the season has data worth pricing.",
+  syncNote: "Futures re-priced daily",
+  lockedNote: "Locked. The board is history now.",
+  markets: {
+    champion: {
+      label: "League Champion",
+      title: "Who lifts the trophy",
+      snark: null as string | null,
+      lockNote: "Locks at the first playoff kickoff.",
+    },
+    toilet_bowl: {
+      label: "Toilet Bowl",
+      title: "Who bottoms out",
+      snark:
+        "The consolation bracket runs backwards: you advance by losing. So does this market.",
+      lockNote: "Locks at the first playoff kickoff.",
+    },
+    mvp: {
+      label: "League MVP",
+      title: "Most points started",
+      snark: null as string | null,
+      lockNote: "Locks at the week 8 kickoff.",
+    },
+    roty: {
+      label: "Rookie of the Year",
+      title: "Best of the first-years",
+      snark: null as string | null,
+      lockNote: "Locks at the week 8 kickoff.",
+    },
+  },
+  fieldName: "The Field",
+  fieldContext: "Everyone not listed above",
+} as const;
+
+/** The dashed house-rules footnote under one board. */
+export function futuresRulesFor(
+  market: FuturesMarket,
+  finalRegularWeek: number,
+): string {
+  const disputes = "Disputes go to the commish, who is biased.";
+  switch (market) {
+    case "champion":
+      return `Graded from the winners bracket final. ${disputes}`;
+    case "toilet_bowl":
+      return `Graded from the consolation final, where the loser wins. ${disputes}`;
+    case "mvp":
+      return `MVP = most points scored while started, weeks 1 to ${finalRegularWeek}. ${disputes}`;
+    case "roty":
+      return `Same rule as MVP, rookies only (first NFL season). ${disputes}`;
+  }
+}
+
 /** Errors the server action returns. Same voice as the rest of the site. */
 export const BOOK_ERRORS = {
   signedOut: "Claim your team before you start betting.",
@@ -363,6 +539,8 @@ export const BOOK_ERRORS = {
   badInput: "That pick did not make sense.",
   noSeason: "No season is open for business.",
   noProp: "There is no such prop.",
+  noFuture: "That one is not on the futures board.",
+  futureLocked: "That market is closed. You had all season.",
 } as const;
 
 // ---------------------------------------------------------------------------

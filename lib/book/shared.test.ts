@@ -5,11 +5,15 @@ import {
   bookCtaLabel,
   bookDogPayoutLine,
   bookLineText,
+  futurePickRejectionReason,
+  futurePicksForSeason,
+  futuresRulesFor,
   picksForBoardWeek,
   pickRejectionReason,
   propPickRejectionReason,
   type HubFooterGame,
   type MemberBookPick,
+  type MemberFuturePick,
   type PickGuardFacts,
   type PropPickGuardFacts,
 } from "./shared";
@@ -227,5 +231,81 @@ describe("propPickRejectionReason", () => {
         existingPickLocked: true,
       }),
     ).toBe(BOOK_ERRORS.locked);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Futures
+// ---------------------------------------------------------------------------
+
+describe("futurePickRejectionReason", () => {
+  it("lets a pick on an open market through", () => {
+    expect(
+      futurePickRejectionReason({ subjectExists: true, marketLocked: false }),
+    ).toBeNull();
+  });
+
+  it("refuses a subject that is not priced on the board", () => {
+    expect(
+      futurePickRejectionReason({ subjectExists: false, marketLocked: false }),
+    ).toBe(BOOK_ERRORS.noFuture);
+  });
+
+  it("refuses any pick once the market has locked", () => {
+    expect(
+      futurePickRejectionReason({ subjectExists: true, marketLocked: true }),
+    ).toBe(BOOK_ERRORS.futureLocked);
+  });
+
+  it("checks the subject before the lock, so the message names the real problem", () => {
+    expect(
+      futurePickRejectionReason({ subjectExists: false, marketLocked: true }),
+    ).toBe(BOOK_ERRORS.noFuture);
+  });
+});
+
+describe("futurePicksForSeason", () => {
+  const picks: MemberFuturePick[] = [
+    { market: "champion", subjectId: "f1", oddsAtPick: 450 },
+  ];
+
+  it("returns the picks when the payload is for the season on the board", () => {
+    expect(futurePicksForSeason({ picks, seasonId: 7 }, 7)).toEqual(picks);
+  });
+
+  it("discards picks from another season, which would look identical", () => {
+    // Every season has a "champion" market, so a stale payload would line up
+    // perfectly against this board. That is exactly what this guards.
+    expect(futurePicksForSeason({ picks, seasonId: 6 }, 7)).toBeNull();
+  });
+
+  it("discards a payload that could not resolve a season at all", () => {
+    expect(futurePicksForSeason({ picks, seasonId: null }, 7)).toBeNull();
+  });
+
+  it("returns null when the board itself has no season", () => {
+    expect(futurePicksForSeason({ picks, seasonId: 7 }, null)).toBeNull();
+  });
+
+  it("handles a missing payload", () => {
+    expect(futurePicksForSeason(null, 7)).toBeNull();
+    expect(futurePicksForSeason(undefined, 7)).toBeNull();
+  });
+});
+
+describe("futuresRulesFor", () => {
+  it("prints the real MVP window rather than a hardcoded guess", () => {
+    expect(futuresRulesFor("mvp", 13)).toContain("weeks 1 to 13");
+    expect(futuresRulesFor("mvp", 15)).toContain("weeks 1 to 15");
+  });
+
+  it("says the toilet bowl is won by losing", () => {
+    expect(futuresRulesFor("toilet_bowl", 14)).toContain("the loser wins");
+  });
+
+  it("states a grading rule for every market", () => {
+    for (const market of ["champion", "toilet_bowl", "mvp", "roty"] as const) {
+      expect(futuresRulesFor(market, 14).length).toBeGreaterThan(20);
+    }
   });
 });

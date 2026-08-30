@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { bookPicks, bookPropPicks } from "@/lib/db/schema";
+import { bookFuturePicks, bookPicks, bookPropPicks } from "@/lib/db/schema";
 import { getSessionMember } from "@/lib/auth";
 import {
   getBookBoard,
@@ -15,7 +15,13 @@ import {
 } from "@/lib/queries/book";
 import { getBookPropById, isWeekLocked } from "@/lib/queries/book-props";
 import {
+  getFutureRow,
+  isFuturesMarketLocked,
+  resolveFuturesSeason,
+} from "@/lib/queries/book-futures";
+import {
   BOOK_ERRORS,
+  futurePickRejectionReason,
   pickRejectionReason,
   propPickRejectionReason,
   type BookActionResult,
@@ -29,6 +35,11 @@ const pickInput = z.object({
 
 const lockInput = z.object({
   week: z.number().int().min(1).max(22),
+});
+
+const futurePickInput = z.object({
+  market: z.enum(["champion", "toilet_bowl", "mvp", "roty"]),
+  subjectId: z.string().min(1).max(64),
 });
 
 function fail(error: string): BookActionResult {
@@ -158,6 +169,86 @@ export async function togglePick(input: {
       set: { side, spreadAtPick, mlAtPick, updatedAt: new Date() },
       // Never move a pick that locked between the read above and this write.
       setWhere: isNull(bookPicks.lockedAt),
+    });
+
+  // Consensus is part of the cached page, so everyone's board picks this up.
+  revalidatePath("/book");
+  return { ok: true, error: null };
+}
+
+/**
+ * Books, switches, or clears a member's call on one futures market.
+ *
+ * Same discipline as togglePick: the session is the only identity trusted, the
+ * season comes from the server's own view of the calendar rather than from the
+ * client, and every rule the board shows is re-enforced here. The odds are
+ * SNAPSHOTTED onto the row, so the daily repricing that runs for months
+ * afterwards never moves a number somebody already took.
+ *
+ * One pick per market is the unique index's job, not a read-then-write check;
+ * a repick lands on the conflict clause and replaces the row in place. Picking
+ * the subject you already hold clears the pick, which is the same toggle the
+ * weekly board uses.
+ */
+export async function pickFuture(input: {
+  market: "champion" | "toilet_bowl" | "mvp" | "roty";
+  subjectId: string;
+}): Promise<BookActionResult> {
+  const parsed = futurePickInput.safeParse(input);
+  if (!parsed.success) return fail(BOOK_ERRORS.badInput);
+  const { market, subjectId } = parsed.data;
+
+  const member = await getSessionMember();
+  if (!member) return fail(BOOK_ERRORS.signedOut);
+
+  const season = await resolveFuturesSeason();
+  if (!season) return fail(BOOK_ERRORS.noSeason);
+
+  const row = await getFutureRow(season.seasonId, market, subjectId);
+  const rejection = futurePickRejectionReason({
+    subjectExists: row !== null,
+    marketLocked: await isFuturesMarketLocked(season, market),
+  });
+  if (rejection) return fail(rejection);
+  // Narrowing for the write below; futurePickRejectionReason already refused a
+  // subject with no priced row.
+  if (!row) return fail(BOOK_ERRORS.noFuture);
+
+  const [existing] = await db
+    .select({ id: bookFuturePicks.id, subjectId: bookFuturePicks.subjectId })
+    .from(bookFuturePicks)
+    .where(
+      and(
+        eq(bookFuturePicks.memberId, member.id),
+        eq(bookFuturePicks.seasonId, season.seasonId),
+        eq(bookFuturePicks.market, market),
+      ),
+    )
+    .limit(1);
+
+  if (existing && existing.subjectId === subjectId) {
+    await db.delete(bookFuturePicks).where(eq(bookFuturePicks.id, existing.id));
+    revalidatePath("/book");
+    return { ok: true, error: null };
+  }
+
+  await db
+    .insert(bookFuturePicks)
+    .values({
+      memberId: member.id,
+      seasonId: season.seasonId,
+      market,
+      subjectId,
+      oddsAtPick: row.odds,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [
+        bookFuturePicks.memberId,
+        bookFuturePicks.seasonId,
+        bookFuturePicks.market,
+      ],
+      set: { subjectId, oddsAtPick: row.odds, updatedAt: new Date() },
     });
 
   // Consensus is part of the cached page, so everyone's board picks this up.

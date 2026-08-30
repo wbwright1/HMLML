@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   buildPlayerMarket,
+  buildTeamMarket,
   candidateCountFor,
   candidateScore,
   FIELD_SUBJECT_ID,
@@ -428,6 +429,96 @@ describe("buildPlayerMarket", () => {
 
   it("returns nothing for an empty pool", () => {
     expect(buildPlayerMarket([], 10)).toEqual([]);
+  });
+
+  it("keeps a candidate somebody bet on, even once he falls off the board", () => {
+    const fallen = "p20";
+    const plain = buildPlayerMarket(pool, 10);
+    expect(plain.some((r) => r.subjectId === fallen)).toBe(false);
+
+    const rows = buildPlayerMarket(pool, 10, undefined, [fallen]);
+    const kept = rows.find((r) => r.subjectId === fallen);
+    expect(kept).toBeDefined();
+    expect(kept?.subjectType).toBe("player");
+    // Priced at his real probability, not resurrected at a made-up number.
+    expect(kept?.prob).toBeCloseTo(
+      buildPlayerMarket(pool, 25).find((r) => r.subjectId === fallen)?.prob ?? -1,
+      12,
+    );
+  });
+
+  it("takes a kept candidate's mass OUT of The Field, so nothing is counted twice", () => {
+    const rows = buildPlayerMarket(pool, 10, undefined, ["p20"]);
+    const total = rows.reduce((sum, r) => sum + r.prob, 0);
+    expect(total).toBeCloseTo(1, 10);
+
+    const field = rows.find((r) => r.subjectId === FIELD_SUBJECT_ID);
+    const plainField = buildPlayerMarket(pool, 10).find(
+      (r) => r.subjectId === FIELD_SUBJECT_ID,
+    );
+    expect(field?.prob).toBeLessThan(plainField?.prob ?? 0);
+  });
+
+  it("does not duplicate a kept candidate who is already listed", () => {
+    const rows = buildPlayerMarket(pool, 10, undefined, ["p00", "p01"]);
+    expect(rows.filter((r) => r.subjectId === "p00")).toHaveLength(1);
+    expect(rows).toHaveLength(11);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildTeamMarket
+// ---------------------------------------------------------------------------
+
+describe("buildTeamMarket", () => {
+  const franchiseByRoster = new Map([
+    ["1", "f1"],
+    ["2", "f2"],
+    ["3", "f3"],
+  ]);
+
+  it("posts every franchise, translated out of roster ids, best price first", () => {
+    const probs = new Map([
+      ["2", 0.2],
+      ["1", 0.5],
+      ["3", 0.3],
+    ]);
+    const rows = buildTeamMarket(probs, franchiseByRoster);
+    expect(rows.map((r) => r.subjectId)).toEqual(["f1", "f3", "f2"]);
+    expect(rows.every((r) => r.subjectType === "franchise")).toBe(true);
+    expect(rows.every((r) => Number.isInteger(r.odds))).toBe(true);
+  });
+
+  it("keeps a team the simulation never saw win, at the board's dog price", () => {
+    const probs = new Map([
+      ["1", 0.9],
+      ["2", 0.1],
+      ["3", 0],
+    ]);
+    const rows = buildTeamMarket(probs, franchiseByRoster);
+    const hopeless = rows.find((r) => r.subjectId === "f3");
+    expect(hopeless).toBeDefined();
+    expect(hopeless?.odds).toBeGreaterThan(0);
+  });
+
+  it("drops a roster with no franchise rather than posting a nameless row", () => {
+    const probs = new Map([
+      ["1", 0.5],
+      ["99", 0.5],
+    ]);
+    const rows = buildTeamMarket(probs, franchiseByRoster);
+    expect(rows.map((r) => r.subjectId)).toEqual(["f1"]);
+  });
+
+  it("is stable under a tie, so a reprice that moved nothing reorders nothing", () => {
+    const probs = new Map([
+      ["3", 0.25],
+      ["1", 0.25],
+      ["2", 0.25],
+    ]);
+    expect(
+      buildTeamMarket(probs, franchiseByRoster).map((r) => r.subjectId),
+    ).toEqual(["f1", "f2", "f3"]);
   });
 });
 
