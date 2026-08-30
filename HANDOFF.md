@@ -1,192 +1,224 @@
-# Handoff: issue #225 (The Book 4/4: hub integration)
+# HANDOFF: issue #224 - The Book Props tab
 
-Paused mid-implementation (user going offline). This is a WIP commit, not
-ready for PR. Branch: `feat/225-book-hub-integration`, based on
-`origin-https/prod` @ d3b5a62 (PR #230 squash-merged the foundation there;
-do NOT rebase onto the old `feat/222-the-book-foundation` branch, it's stale).
+## Status: early, paused mid-implementation (research + pricing engine only)
 
-## Done so far
+Branch: `feat/224-book-props`, based on `origin-https/feat/222-the-book-foundation`
+(commit 063ebca). **NOTE**: coordinator says PR #230 (the foundation) was
+squash-merged into `prod` as `d3b5a62`, so before pushing further you must:
 
-1. **lib/book/shared.ts**: added pure hub-footer helpers, unit tested in
-   `lib/book/shared.test.ts` (20/20 passing via `npx vitest run lib/book/shared.test.ts`):
-   - `bookLineText(game)` -> "CT -3.5 · ML -165/+140"
-   - `bookConsensusText(game)` -> "64% on CT" or null under `MIN_PICKS_FOR_CONSENSUS`
-   - `bookCtaLabel(status)` -> "Pick →" (open) / "The Book →" (live/final)
-   - `bookDogPayoutLine(game, stake?)` -> "A $10 friendly on WW +140 pays $14.00 if it lands."
-   - `buildHubLineFooter(game): BookLineFooter` -- assembles all of the above;
-     `dogPayoutLine` only set when `status === "open"`.
-   - New `HubFooterGame` type (structural subset of `BookGame`) and
-     `BookLineFooter` interface, both exported from shared.ts.
+```
+git fetch origin-https prod
+git rebase --onto origin-https/prod 063ebca
+```
 
-2. **components/book/line-footer.tsx** (NEW): `BookLineFooterRow` presentational
-   component (line text + consensus + gold CTA link to /book, plus italic
-   dog-payout line), shared by both card hosts below. Re-exports `BookLineFooter`
-   type from `lib/book/shared`.
+This branch was cut before that rebase happened, so the first real step on
+resuming is to do that rebase (content should be identical/trivial).
 
-3. **components/live-matchup-card.tsx**: restructured the root from a single
-   `<Link>` to `<div className="card-surface ...">` wrapping the `<Link>` (main
-   clickable body) + an optional sibling footer div (`bookFooter` prop), because
-   nesting an `<a>` (the /book CTA) inside the card's own matchup-detail `<a>`
-   is invalid HTML. Added `bookFooter?: BookLineFooter` prop, renders
-   `<BookLineFooterRow>` in a bordered-top footer when present. Link corner
-   radius adjusts (`rounded-t-[14px]` vs `rounded-[14px]`) depending on whether
-   a footer is present.
+## What's done
 
-4. **components/hub/slate-card.tsx**: added optional `bookFooter?: BookLineFooter`
-   prop, renders the same `BookLineFooterRow` in a `mt-3 pt-3 border-t` block.
-   (SlateCard has no outer link to worry about, simpler case.)
+- Read issue #224 and epic #221 in full (via `gh api repos/wbwright1/HMLML/issues/224`
+  and `.../221` - `gh issue view` is empty in this env).
+- Read all foundation reference files: `lib/book/pricing.ts`, `lib/sync/book-lines.ts`,
+  `app/actions/book.ts`, `app/api/book/picks/route.ts`, `lib/queries/book.ts`,
+  `lib/book/shared.ts`, `components/book/board-island.tsx`, `components/book/book-tabs.tsx`,
+  `app/book/page.tsx`, migration `0014_the_book.sql`, schema.ts book_props/book_prop_picks
+  section (lines ~728-815), `lib/sync/hourly.ts` (syncBookLines step + runHourlySync,
+  ~line 990-1345), `lib/sync/daily.ts` (runDailySync, ~line 1330), `lib/win-probability.ts`,
+  `lib/queries/kickoff.ts`, design handoff `docs/design_handoff_the_book/The Book.dc.html`
+  (Props tab markup ~line 391-419, script/data lines ~747-762), existing e2e pattern
+  `e2e/book-board.spec.ts`.
+- Wrote `lib/book/props.ts` (pure, no I/O) - the pricing/grading engine for all
+  three props, mirroring `pricing.ts`'s conventions:
+  - `toHalfInteger` - shared half-integer rounding hook (extracted from priceSpread's logic).
+  - Prop 1 League Total: `priceLeagueTotal` (flat -115/-105 odds per issue), `gradeLeagueTotal`.
+  - Prop 2 Ceiling Watch: `probOverThreshold`/`probAnyoneOverThreshold` (normal-CDF based,
+    own `SCORE_UNCERTAINTY_SCALE`), `priceCeilingWatch` (odds via pricing.ts's `americanOdds`),
+    `chooseCeilingThreshold` (trailing-2-season P95, default 150 documented), `gradeCeilingWatch`.
+  - Prop 3 Mercy Line: `priceMercyLine` (reuses `toHalfInteger`, odds = `SPREAD_ODDS` flat -110
+    both sides, reusing pricing.ts's convention rather than inventing one), `gradeMercyLine`,
+    `findBiggestFavorite` (pure pairing-selection helper for the week's widest projected margin).
+  - Presentation helpers: `formatOverUnderLine`, `propSideLabels`, `formatPropLine`.
+- Wrote `lib/book/props.test.ts` - unit tests for all of the above. **NOT YET RUN**
+  (`npm run test:unit` was not executed before the pause - do this first on resume,
+  there may be arithmetic mistakes, e.g. double check `toHalfInteger` rounding-bucket
+  math which is easy to get off-by-one on: `f(v) = Math.round(v - 0.5) + 0.5` buckets
+  `[n, n+1)` to `n+0.5`, and `v === n+1` exactly rounds UP into the next bucket because
+  `Math.round(x.5)` rounds half-up in JS. Already caught and fixed two wrong test
+  expectations from this before pausing; there could be more.).
 
-5. **components/hub/shared.tsx** (`GameCard`): added optional `bookGame?: BookGame`
-   prop (type from `lib/queries/book`), computes
-   `bookFooter = bookGame ? buildHubLineFooter(bookGame) : undefined` and passes
-   it to `<LiveMatchupCard bookFooter={bookFooter} />`. **Important finding**:
-   `PairedMatchup.homeTeam`/`awayTeam` are sorted by `rosterId.localeCompare`
-   (lexicographic string sort), while `BookGame.home`/`away` are pinned to the
-   numerically-lower roster_id (`lib/book/pricing`/`lib/queries/book.ts`
-   `pairRosterIds`, `Number(x) - Number(y)`). These CAN disagree for a 12-team
-   league once a roster_id hits double digits (e.g. "10" vs "2": lexicographic
-   puts "10" first, numeric puts "2" first). This does NOT matter for the line
-   footer text itself (it's a self-contained fact about the game, not tied to
-   display order), but keep it in mind if a future feature needs to show
-   BookGame home/away next to PairedMatchup home/away visually — they are not
-   guaranteed to be the same physical side.
+## What's NOT done yet (the bulk of the work)
 
-## NOT done yet (next steps, in order)
+1. **DB query layer** - new file `lib/queries/book-props.ts` (planned, not created):
+   - `isWeekLocked(seasonYear, week)` - bool_or over `nfl_games.status <> 'pre_game'`.
+   - `getHistoricalWeeklyScores(seasonId)` - trailing-2-season `matchups.points` where
+     `status = 'complete'`, feeds `chooseCeilingThreshold`.
+   - `getSeasonHighScore(seasonId)` - max `matchups.points` this season for the Ceiling
+     Watch snark line (must cite a TRUE fact per issue).
+   - `getWeekActuals(seasonId, week)` - returns `{ complete, totalPoints, maxPoints,
+     marginByMatchup: Map<matchupId, number> }` read from `matchups`, feeds grading.
+   - `getBookProps(seasonId, week)` - read-side, formats DB rows into a `BookPropView[]`
+     shape for the page (label "Prop 01 · League Total" etc, formatted line, over/under
+     labels, snark, result-or-null).
+   - `getBookPropById(propId)`, `getMemberPropPicksForWeek(memberId, seasonId, week)`.
 
-1. **Wire real data through** to `GameCard` in
-   `components/hub/regular-season-hub.tsx`: call `getBookBoard(seasonId,
-   seasonYear, week)` from `lib/queries/book.ts` (already exists, reused as-is)
-   inside its own try/catch (optional data -- empty-catch is correct, per
-   CLAUDE.md: book asides on the hub are optional, `book_lines` can be empty
-   pre-first-sync). Build a `Map<number, BookGame>` keyed by `matchupId`, pass
-   `bookGame={bookLinesByMatchup.get(matchup.matchupId)}` into each `<GameCard>`
-   call (there's one call site in the `isGameWindow` branch of
-   `RegularSeasonHub`).
+2. **Sync layer** - new file `lib/sync/book-props.ts` (planned, not created):
+   - `generateOrRepriceBookProps(seasonId, seasonYear, week)`: mirrors
+     `lib/sync/book-lines.ts`'s `repriceBookLines` shape. Reads matchup pairings +
+     `getWeekProjectedTotals` (already exported from `lib/queries/book.ts`) +
+     `getRosterToFranchiseMap` (from `lib/queries/franchise-mapping.ts`). Skip entirely
+     (return `{rowCount:0, locked:true}`) if `isWeekLocked` - props lock at the WEEK's
+     first kickoff, not per-game like book_lines. Builds all 3 `NewBookProp` rows and
+     upserts in ONE statement via `.onConflictDoUpdate({ target: [seasonId, week, kind,
+     subjectType, subjectId], set: {...} })` against the existing
+     `uq_book_props_season_week_kind_subject` unique constraint (NULLS NOT DISTINCT -
+     Postgres ON CONFLICT matches on the column list regardless of that flag, should
+     just work like `repriceBookLines` does for `book_lines`).
+     - League Total: `subjectType: "league"`, `subjectId: null`.
+     - Ceiling Watch: `subjectType: "league"`, `subjectId: null`.
+     - Mercy Line: `subjectType: "matchup"`, `subjectId: String(matchupId)` - **this is a
+       deliberate extension** beyond the schema comment's documented `'franchise' |
+       'player' | 'league'` subjectTypes (that comment is descriptive, not an enum/CHECK
+       constraint - column is plain `text`). Needed because grading must find the exact
+       matchup regardless of roster/franchise reassignment; storing the franchise id
+       alone would not let grading locate the OTHER side's actual score. Document this
+       choice with a code comment when writing the sync file.
+   - `gradeBookProps(seasonId)`: finds all DISTINCT weeks in `book_props` for this season
+     with `result IS NULL` (avoids needing to guess "current week - 1" timing against
+     Sleeper's own Tuesday week-bump), calls a per-week `gradeWeekProps` helper for each,
+     which checks `getWeekActuals(...).complete` first (bails cheaply if not), then grades
+     each ungraded prop row by kind and writes `result`/`actualValue`/`gradedAt` via
+     `runAtomic` (`lib/db/atomic.ts`) as ONE batch of per-row `update` statements (not a
+     loop of separate awaited statements) - all-or-nothing per grading pass, matching the
+     "atomic per data type" rule. Skip (count in `skipped`) a `mercy_line` row whose
+     `subjectId` matchup isn't found in `marginByMatchup` (2-sided data missing) rather
+     than throwing.
 
-2. **Wire `SlateCard` in `components/hub/between-weeks-hub.tsx`**: same
-   `getBookBoard` call (or share the map computed for the between-weeks path),
-   look up by `m.matchupId` for each `restOfSlate` entry, build
-   `buildHubLineFooter(bookGame)` and pass as the new `bookFooter` prop to
-   `<SlateCard bookFooter={...} />`. Consider (optional, not required by the
-   issue) whether `GameOfTheWeekCard` should also get a footer -- the issue text
-   only explicitly names `slate-card.tsx` + regular-season hub, so leaving GOTW
-   alone is defensible; use judgment.
+3. **Wire into sync jobs**:
+   - `lib/sync/hourly.ts`: add a `syncBookProps` step function (copy `syncBookLines`'s
+     shape exactly, ~line 990-1038) calling `generateOrRepriceBookProps`, logging
+     `sync_log` under `dataType: "book_props"`. Call it right after the existing
+     `syncBookLines` call in `runHourlySync` (~line 1327-1343), in its own try/catch so a
+     props failure never takes book_lines or the rest of the run down.
+   - `lib/sync/daily.ts`: add a `syncBookPropGrading` step (no Sleeper API call needed -
+     just `select id from seasons order by seasonYear desc limit 1`, matching
+     `resolveBookWeek`'s "latest season" convention in `lib/queries/book.ts`), calling
+     `gradeBookProps(seasonId)`, logging `sync_log` under `dataType: "book_props"`. Add it
+     to the `Promise.allSettled([...])` array in `runDailySync` (~line 1348) alongside the
+     other independent steps. Needs `desc` added to the `drizzle-orm` import at the top of
+     `daily.ts` (currently only imports `and, eq, lt, ne, sql`).
+   - Both routes (`app/api/sync-hourly/route.ts`, `app/api/sync-daily/route.ts`) already
+     call `revalidateSite(...)` generically on any non-fully-failed run, so no route
+     changes needed for cache invalidation.
 
-3. **The gold Book rail card** (client island, NOT started):
-   - New `components/book/book-rail-island.tsx`, `"use client"`. Add it to the
-     CLAUDE.md client-island enumeration (the list already includes "the book
-     tab pill" and "the book board island" -- append this one with the same
-     justification: `/` (the hub) is ISR-cached, so the member's own slip
-     record cannot be server-rendered).
-   - Pattern: mirror `components/smack-composer-slot.tsx` /
-     `components/book/board-island.tsx`. Use `useSessionMember()` for the
-     session. Props from the server: `week: number`, `games: BookGame[]` (or a
-     narrower shape -- these are public board data, safe to bake into cached
-     HTML), and a server-computed **league-wide fallback string** for
-     signed-out/no-picks-yet visitors, e.g.
-     `` `${totalPicks} picks in this week · ${openCount} games still open` ``
-     where `totalPicks = games.reduce((n,g)=>n+g.homePicks+g.awayPicks,0)` and
-     `openCount = games.filter(g=>g.status==="open").length`. If `totalPicks`
-     is 0, use a generic honest fallback instead (no fabricated numbers) --
-     something like "The board opens once picks come in."
-   - On mount (signed in), `fetch("/api/book/picks")` (existing endpoint, no
-     new API route needed) and use `picksForBoardWeek(body?.data, week)` from
-     `lib/book/shared.ts` to discard stale-week payloads (same pattern as
-     `board-island.tsx`). For each pick whose game has `status !== "open"`
-     (i.e. started/live/final), grade it client-side via `gradePick(homePoints,
-     awayPoints, pick)` from `lib/book/pricing.ts` (pure, safe to import in a
-     client bundle -- no `lib/db` import chain). Compute hits/misses/pushes;
-     `formatRecord(hits, misses, pushes)` from `lib/format-record.ts` gives the
-     big mono record string. Build a summary line similar to the design's
-     `slipSummaryTxt`: "Covering on X of Y locked picks · Z games still open."
-     When the member has picks but none are graded yet (e.g. whole week still
-     open), don't fabricate a record -- show something honest like "X of Y
-     games picked" instead of "0-0".
-   - Design reference: `docs/design_handoff_the_book/The Book.dc.html` lines
-     ~148-155 (rail card markup) and ~665-673 (record/summary computation
-     logic in the mock's script, JS pseudocode only, not literal code to
-     copy -- reimplement in TS against the real schema).
-   - Visual: gold-tinted card (`accent-gold-light`/gradient per CLAUDE.md rail
-     card conventions used elsewhere, e.g. `RailCard tinted` in
-     `components/hub/between-weeks-hub.tsx` for the exact gradient recipe),
-     kicker "The Book · Week N" in gold, big mono record (`text-stat`), summary
-     line (`text-body-sm text-text-secondary`), gold pill CTA "Open the board →"
-     linking `/book`.
-   - Needs a thin **server wrapper** (e.g. `components/hub/book-rail-card.tsx`,
-     plain RSC) that fetches `games`/`week` (reuse the same `getBookBoard` call
-     from step 1, don't refetch) and renders `<BookRailIsland ... />`, so
-     `regular-season-hub.tsx` stays clean. Card must render nothing (or a
-     minimal empty state) when `games.length === 0` -- do not show a rail card
-     with a fabricated "0 picks" claim when The Book has no lines yet
-     (preseason/offseason or pre-first-sync).
-   - Placement: hub's ladder rail, per design, alongside/above
-     `StandingsSnapshotCard` in the `isGameWindow` aside AND in the
-     `!isGameWindow` branch's ladder section of `regular-season-hub.tsx`.
-     Check both branches -- the rail card should probably appear in both, not
-     just the live-game-window one.
+4. **Shared types/copy** - extend `lib/book/shared.ts`:
+   - `export type { PropKind, PropSide, PropResult } from "@/lib/book/props";` (same
+     re-export pattern as `CoverResult` from `pricing.ts`).
+   - `BookPropView` interface (id, kind, label "Prop 0N · ...", question, lineDisplay,
+     overLabel/underLabel, overOdds/underOdds, snark, result: PropResult | null, locked).
+   - `MemberPropPick` interface (propId, side, oddsAtPick, lockedAt).
+   - Add `PROP_COPY` (or extend `BOOK_COPY`) with the League Total generic snark line
+     (non-factual joke, fine to be static: design mock uses "Vegas would call this a
+     lottery. We call it Sunday.") and the House Rules text (**already exists** as
+     `BOOK_COPY.houseRules` - reuse it verbatim, don't duplicate).
+   - Add `BOOK_ERRORS.noProp` ("There is no such prop.") for the new server action's
+     rejection ladder.
+   - A `propPickRejectionReason` pure guard function analogous to `pickRejectionReason`,
+     unit tested alongside the existing ones in `shared.test.ts`. Simpler than the game
+     version: no "slip lock" concept for props (issue doesn't mention a lock-in-picks CTA
+     for props), so it's just: week mismatch -> locked; prop doesn't exist -> noProp; week
+     locked (past first kickoff) OR existing pick already locked -> locked.
 
-4. **Playoff-line divider (issue's 3rd bullet): ALREADY IMPLEMENTED, pre-existing.**
-   `components/standings-snapshot-card.tsx` already has a full `PlayoffLine`
-   component (gold hairline + italic serif "the playoff line" + hairline)
-   inserted after the correct rank, using a real playoff projection
-   (`isIn`-based) when available and falling back to `playoffLineAfter = 6`
-   otherwise. This was shipped long ago in PR #67 / #30 -- verified via
-   `git log --oneline -- components/standings-snapshot-card.tsx`. **One small
-   true-claim improvement still worth making**: the hardcoded default `6`
-   should reference the existing exported constant
-   `PLAYOFF_BERTHS = 6` in `lib/queries/divisions.ts` (issue explicitly asks to
-   "reuse the seed-count constant ... rather than hardcoding 6"). Change
-   `playoffLineAfter = 6` default param to `playoffLineAfter = PLAYOFF_BERTHS`
-   and import it. Trivial, ~2 line change, not yet done.
+5. **Server action** - extend `app/actions/book.ts` with `togglePropPick({week, propId,
+   side})`, modeled closely on `togglePick`: validate input with zod, resolve session
+   member, resolve `bookWeek` and reject on week mismatch, look up the prop row (must
+   belong to this season+week), check `isWeekLocked`, toggle-delete-if-same-side /
+   upsert-with-onConflictDoUpdate-scoped-by-`isNull(lockedAt)` otherwise (copy the
+   `setWhere: isNull(bookPicks.lockedAt)` pattern exactly), `revalidatePath("/book")`.
 
-5. **CLAUDE.md updates needed**:
-   - Add the new Book rail island to the client-island enumeration bullet
-     (search for "the book board island" in the Key Architecture Decisions
-     section, extend the sentence).
-   - No other CLAUDE.md changes anticipated (nav/project-structure sections
-     are already current from #230).
+6. **API route** - new `app/api/book/prop-picks/route.ts`, near-identical copy of
+   `app/api/book/picks/route.ts` (force-dynamic, session-gated, empty-on-signed-out,
+   returns `{ data: { picks, week }, syncedAt }`).
 
-6. **Testing/verification, none done yet**:
-   - `npx tsc --noEmit` -- NOT run yet on the current WIP; will likely have
-     errors since `regular-season-hub.tsx` doesn't pass `bookGame` yet (that's
-     fine, it's an optional prop, should compile) but verify after finishing
-     steps 1-3.
-   - `npx vitest run lib/book/shared.test.ts` -- 20/20 passing as of this
-     commit.
-   - Need a new/extended unit test for the playoff-line default constant
-     change (or just verify existing `standings-snapshot-card` doesn't have
-     tests to update -- check for a co-located test file).
-   - Need to verify with `NFL_STATE_OVERRIDE=regular:1:2026:force npm run dev`
-     (per task instructions) once hub wiring is done, screenshot desktop +
-     mobile.
-   - Need one Playwright E2E spec (chromium-only, single spec, never the full
-     suite against the live DB per CLAUDE.md/task constraints) covering: hub
-     renders line footer + CTA when `book_lines` has a row for the week; hub
-     renders with ZERO breakage when `book_lines` is empty (regression guard
-     for the "must never break" requirement). Check `e2e/` for existing Book
-     specs to extend rather than duplicating setup (e.g. a `book.spec.ts` may
-     already exist from the foundation PR).
-   - Unit test for the playoff-line placement logic already exists somewhere?
-     Check `components/standings-snapshot-card.test.tsx` or similar before
-     writing a new one -- issue's acceptance criteria mentions "unit test for
-     the divider placement logic" which likely already exists from the earlier
-     PR; just verify, don't duplicate.
+7. **Client island** - new `components/book/props-island.tsx` ("use client"), modeled on
+   `components/book/board-island.tsx`'s architecture: `useSessionMember()`, fetch
+   `/api/book/prop-picks` on mount, discard payload if `week` doesn't match (mirror
+   `picksForBoardWeek`'s reasoning, can duplicate the check inline rather than
+   generalizing the existing helper - simpler, and the existing one is typed specifically
+   to `MemberBookPick`), optimistic toggle via `togglePropPick`, `router.refresh()` on
+   success. Renders the full 2-col grid of 3 prop cards (kicker "Prop 0N · Name", question,
+   gold mono line via `formatPropLine`, two buttons with `propSideLabels`, odds via
+   `formatMoneyline`, payout via `payoutLabel`/`pay` from `pricing.ts`, serif italic snark)
+   PLUS the dashed House Rules card as the grid's 4th cell (per the design HTML,
+   `docs/design_handoff_the_book/The Book.dc.html` lines ~391-419) - matches how
+   `BoardIsland` owns its whole pane including the aside, not just the interactive bits.
+   Grading display: prop.result === null -> "Pending" kicker/badge; otherwise show
+   Over/Under (or Yes/No) with sage/rust + a checkmark/x glyph on the member's own pick,
+   same visual language as `YourPickRow` in `board-island.tsx`.
 
-## Gotchas / notes for whoever continues
+8. **Wire into the page** - `app/book/page.tsx`: fetch `getBookProps(seasonId, week)`
+   inside the existing try/catch (alongside `getBookBoard`), pass to a new `PropsIsland`
+   in place of the current `ComingSoonPane` for the props tab. Keep `rethrowUnlessTolerable`
+   discipline - an empty props fetch that silently caught would ISR-cache a dead tab.
 
-- Base branch is `origin-https/prod` @ `d3b5a62`, NOT
-  `feat/222-the-book-foundation` (that branch is now stale/superseded --
-  PR #230 squash-merged it). If you see 11 diverged commits warning on
-  `git status`, that's expected and harmless (comparing against the old
-  feature branch ref, not a problem).
-- `.env.local` `POSTGRES_URL` is the LIVE league DB -- read-only for this
-  task, this PR writes nothing to it.
-- Do not run the full Playwright suite against the live Neon DB (quota risk,
-  documented in memory). Single spec, chromium-only project only.
-- `lib/book/pricing.ts` and `lib/book/shared.ts` are both pure (no `lib/db`
-  import), which is exactly what makes them safe to import into
-  `components/book/board-island.tsx` (existing client island) and the new
-  rail island -- keep it that way, don't accidentally import `lib/queries/book`
-  (which pulls in `@/lib/db`) into a client file. `BookGame` the TYPE is fine
-  to import client-side (type-only imports are erased), but never import a
-  *function* from `lib/queries/book.ts` client-side.
+9. **CLAUDE.md update required**: the client-island enumeration bullet under "Key
+   Architecture Decisions" currently lists "...the book tab pill, and the book board
+   island" with a rationale paragraph specific to the board island. Add "and the book
+   props island" to that list and extend/generalize the rationale sentence to cover both
+   (same reasoning: `/book` is ISR-cached HTML shared league-wide, so a member's own prop
+   picks must resolve client-side). This file is checked into the repo and is treated as
+   binding project convention - don't skip this edit, a reviewer will check it against the
+   actual enumerated list.
+
+10. **E2E test** - new `e2e/book-props.spec.ts`, modeled closely on
+    `e2e/book-board.spec.ts`'s real-stack-no-mocks pattern (checks `book_props` table
+    exists and has rows for the current priced week before running, `test.skip` otherwise,
+    uses the `memberFixtureScope` helper, asserts against real Postgres rows after clicking
+    the real over/under button, not just DOM state). Chromium-only per instructions
+    (`npx playwright test e2e/book-props.spec.ts --project=chromium`), never the full suite.
+
+11. **Quality gates** (none run yet): `npx tsc --noEmit`, `npm run test:unit`, the new E2E
+    spec, screenshots of the Props tab desktop + mobile (via the `run` skill or a manual
+    Playwright script against a running dev server - remember `.env.local`'s
+    `POSTGRES_URL` is the LIVE DB, so don't run destructive migrations/tests against it
+    carelessly; the E2E fixture pattern in `book-board.spec.ts` scopes its writes to
+    `e2e-member-book%` sleeper_user_id and cleans up in `afterAll`).
+
+12. **Commit in logical chunks** (pricing engine / query+sync layer / UI+action / tests),
+    each with the `Co-Authored-By: Claude <noreply@anthropic.com>` trailer, per the ship
+    pipeline's developer standing instructions
+    (`~/.claude-personal/skills/ship/prompts/developer.md`).
+
+13. **PR-DRAFT.md** at worktree root (NOT committed): summary, `Closes #224`, test
+    evidence with real command output excerpts. Target is `prod` directly (the "stacks on
+    #230" note is NO LONGER NEEDED - #230/the foundation is already merged into prod as
+    `d3b5a62`). Do NOT open the PR.
+
+## Gotchas / things to double check on resume
+
+- **Rebase first.** This worktree's branch history (063ebca and its ancestors) predates
+  the squash-merge of PR #230 into `prod`. Must `git fetch origin-https prod` and
+  `git rebase --onto origin-https/prod 063ebca` before doing anything else, or before
+  pushing whatever's already been committed. Content should be identical so this should
+  be a clean/trivial rebase, but verify `git diff` between the old base and
+  `origin-https/prod` is actually empty for the files this issue touches before trusting
+  that.
+- `gh issue view` returns empty in this repo/env - always use `gh api
+  repos/wbwright1/HMLML/issues/<n>` instead.
+- The schema's `book_props.subjectType` comment says `'franchise' | 'player' | 'league'`
+  but it's a plain `text` column (no CHECK constraint) - using `'matchup'` for Mercy Line
+  is safe but deserves an explicit code comment explaining the deviation (see point 2
+  above) so a reviewer doesn't think it's a typo.
+- `book_props` has NO `lockedAt` column (only `book_prop_picks` does) - the props
+  themselves lock implicitly at the week's first kickoff (checked live against
+  `nfl_games`), same as `book_lines`. Don't try to add a migration for this; it's
+  intentional, matches the "locks at first kickoff" issue language.
+- Props keep the SAME `id` across hourly repricing (upsert on the natural key, not
+  delete+reinsert), so `book_prop_picks.propId` foreign keys stay valid across a member's
+  whole week even as the line/odds move - this is the reason to upsert-in-place, not
+  delete-and-recreate. Don't break this.
+- Local dev DB access: `.env.local`'s `POSTGRES_URL` is the LIVE production DB per repo
+  convention (see CLAUDE.md context) - `POSTGRES_DRIVER=pg` is needed locally to avoid the
+  Neon HTTP 443 block, per prior project memory.
+- `npm run test:unit` and the props.test.ts file have NOT been run yet - do this
+  immediately on resume, before writing any more code, in case the pricing-engine math
+  has more bugs like the two `toHalfInteger` rounding-bucket mistakes already caught.
