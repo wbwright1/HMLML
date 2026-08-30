@@ -66,10 +66,17 @@ export default async function BookPage() {
 
     if (bookWeek) {
       week = bookWeek.week;
-      [games, leaderboard, grid, streakTiles, props, futures] = await Promise.all([
-        getBookBoard(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week),
+      // The board first, then everything that describes it. The pick'ems grid
+      // is a view OF this board, so it is handed the same games rather than
+      // rebuilding the whole pricing pipeline for the same week.
+      games = await getBookBoard(
+        bookWeek.seasonId,
+        bookWeek.seasonYear,
+        bookWeek.week,
+      );
+      [leaderboard, grid, streakTiles, props, futures] = await Promise.all([
         getSeasonAtsLeaderboard(bookWeek.seasonId),
-        getPickemsGrid(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week),
+        getPickemsGrid(bookWeek.seasonId, bookWeek.week, games),
         getStreakWatch(bookWeek.seasonId),
         getBookProps(bookWeek.seasonId, bookWeek.week),
         futuresBoards,

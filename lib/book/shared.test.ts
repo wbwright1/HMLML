@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { deriveAbbreviation } from "@/lib/franchise-abbreviations";
 import {
   BOOK_ERRORS,
   bookConsensusText,
@@ -355,7 +356,10 @@ function seed(
   return {
     displayName: `member-${overrides.memberId}`,
     franchiseSlug: overrides.franchiseName.toLowerCase().replace(/\s+/g, "-"),
-    abbreviation: overrides.franchiseName.slice(0, 3).toUpperCase(),
+    // The real seeds come from lib/franchise-abbreviations.ts's ladder, so the
+    // fixture uses it too rather than baking in a naive truncation the app
+    // never produces.
+    abbreviation: deriveAbbreviation(overrides.franchiseName),
     color: null,
     record: "",
     divisionName: null,

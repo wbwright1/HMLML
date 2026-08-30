@@ -1,22 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 import { FranchiseLogo } from "@/components/franchise-logo";
-import { useSessionMember } from "@/components/use-session-member";
-import { togglePick, lockSlip } from "@/app/actions/book";
-import {
-  notifyBookPicksChanged,
-  subscribeToBookPicksChanged,
-} from "@/lib/book/pick-events";
+import { useBookSlip } from "@/components/book/use-book-slip";
 import {
   gradePick,
   formatMoney,
@@ -31,7 +18,6 @@ import {
   MAX_STAKE,
   MIN_PICKS_FOR_CONSENSUS,
   MIN_STAKE,
-  picksForBoardWeek,
   type BookGame,
   type BookSide,
   type BookSideKey,
@@ -59,128 +45,26 @@ export function BoardIsland({
   games: BookGame[];
   week: number;
 }) {
-  const session = useSessionMember();
-  const router = useRouter();
-  const [picks, setPicks] = useState<Map<number, MemberBookPick>>(new Map());
-  const [slipLocked, setSlipLocked] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pendingMatchup, setPendingMatchup] = useState<number | null>(null);
-  const [, startTransition] = useTransition();
-  // Set the instant a pick or a lock happens, so a mount fetch that is still
-  // in flight (or was slower than the click, which is the common case: the
-  // GET and the server action race, and the GET has no reason to win) cannot
-  // land afterward and clobber state a real user action already produced.
-  // Without this, a click's optimistic set could be immediately overwritten
-  // by the initial fetch resolving late, leaving the UI showing "unpicked"
-  // for a pick that is actually booked in Postgres.
-  const mutatedRef = useRef(false);
-
-  const signedIn = session.status === "ready" && session.member !== null;
-
-  const fetchPicks = useCallback(() => {
-    if (!signedIn) return;
-    fetch("/api/book/picks", { credentials: "same-origin" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then(
-        (
-          body: {
-            data?: { picks: MemberBookPick[]; week: number | null };
-          } | null,
-        ) => {
-          if (mutatedRef.current) return;
-          // Discards a payload for any week other than the one this board is
-          // showing; see picksForBoardWeek for why that window is real.
-          const mine = picksForBoardWeek(body?.data, week);
-          if (!mine) return;
-          setPicks(new Map(mine.map((p) => [p.matchupId, p])));
-          setSlipLocked(mine.some((p) => p.lockedAt !== null));
-        },
-      )
-      .catch(() => {
-        // An unreachable slip is a read-only board, not a broken page.
-      });
-  }, [signedIn, week]);
-
-  // Picks now flow BOTH ways: the Tracking tab books through the same server
-  // action this board does, and BookTabs keeps both panes mounted forever, so
-  // without this subscription a pick made over there would never reach this
-  // slip until a full reload (lib/book/pick-events.ts).
-  useEffect(() => {
-    mutatedRef.current = false;
-    fetchPicks();
-    return subscribeToBookPicksChanged(() => {
-      mutatedRef.current = false;
-      fetchPicks();
-    });
-  }, [fetchPicks]);
+  // One shared slip state machine for both pick surfaces (see
+  // components/book/use-book-slip.ts): optimistic writes, ordered responses,
+  // rollback on failure, and the two-way refresh with the Tracking tab.
+  const {
+    signedIn,
+    picks,
+    slipLocked,
+    error,
+    pendingMatchup,
+    canPick,
+    pick: onPick,
+    lock,
+  } = useBookSlip(week);
 
   const openGames = games.filter((g) => g.status === "open");
   const openWithoutPick = openGames.filter((g) => !picks.has(g.matchupId));
-  const canPick = signedIn && !slipLocked;
-
-  function onPick(game: BookGame, side: BookSideKey) {
-    if (!canPick || game.status !== "open") return;
-    setError(null);
-    setPendingMatchup(game.matchupId);
-    mutatedRef.current = true;
-
-    // Optimistic: the toggle should feel instant, and the server re-checks
-    // every rule anyway. A rejection restores the previous state below.
-    const previous = picks.get(game.matchupId) ?? null;
-    const next = new Map(picks);
-    if (previous?.side === side) next.delete(game.matchupId);
-    else
-      next.set(game.matchupId, {
-        matchupId: game.matchupId,
-        side,
-        spreadAtPick: game.spread,
-        mlAtPick: side === "home" ? game.home.moneyline : game.away.moneyline,
-        lockedAt: null,
-      });
-    setPicks(next);
-
-    startTransition(async () => {
-      const result = await togglePick({ week, matchupId: game.matchupId, side });
-      setPendingMatchup(null);
-      if (!result.ok) {
-        setError(result.error);
-        setPicks((current) => {
-          const restored = new Map(current);
-          if (previous) restored.set(game.matchupId, previous);
-          else restored.delete(game.matchupId);
-          return restored;
-        });
-        return;
-      }
-      // Consensus lives in the cached page; pull the refreshed numbers.
-      router.refresh();
-      // The Tracking tab's own-picks overlay only fetches once on mount
-      // (see lib/book/pick-events.ts); tell it a pick just changed.
-      notifyBookPicksChanged();
-    });
-  }
 
   function onLock() {
-    if (!canPick || openWithoutPick.length > 0) return;
-    setError(null);
-    mutatedRef.current = true;
-    startTransition(async () => {
-      const result = await lockSlip({ week });
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setSlipLocked(true);
-      setPicks((current) => {
-        const stamped = new Map(current);
-        const now = new Date().toISOString();
-        for (const [key, value] of stamped) {
-          stamped.set(key, { ...value, lockedAt: value.lockedAt ?? now });
-        }
-        return stamped;
-      });
-      router.refresh();
-    });
+    if (openWithoutPick.length > 0) return;
+    lock();
   }
 
   if (games.length === 0) {

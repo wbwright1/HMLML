@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import type { Page } from "@playwright/test";
+import type { BrowserContext, Page } from "@playwright/test";
 import { getSql } from "./helpers/sql";
 import { membersTableExists, memberFixtureScope } from "./helpers/seed-members";
 
@@ -94,11 +94,23 @@ test.beforeEach(async () => {
   test.skip(!ready, "book tables or a priced week are not present");
 });
 
+// The claim endpoint throttles at 10 attempts per minute per IP
+// (app/claim/actions.ts), and this file signs in on most of its tests, so the
+// real session cookie issued by the first real claim is reused by the rest
+// rather than burning a claim attempt (and flaking) on every test.
+type BrowserCookies = Awaited<ReturnType<BrowserContext["cookies"]>>;
+let sessionCookies: BrowserCookies | null = null;
+
 async function signIn(page: Page, code: string) {
+  if (sessionCookies) {
+    await page.context().addCookies(sessionCookies);
+    return;
+  }
   await page.goto("/claim");
   await page.fill("#code", code);
   await page.getByRole("button", { name: /claim my team/i }).click();
   await expect(page.locator('a[aria-label*="manage your team"]').first()).toBeVisible();
+  sessionCookies = await page.context().cookies();
 }
 
 function trackingPanel(page: Page) {
@@ -163,9 +175,13 @@ test.describe("Tracking tab pick'ems", () => {
 
     const button = trackingPanel(page).locator('button[aria-label^="Pick "]').first();
     await expect(button).toBeVisible();
-    pickedLabel = (await button.innerText()).trim();
+    // The aria-label, not the text: the picked state appends a "✓" glyph, so
+    // the label is the stable identity of the side that was picked.
+    pickedLabel = (await button.getAttribute("aria-label"))!;
     await button.click();
     await expect(button).toHaveAttribute("aria-pressed", "true");
+    // The written label beside the row, not just the gold tint.
+    await expect(trackingPanel(page).getByText("✓ Your pick").first()).toBeVisible();
 
     // The database is the proof, not the optimistic button state.
     await expect
@@ -178,7 +194,7 @@ test.describe("Tracking tab pick'ems", () => {
     await openTrackingTab(page);
     await expect(
       trackingPanel(page).locator('button[aria-pressed="true"]').first(),
-    ).toHaveText(pickedLabel!, { timeout: 10000 });
+    ).toHaveAttribute("aria-label", pickedLabel!, { timeout: 10000 });
   });
 
   test("shows that same pick on the Board tab without a reload", async ({ page }) => {
@@ -217,6 +233,7 @@ test.describe("Tracking tab pick'ems", () => {
     await openTrackingTab(page);
 
     const button = trackingPanel(page).locator('button[aria-label^="Pick "]').first();
+    const pickedAbbreviation = (await button.innerText()).trim().split(/\s+/)[0];
     await button.click();
     await expect
       .poll(async () => (await scopedPickRows()).length, { timeout: 10000 })
@@ -239,6 +256,24 @@ test.describe("Tracking tab pick'ems", () => {
     await expect(fixtureCell(page, row.matchup_id)).toHaveText("—", {
       timeout: 10000,
     });
+
+    // The DOM assertion above could in principle pass while the pick still rode
+    // along in the payload (hidden by client code). Assert on the RAW RESPONSE
+    // BODY instead: every one of this member's cells in the shipped HTML reads
+    // as empty, and the picked side's abbreviation is nowhere among them.
+    const res = await page.request.get("/book");
+    expect(res.ok()).toBeTruthy();
+    const body = await res.text();
+    const cellPattern = new RegExp(
+      `data-member-id="${seededMemberId}"[^>]*data-matchup-id="\\d+"[^>]*>([^<]*)<`,
+      "g",
+    );
+    const shipped = [...body.matchAll(cellPattern)].map((m) => m[1].trim());
+    expect(shipped.length).toBeGreaterThan(0);
+    for (const cell of shipped) {
+      expect(cell).toBe("—");
+      expect(cell).not.toContain(pickedAbbreviation);
+    }
   });
 
   test("swaps the wide grid for a division dropdown on a phone", async ({ page }) => {
@@ -253,5 +288,92 @@ test.describe("Tracking tab pick'ems", () => {
     // visible cell count is a fraction of the twelve-column desktop grid.
     const options = await select.locator("option").count();
     expect(options).toBeGreaterThan(0);
+  });
+
+  // Last on purpose: this test locks the fixture member's slip for the week,
+  // which closes every pick control for the rest of the run.
+  test("closes the control on a locked slip, and the server refuses the pick anyway", async ({
+    page,
+  }) => {
+    // Start from an empty slip: an earlier test in this serial file leaves a
+    // pick behind, and clicking a side that is already picked CLEARS it (the
+    // toggle), which would quietly turn the loop below into a no-op.
+    await deleteScopedPicks();
+    await signIn(page, fx.memberClaimCode);
+    await page.goto("/book");
+    await openTrackingTab(page);
+
+    // The controls only appear once the session resolves client-side.
+    await expect(
+      trackingPanel(page).locator('button[aria-label^="Pick "]').first(),
+    ).toBeVisible({ timeout: 10000 });
+
+    const pickRows = trackingPanel(page).locator(
+      'li:has(button[aria-label^="Pick "])',
+    );
+    const openGames = await pickRows.count();
+    expect(openGames).toBeGreaterThan(0);
+
+    // Capture the REAL server-action request behind the first pick. Once the
+    // slip locks the button is gone (which is the point), so replaying this
+    // captured call is the only honest way to ask the server directly whether
+    // it re-enforces the lock rather than trusting the disabled UI.
+    const capturedPromise = page.waitForRequest(
+      (r) => r.method() === "POST" && r.headers()["next-action"] !== undefined,
+    );
+
+    // The slip can only be locked once every open game has a pick, so pick
+    // them all through the Tracking strip itself.
+    for (let i = 0; i < openGames; i++) {
+      const row = pickRows.nth(i);
+      // Each pick is: click, wait for the action's own follow-up slip refetch
+      // (fired through pick-events), then confirm the row in Postgres before
+      // touching the next game. Clicking at browser speed instead would race
+      // the re-render that refetch triggers and silently drop a click, which
+      // would make this test about Playwright timing rather than the lock rule.
+      const refetch = page.waitForResponse(
+        (r) => r.url().includes("/api/book/picks"),
+        { timeout: 15000 },
+      );
+      await row.locator('button[aria-label^="Pick "]').first().click();
+      await refetch;
+      await expect(row.locator('[aria-pressed="true"]')).toHaveCount(1, {
+        timeout: 10000,
+      });
+      await expect
+        .poll(async () => (await scopedPickRows()).length, { timeout: 15000 })
+        .toBe(i + 1);
+    }
+    const captured = await capturedPromise;
+    const before = await scopedPickRows();
+
+    // Lock the slip from the Board (the one control that can), then come back.
+    await page.getByRole("tab", { name: "The Board" }).click();
+    await page.getByRole("button", { name: /lock in picks/i }).click();
+    await expect(page.getByText("Picks are in. No takebacks.")).toBeVisible({
+      timeout: 10000,
+    });
+
+    await openTrackingTab(page);
+    // No reload: the pick-events signal closes this tab's controls too.
+    await expect(
+      trackingPanel(page).locator('button[aria-label^="Pick "]'),
+    ).toHaveCount(0, { timeout: 10000 });
+    // The sides still render, just as inert labels carrying the lock state.
+    await expect(trackingPanel(page).getByText("Locked").first()).toBeVisible();
+
+    // Now the server itself, asked directly with a request it already accepted
+    // once: it must refuse and leave the row exactly as booked.
+    const headers = { ...captured.headers() };
+    delete headers["content-length"];
+    const replay = await page.request.post(captured.url(), {
+      headers,
+      data: captured.postData() ?? "",
+    });
+    expect(replay.status()).toBe(200);
+    expect(await replay.text()).toContain("Your slip is locked. No takebacks.");
+
+    const after = await scopedPickRows();
+    expect(after).toEqual(before);
   });
 });

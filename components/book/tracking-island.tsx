@@ -1,17 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from "react";
-import { useSessionMember } from "@/components/use-session-member";
-import { togglePick } from "@/app/actions/book";
+import { useMemo, useState } from "react";
+import { useBookSlip } from "@/components/book/use-book-slip";
 import { formatSpread } from "@/lib/book/pricing";
 import {
-  notifyBookPicksChanged,
-  subscribeToBookPicksChanged,
-} from "@/lib/book/pick-events";
-import {
   BOOK_COPY,
-  picksForBoardWeek,
   type AtsLeaderboardRow,
   type BookGame,
   type BookSideKey,
@@ -51,102 +45,18 @@ export function TrackingIsland({
   games: BookGame[];
   week: number;
 }) {
-  const session = useSessionMember();
-  const signedIn = session.status === "ready" && session.member !== null;
-  const franchiseSlug =
-    session.status === "ready" ? (session.member?.franchiseSlug ?? null) : null;
-
-  const [ownPicks, setOwnPicks] = useState<Map<number, MemberBookPick>>(
-    new Map(),
-  );
-  const [slipLocked, setSlipLocked] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [pendingMatchup, setPendingMatchup] = useState<number | null>(null);
-  const [, startTransition] = useTransition();
-  // Set the instant a pick happens, so an in-flight GET that resolves after the
-  // click cannot clobber state a real user action already produced (the same
-  // race the board island guards; the GET has no reason to win).
-  const mutatedRef = useRef(false);
-
-  const fetchOwnPicks = useCallback(() => {
-    if (!signedIn) return;
-    fetch("/api/book/picks", { credentials: "same-origin" })
-      .then((res) => (res.ok ? res.json() : null))
-      .then(
-        (
-          body: {
-            data?: { picks: MemberBookPick[]; week: number | null };
-          } | null,
-        ) => {
-          if (mutatedRef.current) return;
-          const mine = picksForBoardWeek(body?.data, week);
-          if (!mine) return;
-          setOwnPicks(new Map(mine.map((p) => [p.matchupId, p])));
-          setSlipLocked(mine.some((p) => p.lockedAt !== null));
-        },
-      )
-      .catch(() => {
-        // A missed overlay just leaves the viewer's own open picks blank,
-        // same as anyone else's; never a broken page.
-      });
-  }, [signedIn, week]);
-
-  // BookTabs (components/book/book-tabs.tsx) keeps every pane permanently
-  // mounted and toggles visibility with a `hidden` attribute rather than
-  // unmounting, so this island only mounts once per page load: fetching just
-  // on mount would show a stale overlay for the rest of the visit once the
-  // viewer books a pick from the Board tab. Re-fetching on the shared
-  // notifyBookPicksChanged signal (lib/book/pick-events.ts) keeps the "you can
-  // always see your own slip" guarantee true in both directions.
-  useEffect(() => {
-    // A refetch is authoritative again after any signal: it is either the
-    // response to our own write or somebody else's tab-level change.
-    mutatedRef.current = false;
-    fetchOwnPicks();
-    return subscribeToBookPicksChanged(() => {
-      mutatedRef.current = false;
-      fetchOwnPicks();
-    });
-  }, [fetchOwnPicks]);
-
-  function onPick(game: BookGame, side: BookSideKey) {
-    if (!signedIn || slipLocked || game.status !== "open") return;
-    setError(null);
-    setPendingMatchup(game.matchupId);
-    mutatedRef.current = true;
-
-    // Optimistic: the toggle should feel instant, and the server re-checks
-    // every rule anyway. A rejection restores the previous state below.
-    const previous = ownPicks.get(game.matchupId) ?? null;
-    const next = new Map(ownPicks);
-    if (previous?.side === side) next.delete(game.matchupId);
-    else
-      next.set(game.matchupId, {
-        matchupId: game.matchupId,
-        side,
-        spreadAtPick: game.spread,
-        mlAtPick: side === "home" ? game.home.moneyline : game.away.moneyline,
-        lockedAt: null,
-      });
-    setOwnPicks(next);
-
-    startTransition(async () => {
-      const result = await togglePick({ week, matchupId: game.matchupId, side });
-      setPendingMatchup(null);
-      if (!result.ok) {
-        setError(result.error);
-        setOwnPicks((current) => {
-          const restored = new Map(current);
-          if (previous) restored.set(game.matchupId, previous);
-          else restored.delete(game.matchupId);
-          return restored;
-        });
-        return;
-      }
-      // The Board's slip only fetches once on mount; tell it a pick changed.
-      notifyBookPicksChanged();
-    });
-  }
+  // The same slip state machine the Board runs (components/book/use-book-slip.ts):
+  // one implementation, so a pick made here and a pick made there can never
+  // disagree about ordering, rollback, or what the server actually booked.
+  const {
+    signedIn,
+    franchiseSlug,
+    picks: ownPicks,
+    slipLocked,
+    error,
+    pendingMatchup,
+    pick: onPick,
+  } = useBookSlip(week);
 
   return (
     <div className="flex flex-col gap-4">
@@ -285,6 +195,13 @@ function PickRow({
           {locked && game.status === "open" ? "🔒 " : ""}
           {statusLabel}
         </span>
+        {/* The gold tint on the picked button is a color signal, so the pick
+            carries a written label too (CLAUDE.md: never color alone). */}
+        {pick && (
+          <span className="shrink-0 text-caption font-semibold text-accent-gold">
+            ✓ Your pick
+          </span>
+        )}
       </span>
       <span className="flex shrink-0 gap-2">
         <SideButton
@@ -338,6 +255,7 @@ function SideButton({
         aria-label={`${team.name} ${formatSpread(team.spread)}${picked ? ", your pick" : ""}`}
       >
         {label}
+        {picked && <span className="ml-1 font-sans">✓</span>}
       </span>
     );
   }
@@ -352,6 +270,7 @@ function SideButton({
       className={`${base} ${skin} cursor-pointer hover:border-border-strong disabled:cursor-wait`}
     >
       {label}
+      {picked && <span className="ml-1 font-sans">✓</span>}
     </button>
   );
 }
@@ -797,7 +716,7 @@ function PickerHeader({
         aria-hidden="true"
       >
         <span className="text-[9px] font-bold text-canvas">
-          {picker.abbreviation.slice(0, 3)}
+          {picker.abbreviation}
         </span>
       </span>
       <span
@@ -808,7 +727,7 @@ function PickerHeader({
       >
         {isYou ? "YOU" : picker.abbreviation}
       </span>
-      <span className="font-mono text-[10px] tabular-nums text-text-muted">
+      <span className="font-mono text-[10px] tabular-nums text-text-tertiary">
         {picker.record || "—"}
       </span>
     </span>

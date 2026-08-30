@@ -239,6 +239,8 @@ export const BOOK_COPY = {
   pickemsLocked: "Locked",
   pickemsNoGames:
     "No games on the board this week, so there is nothing to pick.",
+  /** A server action that never landed (offline, 500). Calm, never panicked. */
+  actionFailed: "That did not reach the book. Nothing was booked. Try again.",
   propsSoon: "Props post the week they can be graded honestly. Not yet.",
   houseRules:
     "Props grade Tuesday morning after stat corrections. Disputes go to the commish, who is biased. Lines move when projections re-sync every hour.",

@@ -7,6 +7,7 @@
 // no searchParams (see lib/cache.ts's rule for which pages need the
 // unstable_cache wrapper), so the ISR route cache alone is enough.
 
+import { cache } from "react";
 import { alias } from "drizzle-orm/pg-core";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
@@ -28,7 +29,8 @@ import {
   type WeeklyRecord,
 } from "@/lib/book/grading";
 import { formatSpread } from "@/lib/book/pricing";
-import { getBookBoard } from "@/lib/queries/book";
+import { resolveAbbreviation } from "@/lib/franchise-abbreviations";
+import type { BookGame } from "@/lib/book/shared";
 import {
   buildPickemsCell,
   groupPickersByDivision,
@@ -60,6 +62,7 @@ export type {
 
 interface Picker {
   memberId: number;
+  franchiseId: string;
   displayName: string;
   franchiseSlug: string;
   franchiseName: string;
@@ -74,10 +77,13 @@ interface Picker {
  * the division their franchise sits in THIS season (the grid clusters columns
  * by division, and division membership is versioned per season).
  */
-async function getPickers(seasonId: number): Promise<Map<number, Picker>> {
+const getPickers = cache(async function getPickers(
+  seasonId: number,
+): Promise<Map<number, Picker>> {
   const rows = await db
     .select({
       memberId: members.id,
+      franchiseId: franchises.id,
       displayName: members.displayName,
       franchiseSlug: franchises.slug,
       franchiseName: franchises.name,
@@ -99,6 +105,7 @@ async function getPickers(seasonId: number): Promise<Map<number, Picker>> {
   for (const row of rows) {
     map.set(row.memberId, {
       memberId: row.memberId,
+      franchiseId: row.franchiseId,
       displayName: row.displayName,
       franchiseSlug: row.franchiseSlug,
       franchiseName: row.franchiseName,
@@ -108,7 +115,7 @@ async function getPickers(seasonId: number): Promise<Map<number, Picker>> {
     });
   }
   return map;
-}
+});
 
 interface GradedPickRow {
   memberId: number;
@@ -125,7 +132,9 @@ interface GradedPickRow {
  * surface grades a live game: the pick'ems grid reveals a pick at kickoff and
  * leaves it ungraded until the game is done.
  */
-async function getFinalGradedPicks(seasonId: number): Promise<GradedPickRow[]> {
+const getFinalGradedPicks = cache(async function getFinalGradedPicks(
+  seasonId: number,
+): Promise<GradedPickRow[]> {
   const homeMatchups = alias(matchups, "book_tracking_home_matchups");
   const awayMatchups = alias(matchups, "book_tracking_away_matchups");
 
@@ -181,6 +190,28 @@ async function getFinalGradedPicks(seasonId: number): Promise<GradedPickRow[]> {
     });
   }
   return graded;
+});
+
+/**
+ * Graded outcomes per member, most recent week first, for members who own a
+ * franchise. Both the leaderboard and the grid's per-column record read
+ * through this so the two can never disagree about somebody's record: a
+ * member the leaderboard skips (no franchise, so no crest to show) is the
+ * same member the grid has no column for.
+ */
+function gradedOutcomesByMember(
+  pickers: Map<number, Picker>,
+  graded: GradedPickRow[],
+): Map<number, GradedPickRow[]> {
+  const byMember = new Map<number, GradedPickRow[]>();
+  for (const row of graded) {
+    if (!pickers.has(row.memberId)) continue;
+    const list = byMember.get(row.memberId) ?? [];
+    list.push(row);
+    byMember.set(row.memberId, list);
+  }
+  for (const list of byMember.values()) list.sort((a, b) => b.week - a.week);
+  return byMember;
 }
 
 // ---------------------------------------------------------------------------
@@ -200,20 +231,15 @@ export async function getSeasonAtsLeaderboard(
     getFinalGradedPicks(seasonId),
   ]);
 
-  const byMember = new Map<number, GradedPickRow[]>();
-  for (const row of graded) {
-    const list = byMember.get(row.memberId) ?? [];
-    list.push(row);
-    byMember.set(row.memberId, list);
-  }
+  const byMember = gradedOutcomesByMember(pickers, graded);
 
   const unranked: Omit<AtsLeaderboardRow, "rank" | "isLeader" | "isLast">[] = [];
 
-  for (const [memberId, picks] of byMember) {
-    const picker = pickers.get(memberId);
-    if (!picker) continue; // a picker with no franchise cannot show a crest
+  for (const [memberId, sortedDesc] of byMember) {
+    // gradedOutcomesByMember already dropped anyone without a franchise (no
+    // crest to show), so this lookup cannot miss.
+    const picker = pickers.get(memberId)!;
 
-    const sortedDesc = [...picks].sort((a, b) => b.week - a.week);
     const tally = tallyOutcomes(sortedDesc.map((p) => p.outcome));
     const streak = deriveStreak(sortedDesc.map((p) => p.outcome));
 
@@ -262,6 +288,11 @@ export async function getSeasonAtsLeaderboard(
  * The current week's pick'ems grid: one column per member (clustered under
  * their division), one row per game.
  *
+ * Takes the board it should describe rather than fetching its own: /book has
+ * already built that exact week for the Board tab, and re-running the whole
+ * pipeline (lines, matchups, kickoff states, pick counts) a second time per
+ * render bought nothing.
+ *
  * Privacy is enforced HERE, at the query, not by hiding it in the client: a
  * pick on a game that has not kicked off yet (`status === "open"`) is never
  * put into the payload for anyone, and the viewer's own open picks are
@@ -275,38 +306,37 @@ export async function getSeasonAtsLeaderboard(
  */
 export async function getPickemsGrid(
   seasonId: number,
-  seasonYear: number,
   week: number,
+  games: BookGame[],
 ): Promise<PickemsGridData> {
-  const [pickers, games, graded] = await Promise.all([
+  const [pickers, graded] = await Promise.all([
     getPickers(seasonId),
-    getBookBoard(seasonId, seasonYear, week),
     getFinalGradedPicks(seasonId),
   ]);
 
   if (games.length === 0) return { divisions: [], rows: [] };
 
-  const outcomesByMember = new Map<number, PickOutcome[]>();
-  for (const row of graded) {
-    const list = outcomesByMember.get(row.memberId) ?? [];
-    list.push(row.outcome);
-    outcomesByMember.set(row.memberId, list);
-  }
+  const gradedByMember = gradedOutcomesByMember(pickers, graded);
 
   const seeds: PickerSeed[] = [...pickers.values()].map((picker) => {
-    const outcomes = outcomesByMember.get(picker.memberId);
+    const outcomes = gradedByMember.get(picker.memberId);
     return {
       memberId: picker.memberId,
       displayName: picker.displayName,
       franchiseSlug: picker.franchiseSlug,
       franchiseName: picker.franchiseName,
+      // Same word-initial ladder the sync uses when it stamps the column, so
+      // a franchise that has not been backfilled still reads like every other
+      // crest instead of a blunt three-letter truncation.
       abbreviation:
         picker.franchiseAbbreviation ??
-        picker.franchiseName.slice(0, 3).toUpperCase(),
+        resolveAbbreviation(picker.franchiseId, picker.franchiseName),
       color: picker.franchiseColor,
       // Empty, never "0-0": a member who has not been graded yet has no
       // record to show, and inventing one is a fabricated claim.
-      record: outcomes ? formatAtsRecord(tallyOutcomes(outcomes)) : "",
+      record: outcomes
+        ? formatAtsRecord(tallyOutcomes(outcomes.map((o) => o.outcome)))
+        : "",
       divisionName: picker.divisionName,
     };
   });
@@ -380,22 +410,16 @@ export async function getStreakWatch(seasonId: number): Promise<StreakTile[]> {
     getFinalGradedPicks(seasonId),
   ]);
 
-  const byMember = new Map<number, GradedPickRow[]>();
-  for (const row of graded) {
-    const list = byMember.get(row.memberId) ?? [];
-    list.push(row);
-    byMember.set(row.memberId, list);
-  }
+  const byMember = gradedOutcomesByMember(pickers, graded);
 
   let heater: { picker: Picker; streak: Streak; startWeek: number } | null = null;
   let iceCold: { picker: Picker; streak: Streak; startWeek: number } | null = null;
   const weeklyRecords: (WeeklyRecord & { picker: Picker })[] = [];
 
-  for (const [memberId, picks] of byMember) {
-    const picker = pickers.get(memberId);
-    if (!picker) continue;
+  for (const [memberId, sortedDesc] of byMember) {
+    const picker = pickers.get(memberId)!;
+    const picks = sortedDesc;
 
-    const sortedDesc = [...picks].sort((a, b) => b.week - a.week);
     const streak = deriveStreak(sortedDesc.map((p) => p.outcome));
     if (streak && streak.length >= 2) {
       const startWeek = streakStartWeek(sortedDesc, streak);
