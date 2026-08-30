@@ -104,6 +104,32 @@ test.describe("The Board, signed out", () => {
     await expect(
       page.getByText("Claim your team to get a slip."),
     ).toBeVisible();
+
+    // One payout vocabulary sitewide: "returns" (total) plus a labeled
+    // "profit" figure, not the old ambiguous "wins $X.XX". The mobile-only
+    // inline payout and the desktop column both match the text; at this
+    // (desktop) viewport only the desktop one is actually visible, so check
+    // all matches rather than assuming DOM order puts the visible one first.
+    const payoutMatches = page.getByText(
+      /returns \$\d+\.\d\d \(\$\d+\.\d\d profit\)/,
+    );
+    const payoutCount = await payoutMatches.count();
+    let sawVisiblePayout = false;
+    for (let i = 0; i < payoutCount; i++) {
+      if (await payoutMatches.nth(i).isVisible()) {
+        sawVisiblePayout = true;
+        break;
+      }
+    }
+    expect(sawVisiblePayout).toBe(true);
+
+    // The three-chip showcase row (On the Board / Biggest Line / Coin Flip)
+    // is gone from the header entirely. Exact match: getByText's default
+    // substring/case-insensitive matching would otherwise false-positive on
+    // unrelated copy elsewhere on the page ("...put a future on the board.").
+    await expect(page.getByText("On the Board", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Biggest Line", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Coin Flip", { exact: true })).toHaveCount(0);
   });
 
   test("keeps The Book in the nav and /players reachable from the footer", async ({

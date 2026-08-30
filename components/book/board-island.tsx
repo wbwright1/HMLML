@@ -370,11 +370,10 @@ function SideRow({
         </span>
         <span className="block text-[11px] text-text-tertiary">
           <span className="font-mono tabular-nums">{team.record}</span>
-          <span className="sm:hidden">
-            {" · "}
-            <span className="font-mono tabular-nums">
-              {payoutLabel(team.moneyline, DEFAULT_STAKE)}
-            </span>
+        </span>
+        <span className="block text-[11px] text-text-tertiary sm:hidden">
+          <span className="font-mono tabular-nums leading-tight">
+            {payoutLabel(team.moneyline, DEFAULT_STAKE)}
           </span>
         </span>
       </span>
@@ -384,8 +383,7 @@ function SideRow({
       <span className="w-11 shrink-0 text-right font-mono text-caption font-semibold normal-case tracking-normal tabular-nums text-text-tertiary">
         {formatMoneyline(team.moneyline)}
       </span>
-      <span className="hidden w-[104px] shrink-0 text-right text-caption normal-case tracking-normal text-text-tertiary sm:block">
-        ML:{" "}
+      <span className="hidden w-[168px] shrink-0 text-right text-caption normal-case leading-tight tracking-normal text-text-tertiary sm:block">
         <span className="font-mono tabular-nums">
           {payoutLabel(team.moneyline, DEFAULT_STAKE)}
         </span>
@@ -759,13 +757,17 @@ function WagerTranslator({ games }: { games: BookGame[] }) {
         <p className="text-stat text-[30px] leading-none text-accent-green">
           +{formatMoney(win)}
         </p>
+        <p className="text-caption mt-1 normal-case tracking-normal text-text-tertiary">
+          profit
+        </p>
         <p className="mt-2 text-body-sm text-text-tertiary">
           Risk <span className="font-mono tabular-nums">{formatMoney(safeStake)}</span>{" "}
-          on {option.team}, get back{" "}
+          on {option.team} and it returns{" "}
           <span className="font-mono tabular-nums">
             {formatMoney(safeStake + win)}
           </span>{" "}
-          if it hits.
+          total (<span className="font-mono tabular-nums">{formatMoney(win)}</span>{" "}
+          profit).
         </p>
         <p className="mt-2.5 text-[11px] text-text-tertiary">
           {BOOK_COPY.spreadNote}

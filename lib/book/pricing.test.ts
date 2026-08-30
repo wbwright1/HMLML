@@ -12,6 +12,7 @@ import {
   MIN_UNDERDOG_ODDS,
   pay,
   payoutLabel,
+  payoutTotal,
   priceGame,
   priceSpread,
 } from "./pricing";
@@ -278,7 +279,12 @@ describe("formatting", () => {
   });
 
   it("builds the payout label the board shows", () => {
-    expect(payoutLabel(-110, 10)).toBe("$10 wins $9.09");
-    expect(payoutLabel(140, 10)).toBe("$10 wins $14.00");
+    expect(payoutLabel(-110, 10)).toBe("$10 returns $19.09 ($9.09 profit)");
+    expect(payoutLabel(140, 10)).toBe("$10 returns $24.00 ($14.00 profit)");
+  });
+
+  it("computes the total returned (stake plus profit)", () => {
+    expect(payoutTotal(-110, 10)).toBeCloseTo(19.0909, 4);
+    expect(payoutTotal(140, 10)).toBe(24);
   });
 });

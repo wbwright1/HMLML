@@ -177,13 +177,13 @@ describe("bookCtaLabel", () => {
 describe("bookDogPayoutLine", () => {
   it("prices a $10 friendly on the underdog", () => {
     expect(bookDogPayoutLine(HOME_FAVORED)).toBe(
-      "A $10 friendly on WW +140 pays $14.00 if it lands.",
+      "A $10 friendly on WW +140 returns $24.00 total ($14.00 profit).",
     );
   });
 
   it("finds the dog regardless of which side it is stored on", () => {
     expect(bookDogPayoutLine(AWAY_FAVORED)).toBe(
-      "A $10 friendly on GT +140 pays $14.00 if it lands.",
+      "A $10 friendly on GT +140 returns $24.00 total ($14.00 profit).",
     );
   });
 });

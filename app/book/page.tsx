@@ -6,13 +6,7 @@ import { TrackingPane } from "@/components/book/tracking-pane";
 import { PropsIsland } from "@/components/book/props-island";
 import { FuturesIsland } from "@/components/book/futures-island";
 import { BOOK_COPY, FUTURES_COPY, type BookPropView } from "@/lib/book/shared";
-import {
-  buildBoardChips,
-  getBookBoard,
-  resolveBookWeek,
-  type BookChip,
-  type BookGame,
-} from "@/lib/queries/book";
+import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import {
   getSeasonAtsLeaderboard,
   getStreakWatch,
@@ -89,12 +83,11 @@ export default async function BookPage() {
     rethrowUnlessTolerable(e);
   }
 
-  const chips = buildBoardChips(games, week);
   const hasTrackingData = leaderboard.length > 0 || grid.header.length > 0;
 
   return (
     <div className="pb-12">
-      <BookHeader week={week} chips={chips} />
+      <BookHeader week={week} />
 
       <BookTabs
         board={<BoardIsland games={games} week={week} />}
@@ -141,38 +134,17 @@ export default async function BookPage() {
   );
 }
 
-function BookHeader({ week, chips }: { week: number; chips: BookChip[] }) {
+function BookHeader({ week }: { week: number }) {
   return (
-    <section className="flex flex-col items-start justify-between gap-6 py-10 md:flex-row md:gap-8">
-      <div>
-        <p className="text-kicker mb-3">
-          {BOOK_COPY.kicker} · Week{" "}
-          <span className="font-mono tabular-nums">{week}</span>
-        </p>
-        <h1 className="text-display">{BOOK_COPY.title}</h1>
-        <p className="mt-3 font-serif text-body-sm italic text-text-tertiary">
-          {BOOK_COPY.subline}
-        </p>
-      </div>
-
-      {chips.length > 0 && (
-        <div className="flex flex-wrap gap-3">
-          {chips.map((chip) => (
-            <div
-              key={chip.label}
-              className="card-surface min-w-[144px] px-4 py-3"
-            >
-              <p className="text-kicker mb-1.5">{chip.label}</p>
-              <p className="text-stat text-[24px] leading-none text-text-primary">
-                {chip.value}
-                <span className="ml-2 font-sans text-body-sm font-normal text-text-tertiary">
-                  {chip.context}
-                </span>
-              </p>
-            </div>
-          ))}
-        </div>
-      )}
+    <section className="py-10">
+      <p className="text-kicker mb-3">
+        {BOOK_COPY.kicker} · Week{" "}
+        <span className="font-mono tabular-nums">{week}</span>
+      </p>
+      <h1 className="text-display">{BOOK_COPY.title}</h1>
+      <p className="mt-3 font-serif text-body-sm italic text-text-tertiary">
+        {BOOK_COPY.subline}
+      </p>
     </section>
   );
 }

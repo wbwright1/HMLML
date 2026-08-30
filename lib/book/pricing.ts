@@ -226,9 +226,17 @@ export function formatMoney(amount: number): string {
   return `$${amount.toFixed(2)}`;
 }
 
-/** "$10 wins $6.06" — the payout line under each side on the board. */
+/**
+ * Total returned (stake plus profit) on a winning wager at American odds `ml`.
+ * `pay` above is profit only; this is what actually lands back in the pocket.
+ */
+export function payoutTotal(ml: number, stake: number): number {
+  return stake + pay(ml, stake);
+}
+
+/** "$10 returns $19.09 ($9.09 profit)" — the payout line under each side on the board. */
 export function payoutLabel(ml: number, stake: number): string {
-  return `$${stake} wins ${formatMoney(pay(ml, stake))}`;
+  return `$${stake} returns ${formatMoney(payoutTotal(ml, stake))} (${formatMoney(pay(ml, stake))} profit)`;
 }
 
 /** The spread as it reads for the away side (the mirror of the stored value). */
