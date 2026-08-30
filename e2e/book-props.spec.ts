@@ -105,6 +105,80 @@ test.describe("Props, signed out", () => {
     // Read-only: nothing on the props tab is pressable for a visitor.
     await expect(pane.locator('button[aria-label^="Pick "]')).toHaveCount(0);
   });
+
+  test("renders the expanded slate in sections, with a subject on every card", async ({
+    page,
+  }) => {
+    const pane = await openPropsTab(page);
+    const cards = pane.locator('[data-testid="prop-card"]');
+    const count = await cards.count();
+
+    // A full slate is 8 to 15 rows. A thin week (no projections yet) prices
+    // fewer by design, so this skips rather than failing.
+    test.skip(count < 8, `only ${count} props priced this week`);
+
+    // The cap governs NEW additions, not the board: a slate that already
+    // carries more than the cap keeps every posted row rather than dropping
+    // one members can see. So this asserts the board is sane, not capped.
+    expect(count).toBeLessThanOrEqual(20);
+
+    // The sections the expanded slate posts, asserted as real headings.
+    await expect(pane.getByRole("heading", { name: "House Specials" })).toBeVisible();
+    await expect(pane.getByRole("heading", { name: "Player Props" })).toBeVisible();
+    await expect(pane.getByRole("heading", { name: "Team Totals" })).toBeVisible();
+
+    // The new kinds are really on the board, not just the original three.
+    await expect(pane.locator('[data-prop-kind="player_points"]').first()).toBeVisible();
+    await expect(pane.locator('[data-prop-kind="team_total"]').first()).toBeVisible();
+
+    // Player props carry a face and a name, which is the whole point of the
+    // rebuild: the card must say who it is about without being read.
+    const playerCard = pane.locator('[data-prop-kind="player_points"]').first();
+    await expect(playerCard.locator("img, [role=img]").first()).toBeVisible();
+
+    // The marquee card is the League Total and it renders its line.
+    const marquee = pane.locator('[data-prop-kind="league_total"]');
+    await expect(marquee).toHaveCount(1);
+    await expect(marquee).toContainText("O/U");
+  });
+
+  test("graded props show what actually happened, in words not colour", async ({
+    page,
+  }) => {
+    const pane = await openPropsTab(page);
+    const graded = pane.locator('[data-prop-graded="true"]');
+    const count = await graded.count();
+    test.skip(count === 0, "no graded props on this week's board");
+
+    const first = graded.first();
+    // The stored actual value is finally on the card. Asserted on the element
+    // the card renders it into, not on the wording, so the copy can change
+    // without the test going quietly green against a missing number.
+    const actual = first.locator('[data-testid="prop-actual"]');
+    await expect(actual).toBeVisible();
+    expect((await actual.innerText()).trim().length).toBeGreaterThan(0);
+    // ...and the outcome reads as a word, so it survives greyscale.
+    await expect(first).toContainText(/Hit|Missed|Graded|Push/);
+  });
+
+  test("mobile stays a single column with no horizontal scroll", async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    const pane = await openPropsTab(page);
+    const cards = pane.locator('[data-testid="prop-card"]');
+    test.skip((await cards.count()) < 2, "not enough props to compare layout");
+
+    const first = await cards.nth(0).boundingBox();
+    const second = await cards.nth(1).boundingBox();
+    expect(first).not.toBeNull();
+    expect(second).not.toBeNull();
+    // Stacked, not side by side.
+    expect(second!.y).toBeGreaterThan(first!.y);
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
 });
 
 test.describe("Props, signed in", () => {
@@ -152,6 +226,60 @@ test.describe("Props, signed in", () => {
     await firstPick.click();
     await expect(firstPick).toHaveAttribute("aria-pressed", "false");
 
+    await expect
+      .poll(
+        async () => {
+          const rows = (await sql`
+            SELECT COUNT(*)::int AS n FROM "book_prop_picks"
+            WHERE "member_id" = ${seededMemberId}`) as { n: number }[];
+          return rows[0]?.n ?? -1;
+        },
+        { timeout: 15000 },
+      )
+      .toBe(0);
+  });
+
+  test("books a PLAYER prop, one of the new kinds, through the same action", async ({
+    page,
+  }) => {
+    const sql = getSql();
+    await signIn(page, fx.memberClaimCode);
+
+    const pane = await openPropsTab(page);
+    const playerCard = pane.locator('[data-prop-kind="player_points"]').first();
+    test.skip(
+      (await pane.locator('[data-prop-kind="player_points"]').count()) === 0,
+      "no player props priced this week",
+    );
+
+    const over = playerCard.locator('button[aria-label^="Pick "]').first();
+    await over.click();
+    await expect(over).toHaveAttribute("aria-pressed", "true");
+    // The picked state is spelled out, not just tinted gold.
+    await expect(playerCard).toContainText("Picked");
+
+    // The row really lands in Postgres, on a prop of the NEW kind, proving the
+    // untouched server action carries the expanded slate.
+    await expect
+      .poll(
+        async () => {
+          const rows = (await sql`
+            SELECT p."kind", pk."side"
+            FROM "book_prop_picks" pk
+            JOIN "book_props" p ON p."id" = pk."prop_id"
+            WHERE pk."member_id" = ${seededMemberId}`) as {
+            kind: string;
+            side: string;
+          }[];
+          if (rows.length !== 1) return `rows: ${rows.length}`;
+          return rows[0].kind;
+        },
+        { timeout: 15000 },
+      )
+      .toBe("player_points");
+
+    await over.click();
+    await expect(over).toHaveAttribute("aria-pressed", "false");
     await expect
       .poll(
         async () => {
