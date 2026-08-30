@@ -92,14 +92,20 @@ export function priceSpread(homeProjected: number, awayProjected: number): numbe
 }
 
 /**
- * Converts a win probability into American odds, with the house's cut baked in.
+ * Converts an ALREADY-VIGGED implied probability into posted American odds.
  *
- * The probability is inflated by the overround, converted, then rounded to the
- * nearest 5 (books do not post -137) and floored at the house minimums so a
- * near-coin-flip never posts as free money.
+ * Clamps to the house's limits, converts, rounds to the nearest 5 (books do not
+ * post -137), and floors at the house minimums so a near-coin-flip never posts
+ * as free money.
+ *
+ * Split out from americanOdds because the futures book (lib/book/futures.ts)
+ * carries a much heavier overround than a single game does, but must post
+ * numbers on exactly the same grid and inside exactly the same limits. Taking
+ * the vigged probability rather than the fair one is what makes it reusable:
+ * the caller owns its own margin, this owns the conversion.
  */
-export function americanOdds(winProb: number): number {
-  const implied = clamp(winProb * OVERROUND, MIN_IMPLIED_PROB, MAX_IMPLIED_PROB);
+export function toAmericanOdds(impliedProb: number): number {
+  const implied = clamp(impliedProb, MIN_IMPLIED_PROB, MAX_IMPLIED_PROB);
 
   if (implied >= 0.5) {
     const raw = -(implied / (1 - implied)) * 100;
@@ -110,6 +116,14 @@ export function americanOdds(winProb: number): number {
   const raw = ((1 - implied) / implied) * 100;
   const rounded = Math.round(raw / 5) * 5;
   return Math.max(rounded, MIN_UNDERDOG_ODDS);
+}
+
+/**
+ * Converts a FAIR win probability into American odds, with the house's cut
+ * baked in.
+ */
+export function americanOdds(winProb: number): number {
+  return toAmericanOdds(winProb * OVERROUND);
 }
 
 /**

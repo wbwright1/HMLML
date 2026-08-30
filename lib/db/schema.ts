@@ -815,6 +815,106 @@ export const bookPropPicks = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// book_futures
+// ---------------------------------------------------------------------------
+// The Book's season-long markets: League Champion, Toilet Bowl, League MVP and
+// Rookie of the Year. One row per candidate per market per season, priced daily
+// by lib/sync/book-futures.ts from real standings, projections and banked
+// points. Nothing here is computed at render time.
+//
+// subjectId is a franchise id for team markets and a Sleeper player id for
+// player markets, EXCEPT the reserved value "field": every player market posts
+// a listed top N plus one "The Field" row that aggregates the entire remaining
+// candidate pool, and that row wins when the award goes to anybody unlisted.
+// That is why subjectType exists alongside it, and why there is no foreign key
+// on subjectId: it is a union of three different things.
+//
+// lockedAt is set by the pricing pass the first time the market's lock week has
+// really kicked off (game status from nfl_games, never a clock or points
+// guess). Once stamped, the row stops repricing: the number people bet into is
+// history. gradedResult is filled in by the grading pass after the season ends
+// and stays null for the whole in-progress season.
+//
+// detail carries the attribution the card prints (banked points, simulated
+// playoff odds, projected pace), so a price can be explained after its inputs
+// have moved on.
+export const bookFutures = pgTable(
+  "book_futures",
+  {
+    id: serial("id").primaryKey(),
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id),
+    market: text("market").notNull(), // 'champion' | 'toilet_bowl' | 'mvp' | 'roty'
+    subjectType: text("subject_type").notNull(), // 'franchise' | 'player' | 'field'
+    subjectId: text("subject_id").notNull(), // franchise id, Sleeper player id, or 'field'
+    prob: real("prob").notNull(), // fair (pre-overround) probability, in [0, 1]
+    odds: integer("odds").notNull(), // American, as posted
+    detail: jsonb("detail"),
+    pricedAt: timestamp("priced_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    lockedAt: timestamp("locked_at", { withTimezone: true }),
+    gradedResult: text("graded_result"), // 'win' | 'loss' | null (ungraded)
+    gradedAt: timestamp("graded_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("uq_book_futures_season_market_subject").on(
+      table.seasonId,
+      table.market,
+      table.subjectId,
+    ),
+    index("idx_book_futures_season_market").on(table.seasonId, table.market),
+  ],
+);
+
+// ---------------------------------------------------------------------------
+// book_future_picks
+// ---------------------------------------------------------------------------
+// A member's one call per futures market per season. The unique key is what
+// enforces "one pick per market": repicking before the lock replaces the row
+// and re-snapshots the odds, so a member always holds the number that was on
+// the board the moment they last committed, not the number the daily repricing
+// has drifted to since.
+//
+// subjectId is stored rather than a foreign key to book_futures.id for the same
+// reason book_picks stores its own spread: the pick must survive its market row
+// being repriced, and the join it needs (season + market + subject) is exactly
+// the futures table's own unique key.
+export const bookFuturePicks = pgTable(
+  "book_future_picks",
+  {
+    id: serial("id").primaryKey(),
+    memberId: integer("member_id")
+      .notNull()
+      .references(() => members.id),
+    seasonId: integer("season_id")
+      .notNull()
+      .references(() => seasons.id),
+    market: text("market").notNull(),
+    subjectId: text("subject_id").notNull(),
+    oddsAtPick: integer("odds_at_pick").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_book_future_picks_member_season_market").on(
+      table.memberId,
+      table.seasonId,
+      table.market,
+    ),
+    index("idx_book_future_picks_season_market").on(
+      table.seasonId,
+      table.market,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // sync_log
 // ---------------------------------------------------------------------------
 export const syncLog = pgTable(
@@ -907,3 +1007,9 @@ export type NewBookProp = typeof bookProps.$inferInsert;
 
 export type BookPropPick = typeof bookPropPicks.$inferSelect;
 export type NewBookPropPick = typeof bookPropPicks.$inferInsert;
+
+export type BookFuture = typeof bookFutures.$inferSelect;
+export type NewBookFuture = typeof bookFutures.$inferInsert;
+
+export type BookFuturePick = typeof bookFuturePicks.$inferSelect;
+export type NewBookFuturePick = typeof bookFuturePicks.$inferInsert;
