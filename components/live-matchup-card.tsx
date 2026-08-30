@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { LiveIndicator } from "@/components/live-indicator";
+import { BookLineFooterRow, type BookLineFooter } from "@/components/book/line-footer";
+
+export type { BookLineFooter };
 
 interface MatchupTeamProps {
   name: string;
@@ -35,6 +38,9 @@ interface LiveMatchupCardProps {
    * "N V M TO PLAY" status label. Omit to hide it.
    */
   playersLeft?: { home: number; away: number };
+  /** The Book's line footer, from book_lines. Omitted entirely when the game
+   * has no priced line (genuinely optional data). */
+  bookFooter?: BookLineFooter;
 }
 
 export function LiveMatchupCard({
@@ -49,6 +55,7 @@ export function LiveMatchupCard({
   seasonYear,
   winProbHome,
   playersLeft,
+  bookFooter,
 }: LiveMatchupCardProps) {
   const isUpcoming = status === "upcoming";
   // During live play the leader is emphasized; on final the winner. Both reduce
@@ -68,11 +75,12 @@ export function LiveMatchupCard({
     : `${homeTeam.name} ${homeTeam.score.toFixed(1)} versus ${awayTeam.name} ${awayTeam.score.toFixed(1)}, ${status}${showWinProb ? `, ${homeTeam.name} win probability ${homePct} percent` : ""}${showPlayersLeft ? `, ${playersLeft.home} versus ${playersLeft.away} players left to play` : ""}${rivalryLabel}`;
 
   return (
-    <Link
-      href={`/matchups/${seasonYear}/${week}/${matchupId}`}
-      className="card-surface block p-5 transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
-      aria-label={ariaLabel}
-    >
+    <div className="card-surface transition-colors hover:border-border-strong">
+      <Link
+        href={`/matchups/${seasonYear}/${week}/${matchupId}`}
+        className={`block p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${bookFooter ? "rounded-t-[14px]" : "rounded-[14px]"}`}
+        aria-label={ariaLabel}
+      >
       {/* Status row */}
       <div className="flex items-center justify-between gap-3 mb-4 min-h-5">
         {status === "live" && <LiveIndicator />}
@@ -135,7 +143,15 @@ export function LiveMatchupCard({
           </p>
         )
       )}
-    </Link>
+      </Link>
+
+      {/* The Book's line footer: omitted entirely when no line is priced. */}
+      {bookFooter && (
+        <div className="px-5 pb-5 pt-3 border-t border-divider">
+          <BookLineFooterRow footer={bookFooter} />
+        </div>
+      )}
+    </div>
   );
 }
 
