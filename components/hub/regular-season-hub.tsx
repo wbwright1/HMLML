@@ -24,6 +24,8 @@ import { getRivalryWeek, rivalryPairKey } from "@/lib/queries/rivalry-week";
 import { computeStandingsRaceTags } from "@/lib/queries/playoff-race";
 import { StatChip, GameCard, toLadderEntries } from "@/components/hub/shared";
 import { BetweenWeeksHub } from "@/components/hub/between-weeks-hub";
+import { getBookBoard, type BookGame } from "@/lib/queries/book";
+import { BookRailCard } from "@/components/hub/book-rail-card";
 
 export async function RegularSeasonHub({
   matchupData,
@@ -154,6 +156,19 @@ export async function RegularSeasonHub({
     if (s.avatarUrl) avatarByFranchiseId.set(s.franchiseId, s.avatarUrl);
   }
 
+  // The Book's priced lines for this week, keyed by matchup id. Genuinely
+  // optional (book_lines can be empty pre-first-sync, or the whole feature
+  // predates a given season), so an empty catch is correct here.
+  let bookGames: BookGame[] = [];
+  if (latestSeason) {
+    try {
+      bookGames = await getBookBoard(latestSeason.id, seasonYear, week);
+    } catch {
+      // The Book is an aside on the hub; absence is fine.
+    }
+  }
+  const bookGameByMatchup = new Map(bookGames.map((g) => [g.matchupId, g]));
+
   return (
     <>
       {/* Hero */}
@@ -221,6 +236,7 @@ export async function RegularSeasonHub({
                       matchup.awayTeam.franchiseId
                     )
                   )}
+                  bookGame={bookGameByMatchup.get(matchup.matchupId)}
                 />
               ))}
             </div>
@@ -229,6 +245,8 @@ export async function RegularSeasonHub({
 
           {/* The ladder + weekly damage rail */}
           <aside className="space-y-6">
+            {bookGames.length > 0 && <BookRailCard games={bookGames} week={week} />}
+
             {ladderEntries.length > 0 && (
               <div className="space-y-3">
                 <p className="text-kicker flex items-center justify-between">
@@ -339,11 +357,16 @@ export async function RegularSeasonHub({
           {ladderEntries.length > 0 && (
             <ScrollReveal>
               <PageSection label="Current" title="The Ladder">
-                <StandingsSnapshotCard
-                  standings={ladderEntries}
-                  week={week}
-                  seasonYear={seasonYear}
-                />
+                <div className="space-y-6">
+                  {bookGames.length > 0 && (
+                    <BookRailCard games={bookGames} week={week} />
+                  )}
+                  <StandingsSnapshotCard
+                    standings={ladderEntries}
+                    week={week}
+                    seasonYear={seasonYear}
+                  />
+                </div>
               </PageSection>
             </ScrollReveal>
           )}

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { SNARKY_LABELS } from "@/lib/content";
 import type { PlayoffRaceTag } from "@/lib/queries/playoff-race";
+import { PLAYOFF_BERTHS } from "@/lib/queries/divisions";
 
 interface StandingsEntry {
   rank: number;
@@ -36,7 +37,8 @@ interface StandingsSnapshotCardProps {
   week: number;
   seasonYear: number;
   /**
-   * Rank after which the "playoff line" divider is drawn. Defaults to 6.
+   * Rank after which the "playoff line" divider is drawn. Defaults to
+   * PLAYOFF_BERTHS, the league's real seed count (lib/queries/divisions.ts).
    * Ignored when entries carry `isIn` (a real projection is present); the
    * line is then drawn after the last `isIn: true` entry.
    */
@@ -52,7 +54,7 @@ interface StandingsSnapshotCardProps {
  */
 export function StandingsSnapshotCard({
   standings,
-  playoffLineAfter = 6,
+  playoffLineAfter = PLAYOFF_BERTHS,
 }: StandingsSnapshotCardProps) {
   if (standings.length === 0) return null;
 

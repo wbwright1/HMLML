@@ -25,6 +25,8 @@ import {
 } from "@/lib/queries/players-to-watch";
 import { getTrendingAddPlayers } from "@/lib/queries/player-points";
 import { getHubEditorial, matchupPairKey, type HubEditorial } from "@/lib/content";
+import { getBookBoard, type BookGame } from "@/lib/queries/book";
+import { buildHubLineFooter } from "@/lib/book/shared";
 import {
   selectGameOfTheWeek,
   betweenWeeksHeadline,
@@ -115,6 +117,7 @@ export async function BetweenWeeksHub({
   let benchLeader: Awaited<ReturnType<typeof getWeekBenchLeader>> = null;
   let pool: Awaited<ReturnType<typeof getWeekStarterPool>> = [];
   let trending: Awaited<ReturnType<typeof getTrendingAddPlayers>> = [];
+  let bookGames: BookGame[] = [];
   const h2hByMatchup = new Map<
     number,
     { wins: number; losses: number; ties: number }
@@ -126,7 +129,7 @@ export async function BetweenWeeksHub({
       // The Bench" about week 0 would either return null by luck or (if a
       // future data change ever lets it) resurrect a false claim. Skip the
       // fetches outright rather than relying on the empty-shape fallback.
-      const [divisions, superlatives, bench, weekPool, trend, ...h2hResults] =
+      const [divisions, superlatives, bench, weekPool, trend, board, ...h2hResults] =
         await Promise.all([
           getDivisionStandings(seasonId),
           week === 1
@@ -137,6 +140,7 @@ export async function BetweenWeeksHub({
             : getWeekBenchLeader(seasonId, priorWeek),
           getWeekStarterPool(seasonId, week),
           getTrendingAddPlayers(3),
+          getBookBoard(seasonId, seasonYear, week),
           ...matchups.map((m) =>
             getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
           ),
@@ -146,6 +150,7 @@ export async function BetweenWeeksHub({
       benchLeader = bench;
       pool = weekPool;
       trending = trend;
+      bookGames = board;
 
       if (anyGamesPlayed) {
         for (const group of divisions) {
@@ -201,6 +206,7 @@ export async function BetweenWeeksHub({
   const gameOfWeek = matchups.find((m) => m.matchupId === gotwId) ?? null;
   const restOfSlate = matchups.filter((m) => m.matchupId !== gotwId);
   const kickoffWeekday = kickoffWeekdayName(nextKickoff);
+  const bookGameByMatchup = new Map(bookGames.map((g) => [g.matchupId, g]));
 
   // Players to Watch: the pre-kickoff replacement for the retrospective
   // "Standouts" rail. Uses the same pool fetched above; empty (never
@@ -277,6 +283,7 @@ export async function BetweenWeeksHub({
                       record(m.awayTeam.franchiseId),
                       kickoffWeekday
                     );
+                  const bookGame = bookGameByMatchup.get(m.matchupId);
                   return (
                     <SlateCard
                       key={m.matchupId}
@@ -286,6 +293,7 @@ export async function BetweenWeeksHub({
                         h2h ? formatSlateH2H(h2h) : record(m.homeTeam.franchiseId)
                       }
                       angle={angle}
+                      bookFooter={bookGame ? buildHubLineFooter(bookGame) : undefined}
                     />
                   );
                 })}
