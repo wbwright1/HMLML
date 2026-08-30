@@ -13,12 +13,13 @@ import {
 const DESKTOP = { width: 1280, height: 800 };
 const MOBILE = { width: 375, height: 812 };
 
-const PILLS = [
+const PILLS: { label: string; dockLabel?: string; href: string }[] = [
   { label: "Hub", href: "/" },
   { label: "Teams", href: "/teams" },
   { label: "Records", href: "/records" },
   { label: "Drafts", href: "/drafts" },
-  { label: "Players", href: "/players" },
+  // The dock shortens "The Book" to fit at 9px (nav-pills dockLabel).
+  { label: "The Book", dockLabel: "Book", href: "/book" },
 ];
 
 // ============================================================================
@@ -235,7 +236,9 @@ test.describe("Mobile Dock", () => {
     const texts = (await links.allInnerTexts()).map((t) =>
       t.trim().toLowerCase()
     );
-    expect(texts).toEqual(PILLS.map((p) => p.label.toLowerCase()));
+    expect(texts).toEqual(
+      PILLS.map((p) => (p.dockLabel ?? p.label).toLowerCase())
+    );
 
     await expect(
       page.getByRole("button", { name: "Search teams, players, records" })
@@ -596,7 +599,11 @@ test.describe("Root Layout", () => {
     let paddingBottom = await page
       .locator("footer")
       .evaluate((el) => parseFloat(window.getComputedStyle(el).paddingBottom));
-    expect(paddingBottom).toBeGreaterThanOrEqual(140);
+    // SiteFooter reserves dock clearance with
+    // pb-[calc(env(safe-area-inset-bottom)+96px)], so 96 is the true floor:
+    // headless Chrome reports a 0 safe-area inset, while a device with a home
+    // indicator adds its inset on top of the 96.
+    expect(paddingBottom).toBeGreaterThanOrEqual(96);
 
     await page.setViewportSize(DESKTOP);
     await page.goto("/");

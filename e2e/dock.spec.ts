@@ -8,7 +8,8 @@ const TABS = [
   { label: "Teams", href: "/teams" },
   { label: "Records", href: "/records" },
   { label: "Drafts", href: "/drafts" },
-  { label: "Players", href: "/players" },
+  // The dock shortens "The Book" to fit at 9px (nav-pills dockLabel).
+  { label: "Book", href: "/book" },
 ];
 
 test.describe("Mobile dock", () => {

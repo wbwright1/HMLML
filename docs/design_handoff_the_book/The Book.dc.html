@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <script src="_ds/dynasty-fantasy-football-redesign-1fb7380f-b5fe-47dc-8d24-352148211551/_ds_bundle.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Instrument+Serif:ital@1&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+  <style>
+    html { color-scheme: dark; }
+    body { margin:0; background:#1A1613; color:#F2EADC; font-family:'Geist',sans-serif; -webkit-font-smoothing:antialiased; }
+    a { color:#E2B858; text-decoration:none; }
+    a:hover { filter:brightness(1.1); }
+    button { font-family:inherit; }
+    input::placeholder { color:#6E6759; }
+    select, input[type="number"] { font-family:inherit; color:#F2EADC; background:#211C18; border:1px solid rgba(255,255,255,.14); border-radius:10px; padding:8px 10px; font-size:14px; outline:none; }
+    select:focus, input:focus { border-color:#E2B858; }
+    select option { background:#211C18; color:#F2EADC; }
+    @keyframes live-pulse { 0% { transform:scale(1); opacity:.75; } 100% { transform:scale(2.4); opacity:0; } }
+    :focus-visible { outline:2px solid #E2B858; outline-offset:2px; }
+  </style>
+</helmet>
+
+<div style="min-height:100vh;display:flex;flex-direction:column">
+
+  <!-- ===== Topbar ===== -->
+  <div style="position:sticky;top:0;z-index:40;height:64px;border-bottom:1px solid rgba(255,255,255,.08);background:rgba(26,22,19,.85);backdrop-filter:blur(12px)">
+    <div style="margin:0 auto;display:flex;height:100%;max-width:1200px;align-items:center;gap:12px;padding:0 32px;box-sizing:border-box">
+      <button onClick="{{goHub}}" style="border:none;background:none;padding:0;margin-right:8px;font-family:'Instrument Serif',serif;font-style:italic;font-size:22px;color:#E2B858;cursor:pointer">HMLML</button>
+      <nav aria-label="Main navigation">
+        <ul style="display:flex;align-items:center;gap:4px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.045);border-radius:999px;padding:4px;list-style:none;margin:0">
+          <sc-for list="{{navItems}}" as="n" hint-placeholder-count="6">
+            <li>
+              <button onClick="{{n.go}}" style="display:block;border:none;border-radius:999px;padding:6px 16px;font-size:14px;font-weight:500;cursor:pointer;white-space:nowrap;background:{{n.bg}};color:{{n.color}}" style-hover="color:#F2EADC">{{n.label}}</button>
+            </li>
+          </sc-for>
+        </ul>
+      </nav>
+      <div style="margin-left:auto;display:flex;align-items:center;gap:12px;min-width:0">
+        <div style="display:flex;align-items:center;gap:8px;flex:0 1 230px;min-width:110px;padding:7px 12px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.045);border-radius:10px;box-sizing:border-box">
+          <span style="font-size:13px;color:#6E6759;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Search league…</span>
+          <span style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:#6E6759;border:1px solid rgba(255,255,255,.14);border-radius:5px;padding:1px 5px">⌘K</span>
+        </div>
+        <span style="display:inline-flex;align-items:center;gap:8px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.045);border-radius:999px;padding:6px 12px;font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#98917F;white-space:nowrap;flex-shrink:0">
+          <span style="position:relative;display:flex;width:6px;height:6px;flex-shrink:0" aria-hidden="true">
+            <span style="position:absolute;display:inline-flex;height:100%;width:100%;border-radius:999px;background:#8FBF7F;opacity:.75;animation:live-pulse 1.6s ease-out infinite"></span>
+            <span style="position:relative;display:inline-flex;width:6px;height:6px;border-radius:999px;background:#8FBF7F"></span>
+          </span>
+          <span style="color:#F2EADC">4 Games Live</span>
+        </span>
+        <div style="width:32px;height:32px;border-radius:9px;background:linear-gradient(140deg,#E2B858,#8E6E2A);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <span style="font-size:12px;font-weight:700;color:#1A1613;user-select:none">DK</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <main style="flex:1;margin:0 auto;width:100%;max-width:1200px;padding:0 32px 48px;box-sizing:border-box" data-screen-label="{{screenLabel}}">
+
+    <!-- ================= HUB VIEW ================= -->
+    <sc-if value="{{isHub}}" hint-placeholder-val="{{true}}">
+      <section style="padding:40px 0 24px;display:flex;align-items:flex-start;justify-content:space-between;gap:32px">
+        <div>
+          <p style="margin:0 0 12px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">Harambe Memorial League · 2026</p>
+          <h1 style="margin:0;font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:56px;line-height:1.05;letter-spacing:-0.01em;color:#F2EADC">Week 10.</h1>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px">
+          <sc-for list="{{heroChips}}" as="c" hint-placeholder-count="3">
+            <div style="min-width:144px;padding:12px 16px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+              <p style="margin:0 0 6px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">{{c.label}}</p>
+              <p style="margin:0;font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:24px;line-height:1;color:#F2EADC">{{c.value}}<span style="margin-left:8px;font-family:'Geist',sans-serif;font-size:14px;font-weight:400;color:#98917F">{{c.context}}</span></p>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <div style="display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px">
+        <!-- On the field -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+          <p style="margin:0;display:flex;align-items:center;justify-content:space-between;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">
+            <span>On the Field · All Live</span>
+            <button onClick="{{goBook}}" style="border:none;background:none;padding:0;cursor:pointer;font-size:13px;font-weight:500;color:#E2B858;text-transform:none;letter-spacing:0">Matchup detail →</button>
+          </p>
+          <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px">
+            <sc-for list="{{hubGames}}" as="g" hint-placeholder-count="6">
+              <div style="padding:20px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06);transition:border-color 150ms" style-hover="border-color:rgba(255,255,255,.14)">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;min-height:20px">
+                  <sc-if value="{{g.isLive}}" hint-placeholder-val="{{true}}">
+                    <span style="display:inline-flex;align-items:center;gap:6px" aria-label="Live">
+                      <span style="position:relative;display:flex;width:8px;height:8px" aria-hidden="true">
+                        <span style="position:absolute;display:inline-flex;height:100%;width:100%;border-radius:999px;background:#8FBF7F;opacity:.75;animation:live-pulse 1.6s ease-out infinite"></span>
+                        <span style="position:relative;display:inline-flex;width:8px;height:8px;border-radius:999px;background:#8FBF7F"></span>
+                      </span>
+                      <span style="font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:#8FBF7F">Live</span>
+                    </span>
+                    <span style="margin-left:auto;flex-shrink:0;white-space:nowrap;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;font-variant-numeric:tabular-nums;color:#98917F">{{g.leftTxt}}</span>
+                  </sc-if>
+                  <sc-if value="{{g.isUp}}" hint-placeholder-val="{{false}}">
+                    <span style="font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">{{g.kick}}</span>
+                  </sc-if>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                    <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1">
+                      <div style="width:32px;height:32px;border-radius:9px;background:{{g.hColor}};display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:12px;font-weight:700;color:#1A1613;user-select:none">{{g.hAbbr}}</span></div>
+                      <span style="font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:{{g.hW}};color:{{g.hNameC}}">{{g.hName}}</span>
+                    </div>
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:24px;line-height:1;flex-shrink:0;color:{{g.hScoreC}}">{{g.hScore}}</span>
+                  </div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px">
+                    <div style="display:flex;align-items:center;gap:12px;min-width:0;flex:1">
+                      <div style="width:32px;height:32px;border-radius:9px;background:{{g.aColor}};display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:12px;font-weight:700;color:#1A1613;user-select:none">{{g.aAbbr}}</span></div>
+                      <span style="font-size:16px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:{{g.aW}};color:{{g.aNameC}}">{{g.aName}}</span>
+                    </div>
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:24px;line-height:1;flex-shrink:0;color:{{g.aScoreC}}">{{g.aScore}}</span>
+                  </div>
+                </div>
+                <sc-if value="{{g.isLive}}" hint-placeholder-val="{{true}}">
+                  <div style="margin-top:16px">
+                    <div style="height:3px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.07)" aria-hidden="true">
+                      <span style="display:block;height:100%;border-radius:999px;background:#E2B858;width:{{g.wpPct}}"></span>
+                    </div>
+                    <div style="margin-top:8px;display:flex;align-items:baseline;justify-content:space-between;gap:12px;font-size:12px;color:#98917F">
+                      <span>Win prob <span style="font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums">{{g.wpTxt}}</span></span>
+                    </div>
+                  </div>
+                </sc-if>
+                <div style="margin-top:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,.05);display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px">
+                  <span style="font-family:'JetBrains Mono',monospace;font-weight:600;font-variant-numeric:tabular-nums;font-size:12px;color:#B8B0A0;white-space:nowrap">{{g.lineTxt}}</span>
+                  <span style="display:flex;align-items:center;gap:12px;flex-shrink:0">
+                    <span style="font-size:12px;color:#98917F">{{g.consTxt}}</span>
+                    <button onClick="{{goBook}}" style="border:none;background:none;padding:0;cursor:pointer;font-size:12px;font-weight:600;color:#E2B858">{{g.ctaTxt}}</button>
+                  </span>
+                </div>
+                <sc-if value="{{g.isUp}}" hint-placeholder-val="{{false}}">
+                  <p style="margin:8px 0 0;font-size:12px;font-style:italic;color:#98917F">{{g.payTxt}}</p>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <!-- Rail -->
+        <aside style="display:flex;flex-direction:column;gap:24px">
+          <div style="position:relative;overflow:hidden;padding:20px;background:linear-gradient(180deg,rgba(226,184,88,.1),rgba(226,184,88,.02)),linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(226,184,88,.25);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+            <p style="margin:0 0 8px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#E2B858">The Book · Week 10</p>
+            <p style="margin:0 0 4px;font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:30px;line-height:1;color:#F2EADC">{{slipRecordTxt}}</p>
+            <p style="margin:0 0 16px;font-size:14px;line-height:1.45;color:#B8B0A0">{{slipSummaryTxt}}</p>
+            <button onClick="{{goBook}}" style="border:none;border-radius:999px;padding:9px 18px;background:#E2B858;color:#1A1613;font-size:14px;font-weight:600;cursor:pointer" style-hover="filter:brightness(1.08)">Open the board →</button>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <p style="margin:0;display:flex;align-items:center;justify-content:space-between;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">
+              <span>The Ladder</span>
+              <span style="font-size:13px;font-weight:500;color:#E2B858;text-transform:none;letter-spacing:0">Records →</span>
+            </p>
+            <div style="overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+              <ul style="list-style:none;margin:0;padding:0">
+                <sc-for list="{{ladder}}" as="r" hint-placeholder-count="6">
+                  <li style="border-top:1px solid rgba(255,255,255,.05)">
+                    <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:{{r.rowBg}}" style-hover="background:rgba(255,255,255,.07)">
+                      <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;width:20px;text-align:center;flex-shrink:0;color:{{r.rkC}}">{{r.rk}}</span>
+                      <div style="width:28px;height:28px;border-radius:8px;background:{{r.color}};display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:10px;font-weight:700;color:#1A1613;user-select:none">{{r.abbr}}</span></div>
+                      <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:{{r.nmW}};color:{{r.nmC}}">{{r.name}}</span>
+                      <span style="flex-shrink:0;font-size:13px;font-family:'Instrument Serif',serif;font-style:italic;color:#C97C6A">{{r.snark}}</span>
+                      <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;flex-shrink:0;color:{{r.recC}}">{{r.rec}}</span>
+                    </div>
+                    <sc-if value="{{r.line}}" hint-placeholder-val="{{false}}">
+                      <div style="display:flex;align-items:center;gap:12px;padding:6px 16px" aria-hidden="true">
+                        <span style="height:1px;flex:1;background:rgba(226,184,88,.3)"></span>
+                        <span style="font-family:'Instrument Serif',serif;font-style:italic;font-size:14px;line-height:1;color:rgba(226,184,88,.8)">the playoff line</span>
+                        <span style="height:1px;flex:1;background:rgba(226,184,88,.3)"></span>
+                      </div>
+                    </sc-if>
+                  </li>
+                </sc-for>
+              </ul>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <p style="margin:0;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">Week 9 Damage</p>
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px">
+              <div style="padding:20px;background:linear-gradient(180deg,rgba(226,184,88,.1),rgba(226,184,88,.02)),linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(226,184,88,.25);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+                <p style="margin:0 0 8px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#E2B858">High Score</p>
+                <p style="margin:0 0 4px;font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:30px;line-height:1;color:#F2EADC">141.2</p>
+                <p style="margin:0;font-size:14px;color:#B8B0A0">Mahomes Alone</p>
+              </div>
+              <div style="padding:20px;background:linear-gradient(180deg,rgba(201,124,106,.1),rgba(201,124,106,.02)),linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(201,124,106,.25);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+                <p style="margin:0 0 8px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#C97C6A">Mercy Rule</p>
+                <p style="margin:0 0 4px;font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:30px;line-height:1;color:#F2EADC">52.9</p>
+                <p style="margin:0;font-size:14px;color:#B8B0A0">Gorilla Warfare</p>
+              </div>
+            </div>
+          </div>
+        </aside>
+      </div>
+    </sc-if>
+
+    <!-- ================= THE BOOK VIEW ================= -->
+    <sc-if value="{{isBook}}" hint-placeholder-val="{{false}}">
+      <section style="padding:40px 0 24px;display:flex;align-items:flex-start;justify-content:space-between;gap:32px">
+        <div>
+          <p style="margin:0 0 12px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">HMLML Sportsbook · Week 10</p>
+          <h1 style="margin:0;font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;font-size:56px;line-height:1.05;letter-spacing:-0.01em;color:#F2EADC">The Book.</h1>
+          <p style="margin:12px 0 0;font-size:14px;color:#98917F;font-style:italic;font-family:'Instrument Serif',serif">Lines computed from projections. Wagers strictly friendly. The house is a gorilla.</p>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px">
+          <sc-for list="{{bookChips}}" as="c" hint-placeholder-count="3">
+            <div style="min-width:144px;padding:12px 16px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+              <p style="margin:0 0 6px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">{{c.label}}</p>
+              <p style="margin:0;font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:24px;line-height:1;color:#F2EADC">{{c.value}}<span style="margin-left:8px;font-family:'Geist',sans-serif;font-size:14px;font-weight:400;color:#98917F">{{c.context}}</span></p>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <div style="display:inline-flex;align-items:center;gap:4px;border:1px solid rgba(255,255,255,.08);background:rgba(255,255,255,.045);border-radius:999px;padding:4px;margin-bottom:24px">
+        <sc-for list="{{tabItems}}" as="t" hint-placeholder-count="3">
+          <button onClick="{{t.go}}" style="border:none;border-radius:999px;padding:7px 18px;font-size:14px;font-weight:500;cursor:pointer;background:{{t.bg}};color:{{t.color}}" style-hover="color:#F2EADC">{{t.label}}</button>
+        </sc-for>
+      </div>
+
+      <!-- ---- The Board ---- -->
+      <sc-if value="{{isBoard}}" hint-placeholder-val="{{true}}">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start">
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <sc-for list="{{boardGames}}" as="g" hint-placeholder-count="6">
+              <div style="padding:20px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+                <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px">
+                  <span style="font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:{{g.statusC}}">{{g.statusTxt}}</span>
+                  <span style="font-size:12px;color:#98917F">{{g.consLabel}}</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <button onClick="{{g.hGo}}" aria-label="{{g.hAria}}" style="{{g.hBtn}}">
+                    <div style="width:28px;height:28px;border-radius:8px;background:{{g.hColor}};display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:10px;font-weight:700;color:#1A1613;user-select:none">{{g.hAbbr}}</span></div>
+                    <span style="flex:1;min-width:0;text-align:left">
+                      <span style="display:block;font-size:14px;font-weight:600;color:#F2EADC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{g.hName}}</span>
+                      <span style="display:block;font-size:11px;color:#98917F;font-variant-numeric:tabular-nums">{{g.hRec}}</span>
+                    </span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;color:#F2EADC;background:rgba(255,255,255,.07);padding:4px 9px;border-radius:8px;flex-shrink:0">{{g.hChip}}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:600;font-variant-numeric:tabular-nums;font-size:12px;color:#98917F;min-width:44px;text-align:right;flex-shrink:0">{{g.hMl}}</span>
+                    <span style="font-size:12px;color:#98917F;min-width:96px;text-align:right;flex-shrink:0">{{g.hPay}}</span>
+                  </button>
+                  <button onClick="{{g.aGo}}" aria-label="{{g.aAria}}" style="{{g.aBtn}}">
+                    <div style="width:28px;height:28px;border-radius:8px;background:{{g.aColor}};display:flex;align-items:center;justify-content:center;flex-shrink:0"><span style="font-size:10px;font-weight:700;color:#1A1613;user-select:none">{{g.aAbbr}}</span></div>
+                    <span style="flex:1;min-width:0;text-align:left">
+                      <span style="display:block;font-size:14px;font-weight:600;color:#F2EADC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{g.aName}}</span>
+                      <span style="display:block;font-size:11px;color:#98917F;font-variant-numeric:tabular-nums">{{g.aRec}}</span>
+                    </span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;color:#F2EADC;background:rgba(255,255,255,.07);padding:4px 9px;border-radius:8px;flex-shrink:0">{{g.aChip}}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:600;font-variant-numeric:tabular-nums;font-size:12px;color:#98917F;min-width:44px;text-align:right;flex-shrink:0">{{g.aMl}}</span>
+                    <span style="font-size:12px;color:#98917F;min-width:96px;text-align:right;flex-shrink:0">{{g.aPay}}</span>
+                  </button>
+                </div>
+                <sc-if value="{{g.hasPickRow}}" hint-placeholder-val="{{false}}">
+                  <div style="margin-top:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 12px;border-radius:10px;background:rgba(255,255,255,.03)">
+                    <span style="font-size:12px;color:#B8B0A0">Your pick · <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;color:#F2EADC">{{g.pickTxt}}</span></span>
+                    <span style="font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:{{g.tagC}}">{{g.tagTxt}}</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{showCons}}" hint-placeholder-val="{{true}}">
+                  <div style="margin-top:12px">
+                    <div style="height:3px;overflow:hidden;border-radius:999px;background:rgba(255,255,255,.07)" aria-hidden="true">
+                      <span style="display:block;height:100%;border-radius:999px;background:#E2B858;width:{{g.consPct}}"></span>
+                    </div>
+                    <p style="margin:6px 0 0;font-size:11px;color:#6E6759;font-variant-numeric:tabular-nums">League consensus · {{g.consRow}}</p>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+          </div>
+
+          <aside style="display:flex;flex-direction:column;gap:24px">
+            <div style="padding:20px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+              <p style="margin:0 0 14px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">Pick Slip · Week 10</p>
+              <ul style="list-style:none;margin:0 0 16px;padding:0;display:flex;flex-direction:column">
+                <sc-for list="{{slip}}" as="s" hint-placeholder-count="6">
+                  <li style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid rgba(255,255,255,.05)">
+                    <span style="min-width:0">
+                      <span style="display:block;font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;color:{{s.txtC}}">{{s.txt}}</span>
+                      <span style="display:block;font-size:11px;color:#6E6759">{{s.sub}}</span>
+                    </span>
+                    <span style="flex-shrink:0;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:{{s.tagC}}">{{s.tag}}</span>
+                  </li>
+                </sc-for>
+              </ul>
+              <button onClick="{{lockGo}}" style="{{lockBtn}}">{{lockLabel}}</button>
+              <p style="margin:10px 0 0;font-size:11px;color:#6E6759">{{lockNote}}</p>
+            </div>
+
+            <div style="padding:20px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+              <p style="margin:0 0 4px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">Wager Translator</p>
+              <p style="margin:0 0 14px;font-size:12px;font-style:italic;font-family:'Instrument Serif',serif;color:#98917F">friendly wagers only, the commish is not a casino</p>
+              <div style="display:flex;flex-direction:column;gap:10px">
+                <select value="{{calcSel}}" onChange="{{onCalcSel}}" style="width:100%;box-sizing:border-box">
+                  <sc-for list="{{calcOpts}}" as="o" hint-placeholder-count="4">
+                    <option value="{{o.v}}">{{o.label}}</option>
+                  </sc-for>
+                </select>
+                <label style="display:flex;align-items:center;gap:10px;font-size:13px;color:#B8B0A0">Stake
+                  <input type="number" min="1" max="500" value="{{stake}}" onChange="{{onStake}}" style="width:90px;box-sizing:border-box">
+                  <span style="font-size:12px;color:#6E6759">USD</span>
+                </label>
+              </div>
+              <div style="margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.05)">
+                <p style="margin:0;font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:30px;line-height:1;color:#8FBF7F">{{calcWin}}</p>
+                <p style="margin:8px 0 0;font-size:12px;color:#98917F">{{calcCaption}}</p>
+                <p style="margin:10px 0 0;font-size:11px;color:#6E6759">Spread bets pay −110: a $10 friendly wins $9.09.</p>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </sc-if>
+
+      <!-- ---- Tracking ---- -->
+      <sc-if value="{{isTrack}}" hint-placeholder-val="{{false}}">
+        <div style="display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start">
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <p style="margin:0;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">Season · Against the Spread</p>
+            <div style="overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+              <div style="display:grid;grid-template-columns:28px 36px 1fr 64px 72px 72px;gap:12px;align-items:center;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
+                <span></span><span></span><span style="font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#6E6759">Picker</span>
+                <span style="font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#6E6759">Streak</span>
+                <span style="font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#6E6759;text-align:right">Units</span>
+                <span style="font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#6E6759;text-align:right">ATS</span>
+              </div>
+              <ul style="list-style:none;margin:0;padding:0">
+                <sc-for list="{{board}}" as="b" hint-placeholder-count="8">
+                  <li style="display:grid;grid-template-columns:28px 36px 1fr 64px 72px 72px;gap:12px;align-items:center;padding:10px 16px;border-top:1px solid rgba(255,255,255,.05);background:{{b.rowBg}}" style-hover="background:rgba(255,255,255,.07)">
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;text-align:center;color:{{b.rkC}}">{{b.rk}}</span>
+                    <div style="width:28px;height:28px;border-radius:8px;background:{{b.color}};display:flex;align-items:center;justify-content:center"><span style="font-size:10px;font-weight:700;color:#1A1613;user-select:none">{{b.abbr}}</span></div>
+                    <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:15px;font-weight:{{b.nmW}};color:{{b.nmC}}">{{b.name}}<span style="margin-left:8px;font-size:10px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:#E2B858">{{b.you}}</span></span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:600;font-variant-numeric:tabular-nums;font-size:12px;color:{{b.stkC}}">{{b.stk}}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:600;font-variant-numeric:tabular-nums;font-size:13px;text-align:right;color:{{b.unitC}}">{{b.units}}</span>
+                    <span style="font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:14px;text-align:right;color:{{b.recC}}">{{b.ats}}</span>
+                  </li>
+                </sc-for>
+              </ul>
+            </div>
+
+            <p style="margin:16px 0 0;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">Week 10 · Who Picked Whom</p>
+            <div style="overflow:hidden;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+              <div style="display:grid;grid-template-columns:1fr repeat(6,66px);gap:8px;align-items:center;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.05)">
+                <span style="font-size:11px;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#6E6759">Picker</span>
+                <sc-for list="{{gridHead}}" as="h" hint-placeholder-count="6">
+                  <span style="font-family:'JetBrains Mono',monospace;font-weight:600;font-size:10px;color:#6E6759;text-align:center">{{h.t}}</span>
+                </sc-for>
+              </div>
+              <ul style="list-style:none;margin:0;padding:0">
+                <sc-for list="{{grid}}" as="m" hint-placeholder-count="8">
+                  <li style="display:grid;grid-template-columns:1fr repeat(6,66px);gap:8px;align-items:center;padding:7px 16px;border-top:1px solid rgba(255,255,255,.05);background:{{m.rowBg}}">
+                    <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;font-weight:500;color:{{m.nmC}}">{{m.name}}</span>
+                    <sc-for list="{{m.cells}}" as="c" hint-placeholder-count="6">
+                      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;padding:3px 0;border-radius:6px;display:block;text-align:center;background:{{c.bg}};color:{{c.fg}}">{{c.t}}</span>
+                    </sc-for>
+                  </li>
+                </sc-for>
+              </ul>
+              <p style="margin:0;padding:10px 16px;border-top:1px solid rgba(255,255,255,.05);font-size:11px;color:#6E6759">✓ covering or hit · ✗ behind or missed · — locks later. Live games show the current cover.</p>
+            </div>
+          </div>
+
+          <aside style="display:flex;flex-direction:column;gap:12px">
+            <p style="margin:0;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">Streak Watch</p>
+            <div style="padding:20px;background:linear-gradient(180deg,rgba(226,184,88,.1),rgba(226,184,88,.02)),linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(226,184,88,.25);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+              <p style="margin:0 0 8px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#E2B858">Longest Heater</p>
+              <p style="margin:0 0 4px;font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:30px;line-height:1;color:#F2EADC">W6</p>
+              <p style="margin:0;font-size:14px;color:#B8B0A0">Gorilla Warfare · hasn't missed since Week 7</p>
+            </div>
+            <div style="padding:20px;background:linear-gradient(180deg,rgba(201,124,106,.1),rgba(201,124,106,.02)),linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(201,124,106,.25);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+              <p style="margin:0 0 8px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#C97C6A">Ice Cold</p>
+              <p style="margin:0 0 4px;font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:30px;line-height:1;color:#F2EADC">L5</p>
+              <p style="margin:0;font-size:14px;color:#B8B0A0">Practice Squad All-Stars · can't pick 'em either</p>
+            </div>
+            <div style="padding:20px;background:linear-gradient(180deg,rgba(226,184,88,.1),rgba(226,184,88,.02)),linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(226,184,88,.25);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+              <p style="margin:0 0 8px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#E2B858">Best Single Week</p>
+              <p style="margin:0 0 4px;font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:30px;line-height:1;color:#F2EADC">6-0</p>
+              <p style="margin:0;font-size:14px;color:#B8B0A0">Mahomes Alone · Week 3 clean sweep</p>
+            </div>
+          </aside>
+        </div>
+      </sc-if>
+
+      <!-- ---- Props ---- -->
+      <sc-if value="{{isProps}}" hint-placeholder-val="{{false}}">
+        <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start">
+          <sc-for list="{{props}}" as="p" hint-placeholder-count="3">
+            <div style="padding:20px;background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02));border:1px solid rgba(255,255,255,.08);border-radius:14px;box-shadow:0 24px 60px rgba(0,0,0,.3),inset 0 1px 0 rgba(255,255,255,.06)">
+              <p style="margin:0 0 10px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">{{p.label}}</p>
+              <p style="margin:0 0 2px;font-size:16px;font-weight:600;color:#F2EADC">{{p.q}}</p>
+              <p style="margin:0 0 14px;font-family:'JetBrains Mono',monospace;font-weight:700;font-variant-numeric:tabular-nums;font-size:24px;color:#E2B858">{{p.line}}</p>
+              <div style="display:flex;gap:8px">
+                <button onClick="{{p.oGo}}" style="{{p.oBtn}}">
+                  <span style="display:block;font-size:13px;font-weight:600;color:#F2EADC">{{p.oTxt}}</span>
+                  <span style="display:block;margin-top:2px;font-family:'JetBrains Mono',monospace;font-weight:600;font-variant-numeric:tabular-nums;font-size:12px;color:#98917F">{{p.oOdds}}</span>
+                  <span style="display:block;margin-top:2px;font-size:11px;color:#6E6759">{{p.oPay}}</span>
+                </button>
+                <button onClick="{{p.uGo}}" style="{{p.uBtn}}">
+                  <span style="display:block;font-size:13px;font-weight:600;color:#F2EADC">{{p.uTxt}}</span>
+                  <span style="display:block;margin-top:2px;font-family:'JetBrains Mono',monospace;font-weight:600;font-variant-numeric:tabular-nums;font-size:12px;color:#98917F">{{p.uOdds}}</span>
+                  <span style="display:block;margin-top:2px;font-size:11px;color:#6E6759">{{p.uPay}}</span>
+                </button>
+              </div>
+              <p style="margin:12px 0 0;font-size:13px;font-style:italic;font-family:'Instrument Serif',serif;color:#98917F">{{p.snark}}</p>
+            </div>
+          </sc-for>
+          <div style="padding:20px;border:1px dashed rgba(255,255,255,.14);border-radius:14px">
+            <p style="margin:0 0 6px;font-size:11px;line-height:1.2;font-weight:600;letter-spacing:.18em;text-transform:uppercase;color:#98917F">House Rules</p>
+            <p style="margin:0;font-size:14px;line-height:1.5;color:#B8B0A0">Props grade Tuesday morning after stat corrections. Disputes go to the commish, who is biased. Lines move when projections re-sync every hour.</p>
+          </div>
+        </div>
+      </sc-if>
+    </sc-if>
+  </main>
+
+  <footer style="border-top:1px solid rgba(255,255,255,.08);padding:32px 0;text-align:center">
+    <div style="margin:0 auto;display:flex;width:100%;max-width:1200px;flex-direction:column;align-items:center;gap:8px;padding:0 32px;box-sizing:border-box">
+      <p style="margin:0;font-size:12px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:#98917F">Harambe Memorial League Memorial League</p>
+      <p style="margin:0;font-size:12px;color:#6E6759">Data synced 4 minutes ago · Lines re-priced hourly from projections</p>
+    </div>
+  </footer>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;oddsFormat&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;both&quot;,&quot;spread&quot;,&quot;moneyline&quot;],&quot;default&quot;:&quot;both&quot;,&quot;tsType&quot;:&quot;string&quot;,&quot;section&quot;:&quot;Odds&quot;},&quot;showConsensus&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Odds&quot;},&quot;defaultStake&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:10,&quot;min&quot;:1,&quot;max&quot;:100,&quot;unit&quot;:&quot;$&quot;,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Wagers&quot;}}">
+class Component extends DCLogic {
+  state = { view: "hub", bookTab: "board", picks: { g5: null, g6: null }, lockedIn: false, propPicks: {}, stake: null, calcSel: "g5A" };
+
+  renderVals() {
+    const S = this.state, P = this.props;
+    const oddsFormat = P.oddsFormat ?? "both";
+    const showCons = P.showConsensus ?? true;
+    const stake = S.stake ?? (P.defaultStake ?? 10);
+
+    const T = {
+      GW: { n: "Gorilla Warfare", c: "#7FA8C9", r: "7-2" },
+      DK: { n: "The Dak Knight", c: "#9B8FC9", r: "7-2" },
+      MA: { n: "Mahomes Alone", c: "#C97C6A", r: "6-3" },
+      ZS: { n: "Zeke Squad", c: "#8FBF7F", r: "6-3" },
+      HR: { n: "Hot Route Heroes", c: "#E2B858", r: "5-4" },
+      FB: { n: "Fumble Bees", c: "#C9A46A", r: "5-4" },
+      BB: { n: "Blitzkrieg Bop", c: "#7FC9B8", r: "4-5" },
+      CT: { n: "Chubb Thumpers", c: "#B87F9E", r: "4-5" },
+      WW: { n: "Waiver Wire Wizards", c: "#8E9EC9", r: "3-6" },
+      PI: { n: "Punt Intended", c: "#C9C27F", r: "3-6" },
+      GT: { n: "Garbage Time Gods", c: "#7F9EB8", r: "2-7" },
+      PS: { n: "Practice Squad All-Stars", c: "#A08F7F", r: "1-8" },
+    };
+
+    const G = [
+      { id: "g1", h: "GW", a: "PS", hs: 118.4, as: 84.2, live: true, left: [7, 5], sp: -13.5, mlH: -650, mlA: 430, wp: 86, cons: 92, myPick: "H" },
+      { id: "g2", h: "DK", a: "MA", hs: 102.7, as: 98.3, live: true, left: [4, 6], sp: -2.5, mlH: -140, mlA: 118, wp: 58, cons: 58, myPick: "A" },
+      { id: "g3", h: "ZS", a: "HR", hs: 91.5, as: 96.8, live: true, left: [5, 5], sp: 1.5, mlH: 105, mlA: -125, wp: 44, cons: 45, myPick: "A" },
+      { id: "g4", h: "FB", a: "BB", hs: 76.2, as: 88.9, live: true, left: [3, 4], sp: 4.5, mlH: 158, mlA: -190, wp: 29, cons: 33, myPick: "A" },
+      { id: "g5", h: "CT", a: "WW", live: false, kick: "SUN 4:25 PM", sp: -3.5, mlH: -165, mlA: 140, cons: 64 },
+      { id: "g6", h: "PI", a: "GT", live: false, kick: "MON 8:15 PM", sp: -2.5, mlH: -135, mlA: 114, cons: 52 },
+    ];
+
+    const ml = (v) => (v > 0 ? "+" + v : "" + v);
+    const spd = (v) => (v > 0 ? "+" + v : "" + v);
+    const pay = (m, s) => (m < 0 ? (s * 100) / -m : (s * m) / 100);
+    const payTxt = (m, s) => "$" + s + " wins $" + pay(m, s).toFixed(2);
+    const money = (v) => "$" + v.toFixed(2);
+
+    // Cover: margin from home's perspective + home spread. Positive → home covering.
+    const coverSide = (g) => (g.hs - g.as + g.sp > 0 ? "H" : "A");
+
+    const setView = (v) => () => this.setState({ view: v });
+    const noop = () => {};
+    const navDefs = [
+      { label: "Hub", go: setView("hub"), active: S.view === "hub" },
+      { label: "Teams", go: noop }, { label: "Records", go: noop },
+      { label: "Drafts", go: noop }, { label: "Players", go: noop },
+      { label: "The Book", go: setView("book"), active: S.view === "book" },
+    ];
+    const navItems = navDefs.map((n) => ({
+      label: n.label, go: n.go,
+      bg: n.active ? "rgba(226,184,88,.13)" : "transparent",
+      color: n.active ? "#E2B858" : "#98917F",
+    }));
+
+    const tabDefs = [
+      { label: "The Board", k: "board" },
+      { label: "Tracking", k: "track" },
+      { label: "Props", k: "props" },
+    ];
+    const tabItems = tabDefs.map((t) => ({
+      label: t.label,
+      go: () => this.setState({ bookTab: t.k }),
+      bg: S.bookTab === t.k ? "rgba(226,184,88,.13)" : "transparent",
+      color: S.bookTab === t.k ? "#E2B858" : "#98917F",
+    }));
+
+    // Line string for hub cards, honoring the oddsFormat tweak
+    const lineStr = (g) => {
+      const favH = g.sp < 0;
+      const favAbbr = favH ? g.h : g.a;
+      const favSp = favH ? g.sp : -Math.abs(g.sp);
+      const spPart = favAbbr + " " + spd(favH ? g.sp : (g.sp > 0 ? -g.sp : g.sp));
+      const mlPart = ml(g.mlH) + " / " + ml(g.mlA);
+      if (oddsFormat === "spread") return spPart;
+      if (oddsFormat === "moneyline") return g.h + " " + ml(g.mlH) + " · " + g.a + " " + ml(g.mlA);
+      return spPart + " · ML " + mlPart;
+    };
+
+    const hubGames = G.map((g) => {
+      const H = T[g.h], A = T[g.a];
+      const hLeads = g.live && g.hs >= g.as, aLeads = g.live && g.as > g.hs;
+      const consFav = g.cons >= 50 ? g.h : g.a;
+      const consPct = g.cons >= 50 ? g.cons : 100 - g.cons;
+      const dogMl = g.mlH > 0 ? g.mlH : g.mlA;
+      const dogAbbr = g.mlH > 0 ? g.h : g.a;
+      return {
+        id: g.id, isLive: g.live, isUp: !g.live, kick: g.kick ?? "",
+        leftTxt: g.live ? g.left[0] + " V " + g.left[1] + " TO PLAY" : "",
+        hAbbr: g.h, hName: H.n, hColor: H.c,
+        hScore: g.live ? g.hs.toFixed(1) : "--",
+        hW: hLeads ? "700" : "500",
+        hNameC: hLeads ? "#F2EADC" : "#B8B0A0",
+        hScoreC: hLeads ? "#F2EADC" : g.live ? "#98917F" : "#6E6759",
+        aAbbr: g.a, aName: A.n, aColor: A.c,
+        aScore: g.live ? g.as.toFixed(1) : "--",
+        aW: aLeads ? "700" : "500",
+        aNameC: aLeads ? "#F2EADC" : "#B8B0A0",
+        aScoreC: aLeads ? "#F2EADC" : g.live ? "#98917F" : "#6E6759",
+        wpPct: (g.wp ?? 0) + "%", wpTxt: (g.wp ?? 0) + "%",
+        lineTxt: lineStr(g),
+        consTxt: showCons ? consPct + "% on " + consFav : "",
+        ctaTxt: g.live ? "The Book →" : "Pick →",
+        payTxt: "A $10 friendly on " + dogAbbr + " " + ml(dogMl) + " pays " + money(pay(dogMl, 10)) + " if it lands.",
+      };
+    });
+
+    const heroChips = [
+      { label: "High Score", value: "118.4", context: "Gorilla Warfare" },
+      { label: "Closest Game", value: "+4.4", context: "DK · MA" },
+      { label: "Players Left", value: "39", context: "of 72" },
+    ];
+
+    // Ladder
+    const order = ["GW", "DK", "MA", "ZS", "HR", "FB", "BB", "CT", "WW", "PI", "GT", "PS"];
+    const ladder = order.map((k, i) => {
+      const t = T[k], leader = i === 0, doormat = i === order.length - 1;
+      return {
+        rk: i + 1, abbr: k, name: t.n, color: t.c, rec: t.r,
+        rowBg: leader ? "rgba(226,184,88,.13)" : doormat ? "rgba(201,124,106,.14)" : "transparent",
+        rkC: leader ? "#E2B858" : doormat ? "#C97C6A" : "#98917F",
+        nmW: leader ? "700" : "500",
+        nmC: leader ? "#F2EADC" : doormat ? "#C97C6A" : "#B8B0A0",
+        recC: leader ? "#F2EADC" : "#98917F",
+        snark: doormat ? "league doormat" : "",
+        line: i === 5,
+      };
+    });
+
+    // The Book — board
+    const pickOf = (g) => (g.live ? g.myPick : S.picks[g.id]);
+    const btnBase = "display:flex;align-items:center;gap:12px;width:100%;box-sizing:border-box;padding:10px 12px;border-radius:11px;text-align:left;transition:border-color 150ms;";
+    const sideBtn = (g, side) => {
+      const picked = pickOf(g) === side;
+      const lockedGame = g.live || S.lockedIn;
+      const cur = lockedGame ? "cursor:default;" : "cursor:pointer;";
+      if (picked) return btnBase + cur + "background:rgba(226,184,88,.13);border:1px solid rgba(226,184,88,.45);";
+      const dim = lockedGame ? "opacity:.55;" : "";
+      return btnBase + cur + dim + "background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);";
+    };
+    const doPick = (g, side) => () => {
+      if (g.live) return;
+      this.setState((s) => s.lockedIn ? null : ({ picks: { ...s.picks, [g.id]: s.picks[g.id] === side ? null : side } }));
+    };
+
+    const boardGames = G.map((g) => {
+      const H = T[g.h], A = T[g.a];
+      const pick = pickOf(g);
+      const cov = g.live ? coverSide(g) : null;
+      const hideMl = oddsFormat === "spread";
+      const hideSp = oddsFormat === "moneyline";
+      let statusTxt, statusC;
+      if (g.live) { statusTxt = "Locked · Live"; statusC = "#8FBF7F"; }
+      else { statusTxt = "Locks " + g.kick; statusC = "#E2B858"; }
+      let pickTxt = "", tagTxt = "", tagC = "#98917F";
+      if (pick) {
+        const pk = pick === "H" ? g.h : g.a;
+        const psp = pick === "H" ? g.sp : -g.sp;
+        pickTxt = T[pk].n + " " + spd(psp);
+        if (g.live) {
+          const hit = pick === cov;
+          tagTxt = hit ? "Covering ✓" : "Not covering ✗";
+          tagC = hit ? "#8FBF7F" : "#C97C6A";
+        } else {
+          tagTxt = S.lockedIn ? "Locked in" : "Locks at kickoff";
+          tagC = S.lockedIn ? "#8FBF7F" : "#98917F";
+        }
+      }
+      return {
+        id: g.id, statusTxt, statusC,
+        consLabel: showCons ? (g.cons >= 50 ? g.cons + "% of the league on " + g.h : (100 - g.cons) + "% of the league on " + g.a) : "",
+        hAbbr: g.h, hName: H.n, hRec: H.r, hColor: H.c,
+        hChip: hideSp ? ml(g.mlH) : spd(g.sp),
+        hMl: hideMl || hideSp ? "" : ml(g.mlH),
+        hPay: hideSp ? payTxt(g.mlH, 10) : "ML: " + payTxt(g.mlH, 10),
+        hBtn: sideBtn(g, "H"), hGo: doPick(g, "H"),
+        hAria: "Pick " + H.n + " " + spd(g.sp),
+        aAbbr: g.a, aName: A.n, aRec: A.r, aColor: A.c,
+        aChip: hideSp ? ml(g.mlA) : spd(-g.sp),
+        aMl: hideMl || hideSp ? "" : ml(g.mlA),
+        aPay: hideSp ? payTxt(g.mlA, 10) : "ML: " + payTxt(g.mlA, 10),
+        aBtn: sideBtn(g, "A"), aGo: doPick(g, "A"),
+        aAria: "Pick " + A.n + " " + spd(-g.sp),
+        hasPickRow: !!pick, pickTxt, tagTxt, tagC,
+        consPct: g.cons + "%",
+        consRow: g.h + " " + g.cons + "% · " + g.a + " " + (100 - g.cons) + "%",
+      };
+    });
+
+    // Pick slip
+    const slip = G.map((g) => {
+      const pick = pickOf(g);
+      if (!pick) return { txt: "Pick a side", txtC: "#6E6759", sub: T[g.h].n + " vs " + T[g.a].n, tag: "Open", tagC: "#E2B858" };
+      const pk = pick === "H" ? g.h : g.a;
+      const psp = pick === "H" ? g.sp : -g.sp;
+      const base = { txt: pk + " " + spd(psp), txtC: "#F2EADC", sub: "vs " + T[pick === "H" ? g.a : g.h].n };
+      if (g.live) {
+        const hit = pick === coverSide(g);
+        return { ...base, tag: hit ? "✓ Covering" : "✗ Behind", tagC: hit ? "#8FBF7F" : "#C97C6A" };
+      }
+      return { ...base, tag: S.lockedIn ? "Locked" : "Pending", tagC: S.lockedIn ? "#8FBF7F" : "#98917F" };
+    });
+    const openCount = G.filter((g) => !g.live && !pickOf(g)).length;
+    const allPicked = openCount === 0;
+    const lockBtnBase = "width:100%;border:none;border-radius:999px;padding:10px 18px;font-size:14px;font-weight:600;";
+    let lockLabel, lockBtn, lockGo, lockNote;
+    if (S.lockedIn) {
+      lockLabel = "Picks are in. No takebacks.";
+      lockBtn = lockBtnBase + "background:rgba(143,191,127,.14);color:#8FBF7F;cursor:default;";
+      lockGo = noop; lockNote = "Graded live as games play out.";
+    } else if (allPicked) {
+      lockLabel = "Lock in picks";
+      lockBtn = lockBtnBase + "background:#E2B858;color:#1A1613;cursor:pointer;";
+      lockGo = () => this.setState(() => ({ lockedIn: true }));
+      lockNote = "Open picks auto-lock at each kickoff.";
+    } else {
+      lockLabel = openCount + (openCount === 1 ? " pick" : " picks") + " still open";
+      lockBtn = lockBtnBase + "background:rgba(255,255,255,.07);color:#6E6759;cursor:default;";
+      lockGo = noop; lockNote = "Pick every open game to lock the slip early.";
+    }
+
+    // Calculator
+    const calcOpts = [];
+    for (const g of G) {
+      if (g.live) continue;
+      calcOpts.push({ v: g.id + "H", label: T[g.h].n + " " + ml(g.mlH) + " (vs " + g.a + ")", m: g.mlH });
+      calcOpts.push({ v: g.id + "A", label: T[g.a].n + " " + ml(g.mlA) + " (at " + g.h + ")", m: g.mlA });
+    }
+    const sel = calcOpts.find((o) => o.v === S.calcSel) ?? calcOpts[0];
+    const win = pay(sel.m, stake);
+    const calcWin = "+" + money(win);
+    const calcCaption = "Risk " + money(stake) + " on " + sel.label.split(" (")[0] + " → get back " + money(stake + win) + " if it hits.";
+
+    // Week 10 live/graded record
+    const lockedPicks = G.filter((g) => g.live);
+    const hits = lockedPicks.filter((g) => g.myPick === coverSide(g)).length;
+    const misses = lockedPicks.length - hits;
+    const slipRecordTxt = hits + "-" + misses;
+    const slipSummaryTxt = "Covering on " + hits + " of " + lockedPicks.length + " locked picks · " + openCount + " game" + (openCount === 1 ? "" : "s") + " still open on the board.";
+
+    const bookChips = [
+      { label: "Season ATS", value: "34-20", context: "you" },
+      { label: "Streak", value: "W4", context: "heater" },
+      { label: "This Week", value: slipRecordTxt, context: openCount + " open" },
+    ];
+
+    // Tracking — leaderboard
+    const lb = [
+      ["GW", "36-18", "W6", "+$96"], ["DK", "34-20", "W4", "+$62"], ["HR", "33-21", "W2", "+$54"],
+      ["MA", "31-23", "L1", "+$38"], ["BB", "30-24", "W1", "+$30"], ["ZS", "28-26", "L2", "+$8"],
+      ["CT", "27-27", "W3", "-$2"], ["FB", "26-28", "L1", "-$14"], ["WW", "25-29", "L3", "-$26"],
+      ["PI", "24-30", "W1", "-$40"], ["GT", "22-32", "L4", "-$74"], ["PS", "19-35", "L5", "-$118"],
+    ];
+    const board = lb.map((row, i) => {
+      const [k, ats, stk, units] = row;
+      const t = T[k], leader = i === 0, you = k === "DK", last = i === lb.length - 1;
+      return {
+        rk: i + 1, abbr: k, name: t.n, color: t.c, ats, stk, units,
+        you: you ? "You" : "",
+        rowBg: leader ? "rgba(226,184,88,.13)" : you ? "rgba(255,255,255,.03)" : "transparent",
+        rkC: leader ? "#E2B858" : last ? "#C97C6A" : "#98917F",
+        nmW: leader || you ? "700" : "500",
+        nmC: leader ? "#F2EADC" : last ? "#C97C6A" : "#B8B0A0",
+        stkC: stk.startsWith("W") ? "#8FBF7F" : "#C97C6A",
+        unitC: units.startsWith("+") ? "#8FBF7F" : "#C97C6A",
+        recC: leader ? "#F2EADC" : "#98917F",
+      };
+    });
+
+    // Tracking — who-picked-whom grid
+    const gridHead = G.map((g) => ({ t: g.h + "/" + g.a }));
+    const gp = {
+      GW: ["GW", "DK", "HR", "BB", "CT", "PI"],
+      DK: null, // uses live state picks
+      MA: ["GW", "DK", "ZS", "BB", "CT", "GT"],
+      ZS: ["GW", "DK", "ZS", "FB", "CT", "PI"],
+      HR: ["GW", "MA", "HR", "BB", "CT", "PI"],
+      FB: ["GW", "DK", "HR", "BB", "WW", "GT"],
+      BB: ["GW", "DK", "HR", "BB", "CT", "PI"],
+      CT: ["GW", "DK", "ZS", "BB", "CT", "GT"],
+      WW: ["GW", "MA", "HR", "BB", "WW", "PI"],
+      PI: ["GW", "DK", "HR", "BB", "CT", "PI"],
+      GT: ["PS", "MA", "ZS", "FB", "WW", "GT"],
+      PS: ["GW", "DK", "HR", "BB", "CT", "PI"],
+    };
+    const covers = G.map((g) => (g.live ? (coverSide(g) === "H" ? g.h : g.a) : null));
+    const grid = order.map((k) => {
+      const you = k === "DK";
+      let picks;
+      if (you) {
+        picks = G.map((g) => {
+          const p = pickOf(g);
+          return p ? (p === "H" ? g.h : g.a) : null;
+        });
+      } else picks = gp[k];
+      const cells = picks.map((p, gi) => {
+        if (!p) return { t: "—", bg: "transparent", fg: "#6E6759" };
+        if (!covers[gi]) return { t: p, bg: "transparent", fg: "#6E6759" };
+        const hit = p === covers[gi];
+        return {
+          t: p + (hit ? " ✓" : " ✗"),
+          bg: hit ? "rgba(143,191,127,.14)" : "rgba(201,124,106,.14)",
+          fg: hit ? "#8FBF7F" : "#C97C6A",
+        };
+      });
+      return {
+        name: T[k].n + (you ? " (you)" : ""),
+        nmC: you ? "#F2EADC" : "#B8B0A0",
+        rowBg: you ? "rgba(255,255,255,.03)" : "transparent",
+        cells,
+      };
+    });
+
+    // Props
+    const propDefs = [
+      { id: "p1", label: "Prop 01 · League Total", q: "Combined points, all 12 teams", line: "O/U 1,178.5", o: ["Over", -115], u: ["Under", -105], snark: "Vegas would call this a lottery. We call it Sunday." },
+      { id: "p2", label: "Prop 02 · Ceiling Watch", q: "Does anyone hang 150+ this week?", line: "YES / NO", o: ["Yes", 280], u: ["No", -360], snark: "Season high: 162.4, Gorilla Warfare, Week 4." },
+      { id: "p3", label: "Prop 03 · The Mercy Line", q: "Practice Squad margin of defeat", line: "O/U 24.5", o: ["Over", -130], u: ["Under", 110], snark: "Under bettors believe in miracles." },
+    ];
+    const propBtn = (picked) => "flex:1;padding:10px 12px;border-radius:11px;cursor:pointer;text-align:center;transition:border-color 150ms;" + (picked ? "background:rgba(226,184,88,.13);border:1px solid rgba(226,184,88,.45);" : "background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);");
+    const props = propDefs.map((p) => {
+      const pk = S.propPicks[p.id];
+      const toggle = (side) => () => this.setState((s) => ({ propPicks: { ...s.propPicks, [p.id]: s.propPicks[p.id] === side ? null : side } }));
+      return {
+        label: p.label, q: p.q, line: p.line, snark: p.snark,
+        oTxt: p.o[0], oOdds: ml(p.o[1]), oPay: payTxt(p.o[1], 10), oBtn: propBtn(pk === "o"), oGo: toggle("o"),
+        uTxt: p.u[0], uOdds: ml(p.u[1]), uPay: payTxt(p.u[1], 10), uBtn: propBtn(pk === "u"), uGo: toggle("u"),
+      };
+    });
+
+    return {
+      navItems, tabItems, heroChips, bookChips, hubGames, ladder,
+      boardGames, slip, calcOpts, props, board, grid, gridHead,
+      isHub: S.view === "hub", isBook: S.view === "book",
+      isBoard: S.bookTab === "board", isTrack: S.bookTab === "track", isProps: S.bookTab === "props",
+      screenLabel: S.view === "hub" ? "Hub — Week 10" : "The Book — " + S.bookTab,
+      goHub: setView("hub"), goBook: setView("book"),
+      showCons, stake, calcSel: S.calcSel,
+      onStake: (e) => this.setState({ stake: Math.max(1, Number(e.target.value) || 1) }),
+      onCalcSel: (e) => this.setState({ calcSel: e.target.value }),
+      calcWin, calcCaption,
+      slipRecordTxt, slipSummaryTxt,
+      lockLabel, lockBtn, lockGo, lockNote,
+    };
+  }
+}
+
+</script>
+</body>
+</html>
+

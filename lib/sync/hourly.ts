@@ -41,6 +41,8 @@ import {
 import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
 import { resolveDivisionName } from "@/lib/divisions";
 import { runAtomic } from "@/lib/db/atomic";
+import { repriceBookLines } from "@/lib/sync/book-lines";
+import { bookWeekFor } from "@/lib/queries/book";
 
 // Shape of the per-season settings blob stored in seasons.settings_json.
 interface SeasonSettingsJson {
@@ -981,6 +983,63 @@ async function syncPlayerWeekStats(
 }
 
 // ---------------------------------------------------------------------------
+// Step E2: Reprice The Book's lines for the current week
+// ---------------------------------------------------------------------------
+
+/**
+ * Re-prices the sportsbook's lines for the current week from the freshest
+ * projections (see lib/sync/book-lines.ts for the pricing and lock rules).
+ *
+ * Runs alongside the other hourly steps and logs its own sync_log row, so a
+ * pricing failure is visible and never takes roster or matchup data down with
+ * it. This is what makes the footer's "Lines re-priced hourly from projections"
+ * a true statement.
+ */
+async function syncBookLines(
+  seasonId: number,
+  seasonYear: number,
+  seasonType: string,
+  stateWeek: number
+): Promise<SyncStepResult> {
+  const startTime = Date.now();
+  const logId = await logSyncStart("hourly", "book_lines");
+  // NOT the raw state week: in the preseason Sleeper counts preseason weeks, so
+  // this must resolve the same fantasy week the board displays (bookWeekFor).
+  const week = bookWeekFor(seasonType, stateWeek);
+
+  try {
+    const result = await repriceBookLines(seasonId, seasonYear, week);
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "success", result.rowCount, undefined, {
+      week,
+      lockedSkipped: result.lockedSkipped,
+      unpriceable: result.unpriceable,
+    });
+    return {
+      dataType: "book_lines",
+      status: "success",
+      rowCount: result.rowCount,
+      durationMs,
+      note:
+        result.lockedSkipped > 0
+          ? `${result.lockedSkipped} game(s) already under way, left at their booked price.`
+          : undefined,
+    };
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "failure", 0, errorMessage);
+    return {
+      dataType: "book_lines",
+      status: "failure",
+      rowCount: 0,
+      durationMs,
+      error: errorMessage,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Step E: Sync NFL Schedule (game statuses)
 // ---------------------------------------------------------------------------
 
@@ -1262,6 +1321,29 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
   });
 
   stepResults.push(scheduleResult);
+
+  // The Book prices off the data the steps above just wrote (matchup pairings,
+  // weekly projections, game statuses), so it runs after them rather than
+  // alongside. Wrapped so a pricing failure is a logged step result, never an
+  // exception that takes the whole run's summary down.
+  try {
+    stepResults.push(
+      await syncBookLines(
+        seasonId,
+        seasonYear,
+        nflState.season_type,
+        currentWeek,
+      ),
+    );
+  } catch (e) {
+    stepResults.push({
+      dataType: "book_lines",
+      status: "failure",
+      rowCount: 0,
+      durationMs: 0,
+      error: e instanceof Error ? e.message : "Unknown error",
+    });
+  }
 
   // Surface the NFL-state fallback (if used) as a non-fatal advisory step.
   if (nflStateNote) {
