@@ -1,12 +1,22 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { useSessionMember } from "@/components/use-session-member";
 import { togglePick, lockSlip } from "@/app/actions/book";
-import { notifyBookPicksChanged } from "@/lib/book/pick-events";
+import {
+  notifyBookPicksChanged,
+  subscribeToBookPicksChanged,
+} from "@/lib/book/pick-events";
 import {
   gradePick,
   formatMoney,
@@ -67,10 +77,8 @@ export function BoardIsland({
 
   const signedIn = session.status === "ready" && session.member !== null;
 
-  useEffect(() => {
+  const fetchPicks = useCallback(() => {
     if (!signedIn) return;
-    let active = true;
-    mutatedRef.current = false;
     fetch("/api/book/picks", { credentials: "same-origin" })
       .then((res) => (res.ok ? res.json() : null))
       .then(
@@ -79,7 +87,7 @@ export function BoardIsland({
             data?: { picks: MemberBookPick[]; week: number | null };
           } | null,
         ) => {
-          if (!active || mutatedRef.current) return;
+          if (mutatedRef.current) return;
           // Discards a payload for any week other than the one this board is
           // showing; see picksForBoardWeek for why that window is real.
           const mine = picksForBoardWeek(body?.data, week);
@@ -91,10 +99,20 @@ export function BoardIsland({
       .catch(() => {
         // An unreachable slip is a read-only board, not a broken page.
       });
-    return () => {
-      active = false;
-    };
   }, [signedIn, week]);
+
+  // Picks now flow BOTH ways: the Tracking tab books through the same server
+  // action this board does, and BookTabs keeps both panes mounted forever, so
+  // without this subscription a pick made over there would never reach this
+  // slip until a full reload (lib/book/pick-events.ts).
+  useEffect(() => {
+    mutatedRef.current = false;
+    fetchPicks();
+    return subscribeToBookPicksChanged(() => {
+      mutatedRef.current = false;
+      fetchPicks();
+    });
+  }, [fetchPicks]);
 
   const openGames = games.filter((g) => g.status === "open");
   const openWithoutPick = openGames.filter((g) => !picks.has(g.matchupId));

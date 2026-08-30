@@ -1,6 +1,6 @@
-// The Book: Tracking tab queries. Season ATS leaderboard, the Who Picked Whom
-// grid, and Streak Watch, all read from book_picks joined against the matchups
-// those picks were graded against. lib/book/grading.ts does the actual math;
+// The Book: Tracking tab queries. Season ATS leaderboard, the pick'ems grid,
+// and Streak Watch, all read from book_picks joined against the matchups those
+// picks were graded against. lib/book/grading.ts does the actual math;
 // everything here is assembly and JSON-safe shaping.
 //
 // Not wrapped in cachedQuery: this backs /book, which is a plain ISR page with
@@ -10,7 +10,14 @@
 import { alias } from "drizzle-orm/pg-core";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { bookLines, bookPicks, franchises, members, matchups } from "@/lib/db/schema";
+import {
+  bookLines,
+  bookPicks,
+  franchises,
+  franchiseSeasons,
+  members,
+  matchups,
+} from "@/lib/db/schema";
 import {
   bestWeekOf,
   deriveStreak,
@@ -20,15 +27,17 @@ import {
   type Streak,
   type WeeklyRecord,
 } from "@/lib/book/grading";
+import { formatSpread } from "@/lib/book/pricing";
 import { getBookBoard } from "@/lib/queries/book";
-import type {
-  AtsLeaderboardRow,
-  PickOutcome,
-  StreakTile,
-  WhoPickedWhomCell,
-  WhoPickedWhomData,
-  WhoPickedWhomHeader,
-  WhoPickedWhomRow,
+import {
+  buildPickemsCell,
+  groupPickersByDivision,
+  type AtsLeaderboardRow,
+  type PickemsGridData,
+  type PickemsRow,
+  type PickerSeed,
+  type PickOutcome,
+  type StreakTile,
 } from "@/lib/book/shared";
 
 // The tracking shapes live in lib/book/shared.ts (the tracking island imports
@@ -37,10 +46,11 @@ import type {
 // book", matching the pattern lib/queries/book.ts already uses for the board.
 export type {
   AtsLeaderboardRow,
-  WhoPickedWhomCell,
-  WhoPickedWhomData,
-  WhoPickedWhomHeader,
-  WhoPickedWhomRow,
+  PickemsCell,
+  PickemsDivision,
+  PickemsGridData,
+  PickemsRow,
+  PickerColumn,
   StreakTile,
 } from "@/lib/book/shared";
 
@@ -55,10 +65,16 @@ interface Picker {
   franchiseName: string;
   franchiseAbbreviation: string | null;
   franchiseColor: string | null;
+  /** Null for a season with no divisions at all (legacy era), not an error. */
+  divisionName: string | null;
 }
 
-/** Every member who owns a franchise: the universe of possible pickers. */
-async function getPickers(): Promise<Map<number, Picker>> {
+/**
+ * Every member who owns a franchise: the universe of possible pickers, with
+ * the division their franchise sits in THIS season (the grid clusters columns
+ * by division, and division membership is versioned per season).
+ */
+async function getPickers(seasonId: number): Promise<Map<number, Picker>> {
   const rows = await db
     .select({
       memberId: members.id,
@@ -67,9 +83,17 @@ async function getPickers(): Promise<Map<number, Picker>> {
       franchiseName: franchises.name,
       franchiseAbbreviation: franchises.abbreviation,
       franchiseColor: franchises.brandingColor,
+      divisionName: franchiseSeasons.divisionName,
     })
     .from(members)
-    .innerJoin(franchises, eq(franchises.id, members.franchiseId));
+    .innerJoin(franchises, eq(franchises.id, members.franchiseId))
+    .leftJoin(
+      franchiseSeasons,
+      and(
+        eq(franchiseSeasons.franchiseId, franchises.id),
+        eq(franchiseSeasons.seasonId, seasonId),
+      ),
+    );
 
   const map = new Map<number, Picker>();
   for (const row of rows) {
@@ -80,6 +104,7 @@ async function getPickers(): Promise<Map<number, Picker>> {
       franchiseName: row.franchiseName,
       franchiseAbbreviation: row.franchiseAbbreviation,
       franchiseColor: row.franchiseColor,
+      divisionName: row.divisionName,
     });
   }
   return map;
@@ -96,9 +121,9 @@ interface GradedPickRow {
  *
  * "Final" means both sides of the matchup have completed, matching the
  * `isFinal` test getBookBoard uses. A live game's cover can still flip, so
- * counting it toward a season record here would rewrite results mid-game; the
- * Who Picked Whom grid is the one surface allowed to grade a live game, and it
- * does so separately by reading current scores off getBookBoard.
+ * counting it toward a season record would rewrite results mid-game. No
+ * surface grades a live game: the pick'ems grid reveals a pick at kickoff and
+ * leaves it ungraded until the game is done.
  */
 async function getFinalGradedPicks(seasonId: number): Promise<GradedPickRow[]> {
   const homeMatchups = alias(matchups, "book_tracking_home_matchups");
@@ -171,7 +196,7 @@ export async function getSeasonAtsLeaderboard(
   seasonId: number,
 ): Promise<AtsLeaderboardRow[]> {
   const [pickers, graded] = await Promise.all([
-    getPickers(),
+    getPickers(seasonId),
     getFinalGradedPicks(seasonId),
   ]);
 
@@ -230,38 +255,61 @@ export async function getSeasonAtsLeaderboard(
 }
 
 // ---------------------------------------------------------------------------
-// Who Picked Whom grid
+// Pick'ems grid
 // ---------------------------------------------------------------------------
 
 /**
- * The current week's Who Picked Whom grid.
+ * The current week's pick'ems grid: one column per member (clustered under
+ * their division), one row per game.
  *
  * Privacy is enforced HERE, at the query, not by hiding it in the client: a
  * pick on a game that has not kicked off yet (`status === "open"`) is never
- * put into the payload for anyone but its own owner, and the owner's own open
- * picks are overlaid client-side from their own /api/book/picks call (the
- * anti-tailing rule: you can always see your own slip, nobody else's). Once a
- * game is live or final every pick on it is public and graded against its
- * OWN snapshotted spread.
+ * put into the payload for anyone, and the viewer's own open picks are
+ * overlaid client-side from their own /api/book/picks call (the anti-tailing
+ * rule: you can always see your own slip, nobody else's).
+ *
+ * Once a game kicks off every pick on it is public, but it stays UNGRADED
+ * until the game is final: there is no live cover tracking anywhere in The
+ * Book. A final game grades against the spread snapshotted on each pick's own
+ * row, which may differ from the line the game ended up carrying.
  */
-export async function getWhoPickedWhomGrid(
+export async function getPickemsGrid(
   seasonId: number,
   seasonYear: number,
   week: number,
-): Promise<WhoPickedWhomData> {
-  const [pickers, games] = await Promise.all([
-    getPickers(),
+): Promise<PickemsGridData> {
+  const [pickers, games, graded] = await Promise.all([
+    getPickers(seasonId),
     getBookBoard(seasonId, seasonYear, week),
+    getFinalGradedPicks(seasonId),
   ]);
 
-  if (games.length === 0) return { header: [], rows: [] };
+  if (games.length === 0) return { divisions: [], rows: [] };
 
-  const header: WhoPickedWhomHeader[] = games.map((g) => ({
-    matchupId: g.matchupId,
-    label: `${g.home.abbreviation ?? g.home.name}/${g.away.abbreviation ?? g.away.name}`,
-    homeAbbreviation: g.home.abbreviation ?? g.home.name,
-    awayAbbreviation: g.away.abbreviation ?? g.away.name,
-  }));
+  const outcomesByMember = new Map<number, PickOutcome[]>();
+  for (const row of graded) {
+    const list = outcomesByMember.get(row.memberId) ?? [];
+    list.push(row.outcome);
+    outcomesByMember.set(row.memberId, list);
+  }
+
+  const seeds: PickerSeed[] = [...pickers.values()].map((picker) => {
+    const outcomes = outcomesByMember.get(picker.memberId);
+    return {
+      memberId: picker.memberId,
+      displayName: picker.displayName,
+      franchiseSlug: picker.franchiseSlug,
+      franchiseName: picker.franchiseName,
+      abbreviation:
+        picker.franchiseAbbreviation ??
+        picker.franchiseName.slice(0, 3).toUpperCase(),
+      color: picker.franchiseColor,
+      // Empty, never "0-0": a member who has not been graded yet has no
+      // record to show, and inventing one is a fabricated claim.
+      record: outcomes ? formatAtsRecord(tallyOutcomes(outcomes)) : "",
+      divisionName: picker.divisionName,
+    };
+  });
 
   const pickRows = await db
     .select({
@@ -284,38 +332,36 @@ export async function getWhoPickedWhomGrid(
     });
   }
 
-  const rows: WhoPickedWhomRow[] = [...pickers.values()]
-    .sort((a, b) => a.franchiseName.localeCompare(b.franchiseName))
-    .map((picker) => {
-      const cells: WhoPickedWhomCell[] = games.map((game) => {
-        if (game.status === "open") {
-          // Never shipped to the browser for anyone: the client overlays the
-          // viewer's own open pick locally from their own session-scoped call.
-          return { revealed: false, abbreviation: null, outcome: null };
-        }
+  const rows: PickemsRow[] = games.map((game) => {
+    const homeAbbreviation = game.home.abbreviation ?? game.home.name;
+    const awayAbbreviation = game.away.abbreviation ?? game.away.name;
+    const cells: Record<string, ReturnType<typeof buildPickemsCell>> = {};
 
-        const pick = pickByMemberAndMatchup.get(
-          `${picker.memberId}:${game.matchupId}`,
-        );
-        if (!pick) return { revealed: true, abbreviation: null, outcome: null };
-
-        const abbreviation =
-          pick.side === "home"
-            ? (game.home.abbreviation ?? game.home.name)
-            : (game.away.abbreviation ?? game.away.name);
-        const outcome = pickOutcome(game.home.points, game.away.points, pick);
-        return { revealed: true, abbreviation, outcome };
+    for (const picker of pickers.values()) {
+      cells[String(picker.memberId)] = buildPickemsCell({
+        status: game.status,
+        pick:
+          pickByMemberAndMatchup.get(`${picker.memberId}:${game.matchupId}`) ??
+          null,
+        homeAbbreviation,
+        awayAbbreviation,
+        homePoints: game.home.points,
+        awayPoints: game.away.points,
       });
+    }
 
-      return {
-        memberId: picker.memberId,
-        displayName: picker.displayName,
-        franchiseSlug: picker.franchiseSlug,
-        cells,
-      };
-    });
+    return {
+      matchupId: game.matchupId,
+      label: `${homeAbbreviation}/${awayAbbreviation}`,
+      homeAbbreviation,
+      awayAbbreviation,
+      spreadLabel: formatSpread(game.spread),
+      status: game.status,
+      cells,
+    };
+  });
 
-  return { header, rows };
+  return { divisions: groupPickersByDivision(seeds), rows };
 }
 
 // ---------------------------------------------------------------------------
@@ -330,7 +376,7 @@ export async function getWhoPickedWhomGrid(
  */
 export async function getStreakWatch(seasonId: number): Promise<StreakTile[]> {
   const [pickers, graded] = await Promise.all([
-    getPickers(),
+    getPickers(seasonId),
     getFinalGradedPicks(seasonId),
   ]);
 

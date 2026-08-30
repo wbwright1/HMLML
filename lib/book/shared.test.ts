@@ -2,6 +2,9 @@ import { describe, it, expect } from "vitest";
 import {
   BOOK_ERRORS,
   bookConsensusText,
+  buildPickemsCell,
+  groupPickersByDivision,
+  UNDIVIDED_DIVISION_LABEL,
   bookCtaLabel,
   bookDogPayoutLine,
   bookLineText,
@@ -16,6 +19,7 @@ import {
   type HubFooterGame,
   type MemberBookPick,
   type MemberFuturePick,
+  type PickerSeed,
   type PickGuardFacts,
   type PropPickGuardFacts,
 } from "./shared";
@@ -338,5 +342,143 @@ describe("futuresLockNote", () => {
 
   it("follows the board's own lock week, so a moved playoff start moves it", () => {
     expect(copySegmentsText(futuresLockNote(15))).toContain("week 15");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Pick'ems grid: division grouping and cell semantics
+// ---------------------------------------------------------------------------
+
+function seed(
+  overrides: Partial<PickerSeed> & { memberId: number; franchiseName: string },
+): PickerSeed {
+  return {
+    displayName: `member-${overrides.memberId}`,
+    franchiseSlug: overrides.franchiseName.toLowerCase().replace(/\s+/g, "-"),
+    abbreviation: overrides.franchiseName.slice(0, 3).toUpperCase(),
+    color: null,
+    record: "",
+    divisionName: null,
+    ...overrides,
+  };
+}
+
+describe("groupPickersByDivision", () => {
+  it("clusters columns under their division, alphabetically", () => {
+    const grouped = groupPickersByDivision([
+      seed({ memberId: 1, franchiseName: "Zebras", divisionName: "North" }),
+      seed({ memberId: 2, franchiseName: "Apes", divisionName: "South" }),
+      seed({ memberId: 3, franchiseName: "Bears", divisionName: "North" }),
+    ]);
+
+    expect(grouped.map((d) => d.name)).toEqual(["North", "South"]);
+    expect(grouped[0].pickers.map((p) => p.franchiseName)).toEqual([
+      "Bears",
+      "Zebras",
+    ]);
+    expect(grouped[1].pickers.map((p) => p.franchiseName)).toEqual(["Apes"]);
+  });
+
+  it("buckets a franchise with no division into League, always last", () => {
+    const grouped = groupPickersByDivision([
+      seed({ memberId: 1, franchiseName: "Nomads" }),
+      seed({ memberId: 2, franchiseName: "Aces", divisionName: "West" }),
+    ]);
+
+    expect(grouped.map((d) => d.name)).toEqual(["West", UNDIVIDED_DIVISION_LABEL]);
+    expect(grouped[1].pickers[0].franchiseName).toBe("Nomads");
+  });
+
+  it("drops the divisionName from the column it ships to the client", () => {
+    const [division] = groupPickersByDivision([
+      seed({ memberId: 1, franchiseName: "Aces", divisionName: "West" }),
+    ]);
+    expect(division.pickers[0]).not.toHaveProperty("divisionName");
+  });
+});
+
+describe("buildPickemsCell", () => {
+  const abbreviations = { homeAbbreviation: "HOM", awayAbbreviation: "AWY" };
+  const homePick = { side: "home" as const, spreadAtPick: -3 };
+
+  it("reveals nothing at all before kickoff, even to a picker who picked", () => {
+    expect(
+      buildPickemsCell({
+        status: "open",
+        pick: homePick,
+        ...abbreviations,
+        homePoints: 0,
+        awayPoints: 0,
+      }),
+    ).toEqual({ revealed: false, abbreviation: null, outcome: null });
+  });
+
+  it("reveals the side at kickoff but never grades a live game", () => {
+    // Home is up 20 and would be covering -3; the cell still says nothing.
+    expect(
+      buildPickemsCell({
+        status: "live",
+        pick: homePick,
+        ...abbreviations,
+        homePoints: 100,
+        awayPoints: 80,
+      }),
+    ).toEqual({ revealed: true, abbreviation: "HOM", outcome: null });
+  });
+
+  it("grades a final game against the pick's own snapshotted spread", () => {
+    expect(
+      buildPickemsCell({
+        status: "final",
+        pick: homePick,
+        ...abbreviations,
+        homePoints: 100,
+        awayPoints: 90,
+      }).outcome,
+    ).toBe("win");
+
+    expect(
+      buildPickemsCell({
+        status: "final",
+        pick: homePick,
+        ...abbreviations,
+        homePoints: 100,
+        awayPoints: 98,
+      }).outcome,
+    ).toBe("loss");
+
+    expect(
+      buildPickemsCell({
+        status: "final",
+        pick: homePick,
+        ...abbreviations,
+        homePoints: 100,
+        awayPoints: 97,
+      }).outcome,
+    ).toBe("push");
+  });
+
+  it("shows the away abbreviation for an away pick", () => {
+    expect(
+      buildPickemsCell({
+        status: "final",
+        pick: { side: "away", spreadAtPick: -3 },
+        ...abbreviations,
+        homePoints: 100,
+        awayPoints: 98,
+      }),
+    ).toEqual({ revealed: true, abbreviation: "AWY", outcome: "win" });
+  });
+
+  it("marks a revealed no-pick as revealed-but-empty, not hidden", () => {
+    expect(
+      buildPickemsCell({
+        status: "final",
+        pick: null,
+        ...abbreviations,
+        homePoints: 100,
+        awayPoints: 98,
+      }),
+    ).toEqual({ revealed: true, abbreviation: null, outcome: null });
   });
 });

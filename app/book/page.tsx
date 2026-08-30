@@ -8,12 +8,12 @@ import { FuturesIsland } from "@/components/book/futures-island";
 import { BOOK_COPY, FUTURES_COPY, type BookPropView } from "@/lib/book/shared";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import {
+  getPickemsGrid,
   getSeasonAtsLeaderboard,
   getStreakWatch,
-  getWhoPickedWhomGrid,
   type AtsLeaderboardRow,
+  type PickemsGridData,
   type StreakTile,
-  type WhoPickedWhomData,
 } from "@/lib/queries/book-tracking";
 import { getBookProps } from "@/lib/queries/book-props";
 import {
@@ -38,7 +38,7 @@ export default async function BookPage() {
   let week = 1;
   let games: BookGame[] = [];
   let leaderboard: AtsLeaderboardRow[] = [];
-  let grid: WhoPickedWhomData = { header: [], rows: [] };
+  let grid: PickemsGridData = { divisions: [], rows: [] };
   let streakTiles: StreakTile[] = [];
   let props: BookPropView[] = [];
   let futures: FuturesBoard[] = [];
@@ -69,7 +69,7 @@ export default async function BookPage() {
       [games, leaderboard, grid, streakTiles, props, futures] = await Promise.all([
         getBookBoard(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week),
         getSeasonAtsLeaderboard(bookWeek.seasonId),
-        getWhoPickedWhomGrid(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week),
+        getPickemsGrid(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week),
         getStreakWatch(bookWeek.seasonId),
         getBookProps(bookWeek.seasonId, bookWeek.week),
         futuresBoards,
@@ -83,7 +83,10 @@ export default async function BookPage() {
     rethrowUnlessTolerable(e);
   }
 
-  const hasTrackingData = leaderboard.length > 0 || grid.header.length > 0;
+// games.length matters as much as the graded data: the Tracking tab is where
+  // picks are made now, so it has to render before anything has been graded.
+  const hasTrackingData =
+    games.length > 0 || leaderboard.length > 0 || grid.rows.length > 0;
 
   return (
     <div className="pb-12">
@@ -115,6 +118,7 @@ export default async function BookPage() {
             <TrackingPane
               leaderboard={leaderboard}
               grid={grid}
+              games={games}
               streakTiles={streakTiles}
               week={week}
             />
