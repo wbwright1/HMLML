@@ -6,7 +6,7 @@ export type BookSideKey = "home" | "away";
 
 /** Re-exported so the client island types covers from one place. */
 import type { CoverResult } from "@/lib/book/pricing";
-import { formatMoney, formatMoneyline, formatSpread, pay } from "@/lib/book/pricing";
+import { formatMoney, formatMoneyline, formatSpread, pay, payoutTotal } from "@/lib/book/pricing";
 export type { CoverResult };
 
 /** Re-exported so the props island types picks and results from one place. */
@@ -66,12 +66,6 @@ export interface MemberBookPick {
   spreadAtPick: number;
   mlAtPick: number;
   lockedAt: string | null;
-}
-
-export interface BookChip {
-  label: string;
-  value: string;
-  context: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -157,20 +151,21 @@ export function bookCtaLabel(status: BookGameStatus): string {
 }
 
 /**
- * "A $10 friendly on WW +140 pays $24.00 if it lands." -- the underdog payout
- * line under an upcoming hub card. Only meaningful before kickoff (an
- * in-progress or final game's odds are history, not an offer), so callers
- * gate this to `status === "open"`.
+ * "A $10 friendly on WW +140 returns $24.00 total ($14.00 profit)." -- the
+ * underdog payout line under an upcoming hub card. Only meaningful before
+ * kickoff (an in-progress or final game's odds are history, not an offer),
+ * so callers gate this to `status === "open"`.
  */
 export function bookDogPayoutLine(
   game: Pick<HubFooterGame, "home" | "away">,
   stake: number = DEFAULT_STAKE,
 ): string {
   const dog = game.home.moneyline > 0 ? game.home : game.away;
-  const winnings = pay(dog.moneyline, stake);
+  const profit = pay(dog.moneyline, stake);
+  const total = payoutTotal(dog.moneyline, stake);
   return `A $${stake} friendly on ${dog.abbreviation ?? dog.name} ${formatMoneyline(
     dog.moneyline,
-  )} pays ${formatMoney(winnings)} if it lands.`;
+  )} returns ${formatMoney(total)} total (${formatMoney(profit)} profit).`;
 }
 
 /**
@@ -218,7 +213,7 @@ export const BOOK_COPY = {
     "Lines computed from projections. Wagers strictly friendly. The house is a gorilla.",
   translatorTitle: "Wager Translator",
   translatorSnark: "friendly wagers only, the commish is not a casino",
-  spreadNote: "Spread bets pay -110: a $10 friendly wins $9.09.",
+  spreadNote: "Spread bets pay -110: a $10 friendly returns $19.09 ($9.09 profit).",
   syncNote: "Lines re-priced hourly from projections",
   emptyBoard: "No lines up yet. The board opens once the week's projections land.",
   signedOut: "Claim your team to get a slip.",

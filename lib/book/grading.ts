@@ -39,9 +39,9 @@ export function pickOutcome(
 
 /**
  * Friendly-dollar units on one graded pick. Every persisted book_picks row is
- * a spread bet, so it always pays the house's flat -110 (a $10 wager wins
- * $9.09); a push neither wins nor loses, since the stake would simply be
- * refunded.
+ * a spread bet, so it always pays the house's flat -110 (a $10 wager
+ * profits $9.09); a push neither wins nor loses, since the stake would
+ * simply be refunded.
  */
 export function unitsForOutcome(outcome: PickOutcome): number {
   if (outcome === "win") return pay(SPREAD_ODDS, 10);

@@ -317,7 +317,7 @@ function EntryRow({
       <span className="shrink-0 rounded-lg bg-surface-muted px-2.5 py-1 font-mono text-body-sm font-bold tabular-nums text-text-primary">
         {formatMoneyline(entry.odds)}
       </span>
-      <span className="hidden w-[104px] shrink-0 text-right text-caption normal-case tracking-normal text-text-tertiary sm:block">
+      <span className="hidden w-[168px] shrink-0 text-right text-caption normal-case leading-tight tracking-normal text-text-tertiary sm:block">
         <span className="font-mono tabular-nums">
           {payoutLabel(entry.odds, DEFAULT_STAKE)}
         </span>
@@ -495,7 +495,7 @@ function SlipRow({
             {formatMoneyline(pick.oddsAtPick)}
           </span>
         </span>
-        <span className="block truncate text-[11px] text-text-tertiary">
+        <span className="block text-[11px] leading-tight text-text-tertiary">
           {label} ·{" "}
           <span className="font-mono tabular-nums">
             {payoutLabel(pick.oddsAtPick, DEFAULT_STAKE)}

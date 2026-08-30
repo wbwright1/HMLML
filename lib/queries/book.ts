@@ -17,7 +17,6 @@ import { getNflState } from "@/lib/queries/nfl-state";
 import { formatRecord } from "@/lib/format-record";
 import { coverSide } from "@/lib/book/pricing";
 import type {
-  BookChip,
   BookGame,
   BookGameStatus,
   BookSide,
@@ -32,7 +31,6 @@ export type {
   BookGameStatus,
   BookGame,
   MemberBookPick,
-  BookChip,
 } from "@/lib/book/shared";
 export { MIN_PICKS_FOR_CONSENSUS } from "@/lib/book/shared";
 
@@ -65,56 +63,6 @@ export function kickoffWeekday(gameDate: string | null | undefined): string | nu
   if (!m) return null;
   const day = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay();
   return WEEKDAYS[day] ?? null;
-}
-
-/**
- * The three header chips.
- *
- * These are facts about the BOARD, not about you: /book is one cached page
- * served to the whole league, so a personal ATS record could not live in it
- * honestly (that belongs on the Tracking tab, behind a session). And per the
- * superlatives rule, a chip only appears when it is a true claim, so an empty
- * board produces no chips rather than a row of zeroes.
- */
-export function buildBoardChips(games: BookGame[], week: number): BookChip[] {
-  if (games.length === 0) return [];
-
-  const chips: BookChip[] = [
-    {
-      label: "On the Board",
-      value: String(games.length),
-      context: `week ${week}`,
-    },
-  ];
-
-  const byMargin = [...games].sort(
-    (a, b) => Math.abs(b.spread) - Math.abs(a.spread),
-  );
-  const widest = byMargin[0];
-  const tightest = byMargin[byMargin.length - 1];
-
-  if (widest) {
-    const favorite = widest.spread < 0 ? widest.home : widest.away;
-    chips.push({
-      label: "Biggest Line",
-      value: Math.abs(widest.spread).toFixed(1),
-      context: favorite.abbreviation ?? favorite.name,
-    });
-  }
-
-  // Only a real second data point: with one game on the board the widest line
-  // IS the tightest line, and printing it twice is a fake stat.
-  if (tightest && tightest !== widest) {
-    chips.push({
-      label: "Coin Flip",
-      value: Math.abs(tightest.spread).toFixed(1),
-      context: `${tightest.home.abbreviation ?? tightest.home.name} vs ${
-        tightest.away.abbreviation ?? tightest.away.name
-      }`,
-    });
-  }
-
-  return chips;
 }
 
 // ---------------------------------------------------------------------------

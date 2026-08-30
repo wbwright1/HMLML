@@ -264,7 +264,7 @@ function PropSideButton({
       <span className="mt-0.5 block font-mono text-caption font-semibold normal-case tracking-normal tabular-nums text-text-tertiary">
         {odds}
       </span>
-      <span className="mt-0.5 block text-[11px] text-text-muted">{payout}</span>
+      <span className="mt-0.5 block text-[11px] leading-tight text-text-muted">{payout}</span>
     </>
   );
 
