@@ -58,8 +58,11 @@ export default async function MatchupDetailPage({
   let matchups: PairedMatchup[] = [];
   try {
     matchups = await getMatchupsByWeek(season.id, week);
-  } catch {
-    // Matchup data may not be available
+  } catch (e) {
+    // A week with no matchups is a real outcome and lands as an empty array
+    // below (this page then 404s). A DB failure is not: it must reach the
+    // error boundary rather than ISR-cache a bogus 404.
+    rethrowUnlessTolerable(e);
   }
 
   const matchup = matchups.find((m) => m.matchupId === matchupId);

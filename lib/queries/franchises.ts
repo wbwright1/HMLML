@@ -218,6 +218,11 @@ const getFranchiseBySlugUncached = cache(async function getFranchiseBySlug(
 
 /**
  * Returns roster_players for a franchise/season, joined with player info.
+ *
+ * A franchise with no roster rows for that season is a real outcome and comes
+ * back as an empty array. A rejected query goes through rethrowUnlessTolerable
+ * so a DB outage reaches the error boundary instead of ISR-caching a hollow
+ * roster page (#253).
  */
 export async function getFranchiseRoster(
   franchiseId: string,
@@ -262,7 +267,8 @@ export async function getFranchiseRoster(
       fullName: r.fullName ?? `Unknown Player (${r.playerId})`,
       position: r.position ?? "N/A",
     }));
-  } catch {
+  } catch (e) {
+    rethrowUnlessTolerable(e);
     return null;
   }
 }

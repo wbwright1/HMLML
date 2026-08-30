@@ -55,8 +55,10 @@ export default async function WeekResultsPage({
 
   try {
     matchups = await getMatchupsByWeek(season.id, week);
-  } catch {
-    // Matchup data may not be available
+  } catch (e) {
+    // A week with no matchups is a real outcome and stays an empty array.
+    // A DB failure is not, and must reach the error boundary.
+    rethrowUnlessTolerable(e);
   }
 
   // Check if next week has data (for navigation)
@@ -64,8 +66,11 @@ export default async function WeekResultsPage({
   try {
     const nextWeekMatchups = await getMatchupsByWeek(season.id, week + 1);
     nextWeekHasData = nextWeekMatchups.length > 0;
-  } catch {
-    // ignore
+  } catch (e) {
+    // Same database, same request: if this probe fails the primary read above
+    // almost certainly did too. Silently hiding the "next week" arrow would be
+    // the same cacheable lie in miniature.
+    rethrowUnlessTolerable(e);
   }
 
   const isPlayoffWeek =

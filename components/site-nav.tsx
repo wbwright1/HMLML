@@ -20,6 +20,13 @@ import { ScrollChrome } from "@/components/nav/scroll-chrome";
  * including the pre-Week-1 "everyone's 0-0" -> preseason override. Any failure
  * degrades to a benign "offseason" pill so the chrome always renders (E2E
  * asserts nav renders on an empty DB).
+ *
+ * The swallow below is deliberate and stays swallowing even though #252 turned
+ * getCurrentWeekMatchups into a thrower. SiteNav is rendered by the root
+ * layout, so a throw here would take down every route including the error
+ * boundary's own chrome. It masks nothing: getCurrentWeekMatchups (and
+ * getNflState, and getLatestSeason) are React cache()d, so the page's own call
+ * replays the identical rejection and still reaches the error boundary.
  */
 async function resolveLivePill(): Promise<LivePillProps> {
   try {

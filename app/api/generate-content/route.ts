@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { seasons, syncLog } from "@/lib/db/schema";
 import { desc, eq } from "drizzle-orm";
 import {
@@ -94,8 +95,14 @@ async function resolveTarget(request: NextRequest): Promise<RunTarget | null> {
       ]);
       hasLiveMatchups = weekMatchups.some((m) => m.status === "in_progress");
       nothingPlayedYet = isPreWeekOne(standings);
-    } catch {
-      // DB hiccup: fall through with the conservative defaults above.
+    } catch (e) {
+      // Not just a degraded render: this pair of reads picks the seasonType and
+      // therefore the *write scope*, so falling through on a DB hiccup can
+      // persist generated hub content under the wrong scope. Throwing instead
+      // makes runGeneration log a sync_log failure row and lets the hourly cron
+      // retry. Not an ISR path, so this behaves as a plain throw in prod; used
+      // for consistency and for dev tolerance.
+      rethrowUnlessTolerable(e);
     }
     seasonType = resolveHubSeasonType({
       nflSeasonType: nflState?.seasonType ?? null,

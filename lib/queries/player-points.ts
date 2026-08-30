@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { playerWeekPoints, players, seasons, nflGames } from "@/lib/db/schema";
 import { eq, and, isNotNull, inArray } from "drizzle-orm";
 import { getTrendingAdds } from "@/lib/sleeper";
@@ -457,6 +458,11 @@ export async function getCurrentWeekPlayerStatusByPlayer(
       "[player-points] getCurrentWeekPlayerStatusByPlayer error:",
       e
     );
+    // A week with no points rows yet is a real outcome and returns an empty
+    // map. A rejected query is not: falling through would leave the map empty,
+    // the roster page's `size > 0` guard would drop the WK column, and the page
+    // would ISR-cache with the wrong headline column and no error (#253).
+    rethrowUnlessTolerable(e);
   }
 
   return result;
