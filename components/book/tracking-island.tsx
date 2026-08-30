@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useSessionMember } from "@/components/use-session-member";
 import { picksForBoardWeek } from "@/lib/book/shared";
+import { subscribeToBookPicksChanged } from "@/lib/book/pick-events";
 import type {
   AtsLeaderboardRow,
   MemberBookPick,
@@ -39,9 +40,8 @@ export function TrackingIsland({
     new Map(),
   );
 
-  useEffect(() => {
+  const fetchOwnPicks = useCallback(() => {
     if (!franchiseSlug) return;
-    let active = true;
     fetch("/api/book/picks", { credentials: "same-origin" })
       .then((res) => (res.ok ? res.json() : null))
       .then(
@@ -50,7 +50,6 @@ export function TrackingIsland({
             data?: { picks: MemberBookPick[]; week: number | null };
           } | null,
         ) => {
-          if (!active) return;
           const mine = picksForBoardWeek(body?.data, week);
           if (!mine) return;
           setOwnPicks(new Map(mine.map((p) => [p.matchupId, p])));
@@ -60,10 +59,19 @@ export function TrackingIsland({
         // A missed overlay just leaves the viewer's own open picks blank,
         // same as anyone else's; never a broken page.
       });
-    return () => {
-      active = false;
-    };
   }, [franchiseSlug, week]);
+
+  // BookTabs (components/book/book-tabs.tsx) keeps every pane permanently
+  // mounted and toggles visibility with a `hidden` attribute rather than
+  // unmounting, so this island only mounts once per page load: fetching just
+  // on mount would show a stale, pre-pick overlay for the rest of the visit
+  // once the viewer books a pick from the Board tab. Re-fetching on the
+  // Board's notifyBookPicksChanged signal (lib/book/pick-events.ts) keeps the
+  // "you can always see your own slip" guarantee true after that switch.
+  useEffect(() => {
+    fetchOwnPicks();
+    return subscribeToBookPicksChanged(fetchOwnPicks);
+  }, [fetchOwnPicks]);
 
   return (
     <div className="flex flex-col gap-4">
