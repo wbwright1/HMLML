@@ -14,8 +14,8 @@ export type { CoverResult };
 import { pickOutcome } from "@/lib/book/grading";
 
 /** Re-exported so the props island types picks and results from one place. */
-import type { PropKind, PropResult, PropSide } from "@/lib/book/props";
-export type { PropKind, PropResult, PropSide };
+import type { PropGroup, PropKind, PropResult, PropSide } from "@/lib/book/props";
+export type { PropGroup, PropKind, PropResult, PropSide };
 
 // ---------------------------------------------------------------------------
 // Board shapes
@@ -78,14 +78,50 @@ export interface MemberBookPick {
 // Live here for the same reason the board shapes do: the props island imports
 // them and must not drag lib/db into the client bundle.
 
+/** A player the props tab can put a face on. */
+export interface BookPropPlayerSubject {
+  kind: "player";
+  playerId: string;
+  name: string;
+  position: string | null;
+  nflTeam: string | null;
+}
+
+/** A franchise the props tab can put a crest on. */
+export interface BookPropFranchiseSubject {
+  kind: "franchise";
+  franchiseId: string;
+  slug: string;
+  name: string;
+  abbreviation: string | null;
+  brandingColor: string | null;
+}
+
+export type BookPropEntity = BookPropPlayerSubject | BookPropFranchiseSubject;
+
+/**
+ * Who a prop is about, resolved at READ time from franchises/players rather
+ * than baked into the stored row: a franchise rename must never leave a stale
+ * name printed on a prop somebody already booked.
+ */
+export type BookPropSubject =
+  | BookPropEntity
+  | { kind: "pair"; a: BookPropEntity; b: BookPropEntity };
+
 export interface BookPropView {
   id: number;
   kind: PropKind;
+  /** Which section of the tab this card sits in. */
+  group: PropGroup;
   /** "Prop 01 · League Total", etc. */
   label: string;
   question: string;
   /** "O/U 1,178.5" or "YES / NO". */
   lineDisplay: string;
+  /** "PTS" / "MARGIN", the small Geist suffix beside the numeral. Null when the line is not a magnitude. */
+  lineUnit: string | null;
+  /** Null for the league-wide props. */
+  subject: BookPropSubject | null;
   overLabel: string;
   underLabel: string;
   overOdds: string;
@@ -95,6 +131,8 @@ export interface BookPropView {
   snark: string | null;
   /** null until the Tuesday grading pass fills it in. */
   result: PropResult | null;
+  /** What actually happened, formatted. Null until graded. */
+  actualDisplay: string | null;
 }
 
 export interface MemberPropPick {
@@ -243,7 +281,7 @@ export const BOOK_COPY = {
   actionFailed: "That did not reach the book. Nothing was booked. Try again.",
   propsSoon: "Props post the week they can be graded honestly. Not yet.",
   houseRules:
-    "Props grade Tuesday morning after stat corrections. Disputes go to the commish, who is biased. Lines move when projections re-sync every hour.",
+    "Props grade Tuesday morning after stat corrections. Head to head props push on an exact tie: nobody wins, nobody loses. Disputes go to the commish, who is biased. Lines move when projections re-sync every hour.",
   /**
    * League Total's snark is a joke about the bet itself, not a claim about the
    * league (unlike Ceiling Watch's snark, which cites a real season-high
@@ -251,6 +289,35 @@ export const BOOK_COPY = {
    * needs to be true.
    */
   leagueTotalSnark: "Vegas would call this a lottery. We call it Sunday.",
+  /**
+   * Generated snark for the expanded slate (issue #239). Templates live here
+   * with the rest of the voice, not inside the sync module: CLAUDE.md keeps
+   * snarky labels in a content constant. Snark is decoration and is allowed to
+   * be a point-in-time joke; the row's QUESTION stays name-free so a rename
+   * cannot make it a lie.
+   */
+  playerPropSnark: (name: string) =>
+    `The Book thinks ${name} cools off this week. Prove it.`,
+  /**
+   * Name-free on purpose: the card already carries the crest and the franchise
+   * name, resolved at read time, and generating the name INTO the snark would
+   * bake a rename into a row somebody already booked.
+   */
+  teamTotalSnark: () =>
+    "The projection likes them. Projections have been wrong before.",
+  matchbetSnark: () => "One number each. No spread, no excuses.",
+  blowoutSnark: (threshold: number) =>
+    `Somebody in this league loses by ${threshold} most weeks. Pick whether it is this one.`,
+  upsetSnark: () =>
+    "The projected doormat only has to win once to ruin somebody's month.",
+  /** Section headers on the Props tab, in PROP_GROUP order. */
+  propGroupLabels: {
+    specials: "House Specials",
+    players: "Player Props",
+    teams: "Team Totals",
+    h2h: "Head to Head",
+  } as Record<PropGroup, string>,
+  propSlipEmpty: "Nothing on the slip yet.",
 } as const;
 
 // ---------------------------------------------------------------------------

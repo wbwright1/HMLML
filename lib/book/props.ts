@@ -22,9 +22,62 @@
 
 import { americanOdds, SPREAD_ODDS } from "@/lib/book/pricing";
 
-export type PropKind = "league_total" | "ceiling_watch" | "mercy_line";
+export type PropKind =
+  | "league_total"
+  | "ceiling_watch"
+  | "mercy_line"
+  | "player_points"
+  | "team_total"
+  | "player_matchbet"
+  | "franchise_matchbet"
+  | "blowout_special"
+  | "upset_special";
+
 export type PropSide = "over" | "under";
-export type PropResult = "over" | "under";
+
+/**
+ * "push" is new to The Book (issue #239): the two matchbet kinds and the
+ * Upset Special are settled by comparing two real scores, and two real scores
+ * can be exactly equal. Every LINE-based prop still rides a half-integer, so
+ * it can still never push. PropSide stays over/under: a member picks a side,
+ * never a tie.
+ */
+export type PropResult = "over" | "under" | "push";
+
+/** Which section of the Props tab a kind belongs to. */
+export type PropGroup = "specials" | "players" | "teams" | "h2h";
+
+export const PROP_GROUP: Record<PropKind, PropGroup> = {
+  league_total: "specials",
+  ceiling_watch: "specials",
+  mercy_line: "specials",
+  blowout_special: "specials",
+  upset_special: "specials",
+  player_points: "players",
+  team_total: "teams",
+  player_matchbet: "h2h",
+  franchise_matchbet: "h2h",
+};
+
+/**
+ * Display order for the slate. Fixed here rather than derived from the
+ * database so the tab does not reshuffle itself every time the hourly
+ * repricing rewrites a row's updated_at.
+ */
+export const PROP_ORDER: Record<PropKind, number> = {
+  league_total: 0,
+  ceiling_watch: 1,
+  mercy_line: 2,
+  blowout_special: 3,
+  upset_special: 4,
+  player_points: 5,
+  team_total: 6,
+  player_matchbet: 7,
+  franchise_matchbet: 8,
+};
+
+/** How many props one week may post. Thin weeks simply produce fewer. */
+export const MAX_WEEKLY_PROPS = 15;
 
 /**
  * Rounds a non-negative magnitude onto the half-integer grid: the same hook
@@ -84,7 +137,7 @@ export function gradeLeagueTotal(actualTotal: number, line: number): PropResult 
  * fixed threshold, which is a different quantity with different history to
  * calibrate against.
  */
-const SCORE_UNCERTAINTY_SCALE = 2.1;
+export const SCORE_UNCERTAINTY_SCALE = 2.1;
 
 /** Used only when there is not enough history to trust a real percentile. */
 export const DEFAULT_CEILING_THRESHOLD = 150;
@@ -262,26 +315,343 @@ export function findBiggestFavorite(
   return best;
 }
 
+/**
+ * The week's biggest projected UNDERDOG, which is by construction the biggest
+ * favorite's opponent. Derived from findBiggestFavorite rather than scanned
+ * separately so the Mercy Line and the Upset Special can never disagree about
+ * who the week's doormat is.
+ */
+export function findBiggestUnderdog(
+  pairings: ProjectedPairing[],
+): BiggestFavorite | null {
+  return findBiggestFavorite(pairings);
+}
+
+// ---------------------------------------------------------------------------
+// Prop 4: player over/unders
+// ---------------------------------------------------------------------------
+
+/**
+ * Growth rate of ONE player's weekly scoring uncertainty with his projection,
+ * same sigma = scale * sqrt(projection) shape as the team-level constant above.
+ *
+ * Educated guess, not a back-test: a single player's week is proportionally far
+ * more volatile than a whole starting lineup's (one broken tackle is the
+ * difference between 6 and 16), so the scale sits at half the team number
+ * against a much smaller projection. It only moves a player prop's odds a few
+ * points either side of even, because the line is the rounded projection, so
+ * the cost of it being somewhat wrong is small. Worth recalibrating against
+ * real player_week_points history once a season of it exists.
+ */
+export const PLAYER_UNCERTAINTY_SCALE = 1.05;
+
+export interface OverUnderPrice {
+  line: number;
+  overOdds: number;
+  underOdds: number;
+}
+
+function priceOverUnder(projected: number, scale: number): OverUnderPrice {
+  const line = toHalfInteger(projected);
+  const sigma = scale * Math.sqrt(Math.max(projected, 1));
+  const probOver = 1 - normalCdf((line - projected) / sigma);
+  return {
+    line,
+    overOdds: americanOdds(probOver),
+    underOdds: americanOdds(1 - probOver),
+  };
+}
+
+/**
+ * Prices a single player's points prop. The line is his projection rounded onto
+ * the half-integer grid, so the true probability sits within a point or two of
+ * even; pricing that residual through americanOdds is what makes the rounding
+ * honest instead of pretending both sides are -110.
+ */
+export function pricePlayerPoints(projected: number): OverUnderPrice {
+  return priceOverUnder(projected, PLAYER_UNCERTAINTY_SCALE);
+}
+
+/** Never a push: the line is always a half-integer. */
+export function gradePlayerPoints(actual: number, line: number): PropResult {
+  return actual > line ? "over" : "under";
+}
+
+// ---------------------------------------------------------------------------
+// Prop 5: team totals
+// ---------------------------------------------------------------------------
+
+/** One roster's own points O/U, priced off the team-level uncertainty scale. */
+export function priceTeamTotal(projected: number): OverUnderPrice {
+  return priceOverUnder(projected, SCORE_UNCERTAINTY_SCALE);
+}
+
+/** Never a push: the line is always a half-integer. */
+export function gradeTeamTotal(actual: number, line: number): PropResult {
+  return actual > line ? "over" : "under";
+}
+
+// ---------------------------------------------------------------------------
+// Props 6 and 7: matchbets (player vs player, franchise vs franchise)
+// ---------------------------------------------------------------------------
+
+export interface MatchbetPrice {
+  overOdds: number;
+  underOdds: number;
+}
+
+/**
+ * Prices "does A outscore B" from the difference of two Normals. `scale`
+ * decides which flavour this is: PLAYER_UNCERTAINTY_SCALE for two players,
+ * SCORE_UNCERTAINTY_SCALE for two rosters. "over" is always side A.
+ */
+export function priceMatchbet(
+  projA: number,
+  projB: number,
+  scale: number,
+): MatchbetPrice {
+  const varA = (scale * Math.sqrt(Math.max(projA, 1))) ** 2;
+  const varB = (scale * Math.sqrt(Math.max(projB, 1))) ** 2;
+  const sd = Math.sqrt(varA + varB);
+  const probA = normalCdf((projA - projB) / sd);
+  return { overOdds: americanOdds(probA), underOdds: americanOdds(1 - probA) };
+}
+
+/**
+ * A matchbet is settled by comparing two real scores, so an exact tie is a
+ * genuine outcome and pushes. A hundredth of a point apart is not a tie.
+ */
+export function gradeMatchbet(pointsA: number, pointsB: number): PropResult {
+  if (pointsA === pointsB) return "push";
+  return pointsA > pointsB ? "over" : "under";
+}
+
+// ---------------------------------------------------------------------------
+// Prop 8: the Blowout Special
+// ---------------------------------------------------------------------------
+
+export const DEFAULT_BLOWOUT_THRESHOLD = 40.5;
+
+/**
+ * The week's blowout threshold from the league's own history: the trailing
+ * P90 of weekly matchup margins, rounded to the nearest 5 and then onto the
+ * half-integer grid so the bet can never push. Falls back to 40.5 under the
+ * same history minimum chooseCeilingThreshold uses.
+ */
+export function chooseBlowoutThreshold(historicalMargins: number[]): number {
+  if (historicalMargins.length < MIN_HISTORY_FOR_THRESHOLD) {
+    return DEFAULT_BLOWOUT_THRESHOLD;
+  }
+  const sorted = [...historicalMargins].sort((a, b) => a - b);
+  const idx = Math.min(sorted.length - 1, Math.ceil(0.9 * sorted.length) - 1);
+  return toHalfInteger(Math.round(sorted[idx] / 5) * 5);
+}
+
+/** P(this pairing's margin, either direction, clears the threshold). */
+function probMarginOverThreshold(p: ProjectedPairing, threshold: number): number {
+  const varA = (SCORE_UNCERTAINTY_SCALE * Math.sqrt(Math.max(p.projA, 1))) ** 2;
+  const varB = (SCORE_UNCERTAINTY_SCALE * Math.sqrt(Math.max(p.projB, 1))) ** 2;
+  const sd = Math.sqrt(varA + varB);
+  const mean = p.projA - p.projB;
+  const above = 1 - normalCdf((threshold - mean) / sd);
+  const below = normalCdf((-threshold - mean) / sd);
+  return above + below;
+}
+
+/**
+ * Prices "does ANY matchup this week finish outside the threshold", the same
+ * any-of-N-independent-trials fold Ceiling Watch uses, with each pairing's
+ * margin modelled as a Normal around its projected margin.
+ */
+export function priceBlowoutSpecial(
+  pairings: ProjectedPairing[],
+  threshold: number,
+): MatchbetPrice {
+  const probNone = pairings.reduce(
+    (acc, p) => acc * (1 - probMarginOverThreshold(p, threshold)),
+    1,
+  );
+  const probYes = 1 - probNone;
+  return {
+    overOdds: americanOdds(probYes),
+    underOdds: americanOdds(1 - probYes),
+  };
+}
+
+/** YES ("over") when the week's largest margin clears the threshold. */
+export function gradeBlowout(maxMargin: number, threshold: number): PropResult {
+  return maxMargin > threshold ? "over" : "under";
+}
+
+// ---------------------------------------------------------------------------
+// Prop 9: the Upset Special
+// ---------------------------------------------------------------------------
+
+/** "Does the week's biggest dog win outright", priced off the same difference model. */
+export function priceUpsetSpecial(
+  favoriteProjected: number,
+  dogProjected: number,
+): MatchbetPrice {
+  const priced = priceMatchbet(dogProjected, favoriteProjected, SCORE_UNCERTAINTY_SCALE);
+  return priced;
+}
+
+/** YES ("over") when the dog outscores the favorite; an exact tie pushes. */
+export function gradeUpset(dogPoints: number, favoritePoints: number): PropResult {
+  return gradeMatchbet(dogPoints, favoritePoints);
+}
+
+// ---------------------------------------------------------------------------
+// Composite subject ids
+// ---------------------------------------------------------------------------
+
+/**
+ * Matchbets and the Upset Special are ABOUT two things, and book_props stores
+ * one subject_id. "~" is the join character because Sleeper player ids are
+ * numeric strings, roster ids are numeric strings, and franchise ids are slugs;
+ * none of them can contain it.
+ */
+export function encodePairSubject(a: string, b: string): string {
+  return `${a}~${b}`;
+}
+
+/** The two halves of a composite subject id, or null on anything malformed. */
+export function parsePairSubject(id: string | null): [string, string] | null {
+  if (!id) return null;
+  const parts = id.split("~");
+  if (parts.length !== 2) return null;
+  if (parts[0].length === 0 || parts[1].length === 0) return null;
+  return [parts[0], parts[1]];
+}
+
+// ---------------------------------------------------------------------------
+// Sticky subject selection
+// ---------------------------------------------------------------------------
+
+/**
+ * Which subjects a kind should carry this week, given what is ALREADY posted.
+ *
+ * The whole point: repricing runs hourly and the natural key includes
+ * subject_id, so if Thursday's projections promote a different player than
+ * Tuesday's did, a naive regeneration inserts a new row and strands the old
+ * one, which a member may already have picked. So every subject already posted
+ * for the week is kept, in its existing order, and new candidates only ever
+ * FILL up to the target. Nothing is deleted mid-week.
+ *
+ * That means the result can exceed `target` when more subjects are already
+ * posted than the target allows (a target that shrank, a slate assembled under
+ * older rules). Keeping a booked prop alive beats honoring the cap.
+ */
+export function selectStickySubjects(
+  existingSubjectIds: string[],
+  rankedCandidates: string[],
+  target: number,
+): string[] {
+  const chosen: string[] = [];
+  const seen = new Set<string>();
+  for (const id of existingSubjectIds) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    chosen.push(id);
+  }
+  for (const id of rankedCandidates) {
+    if (chosen.length >= target) break;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    chosen.push(id);
+  }
+  return chosen;
+}
+
 // ---------------------------------------------------------------------------
 // Presentation
 // ---------------------------------------------------------------------------
 
 /** "O/U 1,178.5" - thousands-separated, one decimal always shown. */
 export function formatOverUnderLine(line: number): string {
-  return `O/U ${line.toLocaleString("en-US", {
+  return `O/U ${formatPropNumber(line)}`;
+}
+
+/** "1,178.5" - thousands-separated, one decimal always shown. */
+export function formatPropNumber(value: number): string {
+  return value.toLocaleString("en-US", {
     minimumFractionDigits: 1,
     maximumFractionDigits: 1,
-  })}`;
+  });
 }
+
+const YES_NO_KINDS: ReadonlySet<PropKind> = new Set<PropKind>([
+  "ceiling_watch",
+  "blowout_special",
+  "upset_special",
+]);
 
 /** The over/under button labels for one prop kind ("Over"/"Under" or "Yes"/"No"). */
 export function propSideLabels(kind: PropKind): { over: string; under: string } {
-  return kind === "ceiling_watch"
+  return YES_NO_KINDS.has(kind)
     ? { over: "Yes", under: "No" }
     : { over: "Over", under: "Under" };
 }
 
-/** The line as the Props tab displays it ("O/U 1,178.5" or "YES / NO"). */
+/**
+ * The line as the Props tab displays it. Yes/No kinds do not straddle a
+ * number, so they say so, except the Blowout Special, whose threshold IS the
+ * story and stays on the card.
+ */
 export function formatPropLine(kind: PropKind, line: number): string {
-  return kind === "ceiling_watch" ? "YES / NO" : formatOverUnderLine(line);
+  if (kind === "blowout_special") return `${formatPropNumber(line)}+`;
+  if (kind === "player_matchbet" || kind === "franchise_matchbet") {
+    return "HEAD TO HEAD";
+  }
+  if (YES_NO_KINDS.has(kind)) return "YES / NO";
+  return formatOverUnderLine(line);
+}
+
+/**
+ * What actually happened, as the graded card says it out loud.
+ *
+ * The stored actual_value means something different per kind (a league total,
+ * a single player's points, a signed head-to-head margin), so the sentence
+ * that frames it belongs next to the graders that wrote it rather than in the
+ * island, where it would drift.
+ */
+export function formatPropActual(
+  kind: PropKind,
+  actual: number,
+  result: PropResult | null,
+): string {
+  switch (kind) {
+    case "league_total":
+      return `Landed ${formatPropNumber(actual)}`;
+    case "ceiling_watch":
+      return `High was ${formatPropNumber(actual)}`;
+    case "mercy_line":
+      return `Margin ${formatPropNumber(actual)}`;
+    case "blowout_special":
+      return `Biggest margin ${formatPropNumber(actual)}`;
+    case "player_points":
+    case "team_total":
+      return `Scored ${formatPropNumber(actual)}`;
+    case "player_matchbet":
+    case "franchise_matchbet":
+    case "upset_special":
+      return result === "push"
+        ? "Dead even"
+        : `Decided by ${formatPropNumber(Math.abs(actual))}`;
+  }
+}
+
+/** The small Geist unit printed beside the line, so the numeral is not floating. */
+export function propLineUnit(kind: PropKind): string | null {
+  switch (kind) {
+    case "league_total":
+    case "player_points":
+    case "team_total":
+    case "mercy_line":
+      return "PTS";
+    case "blowout_special":
+      return "MARGIN";
+    default:
+      return null;
+  }
 }

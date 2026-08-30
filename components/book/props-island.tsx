@@ -1,19 +1,23 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useSessionMember } from "@/components/use-session-member";
 import { togglePropPick } from "@/app/actions/book";
+import { FranchiseLogo } from "@/components/franchise-logo";
+import { PlayerHeadshot } from "@/components/player-headshot";
 import {
   BOOK_COPY,
+  DEFAULT_STAKE,
+  type BookPropEntity,
   type BookPropView,
   type MemberPropPick,
+  type PropGroup,
   type PropSide,
 } from "@/lib/book/shared";
 
 /**
- * The Props tab: 3 weekly props plus the House Rules card as the grid's 4th
- * cell (matching the design's 2x2 layout).
+ * The Props tab: the week's full slate, in sections.
  *
  * A client island (enumerated in CLAUDE.md) for the same reason the board
  * island is one: /book is ISR-cached HTML served to the whole league, so the
@@ -25,6 +29,10 @@ import {
  * Signed out, the tab is fully readable and completely inert: lines, odds,
  * and snark all render, there is just nothing to press.
  */
+
+/** Section order, top to bottom. Mirrors PROP_ORDER's grouping in props.ts. */
+const GROUP_ORDER: PropGroup[] = ["specials", "players", "teams", "h2h"];
+
 export function PropsIsland({
   props,
   week,
@@ -48,6 +56,14 @@ export function PropsIsland({
   const mutatedRef = useRef(false);
 
   const signedIn = session.status === "ready" && session.member !== null;
+
+  const sections = useMemo(() => {
+    return GROUP_ORDER.map((group) => ({
+      group,
+      label: BOOK_COPY.propGroupLabels[group],
+      items: props.filter((p) => p.group === group),
+    })).filter((section) => section.items.length > 0);
+  }, [props]);
 
   useEffect(() => {
     if (!signedIn) return;
@@ -116,7 +132,7 @@ export function PropsIsland({
 
   if (props.length === 0) {
     return (
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      <div className="flex flex-col gap-4">
         <div className="card-surface p-6">
           <p className="text-kicker mb-2">Props</p>
           <p className="font-serif text-h3 italic text-text-secondary">
@@ -129,25 +145,154 @@ export function PropsIsland({
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-8">
       {error && (
         <p role="status" className="card-surface p-3 text-body-sm text-accent-warm">
           {error}
         </p>
       )}
-      <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
-        {props.map((prop) => (
-          <PropCard
-            key={prop.id}
-            prop={prop}
-            pick={picks.get(prop.id) ?? null}
-            signedIn={signedIn}
-            pending={pendingPropId === prop.id}
-            onPick={onPick}
-          />
-        ))}
-        <HouseRulesCard />
+
+      <SlipStrip total={props.length} picked={picks.size} signedIn={signedIn} />
+
+      {sections.map((section) => (
+        <section key={section.group} className="flex flex-col gap-4">
+          <div className="flex items-baseline gap-2">
+            <h3 className="text-kicker">{section.label}</h3>
+            <span className="font-mono text-caption font-semibold tabular-nums text-text-muted">
+              {section.items.length}
+            </span>
+          </div>
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2">
+            {section.items.map((prop) =>
+              prop.kind === "league_total" ? (
+                <MarqueeCard
+                  key={prop.id}
+                  prop={prop}
+                  pick={picks.get(prop.id) ?? null}
+                  signedIn={signedIn}
+                  pending={pendingPropId === prop.id}
+                  onPick={onPick}
+                />
+              ) : (
+                <PropCard
+                  key={prop.id}
+                  prop={prop}
+                  pick={picks.get(prop.id) ?? null}
+                  signedIn={signedIn}
+                  pending={pendingPropId === prop.id}
+                  onPick={onPick}
+                />
+              ),
+            )}
+          </div>
+        </section>
+      ))}
+
+      <HouseRulesCard />
+    </div>
+  );
+}
+
+/**
+ * "3 of 11 props picked · $30 at risk", in the Board's language. Derived
+ * entirely from state the island already holds, so it costs nothing.
+ */
+function SlipStrip({
+  total,
+  picked,
+  signedIn,
+}: {
+  total: number;
+  picked: number;
+  signedIn: boolean;
+}) {
+  if (!signedIn) {
+    return (
+      <p className="text-body-sm text-text-tertiary">
+        {BOOK_COPY.signedOut}{" "}
+        <span className="font-mono tabular-nums">{total}</span> props on the board.
+      </p>
+    );
+  }
+
+  return (
+    <p className="text-body-sm text-text-tertiary">
+      <span className="font-mono font-semibold tabular-nums text-text-primary">
+        {picked}
+      </span>{" "}
+      of{" "}
+      <span className="font-mono font-semibold tabular-nums text-text-primary">
+        {total}
+      </span>{" "}
+      props picked
+      {picked > 0 ? (
+        <>
+          {" · "}
+          <span className="font-mono font-semibold tabular-nums text-accent-gold">
+            ${picked * DEFAULT_STAKE}
+          </span>{" "}
+          at risk
+        </>
+      ) : (
+        <>{" · "}{BOOK_COPY.propSlipEmpty}</>
+      )}
+    </p>
+  );
+}
+
+/**
+ * The League Total, given the space it deserves: it is the one prop about the
+ * whole league at once, and it is the screenshot the tab exists for.
+ */
+function MarqueeCard({
+  prop,
+  pick,
+  signedIn,
+  pending,
+  onPick,
+}: {
+  prop: BookPropView;
+  pick: MemberPropPick | null;
+  signedIn: boolean;
+  pending: boolean;
+  onPick: (prop: BookPropView, side: PropSide) => void;
+}) {
+  const graded = prop.result !== null;
+
+  return (
+    <div
+      data-testid="prop-card"
+      data-prop-kind={prop.kind}
+      data-prop-graded={graded ? "true" : "false"}
+      className="card-surface card-glows relative overflow-hidden p-6 md:col-span-2"
+    >
+      <div className="mb-2 flex items-center justify-between gap-3">
+        <p className="text-kicker">{prop.label}</p>
+        <ResultBadge prop={prop} pick={pick} />
       </div>
+      <p className="mb-1 text-body font-semibold text-text-primary">{prop.question}</p>
+      <p className="mb-4 flex items-baseline gap-2">
+        <span className="font-mono text-[40px] leading-none font-bold tabular-nums text-accent-gold">
+          {prop.lineDisplay}
+        </span>
+        {prop.lineUnit && (
+          <span className="text-caption text-text-tertiary">{prop.lineUnit}</span>
+        )}
+      </p>
+      <PropSides
+        prop={prop}
+        pick={pick}
+        signedIn={signedIn}
+        pending={pending}
+        onPick={onPick}
+      />
+      <GradedLine prop={prop} />
+      {prop.snark && (
+        <p className="mt-3 font-serif text-body italic text-text-tertiary">
+          {prop.snark}
+        </p>
+      )}
+      {graded && <span className="sr-only">This prop has been graded.</span>}
     </div>
   );
 }
@@ -165,52 +310,40 @@ function PropCard({
   pending: boolean;
   onPick: (prop: BookPropView, side: PropSide) => void;
 }) {
-  const graded = prop.result !== null;
-  const interactive = signedIn && !graded;
-
   return (
-    <div className="card-surface p-5">
+    <div
+      data-testid="prop-card"
+      data-prop-kind={prop.kind}
+      data-prop-graded={prop.result !== null ? "true" : "false"}
+      className="card-surface p-5"
+    >
       <div className="mb-2.5 flex items-center justify-between gap-3">
         <p className="text-kicker">{prop.label}</p>
-        {graded ? (
-          <ResultBadge prop={prop} pick={pick} />
-        ) : pick ? (
-          <span className="text-caption font-semibold text-text-tertiary">
-            Pending
-          </span>
-        ) : null}
+        <ResultBadge prop={prop} pick={pick} />
       </div>
+
+      <SubjectIdentity prop={prop} />
+
       <p className="mb-0.5 text-body-sm font-semibold text-text-primary">
         {prop.question}
       </p>
-      <p className="mb-3.5 font-mono text-[24px] font-bold tabular-nums text-accent-gold">
-        {prop.lineDisplay}
+      <p className="mb-3.5 flex items-baseline gap-1.5">
+        <span className="font-mono text-[28px] leading-none font-bold tabular-nums text-accent-gold">
+          {prop.lineDisplay}
+        </span>
+        {prop.lineUnit && (
+          <span className="text-caption text-text-tertiary">{prop.lineUnit}</span>
+        )}
       </p>
 
-      <div className="flex gap-2">
-        <PropSideButton
-          label={prop.overLabel}
-          odds={prop.overOdds}
-          payout={prop.overPayout}
-          picked={pick?.side === "over"}
-          resultSide={prop.result === "over"}
-          graded={graded}
-          interactive={interactive}
-          pending={pending}
-          onClick={() => onPick(prop, "over")}
-        />
-        <PropSideButton
-          label={prop.underLabel}
-          odds={prop.underOdds}
-          payout={prop.underPayout}
-          picked={pick?.side === "under"}
-          resultSide={prop.result === "under"}
-          graded={graded}
-          interactive={interactive}
-          pending={pending}
-          onClick={() => onPick(prop, "under")}
-        />
-      </div>
+      <PropSides
+        prop={prop}
+        pick={pick}
+        signedIn={signedIn}
+        pending={pending}
+        onPick={onPick}
+      />
+      <GradedLine prop={prop} />
 
       {prop.snark && (
         <p className="mt-3 font-serif text-body-sm italic text-text-tertiary">
@@ -221,6 +354,128 @@ function PropCard({
   );
 }
 
+/** The face or crest the prop is about. Nothing renders for league-wide props. */
+function SubjectIdentity({ prop }: { prop: BookPropView }) {
+  const subject = prop.subject;
+  if (!subject) return null;
+
+  if (subject.kind === "pair") {
+    return (
+      <div className="mb-3 flex items-center gap-2">
+        <EntityChip entity={subject.a} />
+        <span className="font-mono text-caption font-bold text-text-muted">VS</span>
+        <EntityChip entity={subject.b} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mb-3">
+      <EntityChip entity={subject} />
+    </div>
+  );
+}
+
+function EntityChip({ entity }: { entity: BookPropEntity }) {
+  if (entity.kind === "player") {
+    return (
+      <span className="flex min-w-0 items-center gap-2">
+        <PlayerHeadshot
+          playerId={entity.playerId}
+          name={entity.name}
+          size={32}
+          nflTeam={entity.nflTeam}
+        />
+        <span className="min-w-0">
+          <span className="block truncate text-body-sm font-semibold text-text-primary">
+            {entity.name}
+          </span>
+          <span className="text-kicker">
+            {[entity.position, entity.nflTeam].filter(Boolean).join(" · ")}
+          </span>
+        </span>
+      </span>
+    );
+  }
+
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <FranchiseLogo
+        slug={entity.slug}
+        name={entity.name}
+        abbreviation={entity.abbreviation ?? undefined}
+        brandingColor={entity.brandingColor ?? undefined}
+        size="sm"
+        decorative
+      />
+      <span className="min-w-0">
+        <span className="block truncate text-body-sm font-semibold text-text-primary">
+          {entity.name}
+        </span>
+        {entity.abbreviation && (
+          <span className="text-kicker">{entity.abbreviation}</span>
+        )}
+      </span>
+    </span>
+  );
+}
+
+function PropSides({
+  prop,
+  pick,
+  signedIn,
+  pending,
+  onPick,
+}: {
+  prop: BookPropView;
+  pick: MemberPropPick | null;
+  signedIn: boolean;
+  pending: boolean;
+  onPick: (prop: BookPropView, side: PropSide) => void;
+}) {
+  const graded = prop.result !== null;
+  const interactive = signedIn && !graded;
+
+  return (
+    <div className="flex gap-2">
+      <PropSideButton
+        label={prop.overLabel}
+        odds={prop.overOdds}
+        payout={prop.overPayout}
+        picked={pick?.side === "over"}
+        resultSide={prop.result === "over"}
+        graded={graded}
+        pushed={prop.result === "push"}
+        interactive={interactive}
+        pending={pending}
+        onClick={() => onPick(prop, "over")}
+      />
+      <PropSideButton
+        label={prop.underLabel}
+        odds={prop.underOdds}
+        payout={prop.underPayout}
+        picked={pick?.side === "under"}
+        resultSide={prop.result === "under"}
+        graded={graded}
+        pushed={prop.result === "push"}
+        interactive={interactive}
+        pending={pending}
+        onClick={() => onPick(prop, "under")}
+      />
+    </div>
+  );
+}
+
+/** "Landed 1,204.7". Stored since the first prop shipped, shown since #239. */
+function GradedLine({ prop }: { prop: BookPropView }) {
+  if (!prop.actualDisplay) return null;
+  return (
+    <p className="mt-3 font-mono text-body-sm font-semibold tabular-nums text-text-secondary">
+      {prop.actualDisplay}
+    </p>
+  );
+}
+
 function PropSideButton({
   label,
   odds,
@@ -228,6 +483,7 @@ function PropSideButton({
   picked,
   resultSide,
   graded,
+  pushed,
   interactive,
   pending,
   onClick,
@@ -238,6 +494,7 @@ function PropSideButton({
   picked: boolean;
   resultSide: boolean;
   graded: boolean;
+  pushed: boolean;
   interactive: boolean;
   pending: boolean;
   onClick: () => void;
@@ -247,24 +504,33 @@ function PropSideButton({
   const skin = picked
     ? "border-accent-gold/45 bg-accent-gold-light"
     : "border-border bg-white/[.03]";
-  // Once graded, dim the side that did not hit; never dim by color alone
-  // (the checkmark below carries the same signal in text/glyph form).
-  const dim = graded && !resultSide ? "opacity-55" : "";
+  // Once graded, dim the side that did not hit. Never the only signal: the
+  // winning side carries a checkmark with an sr-only equivalent, and a push
+  // dims neither side because neither one won.
+  const dim = graded && !pushed && !resultSide ? "opacity-55" : "";
 
   const content = (
     <>
       <span className="block text-body-sm font-semibold text-text-primary">
         {label}
         {graded && resultSide && (
-          <span className="ml-1.5 text-accent-green" aria-hidden="true">
-            ✓
-          </span>
+          <>
+            <span className="ml-1.5 text-accent-green" aria-hidden="true">
+              ✓
+            </span>
+            <span className="sr-only"> (winning side)</span>
+          </>
         )}
       </span>
       <span className="mt-0.5 block font-mono text-caption font-semibold normal-case tracking-normal tabular-nums text-text-tertiary">
         {odds}
       </span>
       <span className="mt-0.5 block text-[11px] leading-tight text-text-muted">{payout}</span>
+      {/* The picked state must survive greyscale, so it says so in words
+          rather than relying on the gold border and tint alone. */}
+      {picked && (
+        <span className="text-kicker mt-1 block text-accent-gold">Picked</span>
+      )}
     </>
   );
 
@@ -293,9 +559,24 @@ function ResultBadge({
   prop: BookPropView;
   pick: MemberPropPick | null;
 }) {
+  if (prop.result === null) {
+    return pick ? (
+      <span className="text-caption font-semibold text-text-tertiary">Pending</span>
+    ) : null;
+  }
+
+  if (prop.result === "push") {
+    // Rust and green both mean "somebody won". A push is neither, so it takes
+    // the neutral token and an = glyph, never a colour on its own.
+    return (
+      <span className="text-caption font-semibold text-text-tertiary">Push =</span>
+    );
+  }
+
   if (!pick) {
     return <span className="text-caption font-semibold text-text-tertiary">Graded</span>;
   }
+
   const hit = pick.side === prop.result;
   return (
     <span
