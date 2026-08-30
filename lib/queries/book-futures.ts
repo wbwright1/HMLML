@@ -18,7 +18,9 @@ import { TOTAL_WEEKS } from "@/lib/schedule/build-schedule";
 import { REGULAR_SEASON_GAMES, getWeekProjectedTotals } from "@/lib/queries/book";
 import {
   FIELD_SUBJECT_ID,
+  FUTURES_MARKET_IDS,
   futuresLockWeek,
+  regularSeasonWeeksRemaining,
   type FuturesGame,
   type FuturesMarket,
   type FuturesTeam,
@@ -194,24 +196,29 @@ export async function getFuturesPricingInputs(
   season: FuturesSeason,
   week: number,
 ): Promise<FuturesPricingInputs> {
-  const standingRows = await db
-    .select({
-      franchiseId: franchiseSeasons.franchiseId,
-      rosterId: franchiseSeasons.rosterId,
-      wins: franchiseSeasons.wins,
-      losses: franchiseSeasons.losses,
-      ties: franchiseSeasons.ties,
-      pointsScored: franchiseSeasons.pointsScored,
-      division: franchiseSeasons.division,
-    })
-    .from(franchiseSeasons)
-    .where(eq(franchiseSeasons.seasonId, season.seasonId));
-
-  const projections = await getWeekProjectedTotals(
-    season.seasonId,
-    season.seasonYear,
-    week,
-  );
+  // Five independent reads of one moment in the season. They are issued
+  // together rather than in sequence for the obvious reason, and also for a
+  // less obvious one: the further apart they run, the more room there is for a
+  // sync to land between them and price two boards off two different seasons.
+  const [standingRows, projections, remainingGames, weeksBanked, candidates] =
+    await Promise.all([
+      db
+        .select({
+          franchiseId: franchiseSeasons.franchiseId,
+          rosterId: franchiseSeasons.rosterId,
+          wins: franchiseSeasons.wins,
+          losses: franchiseSeasons.losses,
+          ties: franchiseSeasons.ties,
+          pointsScored: franchiseSeasons.pointsScored,
+          division: franchiseSeasons.division,
+        })
+        .from(franchiseSeasons)
+        .where(eq(franchiseSeasons.seasonId, season.seasonId)),
+      getWeekProjectedTotals(season.seasonId, season.seasonYear, week),
+      getRemainingSchedule(season),
+      getBankedWeekCount(season),
+      getPlayerCandidates(season),
+    ]);
 
   const teams: FuturesTeam[] = standingRows.map((row) => ({
     franchiseId: row.franchiseId,
@@ -224,11 +231,15 @@ export async function getFuturesPricingInputs(
     division: row.division,
   }));
 
-  const remainingGames = await getRemainingSchedule(season);
-  const completedWeeks = await getCompletedWeekCount(season);
-  const weeksRemaining = Math.max(0, season.finalRegularWeek - completedWeeks);
-
-  const candidates = await getPlayerCandidates(season);
+  // Counted off the SAME weeks bankedPoints is built from, which is the only
+  // way the two halves of a candidate's score can be added together. Counting
+  // completed matchups instead double counts the week in progress: its started
+  // points are already banked, while the week itself is not "complete" yet, so
+  // every starter got credited a projected week he had already played.
+  const weeksRemaining = regularSeasonWeeksRemaining(
+    season.finalRegularWeek,
+    weeksBanked,
+  );
 
   return { teams, remainingGames, weeksRemaining, candidates };
 }
@@ -276,8 +287,16 @@ async function getRemainingSchedule(
   return games;
 }
 
-/** Regular-season weeks that are fully in the books. */
-async function getCompletedWeekCount(season: FuturesSeason): Promise<number> {
+/**
+ * Regular-season weeks that are fully in the books.
+ *
+ * The grading gate: the player awards are "most points started across the
+ * regular season", so they cannot be settled until the regular season has
+ * actually happened.
+ */
+export async function getCompletedWeekCount(
+  season: FuturesSeason,
+): Promise<number> {
   const rows = await db
     .select({ week: matchups.week })
     .from(matchups)
@@ -289,6 +308,29 @@ async function getCompletedWeekCount(season: FuturesSeason): Promise<number> {
       ),
     )
     .groupBy(matchups.week);
+
+  return rows.length;
+}
+
+/**
+ * How many regular-season weeks have started points on the board.
+ *
+ * This is the week count that matches bankedPoints: a week appears here as soon
+ * as any player has been credited a point in a starting lineup, which is
+ * exactly when that week starts contributing to the candidate scores.
+ */
+async function getBankedWeekCount(season: FuturesSeason): Promise<number> {
+  const rows = await db
+    .select({ week: playerWeekPoints.week })
+    .from(playerWeekPoints)
+    .where(
+      and(
+        eq(playerWeekPoints.seasonId, season.seasonId),
+        eq(playerWeekPoints.started, true),
+        lte(playerWeekPoints.week, season.finalRegularWeek),
+      ),
+    )
+    .groupBy(playerWeekPoints.week);
 
   return rows.length;
 }
@@ -437,7 +479,8 @@ export async function getAwardScorers(
 // The futures board (read by the page)
 // ---------------------------------------------------------------------------
 
-const BOARD_ORDER: FuturesMarket[] = ["champion", "toilet_bowl", "mvp", "roty"];
+/** Board order, from the registry rather than restated here. */
+const BOARD_ORDER: FuturesMarket[] = FUTURES_MARKET_IDS;
 
 interface FuturesDetail {
   record?: string;
@@ -471,52 +514,49 @@ export async function getFuturesBoards(
     .filter((r) => r.subjectType === "player")
     .map((r) => r.subjectId);
 
-  const franchiseRows = franchiseIds.length
-    ? await db
-        .select({
-          id: franchises.id,
-          name: franchises.name,
-          slug: franchises.slug,
-          abbreviation: franchises.abbreviation,
-          brandingColor: franchises.brandingColor,
-          avatarUrl: franchiseSeasons.avatarUrl,
-        })
-        .from(franchises)
-        .leftJoin(
-          franchiseSeasons,
-          and(
-            eq(franchiseSeasons.franchiseId, franchises.id),
-            eq(franchiseSeasons.seasonId, season.seasonId),
-          ),
-        )
-        .where(inArray(franchises.id, franchiseIds))
-    : [];
-
-  const playerRows = playerIds.length
-    ? await db
-        .select({
-          id: players.id,
-          fullName: players.fullName,
-          position: players.position,
-          nflTeam: players.nflTeam,
-        })
-        .from(players)
-        .where(inArray(players.id, playerIds))
-    : [];
-
-  // Crests are decorative: a missing avatar is a monogram, never an error.
-  let fallbackAvatars = new Map<string, string>();
-  try {
-    fallbackAvatars = await getLatestAvatarUrls(franchiseIds);
-  } catch {
-    fallbackAvatars = new Map();
-  }
+  // Five reads that depend only on the priced rows above, so they go out
+  // together. The avatar fetch keeps its own catch inside the batch: crests are
+  // decorative, and a missing one is a monogram rather than a failed board.
+  const [franchiseRows, playerRows, fallbackAvatars, kickedOff, pickCounts] =
+    await Promise.all([
+      franchiseIds.length
+        ? db
+            .select({
+              id: franchises.id,
+              name: franchises.name,
+              slug: franchises.slug,
+              abbreviation: franchises.abbreviation,
+              brandingColor: franchises.brandingColor,
+              avatarUrl: franchiseSeasons.avatarUrl,
+            })
+            .from(franchises)
+            .leftJoin(
+              franchiseSeasons,
+              and(
+                eq(franchiseSeasons.franchiseId, franchises.id),
+                eq(franchiseSeasons.seasonId, season.seasonId),
+              ),
+            )
+            .where(inArray(franchises.id, franchiseIds))
+        : [],
+      playerIds.length
+        ? db
+            .select({
+              id: players.id,
+              fullName: players.fullName,
+              position: players.position,
+              nflTeam: players.nflTeam,
+            })
+            .from(players)
+            .where(inArray(players.id, playerIds))
+        : [],
+      getLatestAvatarUrls(franchiseIds).catch(() => new Map<string, string>()),
+      getKickedOffWeeks(season.seasonYear),
+      getFuturePickCounts(season.seasonId),
+    ]);
 
   const franchiseById = new Map(franchiseRows.map((f) => [f.id, f]));
   const playerById = new Map(playerRows.map((p) => [p.id, p]));
-
-  const kickedOff = await getKickedOffWeeks(season.seasonYear);
-  const pickCounts = await getFuturePickCounts(season.seasonId);
 
   const byMarket = new Map<FuturesMarket, FuturesEntry[]>();
 

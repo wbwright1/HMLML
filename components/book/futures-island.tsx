@@ -13,7 +13,9 @@ import {
   FUTURES_COPY,
   MIN_PICKS_FOR_CONSENSUS,
   futurePicksForSeason,
+  futuresLockNote,
   futuresRulesFor,
+  type CopySegment,
   type FuturesBoard,
   type FuturesEntry,
   type FuturesMarket,
@@ -86,7 +88,8 @@ export function FuturesIsland({
     setPendingMarket(board.market);
 
     // Optimistic: the server re-checks every rule, and a rejection restores the
-    // previous state below.
+    // previous state below. The odds here come from the ISR-cached page, which
+    // is why the booked price is taken from the action's answer once it lands.
     const previous = picks.get(board.market) ?? null;
     const next = new Map(picks);
     if (previous?.subjectId === entry.subjectId) next.delete(board.market);
@@ -113,6 +116,23 @@ export function FuturesIsland({
           return restored;
         });
         return;
+      }
+      // The page HTML is ISR-cached, so entry.odds can be staler than the row
+      // the pick actually booked against, and nothing else would ever correct
+      // it: router.refresh re-renders the server tree but does not re-run the
+      // picks fetch. The action returns the odds it stored, so the slip quotes
+      // the price the database holds rather than the one the cache showed.
+      if (result.oddsAtPick != null) {
+        const booked = result.oddsAtPick;
+        setPicks((current) => {
+          const settled = new Map(current);
+          settled.set(board.market, {
+            market: board.market,
+            subjectId: entry.subjectId,
+            oddsAtPick: booked,
+          });
+          return settled;
+        });
       }
       // Consensus lives in the cached page; pull the refreshed numbers.
       router.refresh();
@@ -193,7 +213,11 @@ function MarketCard({
             board.locked ? "text-text-tertiary" : "text-accent-gold"
           }`}
         >
-          {board.locked ? FUTURES_COPY.lockedNote : copy.lockNote}
+          {board.locked ? (
+            FUTURES_COPY.lockedNote
+          ) : (
+            <Copy segments={futuresLockNote(board.lockWeek)} />
+          )}
         </span>
       </div>
 
@@ -217,9 +241,30 @@ function MarketCard({
       </div>
 
       <p className="mt-4 rounded-[10px] border border-dashed border-border-strong px-3 py-2 text-[11px] leading-relaxed text-text-tertiary">
-        {futuresRulesFor(board.market, finalRegularWeek)}
+        <Copy segments={futuresRulesFor(board.market, finalRegularWeek)} />
       </p>
     </div>
+  );
+}
+
+/**
+ * Copy with its numerals in the mono face, which every numeral on this site
+ * wears. The segments arrive pre-split from lib/book/shared.ts, so this stays a
+ * renderer rather than a parser.
+ */
+function Copy({ segments }: { segments: CopySegment[] }) {
+  return (
+    <>
+      {segments.map((segment, i) =>
+        segment.mono ? (
+          <span key={i} className="font-mono tabular-nums">
+            {segment.text}
+          </span>
+        ) : (
+          <span key={i}>{segment.text}</span>
+        ),
+      )}
+    </>
   );
 }
 

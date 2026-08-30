@@ -5,8 +5,10 @@ import {
   bookCtaLabel,
   bookDogPayoutLine,
   bookLineText,
+  copySegmentsText,
   futurePickRejectionReason,
   futurePicksForSeason,
+  futuresLockNote,
   futuresRulesFor,
   picksForBoardWeek,
   pickRejectionReason,
@@ -295,17 +297,46 @@ describe("futurePicksForSeason", () => {
 
 describe("futuresRulesFor", () => {
   it("prints the real MVP window rather than a hardcoded guess", () => {
-    expect(futuresRulesFor("mvp", 13)).toContain("weeks 1 to 13");
-    expect(futuresRulesFor("mvp", 15)).toContain("weeks 1 to 15");
+    expect(copySegmentsText(futuresRulesFor("mvp", 13))).toContain("weeks 1 to 13");
+    expect(copySegmentsText(futuresRulesFor("mvp", 15))).toContain("weeks 1 to 15");
+  });
+
+  it("hands every numeral over as a mono segment, never inside the prose", () => {
+    const segments = futuresRulesFor("mvp", 14);
+    const monoText = segments.filter((s) => s.mono).map((s) => s.text);
+    expect(monoText).toEqual(["1", "14"]);
+    // And no digit is smuggled into a prose run, which would render in Geist.
+    for (const segment of segments.filter((s) => !s.mono)) {
+      expect(segment.text).not.toMatch(/\d/);
+    }
   });
 
   it("says the toilet bowl is won by losing", () => {
-    expect(futuresRulesFor("toilet_bowl", 14)).toContain("the loser wins");
+    expect(copySegmentsText(futuresRulesFor("toilet_bowl", 14))).toContain(
+      "the loser wins",
+    );
   });
 
   it("states a grading rule for every market", () => {
     for (const market of ["champion", "toilet_bowl", "mvp", "roty"] as const) {
-      expect(futuresRulesFor(market, 14).length).toBeGreaterThan(20);
+      expect(copySegmentsText(futuresRulesFor(market, 14)).length).toBeGreaterThan(
+        20,
+      );
     }
+  });
+});
+
+describe("futuresLockNote", () => {
+  it("names the week the market actually locks, in mono", () => {
+    expect(copySegmentsText(futuresLockNote(8))).toBe(
+      "Locks at the week 8 kickoff.",
+    );
+    expect(futuresLockNote(8).filter((s) => s.mono).map((s) => s.text)).toEqual([
+      "8",
+    ]);
+  });
+
+  it("follows the board's own lock week, so a moved playoff start moves it", () => {
+    expect(copySegmentsText(futuresLockNote(15))).toContain("week 15");
   });
 });

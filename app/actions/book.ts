@@ -19,12 +19,14 @@ import {
   isFuturesMarketLocked,
   resolveFuturesSeason,
 } from "@/lib/queries/book-futures";
+import { isFuturesMarket, type FuturesMarket } from "@/lib/book/futures";
 import {
   BOOK_ERRORS,
   futurePickRejectionReason,
   pickRejectionReason,
   propPickRejectionReason,
   type BookActionResult,
+  type FuturePickActionResult,
 } from "@/lib/book/shared";
 
 const pickInput = z.object({
@@ -37,13 +39,20 @@ const lockInput = z.object({
   week: z.number().int().min(1).max(22),
 });
 
+// The market list comes from the registry rather than being restated here, so
+// a market added to FUTURES_MARKETS is accepted by the action automatically and
+// one removed stops being accepted the same day.
 const futurePickInput = z.object({
-  market: z.enum(["champion", "toilet_bowl", "mvp", "roty"]),
+  market: z.custom<FuturesMarket>(isFuturesMarket),
   subjectId: z.string().min(1).max(64),
 });
 
 function fail(error: string): BookActionResult {
   return { ok: false, error };
+}
+
+function failFuture(error: string): FuturePickActionResult {
+  return { ok: false, error, oddsAtPick: null };
 }
 
 /**
@@ -191,31 +200,35 @@ export async function togglePick(input: {
  * weekly board uses.
  */
 export async function pickFuture(input: {
-  market: "champion" | "toilet_bowl" | "mvp" | "roty";
+  market: FuturesMarket;
   subjectId: string;
-}): Promise<BookActionResult> {
+}): Promise<FuturePickActionResult> {
   const parsed = futurePickInput.safeParse(input);
-  if (!parsed.success) return fail(BOOK_ERRORS.badInput);
+  if (!parsed.success) return failFuture(BOOK_ERRORS.badInput);
   const { market, subjectId } = parsed.data;
 
   const member = await getSessionMember();
-  if (!member) return fail(BOOK_ERRORS.signedOut);
+  if (!member) return failFuture(BOOK_ERRORS.signedOut);
 
   const season = await resolveFuturesSeason();
-  if (!season) return fail(BOOK_ERRORS.noSeason);
+  if (!season) return failFuture(BOOK_ERRORS.noSeason);
 
   const row = await getFutureRow(season.seasonId, market, subjectId);
   const rejection = futurePickRejectionReason({
     subjectExists: row !== null,
     marketLocked: await isFuturesMarketLocked(season, market),
   });
-  if (rejection) return fail(rejection);
+  if (rejection) return failFuture(rejection);
   // Narrowing for the write below; futurePickRejectionReason already refused a
   // subject with no priced row.
-  if (!row) return fail(BOOK_ERRORS.noFuture);
+  if (!row) return failFuture(BOOK_ERRORS.noFuture);
 
   const [existing] = await db
-    .select({ id: bookFuturePicks.id, subjectId: bookFuturePicks.subjectId })
+    .select({
+      id: bookFuturePicks.id,
+      subjectId: bookFuturePicks.subjectId,
+      oddsAtPick: bookFuturePicks.oddsAtPick,
+    })
     .from(bookFuturePicks)
     .where(
       and(
@@ -226,20 +239,88 @@ export async function pickFuture(input: {
     )
     .limit(1);
 
-  if (existing && existing.subjectId === subjectId) {
+  const clearing = existing != null && existing.subjectId === subjectId;
+
+  if (clearing) {
     await db.delete(bookFuturePicks).where(eq(bookFuturePicks.id, existing.id));
-    revalidatePath("/book");
-    return { ok: true, error: null };
+  } else {
+    await db
+      .insert(bookFuturePicks)
+      .values({
+        memberId: member.id,
+        seasonId: season.seasonId,
+        market,
+        subjectId,
+        oddsAtPick: row.odds,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [
+          bookFuturePicks.memberId,
+          bookFuturePicks.seasonId,
+          bookFuturePicks.market,
+        ],
+        set: { subjectId, oddsAtPick: row.odds, updatedAt: new Date() },
+      });
+  }
+
+  // The lock check above and the write below are separate statements, and the
+  // thing that closes a futures market is a sync landing between them (the
+  // pricing pass stamping locked_at, or the schedule sync flipping the lock
+  // week's first game off pre_game). togglePick closes its own version of this
+  // by pushing isNull(lockedAt) into the write, which is not available here:
+  // the lock lives on book_futures, not on the pick row, and Drizzle's
+  // insert-select (the one construct that could read it in the same statement)
+  // demands the table's full column list including the serial id. So the write
+  // is verified instead, and undone if the market shut underneath it. A pick
+  // that survives on a closed market is the one outcome this must never allow.
+  if (await isFuturesMarketLocked(season, market)) {
+    await restoreFuturePick(member.id, season.seasonId, market, existing ?? null);
+    return failFuture(BOOK_ERRORS.futureLocked);
+  }
+
+  // Consensus is part of the cached page, so everyone's board picks this up.
+  revalidatePath("/book");
+  return {
+    ok: true,
+    error: null,
+    // The odds actually written, which the island needs: its board came from
+    // the ISR cache and can be quoting an older number than this row.
+    oddsAtPick: clearing ? null : row.odds,
+  };
+}
+
+/**
+ * Puts a member's futures pick back exactly as it was before a refused write.
+ *
+ * Takes the previous row verbatim, odds included, because re-deriving them from
+ * today's board would hand somebody a price they never accepted.
+ */
+async function restoreFuturePick(
+  memberId: number,
+  seasonId: number,
+  market: FuturesMarket,
+  previous: { subjectId: string; oddsAtPick: number } | null,
+): Promise<void> {
+  const scope = and(
+    eq(bookFuturePicks.memberId, memberId),
+    eq(bookFuturePicks.seasonId, seasonId),
+    eq(bookFuturePicks.market, market),
+  );
+
+  if (!previous) {
+    await db.delete(bookFuturePicks).where(scope);
+    return;
   }
 
   await db
     .insert(bookFuturePicks)
     .values({
-      memberId: member.id,
-      seasonId: season.seasonId,
+      memberId,
+      seasonId,
       market,
-      subjectId,
-      oddsAtPick: row.odds,
+      subjectId: previous.subjectId,
+      oddsAtPick: previous.oddsAtPick,
       updatedAt: new Date(),
     })
     .onConflictDoUpdate({
@@ -248,12 +329,12 @@ export async function pickFuture(input: {
         bookFuturePicks.seasonId,
         bookFuturePicks.market,
       ],
-      set: { subjectId, oddsAtPick: row.odds, updatedAt: new Date() },
+      set: {
+        subjectId: previous.subjectId,
+        oddsAtPick: previous.oddsAtPick,
+        updatedAt: new Date(),
+      },
     });
-
-  // Consensus is part of the cached page, so everyone's board picks this up.
-  revalidatePath("/book");
-  return { ok: true, error: null };
 }
 
 /**

@@ -33,13 +33,8 @@ import { computeWinProbability } from "@/lib/win-probability";
 import { toAmericanOdds } from "@/lib/book/pricing";
 
 // ---------------------------------------------------------------------------
-// The four markets
+// The market registry
 // ---------------------------------------------------------------------------
-
-export type FuturesMarket = "champion" | "toilet_bowl" | "mvp" | "roty";
-
-export const TEAM_MARKETS: FuturesMarket[] = ["champion", "toilet_bowl"];
-export const PLAYER_MARKETS: FuturesMarket[] = ["mvp", "roty"];
 
 export type FuturesSubjectType = "franchise" | "player" | "field";
 
@@ -56,6 +51,67 @@ export const FIELD_SUBJECT_ID = "field";
  */
 export const WEEK_FUTURES_PLAYER_LOCK = 8;
 
+/** How many candidates each player market lists before "The Field". */
+export const MVP_CANDIDATE_COUNT = 10;
+export const ROTY_CANDIDATE_COUNT = 8;
+
+export interface FuturesMarketSpec {
+  /** What this market's non-field rows are. */
+  subjectType: "franchise" | "player";
+  /**
+   * When picks close. "playoffs" rides until the bracket actually starts,
+   * because right up to that kickoff the field is still being decided;
+   * "midseason" is the documented week 8 line for the player awards.
+   */
+  lock: "playoffs" | "midseason";
+  /** Board order, low first. */
+  order: number;
+  /** Candidates listed before The Field. Null on team markets: all twelve post. */
+  listCount: number | null;
+}
+
+/**
+ * Every futures market, once.
+ *
+ * This is the single source of truth for what markets exist: the board order,
+ * the sync's pricing loop, the server action's input validation and the copy
+ * table all derive from these keys rather than restating them. Adding a fifth
+ * market means adding it here and then fixing the compile errors, which is the
+ * point; before this registry the four ids were written out in six unlinked
+ * places and nothing connected them.
+ */
+export const FUTURES_MARKETS = {
+  champion: { subjectType: "franchise", lock: "playoffs", order: 1, listCount: null },
+  toilet_bowl: { subjectType: "franchise", lock: "playoffs", order: 2, listCount: null },
+  mvp: { subjectType: "player", lock: "midseason", order: 3, listCount: MVP_CANDIDATE_COUNT },
+  roty: { subjectType: "player", lock: "midseason", order: 4, listCount: ROTY_CANDIDATE_COUNT },
+} as const satisfies Record<string, FuturesMarketSpec>;
+
+export type FuturesMarket = keyof typeof FUTURES_MARKETS;
+
+/** Every market id in board order. */
+export const FUTURES_MARKET_IDS = (
+  Object.keys(FUTURES_MARKETS) as FuturesMarket[]
+).sort((a, b) => FUTURES_MARKETS[a].order - FUTURES_MARKETS[b].order);
+
+export const TEAM_MARKETS: FuturesMarket[] = FUTURES_MARKET_IDS.filter(
+  (id) => FUTURES_MARKETS[id].subjectType === "franchise",
+);
+export const PLAYER_MARKETS: FuturesMarket[] = FUTURES_MARKET_IDS.filter(
+  (id) => FUTURES_MARKETS[id].subjectType === "player",
+);
+
+/**
+ * Whether an arbitrary value is a market this book runs.
+ *
+ * hasOwn rather than `in`: `in` walks the prototype chain, so "toString" and
+ * "constructor" would both answer yes and sail through the server action's
+ * validation into a query for a market that does not exist.
+ */
+export function isFuturesMarket(value: unknown): value is FuturesMarket {
+  return typeof value === "string" && Object.hasOwn(FUTURES_MARKETS, value);
+}
+
 /**
  * The futures overround. Far heavier than the 1.045 a single game carries,
  * because these markets stay open for months and the book is quoting twelve
@@ -70,10 +126,6 @@ export const FUTURES_OVERROUND = 1.25;
  * not a price anybody takes; it is a number that makes the board look broken.
  */
 export const MIN_FUTURES_FAVORITE_ODDS = -400;
-
-/** How many candidates each player market lists before "The Field". */
-export const MVP_CANDIDATE_COUNT = 10;
-export const ROTY_CANDIDATE_COUNT = 8;
 
 /**
  * Softmax temperature for player markets, in fantasy points.
@@ -536,9 +588,14 @@ export function buildPlayerMarket(
   return rows;
 }
 
-/** How many candidates a market lists before The Field. */
+/**
+ * How many candidates a market lists before The Field.
+ *
+ * A team market has no listed cut (every franchise posts), so it answers 0
+ * rather than a number that would quietly trim a twelve-team board.
+ */
 export function candidateCountFor(market: FuturesMarket): number {
-  return market === "roty" ? ROTY_CANDIDATE_COUNT : MVP_CANDIDATE_COUNT;
+  return FUTURES_MARKETS[market].listCount ?? 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -596,10 +653,65 @@ export function futuresLockWeek(
   market: FuturesMarket,
   playoffWeekStart: number | null,
 ): number {
-  if (market === "champion" || market === "toilet_bowl") {
+  if (FUTURES_MARKETS[market].lock === "playoffs") {
     return playoffWeekStart ?? WEEK_FUTURES_PLAYER_LOCK;
   }
   return WEEK_FUTURES_PLAYER_LOCK;
+}
+
+// ---------------------------------------------------------------------------
+// Season arithmetic
+// ---------------------------------------------------------------------------
+
+/**
+ * Regular-season weeks a candidate still has to bank points in.
+ *
+ * Takes the count of weeks that have ALREADY banked started points, not the
+ * count of completed weeks, and the difference is a real bug rather than
+ * pedantry: the week in progress is not complete, but its started points are
+ * already in bankedPoints, so counting completed weeks leaves it in the
+ * remaining column too and credits every starter one projected week he has
+ * already played.
+ */
+export function regularSeasonWeeksRemaining(
+  finalRegularWeek: number,
+  weeksBanked: number,
+): number {
+  return Math.max(0, finalRegularWeek - weeksBanked);
+}
+
+/**
+ * Whether the player awards can be settled yet.
+ *
+ * MVP and ROTY are "most points started across the regular season", so they are
+ * only true claims once the regular season has been played. Without this gate
+ * the first grading pass of the year would settle both boards on whoever led
+ * after week 1: topScorer answers with the leader of whatever it is handed and
+ * only returns null on an empty table, so a one-week season grades exactly like
+ * a finished one.
+ */
+export function awardsAreGradable(
+  completedWeeks: number,
+  finalRegularWeek: number,
+): boolean {
+  return finalRegularWeek > 0 && completedWeeks >= finalRegularWeek;
+}
+
+/**
+ * The subjects a reprice may not delete: everything priced today, plus every
+ * subject somebody is holding a ticket on.
+ *
+ * The second half is what keeps a bet settleable. A pick's result is written
+ * onto its priced row, so removing that row from the board strands the ticket:
+ * it can never be graded, displayed, or even cleared, since the action refuses
+ * a subject with no priced row. Held subjects that no longer price simply keep
+ * their last posted number, which is the one the ticket was taken at.
+ */
+export function retainedSubjects(
+  pricedIds: string[],
+  heldIds: string[],
+): string[] {
+  return [...new Set([...pricedIds, ...heldIds])];
 }
 
 // ---------------------------------------------------------------------------

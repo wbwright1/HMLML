@@ -439,6 +439,19 @@ export function futurePicksForSeason(
   return payload.picks;
 }
 
+/**
+ * What the futures pick action answers with.
+ *
+ * Carries the odds it actually booked, because the island's board came out of
+ * the ISR cache and may be quoting a price the daily repricing has since moved.
+ * Null when the pick was cleared, or when the write was refused.
+ */
+export interface FuturePickActionResult {
+  ok: boolean;
+  error: string | null;
+  oddsAtPick: number | null;
+}
+
 export interface FuturePickGuardFacts {
   /** A priced row exists for this market and subject. */
   subjectExists: boolean;
@@ -471,6 +484,42 @@ export function futurePickRejectionReason(
  * a market. The MVP and ROTY rules take the last regular-season week so the
  * printed range is a true claim rather than a hardcoded guess.
  */
+export interface FuturesMarketCopy {
+  label: string;
+  title: string;
+  /** The editorial aside under the title, when the market has earned one. */
+  snark: string | null;
+}
+
+/**
+ * Keyed by the registry (`satisfies Record<FuturesMarket, ...>`), so a market
+ * added to FUTURES_MARKETS without copy is a compile error rather than a board
+ * that renders a blank heading.
+ */
+const FUTURES_MARKET_COPY = {
+  champion: {
+    label: "League Champion",
+    title: "Who lifts the trophy",
+    snark: null,
+  },
+  toilet_bowl: {
+    label: "Toilet Bowl",
+    title: "Who bottoms out",
+    snark:
+      "The consolation bracket runs backwards: you advance by losing. So does this market.",
+  },
+  mvp: {
+    label: "League MVP",
+    title: "Most points started",
+    snark: null,
+  },
+  roty: {
+    label: "Rookie of the Year",
+    title: "Best of the first-years",
+    snark: null,
+  },
+} as const satisfies Record<FuturesMarket, FuturesMarketCopy>;
+
 export const FUTURES_COPY = {
   kicker: "Season-long markets",
   title: "Futures.",
@@ -480,52 +529,90 @@ export const FUTURES_COPY = {
   emptyBoard: "No futures up yet. These post once the season has data worth pricing.",
   syncNote: "Futures re-priced daily",
   lockedNote: "Locked. The board is history now.",
-  markets: {
-    champion: {
-      label: "League Champion",
-      title: "Who lifts the trophy",
-      snark: null as string | null,
-      lockNote: "Locks at the first playoff kickoff.",
-    },
-    toilet_bowl: {
-      label: "Toilet Bowl",
-      title: "Who bottoms out",
-      snark:
-        "The consolation bracket runs backwards: you advance by losing. So does this market.",
-      lockNote: "Locks at the first playoff kickoff.",
-    },
-    mvp: {
-      label: "League MVP",
-      title: "Most points started",
-      snark: null as string | null,
-      lockNote: "Locks at the week 8 kickoff.",
-    },
-    roty: {
-      label: "Rookie of the Year",
-      title: "Best of the first-years",
-      snark: null as string | null,
-      lockNote: "Locks at the week 8 kickoff.",
-    },
-  },
+  markets: FUTURES_MARKET_COPY,
   fieldName: "The Field",
   fieldContext: "Everyone not listed above",
 } as const;
 
-/** The dashed house-rules footnote under one board. */
+/**
+ * One run of copy: prose, or a numeral that must render in the mono face.
+ *
+ * Board copy carries week numbers, and this site sets every numeral in
+ * JetBrains Mono, so these strings are handed to the UI pre-split rather than
+ * as a sentence the component would have to parse to obey the three-font rule.
+ */
+export interface CopySegment {
+  text: string;
+  mono: boolean;
+}
+
+/** Flattens segments back into a plain sentence, for aria labels and tests. */
+export function copySegmentsText(segments: CopySegment[]): string {
+  return segments.map((s) => s.text).join("");
+}
+
+/**
+ * "Locks at the week 8 kickoff", for whatever week this market actually locks.
+ *
+ * Deliberately phrased off the WEEK rather than off the market: the team
+ * markets lock at `playoff_week_start`, which is null until Sleeper settles the
+ * season, and a note reading "locks at the first playoff kickoff" would then be
+ * describing a fallback week that has nothing to do with the playoffs.
+ */
+export function futuresLockNote(lockWeek: number): CopySegment[] {
+  return [
+    { text: "Locks at the week ", mono: false },
+    { text: String(lockWeek), mono: true },
+    { text: " kickoff.", mono: false },
+  ];
+}
+
+/**
+ * The dashed house-rules footnote under one board, as copy segments.
+ *
+ * States the actual grading criterion, because a market nobody can check is not
+ * a market. The MVP and ROTY rules take the season's real last regular week, so
+ * the printed range is a true claim rather than a hardcoded guess.
+ */
 export function futuresRulesFor(
   market: FuturesMarket,
   finalRegularWeek: number,
-): string {
-  const disputes = "Disputes go to the commish, who is biased.";
+): CopySegment[] {
+  const disputes = {
+    text: " Disputes go to the commish, who is biased.",
+    mono: false,
+  };
   switch (market) {
     case "champion":
-      return `Graded from the winners bracket final. ${disputes}`;
+      return [
+        { text: "Graded from the winners bracket final.", mono: false },
+        disputes,
+      ];
     case "toilet_bowl":
-      return `Graded from the consolation final, where the loser wins. ${disputes}`;
+      return [
+        {
+          text: "Graded from the consolation final, where the loser wins.",
+          mono: false,
+        },
+        disputes,
+      ];
     case "mvp":
-      return `MVP = most points scored while started, weeks 1 to ${finalRegularWeek}. ${disputes}`;
+      return [
+        { text: "MVP = most points scored while started, weeks ", mono: false },
+        { text: "1", mono: true },
+        { text: " to ", mono: false },
+        { text: String(finalRegularWeek), mono: true },
+        { text: ".", mono: false },
+        disputes,
+      ];
     case "roty":
-      return `Same rule as MVP, rookies only (first NFL season). ${disputes}`;
+      return [
+        {
+          text: "Same rule as MVP, rookies only (first NFL season).",
+          mono: false,
+        },
+        disputes,
+      ];
   }
 }
 

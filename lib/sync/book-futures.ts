@@ -1,15 +1,18 @@
 import { db } from "@/lib/db";
 import { bookFutures, seasons, type NewBookFuture } from "@/lib/db/schema";
-import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, notInArray, sql } from "drizzle-orm";
 import { runAtomic } from "@/lib/db/atomic";
 import {
   FIELD_SUBJECT_ID,
+  FUTURES_MARKET_IDS,
+  awardsAreGradable,
   buildPlayerMarket,
   buildTeamMarket,
   candidateCountFor,
   candidateScore,
   futureResult,
   futuresLockWeek,
+  retainedSubjects,
   simulateTeamMarkets,
   topScorer,
   type FuturesCandidate,
@@ -19,6 +22,7 @@ import {
 import {
   FUTURES_PLAYOFF_SPOTS,
   getAwardScorers,
+  getCompletedWeekCount,
   getFuturesPricingInputs,
   getKickedOffWeeks,
   getPickedSubjectsByMarket,
@@ -27,8 +31,8 @@ import {
   type PlayerCandidateRow,
 } from "@/lib/queries/book-futures";
 
-/** Every market the futures book runs, in board order. */
-const ALL_MARKETS: FuturesMarket[] = ["champion", "toilet_bowl", "mvp", "roty"];
+/** Every market the futures book runs, in board order, from the registry. */
+const ALL_MARKETS: FuturesMarket[] = FUTURES_MARKET_IDS;
 
 export interface FuturesRepriceResult {
   /** book_futures rows written this run. */
@@ -182,10 +186,28 @@ export async function repriceFutures(
 
   for (const [market, rows] of rowsByMarket) {
     if (rows.length === 0) continue;
-    // Delete-then-insert per market, in one transaction (runAtomic leads with
-    // the delete so it can never commit alone). A plain upsert would leave
-    // yesterday's candidates sitting on today's board forever, since a player
-    // who fell out of the top ten writes no row to overwrite his own.
+
+    // What survives this reprice: everything priced today, plus every subject
+    // somebody is holding a ticket on.
+    //
+    // The second half is the load-bearing one. A pick's result is written onto
+    // its book_futures row, and the board is where the member reads it back, so
+    // deleting a row somebody bet on leaves them with a ticket that can never
+    // be settled, shown, or even cleared (the action refuses a subject with no
+    // priced row). keepIds covers the case where the player is still in the
+    // candidate pool; this covers the ones it cannot reach, like a player who
+    // left the league entirely, or The Field on a market that has shrunk to
+    // nothing unlisted. Those rows keep their last posted price, which is the
+    // number the ticket was taken at anyway.
+    const keepSubjects = retainedSubjects(
+      rows.map((r) => r.subjectId),
+      pickedByMarket.get(market) ?? [],
+    );
+
+    // Delete-then-upsert per market, in one transaction (runAtomic leads with
+    // the delete so it can never commit alone). Deleting is what keeps
+    // yesterday's candidates off today's board: a player who fell out of the
+    // top ten writes no row to overwrite his own.
     await runAtomic((executor) => [
       executor
         .delete(bookFutures)
@@ -193,9 +215,26 @@ export async function repriceFutures(
           and(
             eq(bookFutures.seasonId, season.seasonId),
             eq(bookFutures.market, market),
+            notInArray(bookFutures.subjectId, keepSubjects),
           ),
         ),
-      executor.insert(bookFutures).values(rows),
+      executor
+        .insert(bookFutures)
+        .values(rows)
+        .onConflictDoUpdate({
+          target: [
+            bookFutures.seasonId,
+            bookFutures.market,
+            bookFutures.subjectId,
+          ],
+          set: {
+            subjectType: sql`excluded.subject_type`,
+            prob: sql`excluded.prob`,
+            odds: sql`excluded.odds`,
+            detail: sql`excluded.detail`,
+            pricedAt: sql`excluded.priced_at`,
+          },
+        }),
     ]);
     result.rowCount += rows.length;
     result.priced += 1;
@@ -298,13 +337,25 @@ export async function gradeFutures(
 
   const marketsPresent = new Set(ungraded.map((r) => r.market));
   const needsAwards = marketsPresent.has("mvp") || marketsPresent.has("roty");
-  const scorers = needsAwards ? await getAwardScorers(season) : [];
+
+  // The player awards are "most points started ACROSS THE REGULAR SEASON", so
+  // they cannot be settled until the regular season has actually been played.
+  // Without this gate the first sync after week 1 would grade both boards on
+  // the week 1 leader and stamp them closed: topScorer answers with whoever is
+  // ahead and only returns null on an empty table, so a half-played season
+  // grades exactly like a finished one. Graded is permanent, and a graded
+  // market is closed, so that mistake ends the market in week 2. Team markets
+  // need no equivalent gate: the season row has no champion until there is one.
+  const completedWeeks = needsAwards ? await getCompletedWeekCount(season) : 0;
+  const gradeAwards =
+    needsAwards && awardsAreGradable(completedWeeks, season.finalRegularWeek);
+  const scorers = gradeAwards ? await getAwardScorers(season) : [];
 
   const winners: Partial<Record<FuturesMarket, string | null>> = {
     champion: seasonRow.champion,
     toilet_bowl: seasonRow.toiletBowl,
-    mvp: needsAwards ? topScorer(scorers) : null,
-    roty: needsAwards ? topScorer(scorers.filter((s) => s.isRookie)) : null,
+    mvp: gradeAwards ? topScorer(scorers) : null,
+    roty: gradeAwards ? topScorer(scorers.filter((s) => s.isRookie)) : null,
   };
 
   const gradedAt = new Date();

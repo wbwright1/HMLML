@@ -1,8 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
+  awardsAreGradable,
   buildPlayerMarket,
   buildTeamMarket,
   candidateCountFor,
+  FUTURES_MARKET_IDS,
+  FUTURES_MARKETS,
+  isFuturesMarket,
+  regularSeasonWeeksRemaining,
+  retainedSubjects,
   candidateScore,
   FIELD_SUBJECT_ID,
   futureResult,
@@ -10,10 +16,12 @@ import {
   futuresOdds,
   MIN_FUTURES_FAVORITE_ODDS,
   mulberry32,
+  PLAYER_MARKETS,
   playoffFieldFrom,
   simulateBracketWinner,
   simulateTeamMarkets,
   softmaxProbabilities,
+  TEAM_MARKETS,
   topScorer,
   WEEK_FUTURES_PLAYER_LOCK,
   type FuturesGame,
@@ -626,5 +634,113 @@ describe("futureResult", () => {
   it("grades team markets by franchise id the same way", () => {
     expect(futureResult({ subjectId: "f4" }, "f4", [])).toBe("win");
     expect(futureResult({ subjectId: "f4" }, "f7", [])).toBe("loss");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The market registry
+// ---------------------------------------------------------------------------
+
+describe("the market registry", () => {
+  it("lists every market once, in board order", () => {
+    expect(FUTURES_MARKET_IDS).toEqual(["champion", "toilet_bowl", "mvp", "roty"]);
+    expect(new Set(FUTURES_MARKET_IDS).size).toBe(FUTURES_MARKET_IDS.length);
+  });
+
+  it("splits the same list into the team and player halves", () => {
+    expect(TEAM_MARKETS).toEqual(["champion", "toilet_bowl"]);
+    expect(PLAYER_MARKETS).toEqual(["mvp", "roty"]);
+    expect([...TEAM_MARKETS, ...PLAYER_MARKETS].sort()).toEqual(
+      [...FUTURES_MARKET_IDS].sort(),
+    );
+  });
+
+  it("drives the lock rules and the listed counts, rather than restating them", () => {
+    for (const id of FUTURES_MARKET_IDS) {
+      const spec = FUTURES_MARKETS[id];
+      const expected =
+        spec.lock === "playoffs" ? 15 : WEEK_FUTURES_PLAYER_LOCK;
+      expect(futuresLockWeek(id, 15)).toBe(expected);
+      expect(candidateCountFor(id)).toBe(spec.listCount ?? 0);
+    }
+  });
+
+  it("accepts only the markets it runs", () => {
+    expect(isFuturesMarket("mvp")).toBe(true);
+    expect(isFuturesMarket("toilet_bowl")).toBe(true);
+    expect(isFuturesMarket("mvp2")).toBe(false);
+    expect(isFuturesMarket("")).toBe(false);
+    expect(isFuturesMarket(7)).toBe(false);
+    // Not a market just because Object.prototype has heard of it.
+    expect(isFuturesMarket("toString")).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Season arithmetic
+// ---------------------------------------------------------------------------
+
+describe("regularSeasonWeeksRemaining", () => {
+  it("does not count the week in progress twice", () => {
+    // Week 5 is under way: its started points are already banked, so five
+    // weeks have banked and nine are left. Counting COMPLETED weeks (four)
+    // would say ten, handing every starter an extra projected week he has
+    // already played.
+    expect(regularSeasonWeeksRemaining(14, 5)).toBe(9);
+    expect(regularSeasonWeeksRemaining(14, 5)).not.toBe(
+      regularSeasonWeeksRemaining(14, 4),
+    );
+  });
+
+  it("is zero once the regular season has banked every week", () => {
+    expect(regularSeasonWeeksRemaining(14, 14)).toBe(0);
+  });
+
+  it("never goes negative on a season with extra banked weeks", () => {
+    expect(regularSeasonWeeksRemaining(14, 17)).toBe(0);
+  });
+
+  it("is the whole season before anybody has played", () => {
+    expect(regularSeasonWeeksRemaining(14, 0)).toBe(14);
+  });
+});
+
+describe("awardsAreGradable", () => {
+  it("refuses to settle a player award mid-season", () => {
+    expect(awardsAreGradable(1, 14)).toBe(false);
+    expect(awardsAreGradable(13, 14)).toBe(false);
+  });
+
+  it("settles once every regular-season week is in the books", () => {
+    expect(awardsAreGradable(14, 14)).toBe(true);
+    expect(awardsAreGradable(15, 14)).toBe(true);
+  });
+
+  it("refuses a season with no regular season to speak of", () => {
+    expect(awardsAreGradable(0, 0)).toBe(false);
+  });
+});
+
+describe("retainedSubjects", () => {
+  it("keeps a held subject that no longer prices", () => {
+    // The MVP who slid off the board in week 9. His row is where his ticket
+    // gets graded, so deleting it would strand the bet.
+    expect(retainedSubjects(["p1", "p2"], ["p9"])).toContain("p9");
+  });
+
+  it("keeps The Field when somebody is on it and it stops pricing", () => {
+    expect(retainedSubjects(["p1"], [FIELD_SUBJECT_ID])).toContain(
+      FIELD_SUBJECT_ID,
+    );
+  });
+
+  it("never lists a subject twice", () => {
+    const kept = retainedSubjects(["p1", "p2"], ["p1"]);
+    expect(kept).toHaveLength(2);
+    expect(new Set(kept).size).toBe(2);
+  });
+
+  it("is just the priced board when nobody has bet anything", () => {
+    expect(retainedSubjects(["p1", "p2"], [])).toEqual(["p1", "p2"]);
   });
 });
