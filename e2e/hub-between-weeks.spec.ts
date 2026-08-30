@@ -5,29 +5,25 @@ import type { Page, Locator } from "@playwright/test";
 // Between-Weeks Hub (state 1d)
 //
 // The Tue/Wed lull: regular season, no live game, the slate set but not yet
-// kicked off. The hub only renders this layout when the NFL calendar + synced
-// data put it in the between-weeks sub-state, so every test here is guarded by
-// a runtime check: if the between-weeks hero isn't present (any other calendar
-// state, or no seeded data), the test skips rather than failing. This is a
-// runtime-conditional skip, never a blanket test.skip().
+// kicked off. Runs under the "hub-in-season" Playwright project, whose dev
+// server is pinned to NFL_STATE_OVERRIDE=regular:1:force (playwright.config.ts).
+// Bundled with #249's fix because it shares that server and had the same
+// silent-skip defect (a runtime isBetweenWeeks() guard letting every test
+// self-skip with zero assertions exercised).
 //
-// KNOWN LIMITATION: these tests only exercise real assertions when the live NFL
-// calendar is actually in a regular-season lull. There is no seam to stub the
-// NFL-state source (getNflState reads Sleeper directly), so out of that window
-// every test runtime-skips. The future fix is a stubbable NFL-state source
-// (dependency-injected or env-overridable) so the between-weeks layout can be
-// forced in CI; until then this spec cannot run green on demand.
+// The distinctive marker is the hero kicker "... THE SLATE IS SET". The first
+// test below asserts it unconditionally, making the state itself a hard claim
+// rather than an implicit one; every other test in the file also asserts
+// unconditionally now.
 //
-// The distinctive marker is the hero kicker "... THE SLATE IS SET".
+// Fallback documented in the PR: if the forced regular:1:force state does not
+// land the hub in the between-weeks sub-state (computeIsBetweenWeeks needs a
+// slate with no kicked-off games), this file is dropped from the
+// hub-in-season project's testMatch and from STATE_FORCED in
+// playwright.config.ts rather than fought.
 // ============================================================================
 
 const SLATE_MARKER = /THE SLATE IS SET/i;
-
-async function isBetweenWeeks(page: Page): Promise<boolean> {
-  const main = page.locator("main");
-  const text = await main.innerText().catch(() => "");
-  return SLATE_MARKER.test(text);
-}
 
 /** The between-weeks hero is the first section in <main>. */
 function hero(page: Page): Locator {
@@ -35,14 +31,17 @@ function hero(page: Page): Locator {
 }
 
 test.describe("Between-Weeks Hub (1d)", () => {
+  test("T00: the between-weeks slate marker renders", async ({ page }) => {
+    await page.goto("/");
+    const main = page.locator("main");
+    const text = await main.innerText();
+    expect(text).toMatch(SLATE_MARKER);
+  });
+
   test("T01: hero renders the slate kicker and a serif headline", async ({
     page,
   }) => {
     await page.goto("/");
-    if (!(await isBetweenWeeks(page))) {
-      test.skip();
-      return;
-    }
 
     const h = hero(page);
     await expect(h.locator("p.text-kicker").first()).toContainText(
@@ -60,10 +59,6 @@ test.describe("Between-Weeks Hub (1d)", () => {
     page,
   }) => {
     await page.goto("/");
-    if (!(await isBetweenWeeks(page))) {
-      test.skip();
-      return;
-    }
 
     const gotwLabel = page.getByText("Game of the Week", { exact: true });
     await expect(gotwLabel).toBeVisible();
@@ -75,10 +70,6 @@ test.describe("Between-Weeks Hub (1d)", () => {
     page,
   }) => {
     await page.goto("/");
-    if (!(await isBetweenWeeks(page))) {
-      test.skip();
-      return;
-    }
     await expect(
       page.getByText("The Rest of the Slate", { exact: true })
     ).toBeVisible();
@@ -86,10 +77,6 @@ test.describe("Between-Weeks Hub (1d)", () => {
 
   test("T04: no em-dashes anywhere in the hub copy", async ({ page }) => {
     await page.goto("/");
-    if (!(await isBetweenWeeks(page))) {
-      test.skip();
-      return;
-    }
     const text = await page.locator("main").innerText();
     expect(text).not.toContain("—"); // em dash
     expect(text).not.toContain("–"); // en dash
@@ -99,10 +86,6 @@ test.describe("Between-Weeks Hub (1d)", () => {
     page,
   }) => {
     await page.goto("/");
-    if (!(await isBetweenWeeks(page))) {
-      test.skip();
-      return;
-    }
     const main = page.locator("main");
     const text = await main.innerText();
     expect(text).not.toContain("Standouts");
@@ -118,10 +101,6 @@ test.describe("Between-Weeks Hub (1d)", () => {
 
   test("T07: no duplicate <h2> section headings in <main>", async ({ page }) => {
     await page.goto("/");
-    if (!(await isBetweenWeeks(page))) {
-      test.skip();
-      return;
-    }
     const headings = await page.locator("main h2").allInnerTexts();
     const normalized = headings.map((h) => h.trim()).filter(Boolean);
     expect(new Set(normalized).size).toBe(normalized.length);
@@ -131,17 +110,13 @@ test.describe("Between-Weeks Hub (1d)", () => {
     page,
   }) => {
     await page.goto("/");
-    if (!(await isBetweenWeeks(page))) {
-      test.skip();
-      return;
-    }
     // Scope to the Game of the Week card's own season records (not the
     // all-time head-to-head badge, which is a different, always-nonzero
     // number even at week 1): both teams reading 0-0 there means the league
     // has played zero games, so no "1st in Division" claim should exist
     // anywhere in <main>.
     const gotwHeading = page.getByText("Game of the Week", { exact: true });
-    if ((await gotwHeading.count()) === 0) return;
+    await expect(gotwHeading).toBeVisible();
     const gotwCard = gotwHeading.locator("xpath=following-sibling::*[1]");
     const recordSpans = gotwCard.locator("span.text-stat");
     const records = await recordSpans.allInnerTexts();
@@ -159,10 +134,6 @@ test.describe("Between-Weeks Hub (1d)", () => {
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
-    if (!(await isBetweenWeeks(page))) {
-      test.skip();
-      return;
-    }
 
     // Hero + Game of the Week visible on mobile.
     await expect(hero(page).locator("h1")).toBeVisible();

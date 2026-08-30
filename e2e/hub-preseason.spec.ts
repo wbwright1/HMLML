@@ -1,32 +1,22 @@
 import { test, expect } from "@playwright/test";
-import type { Page } from "@playwright/test";
 
 // ============================================================================
 // 1a: Preseason Hub ("The Field")
 //
-// The preseason hub renders on "/" when the league is between the new season
-// starting and Week 1 kicking off (seasonType === "pre"). Its signature is the
-// "Title Defense Loading" hero kicker plus the "The Field" division module.
-// Which hub state renders depends on the live NFL calendar + seeded data, so
-// when the homepage is NOT in the preseason state these tests skip on a runtime
-// condition (matching the story-3.1 hero-spec pattern) rather than blanket-skip.
-// When the state IS active, the assertions below fail if any 1a module is
-// missing, so a deleted/broken feature is caught.
+// Runs under the "hub-preseason" Playwright project, whose dev server is
+// pinned to NFL_STATE_OVERRIDE=pre:1 (playwright.config.ts). The preseason
+// state is therefore a precondition of the project, not a runtime guess: no
+// test in this file skips based on the live NFL calendar. If the preseason
+// hub stops rendering, these go red instead of quietly self-skipping (#249).
 // ============================================================================
-
-/** True when "/" is currently rendering the 1a preseason hub. */
-async function isPreseasonHub(page: Page): Promise<boolean> {
-  const kicker = page.locator("p.text-kicker", { hasText: /Title Defense Loading/i });
-  return (await kicker.count()) > 0;
-}
 
 test.describe("Preseason hub (1a)", () => {
   test("hero renders the countdown headline and dek", async ({ page }) => {
     await page.goto("/");
-    if (!(await isPreseasonHub(page))) {
-      test.skip(true, "Homepage is not in the preseason (1a) state");
-      return;
-    }
+
+    await expect(
+      page.locator("p.text-kicker", { hasText: /Title Defense Loading/i }).first(),
+    ).toBeVisible();
 
     const hero = page.locator("main section").first();
     await expect(hero.locator("h1")).toContainText(/on the clock/i);
@@ -45,28 +35,27 @@ test.describe("Preseason hub (1a)", () => {
     page,
   }) => {
     await page.goto("/");
-    if (!(await isPreseasonHub(page))) {
-      test.skip(true, "Homepage is not in the preseason (1a) state");
-      return;
-    }
 
     const hero = page.locator("main section").first();
     const days = hero.getByText(/^Days$/i);
+    const hrs = hero.getByText(/^Hrs$/i);
+    const min = hero.getByText(/^Min$/i);
     // The countdown is hidden when neither a draft date nor a kickoff is
-    // available; assert its shape only when it rendered.
-    if ((await days.count()) > 0) {
-      await expect(hero.getByText(/^Days$/i).first()).toBeVisible();
-      await expect(hero.getByText(/^Hrs$/i).first()).toBeVisible();
-      await expect(hero.getByText(/^Min$/i).first()).toBeVisible();
+    // available. Assert its shape is all-or-nothing rather than short-
+    // circuiting on the first element, so a half-rendered countdown fails.
+    const daysCount = await days.count();
+    if (daysCount > 0) {
+      await expect(days.first()).toBeVisible();
+      await expect(hrs.first()).toBeVisible();
+      await expect(min.first()).toBeVisible();
+    } else {
+      expect(await hrs.count()).toBe(0);
+      expect(await min.count()).toBe(0);
     }
   });
 
   test("The Field module renders division cards with teams", async ({ page }) => {
     await page.goto("/");
-    if (!(await isPreseasonHub(page))) {
-      test.skip(true, "Homepage is not in the preseason (1a) state");
-      return;
-    }
 
     // The module label.
     await expect(page.locator("p.text-kicker", { hasText: /The Field/i }).first()).toBeVisible();
@@ -82,10 +71,6 @@ test.describe("Preseason hub (1a)", () => {
 
   test("Burning Questions and Smack Feed rails render", async ({ page }) => {
     await page.goto("/");
-    if (!(await isPreseasonHub(page))) {
-      test.skip(true, "Homepage is not in the preseason (1a) state");
-      return;
-    }
 
     await expect(
       page.locator("p.text-kicker", { hasText: /Burning Questions/i }).first(),
@@ -97,10 +82,6 @@ test.describe("Preseason hub (1a)", () => {
 
   test("Bold Predictions module renders verdict chips", async ({ page }) => {
     await page.goto("/");
-    if (!(await isPreseasonHub(page))) {
-      test.skip(true, "Homepage is not in the preseason (1a) state");
-      return;
-    }
 
     await expect(
       page.locator("p.text-kicker", { hasText: /Bold Predictions/i }).first(),
@@ -121,10 +102,6 @@ test.describe("Preseason hub (1a)", () => {
 
   test("hub copy contains no em-dashes", async ({ page }) => {
     await page.goto("/");
-    if (!(await isPreseasonHub(page))) {
-      test.skip(true, "Homepage is not in the preseason (1a) state");
-      return;
-    }
     const text = await page.locator("main").innerText();
     expect(text).not.toContain("—");
     expect(text).not.toContain("–");

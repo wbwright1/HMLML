@@ -25,7 +25,7 @@ import {
 } from "@/lib/queries/players-to-watch";
 import { getTrendingAddPlayers } from "@/lib/queries/player-points";
 import { getHubEditorial, matchupPairKey, type HubEditorial } from "@/lib/content";
-import { getBookBoard, type BookGame } from "@/lib/queries/book";
+import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { buildHubLineFooter } from "@/lib/book/shared";
 import {
   selectGameOfTheWeek,
@@ -125,6 +125,12 @@ export async function BetweenWeeksHub({
 
   if (seasonId != null) {
     try {
+      // The Book's week must agree with resolveBookWeek() (the same source
+      // /book, the pick server actions, and the sync all use), or the hub can
+      // advertise a line for a week The Book is not actually trading (#244).
+      const bookWeek = await resolveBookWeek();
+      const bookMatchesSlate = bookWeek != null && bookWeek.week === week;
+
       // Week 1 has no completed prior week: asking "In The Books" or "Left On
       // The Bench" about week 0 would either return null by luck or (if a
       // future data change ever lets it) resurrect a false claim. Skip the
@@ -140,7 +146,9 @@ export async function BetweenWeeksHub({
             : getWeekBenchLeader(seasonId, priorWeek),
           getWeekStarterPool(seasonId, week),
           getTrendingAddPlayers(3),
-          getBookBoard(seasonId, seasonYear, week),
+          bookMatchesSlate
+            ? getBookBoard(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week)
+            : Promise.resolve([]),
           ...matchups.map((m) =>
             getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
           ),

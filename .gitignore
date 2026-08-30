@@ -16,6 +16,8 @@
 
 # next.js
 /.next/
+/.next-preseason/
+/.next-in-season/
 /out/
 
 # production
