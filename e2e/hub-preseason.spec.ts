@@ -27,8 +27,14 @@ test.describe("Preseason hub (1a)", () => {
       .evaluate((el) => getComputedStyle(el).fontStyle);
     expect(fontStyle).toBe("italic");
 
-    // Dek is present and mentions the 0-0 preseason framing.
-    await expect(hero).toContainText(/0-0/);
+    // Dek renders non-empty. Its wording is LLM-generated (editorial.heroDek
+    // prefers the generated dek over the hardcoded computed fallback, and the
+    // generation prompt never requires specific phrasing like "0-0"), so it
+    // is not code-guaranteed and must not be pinned to exact text here; only
+    // that the dek paragraph itself renders with real content.
+    const dek = hero.locator("p.text-body-lg");
+    await expect(dek).toBeVisible();
+    expect((await dek.innerText()).trim().length).toBeGreaterThan(0);
   });
 
   test("countdown cards render DAYS / HRS / MIN when the schedule is synced", async ({
