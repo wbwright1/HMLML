@@ -114,6 +114,63 @@ export const BOOK_COPY = {
 } as const;
 
 // ---------------------------------------------------------------------------
+// Tracking shapes
+// ---------------------------------------------------------------------------
+// Same reason as the board shapes above: the tracking island imports these,
+// and lib/queries/book-tracking.ts (which builds them) touches lib/db.
+
+export interface AtsLeaderboardRow {
+  memberId: number;
+  displayName: string;
+  franchiseSlug: string;
+  franchiseName: string;
+  franchiseAbbreviation: string | null;
+  franchiseColor: string | null;
+  rank: number;
+  isLeader: boolean;
+  isLast: boolean;
+  record: string;
+  streakLabel: string | null;
+  streakType: "W" | "L" | null;
+  units: number;
+}
+
+export type PickOutcome = "win" | "loss" | "push";
+
+export interface WhoPickedWhomHeader {
+  matchupId: number;
+  label: string;
+  homeAbbreviation: string;
+  awayAbbreviation: string;
+}
+
+export interface WhoPickedWhomCell {
+  /** Whether this game's own pick may be shown at all right now. */
+  revealed: boolean;
+  abbreviation: string | null;
+  outcome: PickOutcome | null;
+}
+
+export interface WhoPickedWhomRow {
+  memberId: number;
+  displayName: string;
+  franchiseSlug: string;
+  cells: WhoPickedWhomCell[];
+}
+
+export interface WhoPickedWhomData {
+  header: WhoPickedWhomHeader[];
+  rows: WhoPickedWhomRow[];
+}
+
+export interface StreakTile {
+  kind: "heater" | "ice-cold" | "best-week";
+  kicker: string;
+  stat: string;
+  attribution: string;
+}
+
+// ---------------------------------------------------------------------------
 // Pure guards (unit-tested in shared.test.ts)
 // ---------------------------------------------------------------------------
 

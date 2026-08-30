@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { useSessionMember } from "@/components/use-session-member";
 import { togglePick, lockSlip } from "@/app/actions/book";
+import { notifyBookPicksChanged } from "@/lib/book/pick-events";
 import {
   gradePick,
   formatMoney,
@@ -125,6 +126,9 @@ export function BoardIsland({
       }
       // Consensus lives in the cached page; pull the refreshed numbers.
       router.refresh();
+      // The Tracking tab's own-picks overlay only fetches once on mount
+      // (see lib/book/pick-events.ts); tell it a pick just changed.
+      notifyBookPicksChanged();
     });
   }
 
