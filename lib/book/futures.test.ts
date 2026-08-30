@@ -1,15 +1,24 @@
 import { describe, it, expect } from "vitest";
 import {
   awardsAreGradable,
+  BENCH_START_SHARE,
   buildPlayerMarket,
   buildTeamMarket,
   candidateCountFor,
   FUTURES_MARKET_IDS,
   FUTURES_MARKETS,
+  IMPACT_RATIO_MAX,
+  IMPACT_RATIO_MIN,
+  IMPACT_WEIGHT,
   isFuturesMarket,
+  lineupShareRatio,
   regularSeasonWeeksRemaining,
+  replacementSwingRatio,
   retainedSubjects,
+  startShareFor,
+  STARTER_START_SHARE,
   candidateScore,
+  teamImpactMultiplier,
   FIELD_SUBJECT_ID,
   futureResult,
   futuresLockWeek,
@@ -17,6 +26,7 @@ import {
   MIN_FUTURES_FAVORITE_ODDS,
   mulberry32,
   PLAYER_MARKETS,
+  PLAYER_SOFTMAX_TEMPERATURE,
   playoffFieldFrom,
   simulateBracketWinner,
   simulateTeamMarkets,
@@ -24,6 +34,7 @@ import {
   TEAM_MARKETS,
   topScorer,
   WEEK_FUTURES_PLAYER_LOCK,
+  type CandidateScoreInput,
   type FuturesGame,
   type FuturesTeam,
 } from "./futures";
@@ -368,15 +379,205 @@ describe("softmaxProbabilities", () => {
   });
 });
 
+describe("startShareFor", () => {
+  it("returns the full share for a starter and the bench share for a bench player", () => {
+    expect(startShareFor("starter")).toBe(STARTER_START_SHARE);
+    expect(startShareFor("bench")).toBe(BENCH_START_SHARE);
+  });
+});
+
+describe("lineupShareRatio", () => {
+  it("returns 1.0 for an exactly average starter", () => {
+    // 10 starters, so an average share is projectedPerWeek / lineupTotal = 1/10.
+    expect(lineupShareRatio(10, 100)).toBeCloseTo(1, 10);
+  });
+
+  it("returns 2.0 for a player at twice the average share", () => {
+    expect(lineupShareRatio(20, 100)).toBeCloseTo(2, 10);
+  });
+
+  it("clamps a monster share at IMPACT_RATIO_MAX", () => {
+    expect(lineupShareRatio(80, 100)).toBe(IMPACT_RATIO_MAX);
+  });
+
+  it("clamps a tiny share at IMPACT_RATIO_MIN", () => {
+    expect(lineupShareRatio(1, 100)).toBe(IMPACT_RATIO_MIN);
+  });
+
+  it("returns the neutral 1.0 for a zero or missing lineup total", () => {
+    expect(lineupShareRatio(20, 0)).toBe(1);
+    expect(Number.isFinite(lineupShareRatio(20, 0))).toBe(true);
+  });
+});
+
+describe("replacementSwingRatio", () => {
+  it("floors at IMPACT_RATIO_MIN for an identical teammate behind him", () => {
+    expect(replacementSwingRatio(20, 20)).toBe(IMPACT_RATIO_MIN);
+  });
+
+  it("floors at IMPACT_RATIO_MIN when projected below his backup", () => {
+    expect(replacementSwingRatio(15, 20)).toBe(IMPACT_RATIO_MIN);
+  });
+
+  it("clamps at IMPACT_RATIO_MAX for a large gap", () => {
+    expect(replacementSwingRatio(30, 0)).toBe(IMPACT_RATIO_MAX);
+  });
+
+  it("scales linearly against SWING_REFERENCE inside the clamp range", () => {
+    // A 1.5-point gap is half of the 3.0 reference, so the ratio sits at 0.5
+    // of the way from 0 to the reference: still inside [0.5, 2.0] band math.
+    expect(replacementSwingRatio(21.5, 20)).toBeCloseTo(0.5, 10);
+  });
+});
+
+describe("teamImpactMultiplier", () => {
+  it("returns exactly 1.0 for neutral inputs", () => {
+    expect(teamImpactMultiplier(1, 1)).toBe(1);
+  });
+
+  it("is bounded by the impact weight applied to the ratio extremes", () => {
+    const lo = 1 + IMPACT_WEIGHT * (IMPACT_RATIO_MIN - 1);
+    const hi = 1 + IMPACT_WEIGHT * (IMPACT_RATIO_MAX - 1);
+    expect(teamImpactMultiplier(IMPACT_RATIO_MIN, IMPACT_RATIO_MIN)).toBeCloseTo(lo, 10);
+    expect(teamImpactMultiplier(IMPACT_RATIO_MAX, IMPACT_RATIO_MAX)).toBeCloseTo(hi, 10);
+  });
+});
+
 describe("candidateScore", () => {
-  it("credits rest-of-season pace only to a current starter", () => {
-    expect(candidateScore(120, 18, 6, true)).toBe(120 + 108);
-    expect(candidateScore(120, 18, 6, false)).toBe(120);
+  const base: CandidateScoreInput = {
+    bankedPoints: 120,
+    projectedPerWeek: 18,
+    weeksRemaining: 6,
+    startShare: STARTER_START_SHARE,
+    lineupProjectedPerWeek: 180, // 18 / 180 = average starter share (1/10)
+    bestAlternativePerWeek: 15, // 3-point gap = SWING_REFERENCE, ratio 1.0
+  };
+
+  it("credits rest-of-season pace scaled by startShare", () => {
+    const starter = candidateScore(base);
+    const bench = candidateScore({ ...base, startShare: BENCH_START_SHARE });
+    // Neutral impact here (share and swing both 1.0), so this reduces to the
+    // old volume-only formula: bankedPoints + startShare * rate * weeks.
+    expect(starter).toBeCloseTo(120 + 1.0 * 18 * 6, 10);
+    expect(bench).toBeCloseTo(120 + 0.25 * 18 * 6, 10);
   });
 
   it("is just banked points once the regular season is done", () => {
-    expect(candidateScore(240, 20, 0, true)).toBe(240);
-    expect(candidateScore(240, 20, -3, true)).toBe(240);
+    expect(candidateScore({ ...base, weeksRemaining: 0 })).toBeCloseTo(120, 10);
+    expect(candidateScore({ ...base, weeksRemaining: -3 })).toBeCloseTo(120, 10);
+  });
+
+  it("is monotonic in projected points, holding impact fixed", () => {
+    // lineupProjectedPerWeek scales with projectedPerWeek to hold shareRatio
+    // at 1.0, and bestAlternativePerWeek keeps the same 3-point gap to hold
+    // swingRatio at 1.0, so only the volume term moves between these two.
+    const low = candidateScore({
+      ...base,
+      projectedPerWeek: 18,
+      lineupProjectedPerWeek: 180,
+      bestAlternativePerWeek: 15,
+    });
+    const high = candidateScore({
+      ...base,
+      projectedPerWeek: 20,
+      lineupProjectedPerWeek: 200,
+      bestAlternativePerWeek: 17,
+    });
+    expect(high).toBeGreaterThan(low);
+  });
+
+  it("is monotonic in team impact, holding projections fixed", () => {
+    const lowShare = candidateScore({ ...base, lineupProjectedPerWeek: 360 }); // half the average share
+    const highShare = candidateScore({ ...base, lineupProjectedPerWeek: 90 }); // twice the average share
+    expect(highShare).toBeGreaterThan(lowShare);
+
+    const lowSwing = candidateScore({ ...base, bestAlternativePerWeek: 18 }); // no gap
+    const highSwing = candidateScore({ ...base, bestAlternativePerWeek: 0 }); // huge gap
+    expect(highSwing).toBeGreaterThan(lowSwing);
+  });
+
+  it("lets high leverage beat a modestly higher projection, but never a large one", () => {
+    // Modestly lower projection, much higher leverage: should win.
+    const modestGapHighLeverage = candidateScore({
+      bankedPoints: 0,
+      projectedPerWeek: 17,
+      weeksRemaining: 14,
+      startShare: STARTER_START_SHARE,
+      lineupProjectedPerWeek: 85, // twice the average share -> ratio 2.0
+      bestAlternativePerWeek: 0, // huge swing -> ratio 2.0
+    });
+    const higherProjectionAverageLeverage = candidateScore({
+      bankedPoints: 0,
+      projectedPerWeek: 19,
+      weeksRemaining: 14,
+      startShare: STARTER_START_SHARE,
+      lineupProjectedPerWeek: 190, // average share -> ratio 1.0
+      bestAlternativePerWeek: 16, // average swing -> ratio 1.0
+    });
+    expect(modestGapHighLeverage).toBeGreaterThan(higherProjectionAverageLeverage);
+
+    // Large projection gap: high leverage cannot overturn it.
+    const buriedButHighLeverage = candidateScore({
+      bankedPoints: 0,
+      projectedPerWeek: 12,
+      weeksRemaining: 14,
+      startShare: STARTER_START_SHARE,
+      lineupProjectedPerWeek: 60, // twice the average share -> ratio 2.0
+      bestAlternativePerWeek: 0, // huge swing -> ratio 2.0
+    });
+    const dominantAverageLeverage = candidateScore({
+      bankedPoints: 0,
+      projectedPerWeek: 20,
+      weeksRemaining: 14,
+      startShare: STARTER_START_SHARE,
+      lineupProjectedPerWeek: 200,
+      bestAlternativePerWeek: 17,
+    });
+    expect(dominantAverageLeverage).toBeGreaterThan(buriedButHighLeverage);
+  });
+});
+
+describe("PLAYER_SOFTMAX_TEMPERATURE", () => {
+  it("produces a favorite inside a sane posted band for a realistic synthetic pool", () => {
+    // A rough shape of a real MVP pool: one clear favorite, a handful of
+    // strong candidates, and a long tail. Scores modeled after candidateScore
+    // output with the real season-points scale (150-360).
+    const pool = [
+      { playerId: "favorite", score: 357 },
+      { playerId: "runner-up-1", score: 337 },
+      { playerId: "runner-up-2", score: 336 },
+      { playerId: "mid-1", score: 319 },
+      { playerId: "mid-2", score: 316 },
+      { playerId: "mid-3", score: 279 },
+      { playerId: "mid-4", score: 278 },
+      { playerId: "mid-5", score: 276 },
+      { playerId: "mid-6", score: 261 },
+      { playerId: "mid-7", score: 260 },
+      // A long tail sized like the real widened MVP pool (346 candidates),
+      // scores trailing off the way bench/backup projections actually do.
+      ...Array.from({ length: 336 }, (_, i) => ({
+        playerId: `tail-${i}`,
+        score: 200 - i * 0.55,
+      })),
+    ];
+    const rows = buildPlayerMarket(pool, 10, PLAYER_SOFTMAX_TEMPERATURE);
+    const favorite = rows.find((r) => r.subjectId === "favorite");
+    expect(favorite).toBeDefined();
+    // A sane favorite band for a season-long award over a 346-candidate pool:
+    // even the favorite is a real underdog in raw odds terms (a wide-open
+    // market, like MVP or ROTY genuinely is), but not so flat that it
+    // collapses onto the +1900 dog cap alongside everyone else.
+    expect(favorite?.odds).toBeGreaterThan(0);
+    expect(favorite?.odds).toBeLessThan(1900);
+
+    // At least five listed rows should be distinct prices, clear of the dog
+    // cap, so the board does not compress into a wall of +1900.
+    const distinctAboveFloor = new Set(
+      rows
+        .filter((r) => r.subjectType === "player" && r.odds !== 1900)
+        .map((r) => r.odds),
+    );
+    expect(distinctAboveFloor.size).toBeGreaterThanOrEqual(5);
   });
 });
 
