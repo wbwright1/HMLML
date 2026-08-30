@@ -146,7 +146,7 @@ describe('UT-22: No default export', () => {
 describe('UT-23: Runtime immutability', () => {
   it('rejects mutation via Object.freeze', () => {
     expect(() => {
-      (SNARKY_LABELS as any)['POINT_MACHINE'] = null;
+      (SNARKY_LABELS as Record<string, unknown>)['POINT_MACHINE'] = null;
     }).toThrow();
     // Verify original value is intact
     expect(SNARKY_LABELS['POINT_MACHINE'].displayText).toBe('Point Machine');

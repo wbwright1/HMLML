@@ -73,6 +73,7 @@ async function PlayerProfileOrNotFound({
           This player doesn&apos;t exist in our records. Maybe they were
           waived, retired, or traded to a league that actually cares.
         </p>
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- intentional hard navigation: this is the intercepted-route modal, a soft nav would leave the modal shell mounted over /players */}
         <a
           href="/players"
           className="inline-block text-body-sm font-medium text-accent-gold hover:underline"

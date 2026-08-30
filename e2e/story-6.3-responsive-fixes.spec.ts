@@ -111,8 +111,7 @@ test.describe("Story 6.3: Responsive Edge-Case Fixes", () => {
     const wrapperCount = await selectorWrapper.count();
 
     if (wrapperCount > 0) {
-      // If there are enough tabs to overflow, a right fade gradient should appear
-      const rightFade = selectorWrapper.first().locator(".bg-gradient-to-l");
+      // If there are enough tabs to overflow, a right fade gradient should appear.
       // This may or may not be visible depending on number of seasons
       // Just verify the selector structure is correct
       const tablist = selectorWrapper.first().locator('[role="tablist"]');

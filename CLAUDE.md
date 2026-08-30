@@ -279,6 +279,8 @@ Before any task is complete, all AI agents MUST:
 8. Use React Server Components by default; `"use client"` only for live score poller
 9. Return structured API responses using the defined success/error formats
 
+`npm run lint` runs `eslint .` against the flat config at `eslint.config.mjs` (ESLint 9; `next lint` was removed in Next.js 16). `docs/**` is excluded from linting since it holds vendored design-handoff bundles, not project source. Warnings are reported but do not fail the command today; only errors do.
+
 ## Anti-Patterns to Avoid
 - Creating a `utils/` or `helpers/` grab-bag directory; put logic in `lib/` with descriptive filenames
 - Using `"use client"` on pages or layouts

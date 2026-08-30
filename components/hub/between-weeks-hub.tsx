@@ -110,8 +110,8 @@ export async function BetweenWeeksHub({
   };
 
   // Rail + division data (degrades to empty when the DB or week has nothing).
-  let divisionLeaderStatus = new Map<string, string>();
-  let leadsDivision = new Set<string>();
+  const divisionLeaderStatus = new Map<string, string>();
+  const leadsDivision = new Set<string>();
   let weeklySuperlatives: Awaited<ReturnType<typeof getWeeklySuperlatives>> | null =
     null;
   let benchLeader: Awaited<ReturnType<typeof getWeekBenchLeader>> = null;

@@ -74,9 +74,6 @@ export default async function DraftsPage() {
   // board is the first thing anyone sees. The remaining years list normally.
   const spotlightYear =
     !upcomingSeasonYear && years.length > 0 ? years[0] : null;
-  const listYears = spotlightYear
-    ? years.filter((y) => y !== spotlightYear)
-    : years;
   const spotlightDrafts = spotlightYear
     ? draftsByYear.get(spotlightYear)!
     : [];

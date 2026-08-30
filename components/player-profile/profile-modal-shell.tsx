@@ -81,7 +81,6 @@ export function ProfileModalShell({ children }: ProfileModalShellProps) {
     if (!dialog) return;
     dialog.addEventListener("keydown", onKeyDown);
     return () => dialog.removeEventListener("keydown", onKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isVisible]);
 
   // Escape-to-close listens on `document` (not scoped to the dialog

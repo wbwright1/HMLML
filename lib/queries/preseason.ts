@@ -3,11 +3,8 @@ import {
   franchises,
   franchiseSeasons,
   seasons,
-  players,
-  rosterPlayers,
-  draftPicks,
 } from "@/lib/db/schema";
-import { eq, desc, asc, and, sql } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 

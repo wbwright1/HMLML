@@ -39,7 +39,6 @@ function crestRadius(px: number): string {
 }
 
 export function FranchiseLogo({
-  slug,
   name,
   abbreviation,
   brandingColor,

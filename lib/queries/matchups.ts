@@ -8,7 +8,7 @@ import {
   franchiseSeasons,
   seasons,
 } from "@/lib/db/schema";
-import { eq, and, desc, gte } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { getNflState } from "@/lib/queries/nfl-state";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 

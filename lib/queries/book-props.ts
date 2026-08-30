@@ -3,7 +3,6 @@ import {
   bookProps,
   bookPropPicks,
   franchises,
-  franchiseSeasons,
   matchups,
   nflGames,
   players,

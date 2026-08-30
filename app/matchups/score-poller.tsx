@@ -42,6 +42,15 @@ export function ScorePoller({
     }
   }, []);
 
+  const stopPolling = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setIsPolling(false);
+    startTimeRef.current = null;
+  }, []);
+
   const startPolling = useCallback(() => {
     if (intervalRef.current) return;
 
@@ -61,16 +70,7 @@ export function ScorePoller({
 
       fetchScores();
     }, POLL_INTERVAL);
-  }, [fetchScores]);
-
-  const stopPolling = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
-    setIsPolling(false);
-    startTimeRef.current = null;
-  }, []);
+  }, [fetchScores, stopPolling]);
 
   // Auto-start when isGameWindow becomes true
   useEffect(() => {

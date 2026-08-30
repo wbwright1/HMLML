@@ -376,8 +376,6 @@ export function PlayerTable({
     return [...result].sort((a, b) => compareValues(a, b, sortKey, sortDir));
   }, [players, search, posFilter, rosterFilter, sortKey, sortDir]);
 
-  const ptsLabel = statsSeason ? `${statsSeason} Pts` : "Pts";
-
   return (
     <>
       {/* ?q= seeding lives in a zero-UI child so that useSearchParams, which
