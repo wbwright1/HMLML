@@ -6,7 +6,7 @@ import {
   draftPicks,
   transactions,
 } from "@/lib/db/schema";
-import { eq, count, sql } from "drizzle-orm";
+import { eq, count } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Types

@@ -1,7 +1,7 @@
 import { neon } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import { seasons, franchises, matchups, franchiseSeasons } from "../../lib/db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 function getTestDb() {
   const sql = neon(process.env.POSTGRES_URL!);

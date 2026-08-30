@@ -1,10 +1,5 @@
 import { db } from "@/lib/db";
-import {
-  seasons,
-  franchises,
-  franchiseSeasons,
-} from "@/lib/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 /**
  * Returns enriched season timeline data for the history page.

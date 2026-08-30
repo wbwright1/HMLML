@@ -10,7 +10,7 @@ config({ path: ".env.local" });
 
 import { db } from "@/lib/db";
 import { seasons, franchiseSeasons, draftPicks } from "@/lib/db/schema";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { getLeagueDrafts, getDraftPicks } from "@/lib/sleeper";
 
 async function backfill() {

@@ -68,7 +68,6 @@ describe("segmentEditorialBody", () => {
   it("does not choke on em-dash-free multi-clause bodies (no weird splitting around punctuation)", () => {
     const body =
       "The Wanderers finished 6-8, good for No. 4 in the division; their 0.429 win rate says otherwise.";
-    const segments = segmentEditorialBody(body);
     expect(reassemble(body)).toBe(body);
     expect(emphasized(body)).toEqual(["6-8", "No. 4", "0.429"]);
   });

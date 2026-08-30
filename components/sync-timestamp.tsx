@@ -87,6 +87,7 @@ export async function SyncTimestamp({
     timeStyle: "short",
   });
 
+  // eslint-disable-next-line react-hooks/purity -- false positive: this is an async server component (no "use client"), so Date.now() runs once per request, not on an unpredictable re-render
   const diffMs = Date.now() - completedAt.getTime();
   const isStale = diffMs > getStaleThresholdMs(dataType);
 
