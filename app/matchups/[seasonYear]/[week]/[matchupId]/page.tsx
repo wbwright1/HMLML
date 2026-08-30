@@ -13,7 +13,7 @@ import { getHubLiveData } from "@/lib/queries/homepage";
 import { getRivalryWeek, rivalryPairKey } from "@/lib/queries/rivalry-week";
 import { computeWinProbability } from "@/lib/win-probability";
 import { deriveLiveAside } from "@/lib/live-aside";
-import type { MatchupTeam, PairedMatchup } from "@/lib/queries/matchups";
+import type { MatchupTeam } from "@/lib/queries/matchups";
 import type { MatchupLineups as MatchupLineupsData } from "@/lib/queries/player-points";
 
 // ISR: rendered once, then served from cache until a successful sync calls
@@ -55,12 +55,11 @@ export default async function MatchupDetailPage({
     notFound();
   }
 
-  let matchups: PairedMatchup[] = [];
-  try {
-    matchups = await getMatchupsByWeek(season.id, week);
-  } catch {
-    // Matchup data may not be available
-  }
+  // Uncaught on purpose: getMatchupsByWeek rethrows a genuine DB failure
+  // itself, so a try/catch here would only be ceremony. A week with no matchups
+  // is a real outcome, comes back as an empty array, and 404s below; before
+  // #252 a DB outage produced that same 404, which was a cacheable lie.
+  const matchups = await getMatchupsByWeek(season.id, week);
 
   const matchup = matchups.find((m) => m.matchupId === matchupId);
   if (!matchup) {
