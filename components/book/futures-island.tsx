@@ -363,8 +363,12 @@ function EntryRow({
   );
 }
 
-/** The crest, the headshot, or the plain mark The Field gets. */
-function EntryMark({ entry }: { entry: FuturesEntry }) {
+/**
+ * The crest, the headshot, or the plain mark The Field gets.
+ *
+ * `size` defaults to the 28px board row; the slip rail passes 20.
+ */
+function EntryMark({ entry, size = 28 }: { entry: FuturesEntry; size?: number }) {
   if (entry.subjectType === "franchise") {
     return (
       <FranchiseLogo
@@ -375,7 +379,7 @@ function EntryMark({ entry }: { entry: FuturesEntry }) {
         abbreviation={entry.abbreviation ?? undefined}
         brandingColor={entry.brandingColor ?? undefined}
         avatarUrl={entry.imageUrl ?? undefined}
-        size={28}
+        size={size}
         decorative
       />
     );
@@ -386,7 +390,7 @@ function EntryMark({ entry }: { entry: FuturesEntry }) {
       <PlayerHeadshot
         playerId={entry.subjectId}
         name={entry.name}
-        size={28}
+        size={size}
         showTeamBadge={false}
       />
     );
@@ -395,7 +399,8 @@ function EntryMark({ entry }: { entry: FuturesEntry }) {
   return (
     <span
       aria-hidden="true"
-      className="flex size-7 shrink-0 items-center justify-center rounded-full bg-surface-muted font-mono text-[11px] font-bold text-text-tertiary"
+      className="flex shrink-0 items-center justify-center rounded-full bg-surface-muted font-mono font-bold text-text-tertiary"
+      style={{ width: size, height: size, fontSize: size < 28 ? 9 : 11 }}
     >
       ALL
     </span>
@@ -488,7 +493,11 @@ function SlipRow({
 
   return (
     <li className="flex items-center justify-between gap-3 border-t border-divider py-2.5">
-      <span className="min-w-0">
+      {/* Reuses the board's own mark (crest, headshot or "ALL") at rail size,
+          so the slip identifies an entry the same way the board did. Absent
+          when the pick fell off the board and there is no entry to mark. */}
+      {entry && <EntryMark entry={entry} size={20} />}
+      <span className="min-w-0 flex-1">
         <span className="block truncate text-body-sm font-semibold text-text-primary">
           {name}{" "}
           <span className="font-mono tabular-nums text-text-secondary">

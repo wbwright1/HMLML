@@ -168,6 +168,16 @@ Card gradient fill: `linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255
 - `.card-glows` -- optional ambient gold + sage radial blobs; requires a positioned, clipped host (applied together with `.card-surface` on signature cards).
 - Radius scale: cards 14px; pills 999px; chips/fields ~10-11px. Derived tokens `--radius-sm..-4xl` scale off `--radius`.
 
+### Franchise Identity Display
+- Wherever a franchise is identified, render `FranchiseLogo` from `components/franchise-logo.tsx`. A bare letter code is never the primary identifier.
+- Never hand-roll a crest chip (a `brandingColor` square with the team's initials in it). That is `FranchiseLogo`'s monogram fallback, and it must come from the component so the fallback lives in exactly one place.
+- Sizes: `size={28}` in Book rows and list rows; **24px in compact grid columns**, which is both the floor (below 28px the monogram is pinned at 9px) and effectively the ceiling (the mobile pick'ems column is 40px wide); 20px in slip rails, hero stat chips and slate cards; 14px in "via" notes, decorative only.
+- `FranchiseLogo` renders a `div`, so it can never sit inside a `<p>`: the parser closes the paragraph early and React refuses to hydrate it. Wrap crest-plus-name lines in a `div` or a `span`. On the hub, use `components/hub/team-flag.tsx` (`TeamFlag` plus the `FlagTeam` shape) rather than writing that pairing again.
+- Pair every logo with visible text. Pass `decorative` (alt `""`) only when the franchise's full name is visible immediately adjacent; otherwise pass the name so the identity is announced. Note that the alt only exists when there is an avatar to render: on the monogram fallback path a non-decorative logo announces nothing, so the surface must still carry its own text label.
+- The codes from `lib/team-acronym.ts` and the persisted `franchises.abbreviation` are a fallback and a compact secondary label, not a primary identifier. Do not derive a franchise code any other way; `.slice(0, n)` on a team name is not an abbreviation scheme.
+- Accepted exceptions, which stay letter codes or plain text: native `<option>` labels (an option cannot host an element), prose sentences, and cells whose value is a *pick* or an event rather than an identity (the pick'ems grid cell names the team a member picked, not the member).
+- Use `components/franchise-identity.tsx` when championship stars and owner attribution are wanted; it has no size below 32px, so compact sites use `FranchiseLogo` directly. Its `CREST_PX` map duplicates `franchise-logo.tsx`'s `sizeMap` by convention: any sizing work touches both.
+
 ### Spacing (8px base unit)
 - All spacing from 8px multiples: 8, 16, 24, 32, 48, 64, 96, 128
 - Content max-width: 1200px centered on desktop
@@ -296,3 +306,4 @@ Before any task is complete, all AI agents MUST:
 - Generic sports-template aesthetics: neon accents, harsh saturated colors, aggressive/rainbow gradients, chrome/glossy effects. (The warm-charcoal dark canvas with a single gold accent and serif display type is the intended look; the ban is on the loud "gamer" sports skin, not on dark backgrounds.)
 - Showing all data at once instead of curating what matters per view
 - Horizontal scroll tables as primary mobile pattern; prefer card layouts
+- Hand-rolling a franchise crest chip (a `brandingColor` square with initials) instead of using `FranchiseLogo`; see Franchise Identity Display

@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { FranchiseLogo } from "@/components/franchise-logo";
 import { useBookSlip } from "@/components/book/use-book-slip";
 import { formatSpread } from "@/lib/book/pricing";
 import {
@@ -385,15 +386,17 @@ function LeaderboardDesktopRow({
       >
         {row.rank}
       </span>
-      <span
-        className="flex size-7 items-center justify-center rounded-[8px]"
-        style={{ backgroundColor: row.franchiseColor ?? "#6E6759" }}
-        aria-hidden="true"
-      >
-        <span className="text-[10px] font-bold text-canvas">
-          {row.franchiseAbbreviation ?? row.franchiseName.slice(0, 2).toUpperCase()}
-        </span>
-      </span>
+      {/* Decorative: the franchise name is the very next cell, so alt text here
+          would only double-announce it. */}
+      <FranchiseLogo
+        slug={row.franchiseSlug}
+        name={row.franchiseName}
+        abbreviation={row.franchiseAbbreviation ?? undefined}
+        brandingColor={row.franchiseColor ?? undefined}
+        avatarUrl={row.franchiseAvatarUrl ?? undefined}
+        size={28}
+        decorative
+      />
       <span
         className={`min-w-0 truncate text-body-sm ${nameWeight} ${nameColor}`}
       >
@@ -452,15 +455,17 @@ function LeaderboardMobileCard({
       >
         {row.rank}
       </span>
-      <span
-        className="flex size-7 shrink-0 items-center justify-center rounded-[8px]"
-        style={{ backgroundColor: row.franchiseColor ?? "#6E6759" }}
-        aria-hidden="true"
-      >
-        <span className="text-[10px] font-bold text-canvas">
-          {row.franchiseAbbreviation ?? row.franchiseName.slice(0, 2).toUpperCase()}
-        </span>
-      </span>
+      {/* Decorative for the same reason as the desktop row: the name sits
+          immediately beside it. */}
+      <FranchiseLogo
+        slug={row.franchiseSlug}
+        name={row.franchiseName}
+        abbreviation={row.franchiseAbbreviation ?? undefined}
+        brandingColor={row.franchiseColor ?? undefined}
+        avatarUrl={row.franchiseAvatarUrl ?? undefined}
+        size={28}
+        decorative
+      />
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
           <span className="truncate text-body-sm font-semibold text-text-primary">
@@ -709,16 +714,31 @@ function PickerHeader({
   isYou: boolean;
 }) {
   return (
-    <span className="flex flex-col items-center gap-1">
-      <span
-        className="flex size-6 items-center justify-center rounded-[7px]"
-        style={{ backgroundColor: picker.color ?? "#6E6759" }}
-        aria-hidden="true"
-      >
-        <span className="text-[9px] font-bold text-canvas">
-          {picker.abbreviation}
-        </span>
-      </span>
+    <span
+      className="flex flex-col items-center gap-1"
+      data-testid="picker-header"
+      data-picker-slug={picker.franchiseSlug}
+    >
+      {/*
+        Deliberately NOT decorative, unlike every other crest in The Book. The
+        only visible label in this column is a three-letter code or the word
+        "YOU"; the franchise name lives in a `title` that touch users never see.
+        Passing the real name as alt is what makes the column announce a
+        franchise at all, and it distinguishes two franchises whose codes
+        collide (see #243) without waiting on that fix.
+
+        24px is both the floor and the ceiling: below 28px the monogram is
+        pinned at 9px either way (which is what the old chip used), and the
+        compact mobile column is only 40px wide.
+      */}
+      <FranchiseLogo
+        slug={picker.franchiseSlug}
+        name={picker.franchiseName}
+        abbreviation={picker.abbreviation}
+        brandingColor={picker.color ?? undefined}
+        avatarUrl={picker.avatarUrl ?? undefined}
+        size={24}
+      />
       <span
         className={`max-w-full truncate text-[10px] font-semibold ${
           isYou ? "text-accent-gold" : "text-text-tertiary"

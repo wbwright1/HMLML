@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { FranchiseLogo } from "@/components/franchise-logo";
 import { LiveMatchupCard } from "@/components/live-matchup-card";
 import { computeWinProbability } from "@/lib/win-probability";
 import { deriveLiveAside } from "@/lib/live-aside";
@@ -9,7 +11,14 @@ import type { getPlayoffProjection } from "@/lib/queries/divisions";
 import type { PlayoffRaceTag } from "@/lib/queries/playoff-race";
 import type { BookGame } from "@/lib/queries/book";
 
-/** Small left-aligned stat card for the hub hero row. */
+/**
+ * Small left-aligned stat card for the hub hero row.
+ *
+ * `context` is a ReactNode so a chip that names franchises can show their
+ * crests rather than bare letter codes. That is also why the value and the
+ * context are siblings in a flex row instead of one <p>: FranchiseLogo renders
+ * a div, and a div inside a <p> is invalid markup React will not hydrate.
+ */
 export function StatChip({
   label,
   value,
@@ -17,19 +26,21 @@ export function StatChip({
 }: {
   label: string;
   value: string;
-  context?: string;
+  context?: ReactNode;
 }) {
   return (
     <div className="card-surface px-4 py-3 min-w-[9rem]">
       <p className="text-kicker mb-1.5">{label}</p>
-      <p className="text-stat text-2xl text-text-primary leading-none">
-        {value}
+      <div className="flex items-center gap-2">
+        <span className="text-stat text-2xl text-text-primary leading-none">
+          {value}
+        </span>
         {context && (
-          <span className="ml-2 font-sans text-body-sm font-normal text-text-tertiary">
+          <span className="flex min-w-0 items-center gap-1.5 font-sans text-body-sm font-normal text-text-tertiary">
             {context}
           </span>
         )}
-      </p>
+      </div>
     </div>
   );
 }

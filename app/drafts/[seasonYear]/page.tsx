@@ -260,15 +260,38 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
         )}
 
         {pick.originalName && (
-          <p
-            className="mt-0.5 truncate text-center text-[10px] text-text-tertiary"
+          <div
+            className="mt-0.5 flex min-w-0 items-center justify-center gap-1 text-[10px] text-text-tertiary"
+            data-testid="via-note"
             title={`via ${pick.originalName}`}
           >
-            via {teamAcronym(pick.originalName)}
-          </p>
+            <ViaCrest pick={pick} />
+            <span className="truncate">via {teamAcronym(pick.originalName)}</span>
+          </div>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The crest on a traded pick's "via" note, matching the precedent in
+ * app/teams/[franchiseSlug]/drafts/page.tsx. Slug-guarded: upcoming (projected)
+ * picks normalize originalSlug to null, and there is no crest to draw for a
+ * franchise the board only knows by name. Decorative, since the origin's name
+ * or code is the very next thing on the line.
+ */
+function ViaCrest({ pick }: { pick: NormalizedPick }) {
+  if (!pick.originalSlug || !pick.originalName) return null;
+  return (
+    <FranchiseLogo
+      slug={pick.originalSlug}
+      name={pick.originalName}
+      abbreviation={pick.originalAbbreviation ?? undefined}
+      brandingColor={pick.originalBrandingColor ?? undefined}
+      size={14}
+      decorative
+    />
   );
 }
 
@@ -300,12 +323,15 @@ function TeamCrest({
     );
   }
 
+  // Mirrors FranchiseLogo's structure, monogram inside its own span, so the
+  // two branches read the same way to a test (and to a screen reader) instead
+  // of the slug-less legacy column being the odd one out.
   const px = size === "sm" ? "h-8 w-8" : "h-12 w-12";
   return (
     <div
       className={`flex ${px} shrink-0 items-center justify-center rounded-md bg-surface-muted text-[10px] font-bold text-text-primary`}
     >
-      {(abbreviation ?? name).slice(0, 2).toUpperCase()}
+      <span>{(abbreviation ?? name).slice(0, 2).toUpperCase()}</span>
     </div>
   );
 }
@@ -334,7 +360,10 @@ function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
           <div className="min-w-0 flex-1">
             <p className="truncate text-body font-semibold text-text-primary">{pick.playerName}</p>
             {pick.originalName && (
-              <p className="truncate text-body-sm text-text-tertiary">via {pick.originalName}</p>
+              <div className="flex min-w-0 items-center gap-1 text-body-sm text-text-tertiary" data-testid="via-note">
+                <ViaCrest pick={pick} />
+                <span className="truncate">via {pick.originalName}</span>
+              </div>
             )}
           </div>
         </PlayerLink>
@@ -354,7 +383,10 @@ function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
               </p>
             )}
             {pick.originalName && (
-              <p className="truncate text-body-sm text-text-tertiary">via {pick.originalName}</p>
+              <div className="flex min-w-0 items-center gap-1 text-body-sm text-text-tertiary" data-testid="via-note">
+                <ViaCrest pick={pick} />
+                <span className="truncate">via {pick.originalName}</span>
+              </div>
             )}
           </div>
         </>
@@ -399,21 +431,30 @@ function DesktopBoard({ board }: { board: DraftBoard }) {
   return (
     <div className="hidden md:block card-surface overflow-x-auto p-4 lg:p-[18px]">
       <div className="grid gap-1.5" style={columnStyle}>
-        {board.columns.map((col) => (
-          <div key={col.key} className="flex min-w-0 flex-col items-center gap-1.5 pb-2" title={col.name}>
-            <TeamCrest
-              slug={col.slug}
-              name={col.name}
-              abbreviation={col.abbreviation}
-              brandingColor={col.brandingColor}
-              avatarUrl={col.avatarUrl}
-              size="sm"
-            />
-            <span className="max-w-full truncate text-[9px] font-bold text-text-tertiary">
-              {teamAcronym(col.name)}
-            </span>
-          </div>
-        ))}
+        {board.columns.map((col) => {
+          // ONE code per column, handed to the crest and printed below it, so
+          // the monogram is always the first two characters of the visible
+          // label. Deriving them independently stacked two different codes on
+          // one franchise, and falling back separately (name.slice(0,2) above,
+          // teamAcronym below) broke the same way for a franchise with no
+          // persisted abbreviation.
+          const code = col.abbreviation ?? teamAcronym(col.name);
+          return (
+            <div key={col.key} className="flex min-w-0 flex-col items-center gap-1.5 pb-2" title={col.name} data-testid="draft-column-header">
+              <TeamCrest
+                slug={col.slug}
+                name={col.name}
+                abbreviation={code}
+                brandingColor={col.brandingColor}
+                avatarUrl={col.avatarUrl}
+                size="sm"
+              />
+              <span className="max-w-full truncate text-[9px] font-bold text-text-tertiary">
+                {code}
+              </span>
+            </div>
+          );
+        })}
       </div>
 
       {board.rounds.map((round) => (

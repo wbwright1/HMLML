@@ -489,7 +489,18 @@ function SlipRow({
 
   return (
     <li className="flex items-center justify-between gap-3 border-t border-divider py-2.5">
-      <span className="min-w-0">
+      {/* Decorative: the code sits immediately beside it and the opponent's
+          full name is on the line below. 20px is the rail size. */}
+      <FranchiseLogo
+        slug={team.slug}
+        name={team.name}
+        abbreviation={team.abbreviation ?? undefined}
+        brandingColor={team.brandingColor ?? undefined}
+        avatarUrl={team.avatarUrl ?? undefined}
+        size={20}
+        decorative
+      />
+      <span className="min-w-0 flex-1">
         <span className="block truncate font-mono text-body-sm font-bold tabular-nums text-text-primary">
           {team.abbreviation ?? team.name} {formatSpread(spread)}
         </span>
