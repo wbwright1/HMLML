@@ -113,7 +113,32 @@ async function runGeneration(request: NextRequest) {
   const startTime = Date.now();
   const startedAt = new Date();
 
-  const target = await resolveTarget(request);
+  // resolveTarget runs OUTSIDE the handler's try/catch below, and it reads
+  // isWeekOneLeadWindowActive, which now throws on a DB failure rather than
+  // swallowing it (lib/queries/nfl-state.ts). Without this guard that throw
+  // would return a bare 500 with no sync_log row, breaking the sync job pattern.
+  let target: Awaited<ReturnType<typeof resolveTarget>>;
+  try {
+    target = await resolveTarget(request);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.error("[generate-content] failed to resolve target:", message);
+    await db.insert(syncLog).values({
+      syncType: "generate-content",
+      dataType: "hub_content",
+      status: "failure",
+      rowCount: 0,
+      durationMs: Date.now() - startTime,
+      errorMessage: message,
+      startedAt,
+      completedAt: new Date(),
+    });
+    return NextResponse.json(
+      { error: { message: "Content generation failed", code: "generation_failed" } },
+      { status: 500 },
+    );
+  }
+
   if (!target) {
     await db.insert(syncLog).values({
       syncType: "generate-content",

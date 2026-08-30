@@ -44,6 +44,7 @@ import { runAtomic } from "@/lib/db/atomic";
 import { repriceBookLines } from "@/lib/sync/book-lines";
 import { generateOrRepriceBookProps } from "@/lib/sync/book-props";
 import { bookWeekFor } from "@/lib/queries/book";
+import { isNflSeasonUnderway } from "@/lib/season-segment";
 
 // Shape of the per-season settings blob stored in seasons.settings_json.
 interface SeasonSettingsJson {
@@ -502,7 +503,16 @@ async function syncMatchupScores(
     // unplayed league weeks 1-2 complete at 0.0-0.0 (found Aug 2026 via the
     // week-1 preview simulation). The main loop above self-heals any rows that
     // were wrongly completed, since it re-derives status every run.
-    const regularSeasonStarted = nflSeasonType === "regular" || nflSeasonType === "post";
+    //
+    // The check is a denylist ("not pre, not off"), not an allowlist:
+    // season_type is free-form z.string() from Sleeper and can also be
+    // synthesized by the DB fallback in lib/sync/nfl-state.ts, so an
+    // unrecognized or missing value must fail toward "the season is under way".
+    // Over-firing is harmless (the main loop self-heals); under-firing leaves
+    // finished weeks stuck at status != 'complete' with is_winner null, which
+    // nothing repairs. "pre" stays excluded, which is the case the Aug 2026 bug
+    // above was about.
+    const regularSeasonStarted = isNflSeasonUnderway(nflSeasonType);
     if (regularSeasonStarted && currentWeek > 1) {
       // Fetch the full prior-week pairing set (regardless of status) so each
       // matchup has both sides available to compare, then update only rows
@@ -1282,6 +1292,11 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
 
   const seasonYear = parseInt(nflState.season, 10);
   const currentWeek = nflState.week;
+  // The fantasy week, not the raw state week: in the preseason Sleeper's
+  // counter counts PRESEASON weeks, and syncing week 3 writes 0.0 rows for a
+  // league week nobody has played. bookWeekFor resolves the same week the board
+  // and the matchup sync use.
+  const leagueWeek = bookWeekFor(nflState.season_type, currentWeek);
   const nflStateNote = resolved.fromFallback
     ? "NFL state served from DB fallback (live /state/nfl unavailable)"
     : undefined;
@@ -1347,7 +1362,10 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
     syncTransactions(leagueId, seasonId, currentWeek),
     syncRostersAndPicks(leagueId, seasonId),
     syncMatchupScores(leagueId, seasonId, seasonYear, currentWeek, nflState.season_type),
-    syncPlayerWeekPoints(leagueId, seasonId, seasonYear, currentWeek),
+    // The two arguments differ on purpose: player_week_points is keyed by the
+    // FANTASY week (leagueWeek), while syncPlayerWeekStats reads Sleeper's NFL
+    // stats endpoint, which is indexed by NFL week (currentWeek).
+    syncPlayerWeekPoints(leagueId, seasonId, seasonYear, leagueWeek),
     syncPlayerWeekStats(seasonId, seasonYear, currentWeek),
   ]);
 
