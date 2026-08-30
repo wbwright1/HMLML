@@ -47,9 +47,12 @@ export const MIN_UNDERDOG_ODDS = 100;
  *    favorite", not as a broken number with four digits in it.
  *
  * 0.95 caps the board at -1900 / +1900.
+ *
+ * Exported because the futures book (lib/book/futures.ts) carries a different
+ * overround but must respect the same posted limits.
  */
-const MAX_IMPLIED_PROB = 0.95;
-const MIN_IMPLIED_PROB = 0.05;
+export const MAX_IMPLIED_PROB = 0.95;
+export const MIN_IMPLIED_PROB = 0.05;
 
 export interface BookPrice {
   /** Home perspective, multiple of 0.5, never 0. */
