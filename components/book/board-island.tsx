@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { useSessionMember } from "@/components/use-session-member";
@@ -56,12 +56,21 @@ export function BoardIsland({
   const [error, setError] = useState<string | null>(null);
   const [pendingMatchup, setPendingMatchup] = useState<number | null>(null);
   const [, startTransition] = useTransition();
+  // Set the instant a pick or a lock happens, so a mount fetch that is still
+  // in flight (or was slower than the click, which is the common case: the
+  // GET and the server action race, and the GET has no reason to win) cannot
+  // land afterward and clobber state a real user action already produced.
+  // Without this, a click's optimistic set could be immediately overwritten
+  // by the initial fetch resolving late, leaving the UI showing "unpicked"
+  // for a pick that is actually booked in Postgres.
+  const mutatedRef = useRef(false);
 
   const signedIn = session.status === "ready" && session.member !== null;
 
   useEffect(() => {
     if (!signedIn) return;
     let active = true;
+    mutatedRef.current = false;
     fetch("/api/book/picks", { credentials: "same-origin" })
       .then((res) => (res.ok ? res.json() : null))
       .then(
@@ -70,7 +79,7 @@ export function BoardIsland({
             data?: { picks: MemberBookPick[]; week: number | null };
           } | null,
         ) => {
-          if (!active) return;
+          if (!active || mutatedRef.current) return;
           // Discards a payload for any week other than the one this board is
           // showing; see picksForBoardWeek for why that window is real.
           const mine = picksForBoardWeek(body?.data, week);
@@ -95,6 +104,7 @@ export function BoardIsland({
     if (!canPick || game.status !== "open") return;
     setError(null);
     setPendingMatchup(game.matchupId);
+    mutatedRef.current = true;
 
     // Optimistic: the toggle should feel instant, and the server re-checks
     // every rule anyway. A rejection restores the previous state below.
@@ -135,6 +145,7 @@ export function BoardIsland({
   function onLock() {
     if (!canPick || openWithoutPick.length > 0) return;
     setError(null);
+    mutatedRef.current = true;
     startTransition(async () => {
       const result = await lockSlip({ week });
       if (!result.ok) {

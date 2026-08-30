@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useSessionMember } from "@/components/use-session-member";
 import { togglePropPick } from "@/app/actions/book";
@@ -38,12 +38,21 @@ export function PropsIsland({
   const [error, setError] = useState<string | null>(null);
   const [pendingPropId, setPendingPropId] = useState<number | null>(null);
   const [, startTransition] = useTransition();
+  // Set the instant a pick happens, so a mount fetch still in flight (or
+  // simply slower than the click, the common case: the GET and the server
+  // action race with no guarantee the GET wins) cannot land afterward and
+  // clobber state a real user action already produced. Without this, a
+  // click's optimistic set gets overwritten by the initial fetch resolving
+  // late, leaving the UI showing "unpicked" for a pick that is actually
+  // booked in Postgres (same race the board island has for /api/book/picks).
+  const mutatedRef = useRef(false);
 
   const signedIn = session.status === "ready" && session.member !== null;
 
   useEffect(() => {
     if (!signedIn) return;
     let active = true;
+    mutatedRef.current = false;
     fetch("/api/book/prop-picks", { credentials: "same-origin" })
       .then((res) => (res.ok ? res.json() : null))
       .then(
@@ -52,7 +61,7 @@ export function PropsIsland({
             data?: { picks: MemberPropPick[]; week: number | null };
           } | null,
         ) => {
-          if (!active) return;
+          if (!active || mutatedRef.current) return;
           // Discards a payload for any week other than this tab's, same
           // reasoning as the board island's picksForBoardWeek check.
           if (!body?.data || body.data.week !== week) return;
@@ -71,6 +80,7 @@ export function PropsIsland({
     if (!signedIn || prop.result !== null) return;
     setError(null);
     setPendingPropId(prop.id);
+    mutatedRef.current = true;
 
     const previous = picks.get(prop.id) ?? null;
     const next = new Map(picks);
