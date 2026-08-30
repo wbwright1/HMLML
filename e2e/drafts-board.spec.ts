@@ -93,6 +93,57 @@ test.describe("Draft board", () => {
     expect(text?.trim().length).toBeGreaterThan("via ".length);
   });
 
+  // Issue #255: the "via" note carries the origin franchise's crest, and the
+  // column header's visible code now comes from the same source the crest
+  // draws its monogram from (they used to disagree: abbreviation.slice(0,2)
+  // above, teamAcronym(name) below).
+  test("puts a crest on the traded-pick 'via' note", async ({ page }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    const href = await findCompletedDraftHref(page);
+    if (!href) return;
+
+    await page.goto(href);
+
+    const notes = page.locator('[data-testid="via-note"]');
+    if ((await notes.count()) === 0) return; // No traded picks in this draft.
+
+    const note = notes.first();
+    await expect(note).toBeVisible();
+    // The crest is FranchiseLogo's 14px box, a sibling of the "via" text.
+    const crest = note.locator("div").first();
+    await expect(crest).toBeAttached();
+    const box = await crest.boundingBox();
+    expect(box?.width).toBe(14);
+    // Never image-only: the origin is still named in text.
+    await expect(note).toHaveText(/via \S+/);
+  });
+
+  test("draws the column header's code from the same source as its crest", async ({
+    page,
+  }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    const href = await findCompletedDraftHref(page);
+    if (!href) return;
+
+    await page.goto(href);
+
+    const headers = page.locator('[data-testid="draft-column-header"]');
+    const count = await headers.count();
+    expect(count).toBeGreaterThan(0);
+
+    for (let i = 0; i < count; i++) {
+      const header = headers.nth(i);
+      // The monogram inside the crest, and the visible label below it.
+      const monogram = ((await header.locator("span").first().textContent()) ?? "").trim();
+      const label = ((await header.locator("span").last().textContent()) ?? "").trim();
+      expect(monogram.length).toBeGreaterThan(0);
+      expect(label.length).toBeGreaterThan(0);
+      // FranchiseLogo's monogram is the first two characters of the same code
+      // the label prints, so one must be a prefix of the other.
+      expect(label.slice(0, 2).toUpperCase()).toBe(monogram.toUpperCase());
+    }
+  });
+
   test("upcoming draft board renders roster breakdown instead of players", async ({ page }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto("/drafts");

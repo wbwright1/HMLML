@@ -4,7 +4,8 @@ interface StatHeroProps {
   value: ReactNode;
   label: string;
   badge?: string;
-  context?: string;
+  /** ReactNode so a franchise-naming context can carry its crest. */
+  context?: ReactNode;
   variant?: "xl" | "lg" | "md";
 }
 

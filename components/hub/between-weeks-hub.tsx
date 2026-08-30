@@ -11,6 +11,7 @@ import { getRecentSmackPosts, anySmackPostsExist } from "@/lib/queries/smack";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { GameOfTheWeekCard } from "@/components/hub/game-of-the-week-card";
 import { SlateCard } from "@/components/hub/slate-card";
+import { teamAcronym } from "@/lib/team-acronym";
 import type { PairedMatchup } from "@/lib/queries/matchups";
 import type { getSeasonStandings } from "@/lib/queries/seasons";
 import { getHeadToHead } from "@/lib/queries/records";
@@ -287,8 +288,20 @@ export async function BetweenWeeksHub({
                   return (
                     <SlateCard
                       key={m.matchupId}
-                      teamAName={m.homeTeam.franchiseName}
-                      teamBName={m.awayTeam.franchiseName}
+                      teamA={{
+                        name: m.homeTeam.franchiseName,
+                        slug: m.homeTeam.franchiseSlug,
+                        abbreviation: m.homeTeam.franchiseAbbreviation,
+                        brandingColor: m.homeTeam.franchiseBrandingColor,
+                        avatarUrl: standingBy.get(m.homeTeam.franchiseId)?.avatarUrl ?? null,
+                      }}
+                      teamB={{
+                        name: m.awayTeam.franchiseName,
+                        slug: m.awayTeam.franchiseSlug,
+                        abbreviation: m.awayTeam.franchiseAbbreviation,
+                        brandingColor: m.awayTeam.franchiseBrandingColor,
+                        avatarUrl: standingBy.get(m.awayTeam.franchiseId)?.avatarUrl ?? null,
+                      }}
                       h2hRecord={
                         h2h ? formatSlateH2H(h2h) : record(m.homeTeam.franchiseId)
                       }
@@ -373,10 +386,11 @@ function GameOfWeekSection({
   const home = matchup.homeTeam;
   const away = matchup.awayTeam;
 
-  const homeAbbr =
-    home.franchiseAbbreviation ?? home.franchiseName.slice(0, 3).toUpperCase();
-  const awayAbbr =
-    away.franchiseAbbreviation ?? away.franchiseName.slice(0, 3).toUpperCase();
+  // teamAcronym, not a .slice(0, 3): truncating a team name is not an
+  // abbreviation scheme, and it was a third way of deriving a code alongside
+  // the persisted column and the shared ladder (see CLAUDE.md).
+  const homeAbbr = home.franchiseAbbreviation ?? teamAcronym(home.franchiseName);
+  const awayAbbr = away.franchiseAbbreviation ?? teamAcronym(away.franchiseName);
 
   // Division rematch framing, derived honestly from the two teams' divisions.
   const homeDiv = divisionOf(home.franchiseId);

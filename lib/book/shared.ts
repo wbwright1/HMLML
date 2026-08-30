@@ -101,6 +101,8 @@ export interface BookPropFranchiseSubject {
   name: string;
   abbreviation: string | null;
   brandingColor: string | null;
+  /** Team crest, null when the franchise has none synced (monogram fallback). */
+  avatarUrl: string | null;
 }
 
 export type BookPropEntity = BookPropPlayerSubject | BookPropFranchiseSubject;
@@ -355,6 +357,8 @@ export interface AtsLeaderboardRow {
   franchiseName: string;
   franchiseAbbreviation: string | null;
   franchiseColor: string | null;
+  /** Team crest, null when the franchise has none synced (monogram fallback). */
+  franchiseAvatarUrl: string | null;
   rank: number;
   isLeader: boolean;
   isLast: boolean;
@@ -382,6 +386,11 @@ export interface PickerColumn {
   franchiseName: string;
   abbreviation: string;
   color: string | null;
+  /**
+   * Team crest, null when the franchise has none synced. Stays a plain
+   * `string | null` because this shape crosses into the tracking client island.
+   */
+  avatarUrl: string | null;
   /** Season ATS record, or "" for a member with nothing graded yet (never a fabricated 0-0). */
   record: string;
 }

@@ -261,14 +261,37 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
 
         {pick.originalName && (
           <p
-            className="mt-0.5 truncate text-center text-[10px] text-text-tertiary"
+            className="mt-0.5 flex min-w-0 items-center justify-center gap-1 text-[10px] text-text-tertiary"
+            data-testid="via-note"
             title={`via ${pick.originalName}`}
           >
-            via {teamAcronym(pick.originalName)}
+            <ViaCrest pick={pick} />
+            <span className="truncate">via {teamAcronym(pick.originalName)}</span>
           </p>
         )}
       </div>
     </div>
+  );
+}
+
+/**
+ * The crest on a traded pick's "via" note, matching the precedent in
+ * app/teams/[franchiseSlug]/drafts/page.tsx. Slug-guarded: upcoming (projected)
+ * picks normalize originalSlug to null, and there is no crest to draw for a
+ * franchise the board only knows by name. Decorative, since the origin's name
+ * or code is the very next thing on the line.
+ */
+function ViaCrest({ pick }: { pick: NormalizedPick }) {
+  if (!pick.originalSlug || !pick.originalName) return null;
+  return (
+    <FranchiseLogo
+      slug={pick.originalSlug}
+      name={pick.originalName}
+      abbreviation={pick.originalAbbreviation ?? undefined}
+      brandingColor={pick.originalBrandingColor ?? undefined}
+      size={14}
+      decorative
+    />
   );
 }
 
@@ -334,7 +357,10 @@ function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
           <div className="min-w-0 flex-1">
             <p className="truncate text-body font-semibold text-text-primary">{pick.playerName}</p>
             {pick.originalName && (
-              <p className="truncate text-body-sm text-text-tertiary">via {pick.originalName}</p>
+              <p className="flex min-w-0 items-center gap-1 text-body-sm text-text-tertiary" data-testid="via-note">
+                <ViaCrest pick={pick} />
+                <span className="truncate">via {pick.originalName}</span>
+              </p>
             )}
           </div>
         </PlayerLink>
@@ -354,7 +380,10 @@ function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
               </p>
             )}
             {pick.originalName && (
-              <p className="truncate text-body-sm text-text-tertiary">via {pick.originalName}</p>
+              <p className="flex min-w-0 items-center gap-1 text-body-sm text-text-tertiary" data-testid="via-note">
+                <ViaCrest pick={pick} />
+                <span className="truncate">via {pick.originalName}</span>
+              </p>
             )}
           </div>
         </>
@@ -400,7 +429,7 @@ function DesktopBoard({ board }: { board: DraftBoard }) {
     <div className="hidden md:block card-surface overflow-x-auto p-4 lg:p-[18px]">
       <div className="grid gap-1.5" style={columnStyle}>
         {board.columns.map((col) => (
-          <div key={col.key} className="flex min-w-0 flex-col items-center gap-1.5 pb-2" title={col.name}>
+          <div key={col.key} className="flex min-w-0 flex-col items-center gap-1.5 pb-2" title={col.name} data-testid="draft-column-header">
             <TeamCrest
               slug={col.slug}
               name={col.name}
@@ -409,8 +438,10 @@ function DesktopBoard({ board }: { board: DraftBoard }) {
               avatarUrl={col.avatarUrl}
               size="sm"
             />
+            {/* Same code the crest above draws its monogram from. Deriving it
+                independently here stacked two different codes on one franchise. */}
             <span className="max-w-full truncate text-[9px] font-bold text-text-tertiary">
-              {teamAcronym(col.name)}
+              {col.abbreviation ?? teamAcronym(col.name)}
             </span>
           </div>
         ))}

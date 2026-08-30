@@ -30,6 +30,7 @@ import {
 } from "@/lib/book/grading";
 import { formatSpread } from "@/lib/book/pricing";
 import { resolveAbbreviation } from "@/lib/franchise-abbreviations";
+import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 import type { BookGame } from "@/lib/book/shared";
 import {
   buildPickemsCell,
@@ -68,6 +69,11 @@ interface Picker {
   franchiseName: string;
   franchiseAbbreviation: string | null;
   franchiseColor: string | null;
+  /**
+   * This season's team crest, when the sync has one. Null is the common case
+   * outside 2026 and is not an error: FranchiseLogo draws its monogram.
+   */
+  franchiseAvatarUrl: string | null;
   /** Null for a season with no divisions at all (legacy era), not an error. */
   divisionName: string | null;
 }
@@ -89,6 +95,7 @@ const getPickers = cache(async function getPickers(
       franchiseName: franchises.name,
       franchiseAbbreviation: franchises.abbreviation,
       franchiseColor: franchises.brandingColor,
+      franchiseAvatarUrl: franchiseSeasons.avatarUrl,
       divisionName: franchiseSeasons.divisionName,
     })
     .from(members)
@@ -101,6 +108,14 @@ const getPickers = cache(async function getPickers(
       ),
     );
 
+  // A franchise with no crest stamped on THIS season still has one on the
+  // season it was last synced with, so fall back to the most recent avatar the
+  // same way the board does. getLatestAvatarUrls is React-cached and getBookBoard
+  // already warms it on this render, so this costs no extra query.
+  const fallbackAvatars = await getLatestAvatarUrls(
+    rows.map((row) => row.franchiseId),
+  );
+
   const map = new Map<number, Picker>();
   for (const row of rows) {
     map.set(row.memberId, {
@@ -111,6 +126,8 @@ const getPickers = cache(async function getPickers(
       franchiseName: row.franchiseName,
       franchiseAbbreviation: row.franchiseAbbreviation,
       franchiseColor: row.franchiseColor,
+      franchiseAvatarUrl:
+        row.franchiseAvatarUrl ?? fallbackAvatars.get(row.franchiseId) ?? null,
       divisionName: row.divisionName,
     });
   }
@@ -250,6 +267,7 @@ export async function getSeasonAtsLeaderboard(
       franchiseName: picker.franchiseName,
       franchiseAbbreviation: picker.franchiseAbbreviation,
       franchiseColor: picker.franchiseColor,
+      franchiseAvatarUrl: picker.franchiseAvatarUrl,
       record: formatAtsRecord(tally),
       streakLabel: streak ? `${streak.type}${streak.length}` : null,
       streakType: streak?.type ?? null,
@@ -332,6 +350,7 @@ export async function getPickemsGrid(
         picker.franchiseAbbreviation ??
         resolveAbbreviation(picker.franchiseId, picker.franchiseName),
       color: picker.franchiseColor,
+      avatarUrl: picker.franchiseAvatarUrl,
       // Empty, never "0-0": a member who has not been graded yet has no
       // record to show, and inventing one is a fabricated claim.
       record: outcomes

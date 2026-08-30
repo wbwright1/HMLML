@@ -276,6 +276,67 @@ test.describe("Tracking tab pick'ems", () => {
     }
   });
 
+  // Issue #255: the picker column identifies a franchise by crest, not by a
+  // bare letter code. The code is demoted to a compact secondary label, so it
+  // must still be on screen: nothing here may be image-only.
+  test("identifies each picker column by a crest, without dropping its text", async ({
+    page,
+  }) => {
+    await page.goto("/book");
+    await openTrackingTab(page);
+
+    const headers = trackingPanel(page).locator('[data-testid="picker-header"]');
+    expect(await headers.count()).toBeGreaterThan(0);
+
+    // The fixture franchise has no franchise_seasons row, so avatar_url IS
+    // NULL for it: this is the monogram fallback path, and it must render a
+    // styled monogram with NO <img> at all (a broken-image glyph would be the
+    // regression this pins).
+    const fixtureHeader = trackingPanel(page)
+      .locator(`[data-picker-slug="${fx.franchiseSlug}"]`)
+      .first();
+    await expect(fixtureHeader).toBeAttached();
+    expect(await fixtureHeader.locator("img").count()).toBe(0);
+    // FranchiseLogo's monogram is the first two characters of the abbreviation,
+    // which the fixture seeds as "E2".
+    await expect(fixtureHeader).toContainText("E2");
+    // The visible compact label and the season record survive the swap.
+    const label = fixtureHeader.locator("span[title]");
+    await expect(label).toHaveAttribute("title", new RegExp(fx.franchiseName));
+    await expect(label).toHaveText(/\S/);
+
+    // At least one real franchise carries a synced crest for this season; that
+    // header must render a real <img> with a NON-EMPTY alt, which is what fails
+    // if the deliberate non-decorative decision here is ever reverted.
+    const sql = getSql();
+    const withAvatar = (await sql`
+      SELECT COUNT(*)::int AS n
+      FROM "members" m
+      JOIN "franchise_seasons" fs ON fs."franchise_id" = m."franchise_id"
+      WHERE fs."avatar_url" IS NOT NULL`) as { n: number }[];
+    if ((withAvatar[0]?.n ?? 0) > 0) {
+      const crest = headers.locator("img").first();
+      await expect(crest).toHaveAttribute("src", /\S/);
+      await expect(crest).toHaveAttribute("alt", /\S/);
+    }
+  });
+
+  test("keeps the compact phone grid inside the viewport with crested columns", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/book");
+    await openTrackingTab(page);
+
+    // The grid scrolls sideways inside its own container by design; what must
+    // not happen is the PAGE growing wider than the phone because a 24px crest
+    // landed in a 40px column.
+    const docWidth = await page.evaluate(
+      () => document.documentElement.scrollWidth,
+    );
+    expect(docWidth).toBeLessThanOrEqual(390);
+  });
+
   test("swaps the wide grid for a division dropdown on a phone", async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/book");

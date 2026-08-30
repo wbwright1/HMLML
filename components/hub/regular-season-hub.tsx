@@ -8,7 +8,12 @@ import { WeekBanner } from "@/components/week-banner";
 import { WeeklySuperlativeCard } from "@/components/weekly-superlative-card";
 import { StandingsSnapshotCard } from "@/components/standings-snapshot-card";
 import { ScorePoller } from "@/app/matchups/score-poller";
-import { getCurrentWeekMatchups, getLatestSeason } from "@/lib/queries/matchups";
+import {
+  getCurrentWeekMatchups,
+  getLatestSeason,
+  type PairedMatchup,
+} from "@/lib/queries/matchups";
+import { FranchiseLogo } from "@/components/franchise-logo";
 import { getSeasonStandings } from "@/lib/queries/seasons";
 import {
   getHomepageSuperlatives,
@@ -110,21 +115,35 @@ export async function RegularSeasonHub({
 
   // Hero stat chips derived from the current week's scores (existing data only).
   const currentMatchups = matchupData?.matchups ?? [];
+  // Carries crest fields alongside the name so the chip can show a logo rather
+  // than a bare code (see CLAUDE.md, Franchise Identity Display).
+  const toChipTeam = (t: PairedMatchup["homeTeam"]) => ({
+    name: t.franchiseName,
+    slug: t.franchiseSlug,
+    abbreviation: t.franchiseAbbreviation,
+    brandingColor: t.franchiseBrandingColor,
+    avatarUrl: t.avatarUrl,
+    points: t.points,
+  });
   const teamScores = currentMatchups.flatMap((m) => [
-    { name: m.homeTeam.franchiseName, points: m.homeTeam.points },
-    { name: m.awayTeam.franchiseName, points: m.awayTeam.points },
+    toChipTeam(m.homeTeam),
+    toChipTeam(m.awayTeam),
   ]);
   const highScore = teamScores.length
     ? teamScores.reduce((best, t) => (t.points > best.points ? t : best))
     : null;
   const closestGame = currentMatchups.length
-    ? currentMatchups.reduce<{ margin: number; a: string; b: string } | null>((best, m) => {
+    ? currentMatchups.reduce<{
+        margin: number;
+        a: ReturnType<typeof toChipTeam>;
+        b: ReturnType<typeof toChipTeam>;
+      } | null>((best, m) => {
         const margin = Math.abs(m.homeTeam.points - m.awayTeam.points);
         if (best === null || margin < best.margin) {
           return {
             margin,
-            a: m.homeTeam.franchiseAbbreviation ?? m.homeTeam.franchiseName,
-            b: m.awayTeam.franchiseAbbreviation ?? m.awayTeam.franchiseName,
+            a: toChipTeam(m.homeTeam),
+            b: toChipTeam(m.awayTeam),
           };
         }
         return best;
@@ -186,14 +205,20 @@ export async function RegularSeasonHub({
               <StatChip
                 label="High Score"
                 value={highScore.points.toFixed(1)}
-                context={highScore.name}
+                context={<ChipTeam team={highScore} />}
               />
             )}
             {highScore && highScore.points > 0 && closestGame && (
               <StatChip
                 label="Closest Game"
                 value={`+${closestGame.margin.toFixed(1)}`}
-                context={`${closestGame.a} · ${closestGame.b}`}
+                context={
+                  <>
+                    <ChipTeam team={closestGame.a} compact />
+                    <span aria-hidden="true">·</span>
+                    <ChipTeam team={closestGame.b} compact />
+                  </>
+                }
               />
             )}
             {hasPlayersLeftStat && hubLive && (
@@ -520,5 +545,42 @@ export async function RegularSeasonHub({
         />
       )}
     </>
+  );
+}
+
+/**
+ * A franchise inside a hero stat chip: 20px crest plus the name, replacing the
+ * bare abbreviation the Closest Game chip used to print. Decorative because the
+ * name is right beside it.
+ */
+function ChipTeam({
+  team,
+  compact = false,
+}: {
+  /** Shows the letter code instead of the full name when two teams share a chip. */
+  compact?: boolean;
+  team: {
+    name: string;
+    slug: string;
+    abbreviation: string | null;
+    brandingColor: string | null;
+    avatarUrl: string | null;
+  };
+}) {
+  return (
+    <span className="flex min-w-0 items-center gap-1.5">
+      <FranchiseLogo
+        slug={team.slug}
+        name={team.name}
+        abbreviation={team.abbreviation ?? undefined}
+        brandingColor={team.brandingColor ?? undefined}
+        avatarUrl={team.avatarUrl ?? undefined}
+        size={20}
+        decorative
+      />
+      <span className="truncate">
+        {compact ? (team.abbreviation ?? team.name) : team.name}
+      </span>
+    </span>
   );
 }

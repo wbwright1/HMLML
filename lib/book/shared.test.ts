@@ -361,6 +361,7 @@ function seed(
     // never produces.
     abbreviation: deriveAbbreviation(overrides.franchiseName),
     color: null,
+    avatarUrl: null,
     record: "",
     divisionName: null,
     ...overrides,
@@ -398,6 +399,24 @@ describe("groupPickersByDivision", () => {
       seed({ memberId: 1, franchiseName: "Aces", divisionName: "West" }),
     ]);
     expect(division.pickers[0]).not.toHaveProperty("divisionName");
+  });
+
+  it("carries avatarUrl through to the column, null included", () => {
+    const [division] = groupPickersByDivision([
+      seed({
+        memberId: 1,
+        franchiseName: "Aces",
+        divisionName: "West",
+        avatarUrl: "https://sleepercdn.com/avatars/aces",
+      }),
+      seed({ memberId: 2, franchiseName: "Bandits", divisionName: "West" }),
+    ]);
+    // The picker header draws its crest from this field; dropping it here
+    // would silently send every column back to the monogram fallback.
+    expect(division.pickers.map((p) => p.avatarUrl)).toEqual([
+      "https://sleepercdn.com/avatars/aces",
+      null,
+    ]);
   });
 });
 

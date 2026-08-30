@@ -393,16 +393,17 @@ function EntityChip({ entity }: { entity: BookPropEntity }) {
         name={entity.name}
         abbreviation={entity.abbreviation ?? undefined}
         brandingColor={entity.brandingColor ?? undefined}
+        avatarUrl={entity.avatarUrl ?? undefined}
         size="sm"
         decorative
       />
       <span className="min-w-0">
+        {/* No abbreviation kicker under the name: the crest above it is the
+            franchise's identity now, and reprinting its letter code beneath
+            the full name only repeats what the crest already says. */}
         <span className="block truncate text-body-sm font-semibold text-text-primary">
           {entity.name}
         </span>
-        {entity.abbreviation && (
-          <span className="text-kicker">{entity.abbreviation}</span>
-        )}
       </span>
     </span>
   );
