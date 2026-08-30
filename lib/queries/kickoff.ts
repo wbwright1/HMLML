@@ -2,62 +2,33 @@ import { cache } from "react";
 import { db } from "@/lib/db";
 import { nflGames } from "@/lib/db/schema";
 import { and, eq } from "drizzle-orm";
+import { startOfDayInZone } from "@/lib/time-zone";
 
 // ---------------------------------------------------------------------------
 // Pure helpers (unit-tested in kickoff.test.ts)
 // ---------------------------------------------------------------------------
 
-const CHICAGO_TIME_ZONE = "America/Chicago";
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
-/**
- * The signed offset (ms) of `timeZone` from UTC at the given instant, e.g.
- * Chicago in September (CDT, UTC-5) returns -5h. Uses Intl so DST is handled
- * correctly without a timezone library.
- */
-function timeZoneOffsetMs(date: Date, timeZone: string): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone,
-    hour12: false,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  }).formatToParts(date);
-  const map: Record<string, number> = {};
-  for (const p of parts) if (p.type !== "literal") map[p.type] = Number(p.value);
-  const asUtc = Date.UTC(
-    map.year,
-    map.month - 1,
-    map.day,
-    map.hour % 24,
-    map.minute,
-    map.second
-  );
-  return asUtc - date.getTime();
-}
-
-/** The instant of 00:00 America/Chicago on a "YYYY-MM-DD" date (DST-correct). */
-function chicagoStartOfDay(dateOnly: string): Date | null {
+/** The instant of 00:00 in the league timezone (LEAGUE_TIME_ZONE) on a "YYYY-MM-DD" date (DST-correct). */
+function leagueStartOfDay(dateOnly: string): Date | null {
   const [y, m, d] = dateOnly.split("-").map(Number);
   const utcMidnight = Date.UTC(y, m - 1, d, 0, 0, 0);
-  const offset = timeZoneOffsetMs(new Date(utcMidnight), CHICAGO_TIME_ZONE);
-  return new Date(utcMidnight - offset);
+  return startOfDayInZone(new Date(utcMidnight));
 }
 
 /**
  * Parses a stored nfl_games.game_date into a Date. Sleeper's schedule feed
  * gives a date-only "YYYY-MM-DD" (no kickoff clock time exists in our data). A
  * bare `new Date("2026-09-10")` is UTC midnight, which renders as the previous
- * evening in America/Chicago; so date-only values are anchored to start-of-day
- * in the league's home timezone. Full timestamps (a Phase 2 upgrade when a real
- * time source exists) pass straight through. Null for null/empty/unparseable.
+ * evening in the league timezone (`LEAGUE_TIME_ZONE`); so date-only values are
+ * anchored to start-of-day in the league's home timezone. Full timestamps (a
+ * Phase 2 upgrade when a real time source exists) pass straight through. Null
+ * for null/empty/unparseable.
  */
 export function parseKickoff(gameDate: string | null | undefined): Date | null {
   if (!gameDate) return null;
-  if (DATE_ONLY.test(gameDate)) return chicagoStartOfDay(gameDate);
+  if (DATE_ONLY.test(gameDate)) return leagueStartOfDay(gameDate);
   const d = new Date(gameDate);
   return Number.isNaN(d.getTime()) ? null : d;
 }

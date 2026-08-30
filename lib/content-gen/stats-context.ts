@@ -232,10 +232,22 @@ function toStatsTeam(t: {
 // ---------------------------------------------------------------------------
 
 /**
- * Builds a StatsContext for a season/week from local DB queries only. Every
- * sub-query already degrades to an empty/null result on its own failure, so
- * this never throws; a sparse context (e.g. a season with no matchups yet)
- * simply yields fewer content items downstream.
+ * Builds a StatsContext for a season/week from local DB queries only.
+ *
+ * A sparse but successful context (e.g. a season with no matchups yet) simply
+ * yields fewer content items downstream, which is a real outcome, not an error.
+ *
+ * Failure propagation is currently mixed, so be precise about it:
+ *   - PROPAGATES on a DB failure: getMatchupsByWeek and getSeasonStandings.
+ *     Both rethrow via rethrowUnlessTolerable, so this function can throw.
+ *   - STILL SWALLOWS to an empty/null result: getDivisionStandings,
+ *     getLastCompletedSeason, getRecentTransactions. A DB failure inside any
+ *     of those still yields a quietly thinner context rather than an error.
+ *
+ * Where it does throw, the throw is caught by runGeneration, which logs a
+ * sync_log failure row and lets the hourly cron retry, rather than generating
+ * hub content from a hollow context. Converting the three remaining swallows is
+ * follow-up work, not done here.
  */
 export async function buildStatsContext(
   input: StatsContextInput,

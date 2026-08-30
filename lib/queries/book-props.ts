@@ -23,6 +23,7 @@ import {
   propSideLabels,
 } from "@/lib/book/props";
 import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
+import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 import { formatMoneyline, payoutLabel } from "@/lib/book/pricing";
 import {
   DEFAULT_STAKE,
@@ -567,6 +568,10 @@ export async function getBookProps(
       })
       .from(franchises)
       .where(inArray(franchises.id, [...franchiseIds]));
+    // React-cached and already warmed by getBookBoard on this render, so the
+    // crest costs no extra query. Null stays null: FranchiseLogo's monogram is
+    // the documented fallback for a franchise with no synced avatar.
+    const avatars = await getLatestAvatarUrls(franchiseRows.map((f) => f.id));
     for (const f of franchiseRows) {
       franchiseById.set(f.id, {
         kind: "franchise",
@@ -575,6 +580,7 @@ export async function getBookProps(
         name: f.name,
         abbreviation: f.abbreviation,
         brandingColor: f.brandingColor,
+        avatarUrl: avatars.get(f.id) ?? null,
       });
     }
   }

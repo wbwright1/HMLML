@@ -5,6 +5,8 @@ const config = [
   {
     ignores: [
       ".next/**",
+      ".next-preseason/**",
+      ".next-in-season/**",
       "node_modules/**",
       "next-env.d.ts",
       "docs/**",

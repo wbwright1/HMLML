@@ -204,6 +204,16 @@ export const getSeasonStandings = cache(async function getSeasonStandings(season
       coOwnerDisplayName: resolveCoOwnerNames(row.coOwnerDisplayName),
     }));
   } catch (e) {
+    // Guard before logging, not after: on the intolerable path this throws and
+    // Next (or runGeneration) reports the error itself, so a console.error
+    // above would double-report every production failure. The log below is
+    // therefore reached only where the empty fallback is actually returned.
+    //
+    // A season with no franchise_seasons rows is a real outcome and returns []
+    // without reaching this catch. A rejected query is not: swallowing it let
+    // isPreWeekOne([]) read false and skip the regular -> pre demotion, which
+    // in generate-content picks a write scope.
+    rethrowUnlessTolerable(e);
     console.error("[seasons] getSeasonStandings error:", e);
     return [];
   }

@@ -8,7 +8,12 @@ import { WeekBanner } from "@/components/week-banner";
 import { WeeklySuperlativeCard } from "@/components/weekly-superlative-card";
 import { StandingsSnapshotCard } from "@/components/standings-snapshot-card";
 import { ScorePoller } from "@/app/matchups/score-poller";
-import { getCurrentWeekMatchups, getLatestSeason } from "@/lib/queries/matchups";
+import {
+  getCurrentWeekMatchups,
+  getLatestSeason,
+  type PairedMatchup,
+} from "@/lib/queries/matchups";
+import { TeamFlag, type FlagTeam } from "@/components/hub/team-flag";
 import { getSeasonStandings } from "@/lib/queries/seasons";
 import {
   getHomepageSuperlatives,
@@ -24,7 +29,7 @@ import { getRivalryWeek, rivalryPairKey } from "@/lib/queries/rivalry-week";
 import { computeStandingsRaceTags } from "@/lib/queries/playoff-race";
 import { StatChip, GameCard, toLadderEntries } from "@/components/hub/shared";
 import { BetweenWeeksHub } from "@/components/hub/between-weeks-hub";
-import { getBookBoard, type BookGame } from "@/lib/queries/book";
+import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { BookRailCard } from "@/components/hub/book-rail-card";
 
 export async function RegularSeasonHub({
@@ -110,21 +115,37 @@ export async function RegularSeasonHub({
 
   // Hero stat chips derived from the current week's scores (existing data only).
   const currentMatchups = matchupData?.matchups ?? [];
+  // Carries crest fields alongside the name so the chip can show a logo rather
+  // than a bare code (see CLAUDE.md, Franchise Identity Display).
+  const toFlagTeam = (
+    t: PairedMatchup["homeTeam"],
+  ): FlagTeam & { points: number } => ({
+    name: t.franchiseName,
+    slug: t.franchiseSlug,
+    abbreviation: t.franchiseAbbreviation,
+    brandingColor: t.franchiseBrandingColor,
+    avatarUrl: t.avatarUrl,
+    points: t.points,
+  });
   const teamScores = currentMatchups.flatMap((m) => [
-    { name: m.homeTeam.franchiseName, points: m.homeTeam.points },
-    { name: m.awayTeam.franchiseName, points: m.awayTeam.points },
+    toFlagTeam(m.homeTeam),
+    toFlagTeam(m.awayTeam),
   ]);
   const highScore = teamScores.length
     ? teamScores.reduce((best, t) => (t.points > best.points ? t : best))
     : null;
   const closestGame = currentMatchups.length
-    ? currentMatchups.reduce<{ margin: number; a: string; b: string } | null>((best, m) => {
+    ? currentMatchups.reduce<{
+        margin: number;
+        a: FlagTeam;
+        b: FlagTeam;
+      } | null>((best, m) => {
         const margin = Math.abs(m.homeTeam.points - m.awayTeam.points);
         if (best === null || margin < best.margin) {
           return {
             margin,
-            a: m.homeTeam.franchiseAbbreviation ?? m.homeTeam.franchiseName,
-            b: m.awayTeam.franchiseAbbreviation ?? m.awayTeam.franchiseName,
+            a: toFlagTeam(m.homeTeam),
+            b: toFlagTeam(m.awayTeam),
           };
         }
         return best;
@@ -158,11 +179,17 @@ export async function RegularSeasonHub({
 
   // The Book's priced lines for this week, keyed by matchup id. Genuinely
   // optional (book_lines can be empty pre-first-sync, or the whole feature
-  // predates a given season), so an empty catch is correct here.
+  // predates a given season), so an empty catch is correct here. The week
+  // must agree with resolveBookWeek() (the same source /book, the pick
+  // server actions, and the sync all use), or the hub can advertise a line
+  // for a week The Book is not actually trading (#244).
   let bookGames: BookGame[] = [];
   if (latestSeason) {
     try {
-      bookGames = await getBookBoard(latestSeason.id, seasonYear, week);
+      const bookWeek = await resolveBookWeek();
+      if (bookWeek != null && bookWeek.week === week) {
+        bookGames = await getBookBoard(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week);
+      }
     } catch {
       // The Book is an aside on the hub; absence is fine.
     }
@@ -186,14 +213,20 @@ export async function RegularSeasonHub({
               <StatChip
                 label="High Score"
                 value={highScore.points.toFixed(1)}
-                context={highScore.name}
+                context={<TeamFlag team={highScore} />}
               />
             )}
             {highScore && highScore.points > 0 && closestGame && (
               <StatChip
                 label="Closest Game"
                 value={`+${closestGame.margin.toFixed(1)}`}
-                context={`${closestGame.a} · ${closestGame.b}`}
+                context={
+                  <>
+                    <TeamFlag team={closestGame.a} compact />
+                    <span aria-hidden="true">·</span>
+                    <TeamFlag team={closestGame.b} compact />
+                  </>
+                }
               />
             )}
             {hasPlayersLeftStat && hubLive && (

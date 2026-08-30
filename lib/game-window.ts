@@ -6,6 +6,12 @@
  * pre-filter (the nav's live pill island). Evaluated in US Eastern so the
  * windows hold under DST from any server or client timezone.
  *
+ * Deliberately NOT LEAGUE_TIME_ZONE (lib/time-zone.ts). This encodes NFL
+ * national kickoff clock times (Thu 7pm, Sun 11am, Mon 7pm), which are
+ * defined in America/New_York as a fact about the league schedule, not about
+ * where our members live. Unifying it with the league timezone would silently
+ * shift every game window by an hour; do not "finish the job" here.
+ *
  * Windows: Thursday from 7pm, Saturday from 1pm, Sunday from 11am, Monday
  * from 7pm.
  */

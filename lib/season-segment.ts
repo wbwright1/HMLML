@@ -13,6 +13,8 @@
 //
 // Pure: no I/O, no dependencies, safe to unit test directly.
 
+import { startOfDayInZone } from "@/lib/time-zone";
+
 export type SeasonSegment = "offseason" | "preseason" | "in_season";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -43,49 +45,20 @@ export function parseGameDate(value: string | null | undefined): Date | null {
   return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
-export const ET_TIME_ZONE = "America/New_York";
-
-/** Fallback offset (EST, minutes) when the runtime cannot report a longOffset. */
-const EST_OFFSET_MINUTES = -300;
-
 /**
- * The UTC instant of local midnight in ET on the calendar day `utcMidnight`
- * names. Both kickoff windows anchor here rather than on UTC midnight, which
- * in September lands at 20:00 ET the previous day (a hub that flips to
- * "kickoff week" on a Saturday evening).
+ * True once we've reached league-timezone midnight on the Sunday before the
+ * earliest week-1 game. This is the hub's "kickoff week" window: from that
+ * Sunday on, the site presents as regular season (week banner, kickoff
+ * countdown, standings) even though every team is still 0-0. Sunday rather
+ * than Monday because week 1 can open on a Wednesday (2026 does). A kickoff
+ * that itself falls on a Sunday anchors to the previous Sunday. Null/
+ * unparseable date: false (no week-1 schedule rows means the window can never
+ * fire).
  *
- * Intl supplies the correct offset for the date (EDT in September, EST later),
- * so this needs no hardcoded DST rules. On a parse miss it falls back to EST
- * rather than throwing; this is a display boundary, not a correctness-critical
- * read.
- */
-export function easternMidnight(utcMidnight: Date): Date {
-  let offsetMinutes = EST_OFFSET_MINUTES;
-  try {
-    const parts = new Intl.DateTimeFormat("en-US", {
-      timeZone: ET_TIME_ZONE,
-      timeZoneName: "longOffset",
-    }).formatToParts(utcMidnight);
-    const name = parts.find((p) => p.type === "timeZoneName")?.value ?? "";
-    const m = /GMT([+-])(\d{2}):(\d{2})/.exec(name);
-    if (m) {
-      const sign = m[1] === "-" ? -1 : 1;
-      offsetMinutes = sign * (Number(m[2]) * 60 + Number(m[3]));
-    }
-  } catch {
-    // Keep the EST fallback.
-  }
-  return new Date(utcMidnight.getTime() - offsetMinutes * 60 * 1000);
-}
-
-/**
- * True once we've reached ET midnight on the Sunday before the earliest week-1
- * game. This is the hub's "kickoff week" window: from that Sunday on, the site
- * presents as regular season (week banner, kickoff countdown, standings)
- * even though every team is still 0-0. Sunday rather than Monday because
- * week 1 can open on a Wednesday (2026 does). A kickoff that itself falls
- * on a Sunday anchors to the previous Sunday. Null/unparseable date: false
- * (no week-1 schedule rows means the window can never fire).
+ * The anchor is shared with the countdown target in lib/queries/kickoff.ts
+ * (both call startOfDayInZone / LEAGUE_TIME_ZONE from lib/time-zone.ts), which
+ * is the whole point of this change: a countdown can no longer hit zero
+ * before, or after, the window it is counting down to actually opens.
  *
  * The window is intentionally open-ended: it is a `now >= threshold` test with
  * no upper bound, so it never closes on its own and reads true for a past
@@ -105,7 +78,7 @@ export function isWithinWeekOneLeadWindow(
   if (!week1) return false;
   const weekday = week1.getUTCDay(); // Sun=0 .. Sat=6
   const daysBack = weekday === 0 ? 7 : weekday;
-  return now.getTime() >= easternMidnight(week1).getTime() - daysBack * DAY_MS;
+  return now.getTime() >= startOfDayInZone(week1).getTime() - daysBack * DAY_MS;
 }
 
 /**
@@ -146,10 +119,11 @@ export function resolveSeasonSegment(input: SeasonSegmentInput): SeasonSegment {
   // independent kickoff-date window below.
   const nflStarted = seasonType === "regular" || seasonType === "post";
   const week1 = parseGameDate(week1EarliestGameDate);
-  // Anchored on ET midnight of the kickoff day, not UTC midnight (see easternMidnight).
+  // Anchored on league-timezone midnight of the kickoff day, not UTC midnight
+  // (see startOfDayInZone in lib/time-zone.ts).
   const withinKickoffWindow =
     week1 != null &&
-    now.getTime() >= easternMidnight(week1).getTime() - KICKOFF_LEAD_DAYS * DAY_MS;
+    now.getTime() >= startOfDayInZone(week1).getTime() - KICKOFF_LEAD_DAYS * DAY_MS;
 
   if (nflStarted || withinKickoffWindow) {
     return "in_season";

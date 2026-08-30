@@ -94,8 +94,16 @@ async function resolveTarget(request: NextRequest): Promise<RunTarget | null> {
       ]);
       hasLiveMatchups = weekMatchups.some((m) => m.status === "in_progress");
       nothingPlayedYet = isPreWeekOne(standings);
-    } catch {
-      // DB hiccup: fall through with the conservative defaults above.
+    } catch (e) {
+      // Deliberately a plain throw, NOT rethrowUnlessTolerable. This pair of
+      // reads picks the seasonType and therefore the *write scope*, so falling
+      // through on a DB hiccup makes replaceHubContent (a delete-then-insert)
+      // run against possibly the wrong scope. A write endpoint has no ISR
+      // rationale for the dev exemption, and rethrowUnlessTolerable *returns*
+      // in development, which would leave exactly that hole open locally.
+      // Aborting in every environment makes runGeneration log a sync_log
+      // failure row and lets the hourly cron retry.
+      throw e;
     }
     seasonType = resolveHubSeasonType({
       nflSeasonType: nflState?.seasonType ?? null,

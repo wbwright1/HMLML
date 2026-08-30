@@ -1,8 +1,9 @@
+import { TeamFlag, type FlagTeam } from "@/components/hub/team-flag";
 import { BookLineFooterRow, type BookLineFooter } from "@/components/book/line-footer";
 
 interface SlateCardProps {
-  teamAName: string;
-  teamBName: string;
+  teamA: FlagTeam;
+  teamB: FlagTeam;
   /** All-time H2H record from team A's perspective, e.g. "6-0". */
   h2hRecord: string;
   /** Serif one-line angle for the matchup. */
@@ -18,15 +19,17 @@ interface SlateCardProps {
  * bold "TeamA vs TeamB", the all-time H2H record top-right (mono), and a serif
  * one-line angle below. Server component.
  */
-export function SlateCard({ teamAName, teamBName, h2hRecord, angle, bookFooter }: SlateCardProps) {
+export function SlateCard({ teamA, teamB, h2hRecord, angle, bookFooter }: SlateCardProps) {
   return (
     <div className="card-surface p-4">
       <div className="flex items-start justify-between gap-3">
-        <p className="text-body font-semibold text-text-primary">
-          {teamAName}
-          <span className="font-normal text-text-tertiary"> vs </span>
-          {teamBName}
-        </p>
+        {/* A div, not a <p>: TeamFlag contains FranchiseLogo's root div, and a
+            div inside a <p> is invalid markup the parser closes early. */}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-body font-semibold text-text-primary">
+          <TeamFlag team={teamA} />
+          <span className="font-normal text-text-tertiary">vs</span>
+          <TeamFlag team={teamB} />
+        </div>
         <span className="text-stat tabular-nums text-body-sm text-text-tertiary shrink-0">
           {h2hRecord}
         </span>

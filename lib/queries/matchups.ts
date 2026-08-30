@@ -132,6 +132,11 @@ export function pairMatchupRows(
 /**
  * Returns paired matchups for a specific season and week,
  * joined with franchise info.
+ *
+ * A week with no rows is a real outcome (no matchups scheduled or synced yet)
+ * and returns an empty array. A rejected query is not: it goes through
+ * rethrowUnlessTolerable so a DB outage reaches the error boundary instead of
+ * being ISR-cached as a successful, empty week. Do not conflate the two.
  */
 export async function getMatchupsByWeek(
   seasonId: number,
@@ -181,6 +186,9 @@ export async function getMatchupsByWeek(
 
     return pairMatchupRows(rowsWithAvatars);
   } catch (e) {
+    // Guard before logging: on the intolerable path this throws and Next
+    // reports it, so logging above would double-report every prod failure.
+    rethrowUnlessTolerable(e);
     console.error("[matchups] getMatchupsByWeek error:", e);
     return [];
   }
@@ -207,6 +215,8 @@ export const getCurrentWeekMatchups = cache(async function getCurrentWeekMatchup
       .orderBy(desc(seasons.seasonYear))
       .limit(1);
 
+    // No seasons synced yet is a real outcome, not a failure: return null
+    // without throwing. Only a rejected query reaches the catch below.
     if (!latestSeason) return null;
 
     // Determine current week. Since the hourly sync now writes the full
@@ -216,6 +226,11 @@ export const getCurrentWeekMatchups = cache(async function getCurrentWeekMatchup
     // the real NFL week from Sleeper's state endpoint, falling back to the
     // old "highest week with matchup data" heuristic only if that lookup
     // fails or doesn't match this season.
+    // getNflState now throws on a DB failure (#254), which is what we want:
+    // it means the catch below rethrows rather than quietly guessing a week.
+    // A Sleeper outage still returns null (fetchSleeper resolves an { error }
+    // result instead of rejecting), so the "highest synced week" fallback
+    // underneath still covers the API-outage case it was written for.
     let currentWeek: number | null = null;
     const nflState = await getNflState();
     if (nflState && String(latestSeason.seasonYear) === nflState.season) {
@@ -242,6 +257,8 @@ export const getCurrentWeekMatchups = cache(async function getCurrentWeekMatchup
       seasonId: latestSeason.id,
     };
   } catch (e) {
+    // Guard before logging, same convention as getMatchupsByWeek above.
+    rethrowUnlessTolerable(e);
     console.error("[matchups] getCurrentWeekMatchups error:", e);
     return null;
   }
