@@ -109,11 +109,67 @@ async function resolveTarget(request: NextRequest): Promise<RunTarget | null> {
   return { seasonId: seasonRow.id, seasonYear: seasonRow.seasonYear, seasonType, week };
 }
 
+/**
+ * Best-effort sync_log failure row.
+ *
+ * The point of the wrapper below is to log a run that died, so the logging
+ * itself must never throw and mask the original error. With Postgres dead (the
+ * headline scenario for this route) the insert rejects too, and an unguarded
+ * await would escape and 500 unlogged, exactly the hole this is closing.
+ */
+async function logGenerationFailure(
+  message: string,
+  startTime: number,
+  startedAt: Date,
+): Promise<void> {
+  try {
+    await db.insert(syncLog).values({
+      syncType: "generate-content",
+      dataType: "hub_content",
+      status: "failure",
+      rowCount: 0,
+      durationMs: Date.now() - startTime,
+      errorMessage: message,
+      startedAt,
+      completedAt: new Date(),
+    });
+  } catch (e) {
+    console.error("[generate-content] could not write sync_log failure row:", e);
+  }
+}
+
+/**
+ * One try around the whole run. Every step, including resolveTarget (which
+ * reads isWeekOneLeadWindowActive and now throws on a DB failure instead of
+ * swallowing it) and the sibling sync_log writes on the skip paths, is inside
+ * it, so any throw becomes a logged failure row plus a structured 500 rather
+ * than a bare unlogged one. The sync job pattern requires every run to leave a
+ * sync_log trace.
+ */
 async function runGeneration(request: NextRequest) {
   const startTime = Date.now();
   const startedAt = new Date();
 
+  try {
+    return await generateHubContent(request, startTime, startedAt);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.error("[generate-content] error:", message);
+    await logGenerationFailure(message, startTime, startedAt);
+    return NextResponse.json(
+      { error: { message: "Content generation failed", code: "generation_failed" } },
+      { status: 500 },
+    );
+  }
+}
+
+async function generateHubContent(
+  request: NextRequest,
+  startTime: number,
+  startedAt: Date,
+) {
   const target = await resolveTarget(request);
+
   if (!target) {
     await db.insert(syncLog).values({
       syncType: "generate-content",
@@ -210,78 +266,59 @@ async function runGeneration(request: NextRequest) {
     }
   }
 
-  try {
-    const ctx = await buildStatsContext(target);
-    const generated = await generateContent(ctx);
+  const ctx = await buildStatsContext(target);
+  const generated = await generateContent(ctx);
 
-    // Regular-season content is week-scoped; preseason/offseason is season-scoped.
-    const week = ctx.seasonType === "regular" ? ctx.week : null;
-    const rowCount = await replaceHubContent(
-      target.seasonId,
+  // Regular-season content is week-scoped; preseason/offseason is season-scoped.
+  const week = ctx.seasonType === "regular" ? ctx.week : null;
+  const rowCount = await replaceHubContent(
+    target.seasonId,
+    week,
+    generated.kinds,
+    generated.rows,
+    "auto",
+  );
+
+  const durationMs = Date.now() - startTime;
+  await db.insert(syncLog).values({
+    syncType: "generate-content",
+    dataType: "hub_content",
+    status: "success",
+    rowCount,
+    durationMs,
+    detailsJson: {
+      path: generated.source,
+      seasonId: target.seasonId,
+      seasonType: ctx.seasonType,
       week,
-      generated.kinds,
-      generated.rows,
-      "auto",
-    );
+      kinds: generated.kinds,
+      templateFilledKinds: generated.templateFilledKinds ?? [],
+      // Content diversity/dedup observability: how many candidate rows the
+      // validate + selectDiverseSubset layer dropped (invalid or
+      // duplicate), and which kinds had to relax their cap to avoid
+      // shipping an empty module.
+      diversityDroppedCount: generated.diversityStats?.droppedCount ?? 0,
+      diversityRelaxedKinds: generated.diversityStats?.relaxedKinds ?? [],
+    },
+    startedAt,
+    completedAt: new Date(),
+  });
 
-    const durationMs = Date.now() - startTime;
-    await db.insert(syncLog).values({
-      syncType: "generate-content",
-      dataType: "hub_content",
-      status: "success",
+  // New hub content is rendered output, so drop the ISR cache. The two skip
+  // paths above return before this and deliberately leave the cache intact.
+  revalidateSite("generate-content");
+
+  return NextResponse.json({
+    data: {
+      seasonId: target.seasonId,
+      seasonType: ctx.seasonType,
+      week,
+      path: generated.source,
       rowCount,
-      durationMs,
-      detailsJson: {
-        path: generated.source,
-        seasonId: target.seasonId,
-        seasonType: ctx.seasonType,
-        week,
-        kinds: generated.kinds,
-        templateFilledKinds: generated.templateFilledKinds ?? [],
-        // Content diversity/dedup observability: how many candidate rows the
-        // validate + selectDiverseSubset layer dropped (invalid or
-        // duplicate), and which kinds had to relax their cap to avoid
-        // shipping an empty module.
-        diversityDroppedCount: generated.diversityStats?.droppedCount ?? 0,
-        diversityRelaxedKinds: generated.diversityStats?.relaxedKinds ?? [],
-      },
-      startedAt,
-      completedAt: new Date(),
-    });
-
-    // New hub content is rendered output, so drop the ISR cache. The two skip
-    // paths above return before this and deliberately leave the cache intact.
-    revalidateSite("generate-content");
-
-    return NextResponse.json({
-      data: {
-        seasonId: target.seasonId,
-        seasonType: ctx.seasonType,
-        week,
-        path: generated.source,
-        rowCount,
-        kinds: generated.kinds,
-      },
-      syncedAt: new Date().toISOString(),
-    });
-  } catch (e) {
-    const message = e instanceof Error ? e.message : "Unknown error";
-    console.error("[generate-content] error:", message);
-    await db.insert(syncLog).values({
-      syncType: "generate-content",
-      dataType: "hub_content",
-      status: "failure",
-      rowCount: 0,
-      durationMs: Date.now() - startTime,
-      errorMessage: message,
-      startedAt,
-      completedAt: new Date(),
-    });
-    return NextResponse.json(
-      { error: { message: "Content generation failed", code: "generation_failed" } },
-      { status: 500 },
-    );
-  }
+      kinds: generated.kinds,
+    },
+    syncedAt: new Date().toISOString(),
+  });
 }
 
 function authorized(request: NextRequest): boolean {

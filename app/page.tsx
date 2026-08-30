@@ -44,6 +44,12 @@ export default async function HomePage() {
 
   // Kickoff-week window: from the Sunday before the week-1 kickoff, the 0-0
   // demotion above stops firing and the regular-season hub takes over.
+  //
+  // This call is deliberately OUTSIDE the page's data-fetch try/catch. On a DB
+  // failure it throws (lib/queries/nfl-state.ts), Next serves the error
+  // boundary, and ISR keeps the last good entry. Wrapping it would let a
+  // transient failure ISR-cache the preseason hub during kickoff week, which is
+  // the exact bug lib/db-guard.ts exists to prevent. Do not "fix" this.
   const windowSeasonYear =
     latestSeason?.seasonYear ?? (nflState ? Number(nflState.season) : null);
   const weekOneLeadWindow =

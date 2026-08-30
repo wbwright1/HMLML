@@ -2,6 +2,7 @@ import { cache } from "react";
 import { getNFLState } from "@/lib/sleeper";
 import { PAGE_REVALIDATE_SECONDS } from "@/lib/cache";
 import { db } from "@/lib/db";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { nflGames } from "@/lib/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import {
@@ -26,25 +27,38 @@ export interface NflState {
  * regular:1:2026:force. The trailing ":force" also treats the week-one lead
  * window as active (see isWeekOneLeadWindowActive), so a preview can show the
  * regular-season hub before the real calendar reaches the Sunday before
- * kickoff. Ignored in production (VERCEL_ENV === "production") and when unset
+ * kickoff. The week must be 1 to 22; anything outside that range is rejected
+ * (week 0 used to render an empty regular-season hub that looked like a data
+ * bug). Ignored in production (VERCEL_ENV === "production") and when unset
  * or malformed, so it can never lie on the live site.
  */
-function parseNflStateOverride(): { state: NflState; forceLeadWindow: boolean } | null {
-  if (process.env.VERCEL_ENV === "production") return null;
-  const raw = process.env.NFL_STATE_OVERRIDE;
+export function parseNflStateOverrideValue(
+  raw: string | null | undefined
+): { state: NflState; forceLeadWindow: boolean } | null {
   if (!raw) return null;
 
   const m = /^(pre|regular|post|off):(\d{1,2})(?::(\d{4}))?(?::(force))?$/.exec(raw.trim());
   if (!m) return null;
 
+  // Reject rather than clamp, so a typo falls back to the real calendar instead
+  // of quietly simulating a different week.
+  const week = Number(m[2]);
+  if (week < 1 || week > 22) return null;
+
   return {
     state: {
       seasonType: m[1] as NflSeasonType,
-      week: Number(m[2]),
+      week,
       season: m[3] ?? String(new Date().getFullYear()),
     },
     forceLeadWindow: m[4] === "force",
   };
+}
+
+/** Env gating around parseNflStateOverrideValue. Never active in production. */
+function parseNflStateOverride(): { state: NflState; forceLeadWindow: boolean } | null {
+  if (process.env.VERCEL_ENV === "production") return null;
+  return parseNflStateOverrideValue(process.env.NFL_STATE_OVERRIDE);
 }
 
 /**
@@ -67,7 +81,12 @@ function parseNflStateOverride(): { state: NflState; forceLeadWindow: boolean } 
  * the earliest week-1 game onward (isWithinWeekOneLeadWindow), or immediately
  * when a ":force" NFL_STATE_OVERRIDE is active (preview/dev only). Shared by
  * the hub and the nav so they flip to the regular-season view on the same
- * request. React-cache()'d per request; a DB failure reads as "not yet".
+ * request. React-cache()'d per request, so a rejection is shared by every
+ * caller in that request. In production a DB failure now THROWS rather than
+ * reading as "not yet" (it would ISR-cache the preseason hub for an hour); in
+ * local dev and the build prerender pass it still degrades to "not yet".
+ * Callers that must not throw (the nav, the history/seasons badges) keep their
+ * own catch.
  */
 export const isWeekOneLeadWindowActive = cache(async function isWeekOneLeadWindowActive(
   seasonYear: number
@@ -111,7 +130,14 @@ export const getNflState = cache(async function getNflState(): Promise<NflState 
       week,
       season,
     };
-  } catch {
+  } catch (e) {
+    // The only realistic throw source here is the DB read behind
+    // isWeekOneLeadWindowActive above: a Sleeper outage comes back as a result
+    // object from fetchSleeper, never as an exception. Swallowing that read
+    // would undo the guard it just gained, turning a Postgres outage into
+    // getNflState() === null and letting the book/players/roster paths
+    // ISR-cache degraded output.
+    rethrowUnlessTolerable(e);
     console.error("[nfl-state] Unexpected error fetching NFL state");
     return null;
   }
@@ -132,7 +158,11 @@ export async function getWeek1EarliestGameDate(
       .where(and(eq(nflGames.seasonYear, seasonYear), eq(nflGames.week, 1)));
 
     return row?.earliest ?? null;
-  } catch {
+  } catch (e) {
+    // A missing week-1 date silently demotes the whole site to the preseason
+    // hub, so this must not be swallowed in production (see lib/db-guard.ts).
+    // Local dev and the build prerender pass still degrade to null.
+    rethrowUnlessTolerable(e);
     return null;
   }
 }
