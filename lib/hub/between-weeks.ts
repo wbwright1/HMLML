@@ -4,6 +4,7 @@
 
 import { formatRecord } from "@/lib/format-record";
 import { daysUntil } from "@/lib/hub/live-pill-label";
+import { LEAGUE_TIME_ZONE } from "@/lib/time-zone";
 
 // ---------------------------------------------------------------------------
 // Game of the Week heuristic
@@ -240,8 +241,6 @@ export function genericSlateAngle(
   return `${recordA} against ${recordB}. Somebody's number moves ${kickoffWeekday}.`;
 }
 
-const CHICAGO_TIME_ZONE = "America/Chicago";
-
 /**
  * Full weekday name (e.g. "Wednesday") of a kickoff instant in the league's
  * home timezone, for genericSlateAngle. Falls back to "kickoff" when there is
@@ -251,6 +250,6 @@ export function kickoffWeekdayName(target: Date | null): string {
   if (!target) return "kickoff";
   return new Intl.DateTimeFormat("en-US", {
     weekday: "long",
-    timeZone: CHICAGO_TIME_ZONE,
+    timeZone: LEAGUE_TIME_ZONE,
   }).format(target);
 }

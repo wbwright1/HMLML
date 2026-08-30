@@ -3,7 +3,7 @@
 // components/live-pill.tsx (presentational) and lib/queries/kickoff.ts
 // (DB access) so the string formatting is independently unit-testable.
 
-const CHICAGO_TIME_ZONE = "America/Chicago";
+import { LEAGUE_TIME_ZONE } from "@/lib/time-zone";
 
 /**
  * Whole days remaining until `target`, floored (matches the countdown DAYS card
@@ -23,7 +23,7 @@ export function formatPreseasonKickoffLabel(target: Date, now: Date): string {
 function formatKickoffDay(target: Date): string {
   return new Intl.DateTimeFormat("en-US", {
     weekday: "short",
-    timeZone: CHICAGO_TIME_ZONE,
+    timeZone: LEAGUE_TIME_ZONE,
   })
     .format(target)
     .toUpperCase();
