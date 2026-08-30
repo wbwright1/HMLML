@@ -13,7 +13,7 @@ import {
   getLatestSeason,
   type PairedMatchup,
 } from "@/lib/queries/matchups";
-import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamFlag, type FlagTeam } from "@/components/hub/team-flag";
 import { getSeasonStandings } from "@/lib/queries/seasons";
 import {
   getHomepageSuperlatives,
@@ -117,7 +117,9 @@ export async function RegularSeasonHub({
   const currentMatchups = matchupData?.matchups ?? [];
   // Carries crest fields alongside the name so the chip can show a logo rather
   // than a bare code (see CLAUDE.md, Franchise Identity Display).
-  const toChipTeam = (t: PairedMatchup["homeTeam"]) => ({
+  const toFlagTeam = (
+    t: PairedMatchup["homeTeam"],
+  ): FlagTeam & { points: number } => ({
     name: t.franchiseName,
     slug: t.franchiseSlug,
     abbreviation: t.franchiseAbbreviation,
@@ -126,8 +128,8 @@ export async function RegularSeasonHub({
     points: t.points,
   });
   const teamScores = currentMatchups.flatMap((m) => [
-    toChipTeam(m.homeTeam),
-    toChipTeam(m.awayTeam),
+    toFlagTeam(m.homeTeam),
+    toFlagTeam(m.awayTeam),
   ]);
   const highScore = teamScores.length
     ? teamScores.reduce((best, t) => (t.points > best.points ? t : best))
@@ -135,15 +137,15 @@ export async function RegularSeasonHub({
   const closestGame = currentMatchups.length
     ? currentMatchups.reduce<{
         margin: number;
-        a: ReturnType<typeof toChipTeam>;
-        b: ReturnType<typeof toChipTeam>;
+        a: FlagTeam;
+        b: FlagTeam;
       } | null>((best, m) => {
         const margin = Math.abs(m.homeTeam.points - m.awayTeam.points);
         if (best === null || margin < best.margin) {
           return {
             margin,
-            a: toChipTeam(m.homeTeam),
-            b: toChipTeam(m.awayTeam),
+            a: toFlagTeam(m.homeTeam),
+            b: toFlagTeam(m.awayTeam),
           };
         }
         return best;
@@ -205,7 +207,7 @@ export async function RegularSeasonHub({
               <StatChip
                 label="High Score"
                 value={highScore.points.toFixed(1)}
-                context={<ChipTeam team={highScore} />}
+                context={<TeamFlag team={highScore} />}
               />
             )}
             {highScore && highScore.points > 0 && closestGame && (
@@ -214,9 +216,9 @@ export async function RegularSeasonHub({
                 value={`+${closestGame.margin.toFixed(1)}`}
                 context={
                   <>
-                    <ChipTeam team={closestGame.a} compact />
+                    <TeamFlag team={closestGame.a} compact />
                     <span aria-hidden="true">·</span>
-                    <ChipTeam team={closestGame.b} compact />
+                    <TeamFlag team={closestGame.b} compact />
                   </>
                 }
               />
@@ -545,42 +547,5 @@ export async function RegularSeasonHub({
         />
       )}
     </>
-  );
-}
-
-/**
- * A franchise inside a hero stat chip: 20px crest plus the name, replacing the
- * bare abbreviation the Closest Game chip used to print. Decorative because the
- * name is right beside it.
- */
-function ChipTeam({
-  team,
-  compact = false,
-}: {
-  /** Shows the letter code instead of the full name when two teams share a chip. */
-  compact?: boolean;
-  team: {
-    name: string;
-    slug: string;
-    abbreviation: string | null;
-    brandingColor: string | null;
-    avatarUrl: string | null;
-  };
-}) {
-  return (
-    <span className="flex min-w-0 items-center gap-1.5">
-      <FranchiseLogo
-        slug={team.slug}
-        name={team.name}
-        abbreviation={team.abbreviation ?? undefined}
-        brandingColor={team.brandingColor ?? undefined}
-        avatarUrl={team.avatarUrl ?? undefined}
-        size={20}
-        decorative
-      />
-      <span className="truncate">
-        {compact ? (team.abbreviation ?? team.name) : team.name}
-      </span>
-    </span>
   );
 }
