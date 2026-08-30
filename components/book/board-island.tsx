@@ -7,6 +7,7 @@ import { FranchiseLogo } from "@/components/franchise-logo";
 import { useSessionMember } from "@/components/use-session-member";
 import { togglePick, lockSlip } from "@/app/actions/book";
 import {
+  gradePick,
   formatMoney,
   formatMoneyline,
   formatSpread,
@@ -19,9 +20,11 @@ import {
   MAX_STAKE,
   MIN_PICKS_FOR_CONSENSUS,
   MIN_STAKE,
+  picksForBoardWeek,
   type BookGame,
   type BookSide,
   type BookSideKey,
+  type CoverResult,
   type MemberBookPick,
 } from "@/lib/book/shared";
 
@@ -60,18 +63,28 @@ export function BoardIsland({
     let active = true;
     fetch("/api/book/picks", { credentials: "same-origin" })
       .then((res) => (res.ok ? res.json() : null))
-      .then((body: { data?: { picks: MemberBookPick[] } } | null) => {
-        if (!active || !body?.data) return;
-        setPicks(new Map(body.data.picks.map((p) => [p.matchupId, p])));
-        setSlipLocked(body.data.picks.some((p) => p.lockedAt !== null));
-      })
+      .then(
+        (
+          body: {
+            data?: { picks: MemberBookPick[]; week: number | null };
+          } | null,
+        ) => {
+          if (!active) return;
+          // Discards a payload for any week other than the one this board is
+          // showing; see picksForBoardWeek for why that window is real.
+          const mine = picksForBoardWeek(body?.data, week);
+          if (!mine) return;
+          setPicks(new Map(mine.map((p) => [p.matchupId, p])));
+          setSlipLocked(mine.some((p) => p.lockedAt !== null));
+        },
+      )
       .catch(() => {
         // An unreachable slip is a read-only board, not a broken page.
       });
     return () => {
       active = false;
     };
-  }, [signedIn]);
+  }, [signedIn, week]);
 
   const openGames = games.filter((g) => g.status === "open");
   const openWithoutPick = openGames.filter((g) => !picks.has(g.matchupId));
@@ -189,6 +202,11 @@ export function BoardIsland({
 // Game card
 // ---------------------------------------------------------------------------
 
+/** Grades a pick against ITS OWN snapshotted line, never the game's current one. */
+function gradeGamePick(game: BookGame, pick: MemberBookPick): CoverResult {
+  return gradePick(game.home.points, game.away.points, pick);
+}
+
 function GameCard({
   game,
   pick,
@@ -264,7 +282,7 @@ function GameCard({
               style={{ width: `${homePct}%` }}
             />
           </div>
-          <p className="mt-1.5 text-[11px] text-text-muted">
+          <p className="mt-1.5 text-[11px] text-text-tertiary">
             League consensus ·{" "}
             <span className="font-mono tabular-nums">
               {game.home.abbreviation ?? game.home.name} {homePct}% ·{" "}
@@ -412,16 +430,18 @@ function YourPickRow({
     tag = locked ? "Locked in" : "Locks at kickoff";
     tone = locked ? "text-accent-green" : "text-text-tertiary";
   } else {
-    const hit = game.coveringSide === pick.side;
+    const result = gradeGamePick(game, pick);
     const settled = game.status === "final";
-    tag = hit
-      ? settled
-        ? "Covered ✓"
-        : "Covering ✓"
-      : settled
-        ? "Missed ✗"
-        : "Not covering ✗";
-    tone = hit ? "text-accent-green" : "text-accent-warm";
+    if (result === "push") {
+      tag = "Push";
+      tone = "text-text-tertiary";
+    } else if (result === pick.side) {
+      tag = settled ? "Covered ✓" : "Covering ✓";
+      tone = "text-accent-green";
+    } else {
+      tag = settled ? "Missed ✗" : "Not covering ✗";
+      tone = "text-accent-warm";
+    }
   }
 
   return (
@@ -510,10 +530,10 @@ function SlipRow({
     return (
       <li className="flex items-center justify-between gap-3 border-t border-divider py-2.5">
         <span className="min-w-0">
-          <span className="block truncate text-body-sm text-text-muted">
+          <span className="block truncate text-body-sm text-text-tertiary">
             Pick a side
           </span>
-          <span className="block truncate text-[11px] text-text-muted">
+          <span className="block truncate text-[11px] text-text-tertiary">
             {game.home.name} vs {game.away.name}
           </span>
         </span>
@@ -539,9 +559,17 @@ function SlipRow({
     tag = locked ? "Locked" : "Pending";
     tone = locked ? "text-accent-green" : "text-text-tertiary";
   } else {
-    const hit = game.coveringSide === pick.side;
-    tag = hit ? "✓ Covering" : "✗ Behind";
-    tone = hit ? "text-accent-green" : "text-accent-warm";
+    const result = gradeGamePick(game, pick);
+    if (result === "push") {
+      tag = "Push";
+      tone = "text-text-tertiary";
+    } else if (result === pick.side) {
+      tag = "✓ Covering";
+      tone = "text-accent-green";
+    } else {
+      tag = "✗ Behind";
+      tone = "text-accent-warm";
+    }
   }
 
   return (
@@ -550,7 +578,7 @@ function SlipRow({
         <span className="block truncate font-mono text-body-sm font-bold tabular-nums text-text-primary">
           {team.abbreviation ?? team.name} {formatSpread(spread)}
         </span>
-        <span className="block truncate text-[11px] text-text-muted">
+        <span className="block truncate text-[11px] text-text-tertiary">
           vs {other.name}
         </span>
       </span>
@@ -578,7 +606,7 @@ function LockButton({
         <p className={`${base} bg-accent-green-light text-center text-accent-green`}>
           {BOOK_COPY.lockedIn}
         </p>
-        <p className="mt-2.5 text-[11px] text-text-muted">
+        <p className="mt-2.5 text-[11px] text-text-tertiary">
           {BOOK_COPY.lockNoteLocked}
         </p>
       </>
@@ -588,11 +616,11 @@ function LockButton({
   if (openWithoutPick > 0) {
     return (
       <>
-        <p className={`${base} bg-surface-muted text-center text-text-muted`}>
+        <p className={`${base} bg-surface-muted text-center text-text-tertiary`}>
           <span className="font-mono tabular-nums">{openWithoutPick}</span>{" "}
           {openWithoutPick === 1 ? "pick" : "picks"} still open
         </p>
-        <p className="mt-2.5 text-[11px] text-text-muted">
+        <p className="mt-2.5 text-[11px] text-text-tertiary">
           {BOOK_COPY.lockNoteIncomplete}
         </p>
       </>
@@ -608,7 +636,7 @@ function LockButton({
       >
         {BOOK_COPY.lockCta}
       </button>
-      <p className="mt-2.5 text-[11px] text-text-muted">
+      <p className="mt-2.5 text-[11px] text-text-tertiary">
         {BOOK_COPY.lockNoteReady}
       </p>
     </>
@@ -706,7 +734,7 @@ function WagerTranslator({ games }: { games: BookGame[] }) {
             onChange={(e) => setStake(Number(e.target.value))}
             className="w-24 rounded-[10px] border border-border-strong bg-surface px-2.5 py-2 font-mono text-body-sm tabular-nums text-text-primary focus:border-accent-gold focus:outline-none"
           />
-          <span className="text-caption normal-case tracking-normal text-text-muted">
+          <span className="text-caption normal-case tracking-normal text-text-tertiary">
             USD
           </span>
         </label>
@@ -724,7 +752,7 @@ function WagerTranslator({ games }: { games: BookGame[] }) {
           </span>{" "}
           if it hits.
         </p>
-        <p className="mt-2.5 text-[11px] text-text-muted">
+        <p className="mt-2.5 text-[11px] text-text-tertiary">
           {BOOK_COPY.spreadNote}
         </p>
       </div>

@@ -4,6 +4,10 @@
 
 export type BookSideKey = "home" | "away";
 
+/** Re-exported so the client island types covers from one place. */
+import type { CoverResult } from "@/lib/book/pricing";
+export type { CoverResult };
+
 // ---------------------------------------------------------------------------
 // Board shapes
 // ---------------------------------------------------------------------------
@@ -40,8 +44,13 @@ export interface BookGame {
   away: BookSide;
   /** Weekday label of the first kickoff this game rides on, e.g. "SUN". */
   kickoffLabel: string | null;
-  /** Which side is covering now (live) or covered (final). Null before kickoff. */
-  coveringSide: BookSideKey | null;
+  /**
+   * The GAME-level cover against the current line: which side is covering now
+   * (live) or covered (final), null before kickoff. Not a member's result: a
+   * pick is graded against the spread snapshotted on its own row, which may
+   * differ from the line the game ended up carrying.
+   */
+  coveringSide: CoverResult | null;
   homePicks: number;
   awayPicks: number;
 }
@@ -103,6 +112,62 @@ export const BOOK_COPY = {
   houseRules:
     "Props grade Tuesday morning after stat corrections. Disputes go to the commish, who is biased. Lines move when projections re-sync every hour.",
 } as const;
+
+// ---------------------------------------------------------------------------
+// Pure guards (unit-tested in shared.test.ts)
+// ---------------------------------------------------------------------------
+
+export interface PickGuardFacts {
+  /** The board the click came from is the week the server is trading. */
+  weekMatchesBoard: boolean;
+  /** A priced line exists for this game. */
+  lineExists: boolean;
+  /** Either roster already has a starter on the field. */
+  gameStarted: boolean;
+  /** The member has ANY locked pick this week, so the slip is closed. */
+  slipHasLockedPick: boolean;
+  /** This particular pick row is already locked. */
+  existingPickLocked: boolean;
+}
+
+/**
+ * Why a pick must be refused, or null when it may go through.
+ *
+ * Pure so the guard ladder is testable without a database, and shaped around
+ * the bug it was written for: lock was enforced per ROW, so a member could lock
+ * their slip, wait for the sync to price a game that had no row yet, and still
+ * add a pick to it, because there was no `lockedAt` on a row that did not
+ * exist. Locking is a slip-level commitment; `slipHasLockedPick` is what
+ * enforces that.
+ */
+export function pickRejectionReason(facts: PickGuardFacts): string | null {
+  if (!facts.weekMatchesBoard) return BOOK_ERRORS.locked;
+  if (!facts.lineExists) return BOOK_ERRORS.noLine;
+  if (facts.gameStarted) return BOOK_ERRORS.locked;
+  if (facts.slipHasLockedPick || facts.existingPickLocked) {
+    return BOOK_ERRORS.slipLocked;
+  }
+  return null;
+}
+
+/**
+ * The picks from an /api/book/picks payload, or null when they must be ignored.
+ *
+ * Sleeper reuses matchup ids every week (pairing 1 exists in week 1 and again
+ * in week 2) and picks are keyed by matchup id, so a payload for a different
+ * week would line up perfectly against the board and paint the wrong picks onto
+ * it. /book is ISR-cached, so that window is real: after a Tuesday rollover a
+ * visitor can hold last week's cached HTML while the API answers for the new
+ * week.
+ */
+export function picksForBoardWeek(
+  payload: { picks: MemberBookPick[]; week: number | null } | null | undefined,
+  boardWeek: number,
+): MemberBookPick[] | null {
+  if (!payload) return null;
+  if (payload.week !== boardWeek) return null;
+  return payload.picks;
+}
 
 /** Errors the server action returns. Same voice as the rest of the site. */
 export const BOOK_ERRORS = {

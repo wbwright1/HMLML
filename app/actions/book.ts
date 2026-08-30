@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { bookPicks } from "@/lib/db/schema";
 import { getSessionMember } from "@/lib/auth";
@@ -13,7 +13,11 @@ import {
   getRosterKickoffStates,
   resolveBookWeek,
 } from "@/lib/queries/book";
-import { BOOK_ERRORS, type BookActionResult } from "@/lib/book/shared";
+import {
+  BOOK_ERRORS,
+  pickRejectionReason,
+  type BookActionResult,
+} from "@/lib/book/shared";
 
 const pickInput = z.object({
   week: z.number().int().min(1).max(22),
@@ -58,23 +62,33 @@ export async function togglePick(input: {
 
   const bookWeek = await resolveBookWeek();
   if (!bookWeek) return fail(BOOK_ERRORS.noSeason);
-  // A tab left open across a week rollover: refuse rather than book into the
-  // wrong week. The page revalidates below, so a reload lands them on the
-  // current board.
-  if (bookWeek.week !== week) return fail(BOOK_ERRORS.locked);
 
   const line = await getBookLine(bookWeek.seasonId, week, matchupId);
-  if (!line) return fail(BOOK_ERRORS.noLine);
 
-  const kickoffs = await getRosterKickoffStates(
-    bookWeek.seasonId,
-    bookWeek.seasonYear,
-    week,
-  );
-  const started =
-    kickoffs.get(line.homeRosterId)?.started ||
-    kickoffs.get(line.awayRosterId)?.started;
-  if (started) return fail(BOOK_ERRORS.locked);
+  const kickoffs = line
+    ? await getRosterKickoffStates(
+        bookWeek.seasonId,
+        bookWeek.seasonYear,
+        week,
+      )
+    : new Map<string, { started: boolean }>();
+
+  // Locking is a SLIP-level commitment, not a per-row one. Checking only this
+  // game's row let a member lock their slip and then still add a pick to a game
+  // the sync priced afterwards, because a row that does not exist carries no
+  // lockedAt. Any locked pick in the week closes the whole slip.
+  const [lockedRow] = await db
+    .select({ id: bookPicks.id })
+    .from(bookPicks)
+    .where(
+      and(
+        eq(bookPicks.memberId, member.id),
+        eq(bookPicks.seasonId, bookWeek.seasonId),
+        eq(bookPicks.week, week),
+        isNotNull(bookPicks.lockedAt),
+      ),
+    )
+    .limit(1);
 
   const [existing] = await db
     .select()
@@ -89,10 +103,30 @@ export async function togglePick(input: {
     )
     .limit(1);
 
-  if (existing?.lockedAt) return fail(BOOK_ERRORS.slipLocked);
+  // One pure ladder over the facts gathered above (see pickRejectionReason),
+  // so the rules are testable without a database and read in one place.
+  const rejection = pickRejectionReason({
+    weekMatchesBoard: bookWeek.week === week,
+    lineExists: line !== null,
+    gameStarted: Boolean(
+      line &&
+        (kickoffs.get(line.homeRosterId)?.started ||
+          kickoffs.get(line.awayRosterId)?.started),
+    ),
+    slipHasLockedPick: Boolean(lockedRow),
+    existingPickLocked: existing?.lockedAt != null,
+  });
+  if (rejection) return fail(rejection);
+  // Narrowing for the writes below; pickRejectionReason already refused a null.
+  if (!line) return fail(BOOK_ERRORS.noLine);
 
   if (existing && existing.side === side) {
-    await db.delete(bookPicks).where(eq(bookPicks.id, existing.id));
+    // isNull(lockedAt) in the WHERE, not just the check above: the read and the
+    // write are separate statements, and a lockSlip landing between them must
+    // not be undone by this delete. Same reason lockSlip scopes its own update.
+    await db
+      .delete(bookPicks)
+      .where(and(eq(bookPicks.id, existing.id), isNull(bookPicks.lockedAt)));
     revalidatePath("/book");
     return { ok: true, error: null };
   }
@@ -120,6 +154,8 @@ export async function togglePick(input: {
         bookPicks.matchupId,
       ],
       set: { side, spreadAtPick, mlAtPick, updatedAt: new Date() },
+      // Never move a pick that locked between the read above and this write.
+      setWhere: isNull(bookPicks.lockedAt),
     });
 
   // Consensus is part of the cached page, so everyone's board picks this up.
