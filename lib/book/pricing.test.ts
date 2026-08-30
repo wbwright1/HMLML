@@ -6,6 +6,8 @@ import {
   formatMoney,
   formatMoneyline,
   formatSpread,
+  gradePick,
+  pickCovered,
   MIN_FAVORITE_ODDS,
   MIN_UNDERDOG_ODDS,
   pay,
@@ -16,33 +18,71 @@ import {
 
 describe("priceSpread", () => {
   it("gives the favored home side a negative number", () => {
-    expect(priceSpread(120, 100)).toBe(-20);
+    expect(priceSpread(120, 100)).toBe(-20.5);
   });
 
   it("gives the underdog home side a positive number", () => {
-    expect(priceSpread(100, 112)).toBe(12);
+    expect(priceSpread(100, 112)).toBe(12.5);
   });
 
-  it("rounds to the nearest half point", () => {
+  it("rounds to the nearest half-integer", () => {
     expect(priceSpread(110.3, 106.9)).toBe(-3.5);
-    expect(priceSpread(100.1, 100.9)).toBe(1);
-    expect(priceSpread(100, 103.24)).toBe(3);
-    expect(priceSpread(100, 103.26)).toBe(3.5);
+    expect(priceSpread(100.1, 100.9)).toBe(0.5);
+    expect(priceSpread(100, 102.4)).toBe(2.5);
+    expect(priceSpread(100, 103.1)).toBe(3.5);
+    expect(priceSpread(100, 103.9)).toBe(3.5);
+    expect(priceSpread(100, 104.2)).toBe(4.5);
   });
 
-  it("never returns exactly zero, so a push is impossible", () => {
+  it("never distorts the projected margin by more than half a point", () => {
+    for (let i = 0; i < 500; i++) {
+      const away = 100 + i * 0.137;
+      const raw = away - 100;
+      if (raw === 0) continue;
+      expect(Math.abs(priceSpread(100, away) - raw)).toBeLessThanOrEqual(0.5);
+    }
+  });
+
+  it("never returns exactly zero, and keeps the sign of the projection", () => {
+    // A dead heat has no favorite, so the half point goes to the nominal home
+    // side. The barely-separated cases keep whichever side actually projects
+    // ahead rather than collapsing both to the same line.
     expect(priceSpread(100, 100)).toBe(-0.5);
     expect(priceSpread(100.2, 100.1)).toBe(-0.5);
-    expect(priceSpread(100.1, 100.2)).toBe(-0.5);
+    expect(priceSpread(100.1, 100.2)).toBe(0.5);
   });
 
-  it("always lands on a half-point multiple", () => {
-    for (let i = 0; i < 200; i++) {
-      const home = 60 + i * 0.37;
-      const away = 95 + i * 0.11;
-      const spread = priceSpread(home, away);
-      expect(Number.isInteger(spread * 2)).toBe(true);
-      expect(spread).not.toBe(0);
+  it("always carries a hook, never a whole number", () => {
+    // The bug this pins: rounding to the nearest 0.5 lands on a whole number
+    // half the time (-18, +3), and a whole-number spread CAN be landed on
+    // exactly, which is a push, which nothing downstream can grade.
+    expect(priceSpread(120, 100)).toBe(-20.5);
+    expect(priceSpread(100, 112)).toBe(12.5);
+    expect(priceSpread(100, 103)).toBe(3.5);
+  });
+
+  it("hooks a whole-number margin rather than posting a tieable line", () => {
+    expect(priceSpread(103, 100)).toBe(-3.5);
+    expect(priceSpread(100, 103)).toBe(3.5);
+  });
+
+  it("emits a half-point spread across a wide sweep of real projections", () => {
+    for (let home = 60; home <= 200; home += 0.25) {
+      for (const away of [72, 99.5, 118.3, 140, 175.75]) {
+        const spread = priceSpread(home, away);
+        expect(Number.isInteger(spread)).toBe(false);
+        expect(Number.isInteger(spread * 2)).toBe(true);
+        expect(spread).not.toBe(0);
+      }
+    }
+  });
+
+  it("mirrors under a side swap everywhere except a dead heat", () => {
+    for (let i = 0; i < 300; i++) {
+      const home = 70 + i * 0.31;
+      const away = 130 - i * 0.17;
+      if (home === away) continue;
+      expect(priceSpread(home, away)).toBe(-priceSpread(away, home));
     }
   });
 });
@@ -156,10 +196,60 @@ describe("coverSide", () => {
     expect(coverSide(100, 106, 3.5)).toBe("away");
   });
 
-  it("resolves the closest possible game, because the spread is never zero", () => {
+  it("resolves the closest possible game", () => {
     expect(coverSide(100, 100, -0.5)).toBe("away");
-    expect(coverSide(100.5, 100, -0.5)).toBe("away");
     expect(coverSide(101, 100, -0.5)).toBe("home");
+  });
+
+  it("reports a push instead of miscrediting a cover", () => {
+    // The hook kills the common push (a whole-number margin against a
+    // whole-number line) but not every one: fantasy scores are decimal, so a
+    // margin of exactly 0.5 against a -0.5 line lands on zero. Reachable, so it
+    // is graded honestly rather than handed to the away side.
+    expect(coverSide(100.5, 100, -0.5)).toBe("push");
+    expect(coverSide(113.5, 110, -3.5)).toBe("push");
+    expect(coverSide(110, 107, -3)).toBe("push");
+  });
+
+  it("kills the whole-number push the hook exists to prevent", () => {
+    // Every whole-number margin against a priced line resolves, which is what
+    // the half-integer spread buys. Only exact half-point margins can still tie.
+    for (const away of [95, 118.5, 133, 141.25]) {
+      const spread = priceSpread(112, away);
+      for (let margin = -40; margin <= 40; margin += 1) {
+        expect(coverSide(110 + margin, 110, spread)).not.toBe("push");
+      }
+    }
+  });
+});
+
+describe("gradePick", () => {
+  const pick = { side: "home" as const, spreadAtPick: -3.5 };
+
+  it("grades against the pick's own snapshotted line", () => {
+    expect(gradePick(120, 110, pick)).toBe("home");
+    expect(gradePick(113, 110, pick)).toBe("away");
+  });
+
+  it("ignores where the line moved to after the pick was booked", () => {
+    // The bug this pins: the board's cover was computed from the CURRENT line
+    // and reused as the member's result, so an hourly reprice could flip
+    // somebody's already-booked pick from a win to a loss. Here the game's
+    // line drifted from -3.5 to -9.5; the pick still grades on -3.5.
+    const gameLineNow = -12.5;
+    expect(coverSide(120, 110, gameLineNow)).toBe("away");
+    expect(gradePick(120, 110, pick)).toBe("home");
+  });
+
+  it("grades an away pick on the mirrored number", () => {
+    const away = { side: "away" as const, spreadAtPick: -3.5 };
+    expect(gradePick(113, 110, away)).toBe("away");
+    expect(gradePick(120, 110, away)).toBe("home");
+  });
+
+  it("pickCovered is true only when the pick's own side came in", () => {
+    expect(pickCovered(120, 110, pick)).toBe(true);
+    expect(pickCovered(113, 110, pick)).toBe(false);
   });
 });
 

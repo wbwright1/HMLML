@@ -65,15 +65,27 @@ export interface BookPrice {
  *
  * `homeProjected - awayProjected` is the margin we expect home to win by, so
  * the spread they must give up is its negation, rounded to the nearest half
- * point. A rounded 0 is nudged to -0.5: a pick-em would make pushes possible,
- * and the half point has to land on somebody, so it lands on the (nominal) home
- * side.
+ * point.
+ *
+ * Every spread carries a hook: the result is always a half-integer (-3.5, +12.5),
+ * never a whole number, because a whole-number spread ties on a whole-number
+ * margin and that is a push. So the margin is rounded to the nearest
+ * HALF-INTEGER rather than to the nearest 0.5, which keeps the distortion at
+ * most half a point and stays symmetric under a side swap. A dead-even 0
+ * becomes -0.5; the half point has to land on somebody, and with no favorite to
+ * pick it lands on the nominal home side.
+ *
+ * The hook makes a push rare, not impossible: fantasy scores are decimal, so a
+ * margin of exactly 0.5 against a -0.5 line still ties. That residue is why
+ * coverSide reports "push" rather than assuming it away.
  */
 export function priceSpread(homeProjected: number, awayProjected: number): number {
-  const rounded = Math.round((awayProjected - homeProjected) * 2) / 2;
-  // Object.is guards -0, which formats as "-0" and reads as a broken line.
-  if (rounded === 0) return -0.5;
-  return rounded;
+  const raw = awayProjected - homeProjected;
+  if (raw === 0) return -0.5;
+  // Round the MAGNITUDE onto the half-integer grid, then restore the sign, so
+  // swapping the two sides negates the spread exactly.
+  const magnitude = Math.round(Math.abs(raw) - 0.5) + 0.5;
+  return raw < 0 ? -magnitude : magnitude;
 }
 
 /**
@@ -131,18 +143,54 @@ export function pay(ml: number, stake: number): number {
   return (stake * ml) / 100;
 }
 
+export type CoverResult = "home" | "away" | "push";
+
 /**
  * Which side covered, given final (or current) scores and the home spread.
- * Home covers when its margin plus its spread is positive. Because the spread
- * is never 0 and never a whole number, this can never land on exactly 0 for a
- * whole-number score difference; the `> 0` test is therefore total.
+ * Home covers when its margin plus its spread is positive.
+ *
+ * "push" is rare but genuinely reachable, and it is a real outcome rather than
+ * a defensive fiction. The half-point hook on every spread kills the common
+ * case (a whole-number margin against a whole-number line), but fantasy scores
+ * are decimal: 100.5 to 100.0 against a -0.5 line lands on exactly zero. It is
+ * returned instead of being folded into "away" because crediting a cover to a
+ * side that did not earn one puts a wrong result in somebody's record. Every
+ * caller must handle it.
  */
 export function coverSide(
   homePoints: number,
   awayPoints: number,
   spread: number,
-): "home" | "away" {
-  return homePoints - awayPoints + spread > 0 ? "home" : "away";
+): CoverResult {
+  const margin = homePoints - awayPoints + spread;
+  if (margin === 0) return "push";
+  return margin > 0 ? "home" : "away";
+}
+
+/**
+ * Grades one member's pick against the spread SNAPSHOTTED on their row.
+ *
+ * Deliberately does not take the game's current line: the hourly repricing
+ * moves lines right up to kickoff, so the number a member agreed to and the
+ * number the game ended up carrying are routinely different, and only the
+ * former is theirs. Grading against the live line would rewrite people's
+ * results every hour.
+ */
+export function gradePick(
+  homePoints: number,
+  awayPoints: number,
+  pick: { side: "home" | "away"; spreadAtPick: number },
+): CoverResult {
+  return coverSide(homePoints, awayPoints, pick.spreadAtPick);
+}
+
+/** True when the pick's own snapshotted line came in. */
+export function pickCovered(
+  homePoints: number,
+  awayPoints: number,
+  pick: { side: "home" | "away"; spreadAtPick: number },
+): boolean {
+  return gradePick(homePoints, awayPoints, pick) === pick.side;
 }
 
 /** "-3.5" / "+3.5", never a bare "3.5" and never "-0". */
