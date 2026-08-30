@@ -372,45 +372,25 @@ export default async function RosterPage({ params }: RosterPageProps) {
   // Use the most recent season to fetch the roster
   const latestSeason = franchise.seasonHistory[0];
 
-  // These are independent; fetch in parallel. None of them is optional data:
-  // after #253 every one of these rethrows a genuine DB failure via
-  // rethrowUnlessTolerable, so an outage reaches the error boundary and the
-  // last good ISR entry survives. Only real non-error outcomes (a franchise
-  // with no roster rows, a Sleeper outage behind nflState) still degrade to
-  // null. `globalSeason` (the league's latest season row, not this franchise's)
-  // plus `nflState` feed the season-segment resolver, exactly like
+  // These are independent; fetch in parallel. None of them is optional data,
+  // and none is wrapped in a caller-side catch: as of #253 every one of these
+  // queries ends its own catch with rethrowUnlessTolerable, so the guard lives
+  // in the query layer and a wrapper here would be dead code. A genuine DB
+  // outage therefore reaches the error boundary and the last good ISR entry
+  // survives, while real non-error outcomes (a franchise with no roster rows, a
+  // Sleeper outage behind nflState) still come back as null from the query.
+  //
+  // `globalSeason` (the league's latest season row, not this franchise's) plus
+  // `nflState` feed the season-segment resolver, exactly like
   // app/players/page.tsx, so both tables lead with the same column for the same
   // live data.
   const [roster, allFranchises, nflState, globalSeason] = await Promise.all([
     latestSeason
-      ? getFranchiseRoster(franchise.id, latestSeason.seasonId).catch((e) => {
-          rethrowUnlessTolerable(e);
-          return null;
-        })
+      ? getFranchiseRoster(franchise.id, latestSeason.seasonId)
       : Promise.resolve(null),
-    // This is the franchise picker's data. A picker that silently vanishes is a
-    // plausible-looking page, which is exactly the cacheable lie the rule
-    // targets. getAllFranchisesUncached already rethrows, so this catch is the
-    // only remaining swallow on the path.
-    getAllFranchises().catch((e) => {
-      rethrowUnlessTolerable(e);
-      return null;
-    }),
-    // Not optional data: nflState drives the season segment and therefore which
-    // column leads the roster table, so a DB outage behind it must reach the
-    // error boundary rather than ISR-cache a roster with the wrong lead column
-    // (see lib/db-guard.ts). A Sleeper outage still degrades to null.
-    getNflState().catch((e) => {
-      rethrowUnlessTolerable(e);
-      return null;
-    }),
-    // Same argument as nflState: globalSeason is the other half of
-    // resolveLiveSeasonSegment, so swallowing here is the same bug under a
-    // different variable name.
-    getLatestSeason().catch((e) => {
-      rethrowUnlessTolerable(e);
-      return null;
-    }),
+    getAllFranchises(),
+    getNflState(),
+    getLatestSeason(),
   ]);
 
   const segment = await resolveLiveSeasonSegment(globalSeason, nflState);
@@ -422,15 +402,12 @@ export default async function RosterPage({ params }: RosterPageProps) {
 
   const weekStatusRaw =
     segment === "in_season" && isCurrentSeason && latestSeason && nflState
-      ? // Not optional either: an empty map flips showWkColumn false (it guards
-        // on size > 0), so a swallowed failure renders the wrong headline
-        // column with no error at all.
-        await getCurrentWeekPlayerStatusByPlayer(latestSeason.seasonId, nflState.week).catch(
-          (e) => {
-            rethrowUnlessTolerable(e);
-            return new Map();
-          }
-        )
+      ? // Uncaught on purpose: the query rethrows a genuine DB failure itself.
+        // An empty map flips showWkColumn false (it guards on size > 0), so a
+        // swallowed failure would render the wrong headline column with no
+        // error at all. The empty-map branch below is the real not-in-season
+        // outcome, not a failure fallback.
+        await getCurrentWeekPlayerStatusByPlayer(latestSeason.seasonId, nflState.week)
       : new Map<
           string,
           { points: number | null; projected: number | null; gameStatus: string | null }

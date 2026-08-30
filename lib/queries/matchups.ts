@@ -186,8 +186,10 @@ export async function getMatchupsByWeek(
 
     return pairMatchupRows(rowsWithAvatars);
   } catch (e) {
-    console.error("[matchups] getMatchupsByWeek error:", e);
+    // Guard before logging: on the intolerable path this throws and Next
+    // reports it, so logging above would double-report every prod failure.
     rethrowUnlessTolerable(e);
+    console.error("[matchups] getMatchupsByWeek error:", e);
     return [];
   }
 }
@@ -255,8 +257,9 @@ export const getCurrentWeekMatchups = cache(async function getCurrentWeekMatchup
       seasonId: latestSeason.id,
     };
   } catch (e) {
-    console.error("[matchups] getCurrentWeekMatchups error:", e);
+    // Guard before logging, same convention as getMatchupsByWeek above.
     rethrowUnlessTolerable(e);
+    console.error("[matchups] getCurrentWeekMatchups error:", e);
     return null;
   }
 });

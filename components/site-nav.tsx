@@ -23,10 +23,17 @@ import { ScrollChrome } from "@/components/nav/scroll-chrome";
  *
  * The swallow below is deliberate and stays swallowing even though #252 turned
  * getCurrentWeekMatchups into a thrower. SiteNav is rendered by the root
- * layout, so a throw here would take down every route including the error
- * boundary's own chrome. It masks nothing: getCurrentWeekMatchups (and
- * getNflState, and getLatestSeason) are React cache()d, so the page's own call
- * replays the identical rejection and still reaches the error boundary.
+ * layout, so a throw here would take down every route, including the error
+ * boundary's own chrome, and turn a one-page data problem into a blank site.
+ *
+ * Be honest about the cost rather than claiming it is free: this CAN mask a
+ * failure. Only / and /matchups call getCurrentWeekMatchups themselves, so on
+ * every other route a matchups-only DB failure surfaces as nothing louder than
+ * an "Offseason" pill on an otherwise healthy page. The two routes that do call
+ * it re-run the query inside their own rethrowing try, so there at least the
+ * page still reaches the error boundary. Accepting a possibly-wrong pill is the
+ * chosen trade for keeping the chrome renderable; it is not a claim that the
+ * error resurfaces elsewhere.
  */
 async function resolveLivePill(): Promise<LivePillProps> {
   try {

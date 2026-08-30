@@ -51,27 +51,16 @@ export default async function WeekResultsPage({
     notFound();
   }
 
-  let matchups: Awaited<ReturnType<typeof getMatchupsByWeek>> = [];
+  // Both reads are uncaught on purpose: getMatchupsByWeek rethrows a genuine DB
+  // failure itself, so a try/catch here would only be ceremony. A week with no
+  // matchups is a real outcome and still comes back as an empty array.
+  const matchups = await getMatchupsByWeek(season.id, week);
 
-  try {
-    matchups = await getMatchupsByWeek(season.id, week);
-  } catch (e) {
-    // A week with no matchups is a real outcome and stays an empty array.
-    // A DB failure is not, and must reach the error boundary.
-    rethrowUnlessTolerable(e);
-  }
-
-  // Check if next week has data (for navigation)
-  let nextWeekHasData = false;
-  try {
-    const nextWeekMatchups = await getMatchupsByWeek(season.id, week + 1);
-    nextWeekHasData = nextWeekMatchups.length > 0;
-  } catch (e) {
-    // Same database, same request: if this probe fails the primary read above
-    // almost certainly did too. Silently hiding the "next week" arrow would be
-    // the same cacheable lie in miniature.
-    rethrowUnlessTolerable(e);
-  }
+  // Check if next week has data (for navigation). Same database, same request:
+  // if this probe fails the primary read above almost certainly did too, and
+  // silently hiding the "next week" arrow would be the same cacheable lie in
+  // miniature.
+  const nextWeekHasData = (await getMatchupsByWeek(season.id, week + 1)).length > 0;
 
   const isPlayoffWeek =
     season.playoffWeekStart != null && week >= season.playoffWeekStart;
