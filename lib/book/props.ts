@@ -118,7 +118,7 @@ function probOverThreshold(projected: number, threshold: number): number {
 }
 
 /**
- * P(at least one of these teams clears the threshold) — a Poisson-ish "any of
+ * P(at least one of these teams clears the threshold): a Poisson-ish "any of
  * N independent trials" fold over each team's own probability, per the issue.
  * Fantasy scores are not truly independent (a shared bye week, weather on a
  * whole slate), but nothing in this league's data models that correlation,
@@ -158,7 +158,7 @@ export function priceCeilingWatch(
  * Picks the week's ceiling threshold from the league's own history: the
  * trailing-two-seasons P95 of weekly team scores, rounded to the nearest 10.
  * Falls back to 150 (documented default, issue #224) when there is not
- * enough history yet to trust a percentile — a young league, or the very
+ * enough history yet to trust a percentile: a young league, or the very
  * first props ever generated.
  */
 export function chooseCeilingThreshold(historicalScores: number[]): number {
@@ -226,7 +226,7 @@ export interface BiggestFavorite {
 }
 
 /**
- * The week's most lopsided pairing by projected margin — what the Mercy Line
+ * The week's most lopsided pairing by projected margin: what the Mercy Line
  * prices and what its card copy names as "the projected doormat". An exact
  * tie for the widest margin resolves to whichever pairing appeared first in
  * the input, a predictable choice for something this rare.

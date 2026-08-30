@@ -8,7 +8,8 @@ import {
   draftPicks,
   playerValues,
 } from "@/lib/db/schema";
-import { and, eq, lt, ne, sql } from "drizzle-orm";
+import { and, desc, eq, lt, ne, sql } from "drizzle-orm";
+import { gradeBookProps } from "@/lib/sync/book-props";
 import {
   getLeague,
   getLeagueUsers,
@@ -1328,6 +1329,69 @@ async function resolveActiveLeagueId(
 }
 
 // ---------------------------------------------------------------------------
+// Step: Grade The Book's props (Tuesday-morning-ish, whenever a week's actuals
+// are complete)
+// ---------------------------------------------------------------------------
+
+/**
+ * Grades any book_props week whose actuals have come in complete. No Sleeper
+ * call needed: just the latest season row, matching resolveBookWeek's "latest
+ * season" convention in lib/queries/book.ts.
+ */
+async function syncBookPropGrading(): Promise<SyncStepResult> {
+  const startTime = Date.now();
+  const logId = await logSyncStart("daily", "book_props");
+
+  try {
+    const [latest] = await db
+      .select({ id: seasons.id })
+      .from(seasons)
+      .orderBy(desc(seasons.seasonYear))
+      .limit(1);
+
+    if (!latest) {
+      const durationMs = Date.now() - startTime;
+      await logSyncComplete(logId, "success", 0);
+      return {
+        dataType: "book_props",
+        status: "success",
+        rowCount: 0,
+        durationMs,
+        note: "No season in the database yet; nothing to grade.",
+      };
+    }
+
+    const result = await gradeBookProps(latest.id);
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "success", result.propsGraded, undefined, {
+      weeksGraded: result.weeksGraded,
+      skipped: result.skipped,
+    });
+    return {
+      dataType: "book_props",
+      status: "success",
+      rowCount: result.propsGraded,
+      durationMs,
+      note:
+        result.skipped > 0
+          ? `${result.skipped} prop(s) skipped (incomplete matchup data)`
+          : undefined,
+    };
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "failure", 0, errorMessage);
+    return {
+      dataType: "book_props",
+      status: "failure",
+      rowCount: 0,
+      durationMs,
+      error: errorMessage,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main: Run Daily Sync
 // ---------------------------------------------------------------------------
 
@@ -1354,9 +1418,17 @@ export async function runDailySync(): Promise<DailySyncSummary> {
     syncDrafts(leagueId),
     syncPlayoffBracket(leagueId),
     syncPlayerValues(),
+    syncBookPropGrading(),
   ]);
 
-  const dataTypes = ["rosters", "players", "drafts", "playoffs", "player_values"];
+  const dataTypes = [
+    "rosters",
+    "players",
+    "drafts",
+    "playoffs",
+    "player_values",
+    "book_props",
+  ];
   const stepResults: SyncStepResult[] = [leagueResult];
   results.forEach((r, i) => {
     if (r.status === "fulfilled") {

@@ -42,6 +42,7 @@ import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
 import { resolveDivisionName } from "@/lib/divisions";
 import { runAtomic } from "@/lib/db/atomic";
 import { repriceBookLines } from "@/lib/sync/book-lines";
+import { generateOrRepriceBookProps } from "@/lib/sync/book-props";
 import { bookWeekFor } from "@/lib/queries/book";
 
 // Shape of the per-season settings blob stored in seasons.settings_json.
@@ -1040,6 +1041,56 @@ async function syncBookLines(
 }
 
 // ---------------------------------------------------------------------------
+// Step E1: Generate/reprice The Book's props for the current week
+// ---------------------------------------------------------------------------
+
+/**
+ * Generates (or reprices) the week's three props from the freshest
+ * projections and actuals (see lib/sync/book-props.ts). Its own sync_log row
+ * and its own try/catch, in its own function, so a props failure never takes
+ * book_lines or the rest of the hourly run down with it.
+ */
+async function syncBookProps(
+  seasonId: number,
+  seasonYear: number,
+  seasonType: string,
+  stateWeek: number
+): Promise<SyncStepResult> {
+  const startTime = Date.now();
+  const logId = await logSyncStart("hourly", "book_props");
+  const week = bookWeekFor(seasonType, stateWeek);
+
+  try {
+    const result = await generateOrRepriceBookProps(seasonId, seasonYear, week);
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "success", result.rowCount, undefined, {
+      week,
+      locked: result.locked,
+    });
+    return {
+      dataType: "book_props",
+      status: "success",
+      rowCount: result.rowCount,
+      durationMs,
+      note: result.locked
+        ? "Week already past its first kickoff; props left at their booked numbers."
+        : undefined,
+    };
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "failure", 0, errorMessage);
+    return {
+      dataType: "book_props",
+      status: "failure",
+      rowCount: 0,
+      durationMs,
+      error: errorMessage,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Step E: Sync NFL Schedule (game statuses)
 // ---------------------------------------------------------------------------
 
@@ -1338,6 +1389,25 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
   } catch (e) {
     stepResults.push({
       dataType: "book_lines",
+      status: "failure",
+      rowCount: 0,
+      durationMs: 0,
+      error: e instanceof Error ? e.message : "Unknown error",
+    });
+  }
+
+  try {
+    stepResults.push(
+      await syncBookProps(
+        seasonId,
+        seasonYear,
+        nflState.season_type,
+        currentWeek,
+      ),
+    );
+  } catch (e) {
+    stepResults.push({
+      dataType: "book_props",
       status: "failure",
       rowCount: 0,
       durationMs: 0,
