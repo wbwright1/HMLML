@@ -150,12 +150,14 @@ export async function repriceFutures(
 
     const candidates: FuturesCandidate[] = pool.map((c) => ({
       playerId: c.playerId,
-      score: candidateScore(
-        c.bankedPoints,
-        c.projectedPerWeek,
-        inputs.weeksRemaining,
-        c.isStarter,
-      ),
+      score: candidateScore({
+        bankedPoints: c.bankedPoints,
+        projectedPerWeek: c.projectedPerWeek,
+        weeksRemaining: inputs.weeksRemaining,
+        startShare: c.startShare,
+        lineupProjectedPerWeek: c.lineupProjectedPerWeek,
+        bestAlternativePerWeek: c.bestAlternativePerWeek,
+      }),
     }));
     const byId = new Map<string, PlayerCandidateRow>(
       pool.map((c) => [c.playerId, c]),
@@ -178,6 +180,10 @@ export async function repriceFutures(
           : {
               bankedPoints: candidate?.bankedPoints ?? 0,
               weeksStarted: candidate?.weeksStarted ?? 0,
+              lineupShare:
+                candidate && candidate.lineupProjectedPerWeek > 0
+                  ? candidate.projectedPerWeek / candidate.lineupProjectedPerWeek
+                  : 0,
             },
       );
     });
@@ -248,6 +254,8 @@ interface FuturesDetail {
   playoffProb?: number;
   bankedPoints?: number;
   weeksStarted?: number;
+  /** This player's raw share of his franchise's projected lineup, as a fraction. */
+  lineupShare?: number;
 }
 
 function toFutureRow(

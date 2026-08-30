@@ -21,6 +21,7 @@ import {
   FUTURES_MARKET_IDS,
   futuresLockWeek,
   regularSeasonWeeksRemaining,
+  startShareFor,
   type FuturesGame,
   type FuturesMarket,
   type FuturesTeam,
@@ -179,9 +180,15 @@ export interface PlayerCandidateRow {
   /** Points scored while in a starting lineup, this regular season. */
   bankedPoints: number;
   weeksStarted: number;
-  /** Currently in a starting slot, so still on pace for anything. */
-  isStarter: boolean;
+  /** Rest-of-season start credit: 1.0 for a starter, BENCH_START_SHARE for bench. */
+  startShare: number;
   projectedPerWeek: number;
+  /** The roster this player is on, so team-impact terms can be computed. */
+  rosterId: string;
+  /** This roster's projected starting-lineup total, per week. */
+  lineupProjectedPerWeek: number;
+  /** Best other same-position teammate's projected total, per week. */
+  bestAlternativePerWeek: number;
 }
 
 /**
@@ -196,29 +203,42 @@ export async function getFuturesPricingInputs(
   season: FuturesSeason,
   week: number,
 ): Promise<FuturesPricingInputs> {
-  // Five independent reads of one moment in the season. They are issued
-  // together rather than in sequence for the obvious reason, and also for a
-  // less obvious one: the further apart they run, the more room there is for a
+  // Weeks that have really kicked off, per nfl_games: the authority for
+  // "banked", immune to the lineup sync writing started=true rows for every
+  // week of the schedule the moment the season is created. Fetched once and
+  // reused for both the weeks-remaining arithmetic below and the banked-points
+  // scoping inside getPlayerCandidates, rather than recomputed.
+  const kickedOffWeeks = await getKickedOffWeeks(season.seasonYear);
+  const playedWeeks = [...kickedOffWeeks]
+    .filter((w) => w >= 1 && w <= season.finalRegularWeek)
+    .sort((a, b) => a - b);
+
+  // Independent reads of one moment in the season. They are issued together
+  // rather than in sequence for the obvious reason, and also for a less
+  // obvious one: the further apart they run, the more room there is for a
   // sync to land between them and price two boards off two different seasons.
-  const [standingRows, projections, remainingGames, weeksBanked, candidates] =
-    await Promise.all([
-      db
-        .select({
-          franchiseId: franchiseSeasons.franchiseId,
-          rosterId: franchiseSeasons.rosterId,
-          wins: franchiseSeasons.wins,
-          losses: franchiseSeasons.losses,
-          ties: franchiseSeasons.ties,
-          pointsScored: franchiseSeasons.pointsScored,
-          division: franchiseSeasons.division,
-        })
-        .from(franchiseSeasons)
-        .where(eq(franchiseSeasons.seasonId, season.seasonId)),
-      getWeekProjectedTotals(season.seasonId, season.seasonYear, week),
-      getRemainingSchedule(season),
-      getBankedWeekCount(season),
-      getPlayerCandidates(season),
-    ]);
+  const [standingRows, projections, remainingGames] = await Promise.all([
+    db
+      .select({
+        franchiseId: franchiseSeasons.franchiseId,
+        rosterId: franchiseSeasons.rosterId,
+        wins: franchiseSeasons.wins,
+        losses: franchiseSeasons.losses,
+        ties: franchiseSeasons.ties,
+        pointsScored: franchiseSeasons.pointsScored,
+        division: franchiseSeasons.division,
+      })
+      .from(franchiseSeasons)
+      .where(eq(franchiseSeasons.seasonId, season.seasonId)),
+    getWeekProjectedTotals(season.seasonId, season.seasonYear, week),
+    getRemainingSchedule(season),
+  ]);
+
+  // Candidates need the franchise starting-lineup projection map above (the
+  // team-impact denominator), so this read follows rather than joins the
+  // batch: reusing the map is the point, per book-futures's own comment about
+  // the champion market pricing off the same number.
+  const candidates = await getPlayerCandidates(season, playedWeeks, projections);
 
   const teams: FuturesTeam[] = standingRows.map((row) => ({
     franchiseId: row.franchiseId,
@@ -231,14 +251,14 @@ export async function getFuturesPricingInputs(
     division: row.division,
   }));
 
-  // Counted off the SAME weeks bankedPoints is built from, which is the only
-  // way the two halves of a candidate's score can be added together. Counting
-  // completed matchups instead double counts the week in progress: its started
-  // points are already banked, while the week itself is not "complete" yet, so
-  // every starter got credited a projected week he had already played.
+  // Counted off nfl_games kickoffs, the same authority the market locks read.
+  // Counting completed matchups instead would double count the week in
+  // progress: its started points are already banked, while the week itself is
+  // not "complete" yet, so every starter would be credited a projected week he
+  // had already played.
   const weeksRemaining = regularSeasonWeeksRemaining(
     season.finalRegularWeek,
-    weeksBanked,
+    playedWeeks.length,
   );
 
   return { teams, remainingGames, weeksRemaining, candidates };
@@ -313,37 +333,27 @@ export async function getCompletedWeekCount(
 }
 
 /**
- * How many regular-season weeks have started points on the board.
- *
- * This is the week count that matches bankedPoints: a week appears here as soon
- * as any player has been credited a point in a starting lineup, which is
- * exactly when that week starts contributing to the candidate scores.
- */
-async function getBankedWeekCount(season: FuturesSeason): Promise<number> {
-  const rows = await db
-    .select({ week: playerWeekPoints.week })
-    .from(playerWeekPoints)
-    .where(
-      and(
-        eq(playerWeekPoints.seasonId, season.seasonId),
-        eq(playerWeekPoints.started, true),
-        lte(playerWeekPoints.week, season.finalRegularWeek),
-      ),
-    )
-    .groupBy(playerWeekPoints.week);
-
-  return rows.length;
-}
-
-/**
- * The MVP and ROTY candidate pool: everyone who has started a game this season,
- * plus everyone currently in a starting lineup.
+ * The MVP and ROTY candidate pool: everyone who has started a game this
+ * season, plus everyone currently rostered as a starter OR a bench player.
  *
  * The union matters at both ends of the calendar. Before week 1 nobody has
  * started anything, so without the roster side the pool would be empty and
  * there would be no market at all; late in the season somebody who has banked
- * 200 points and since been benched is still very much in the race, so without
- * the history side he would fall off the board he is leading.
+ * 200 points and since been benched is still very much in the race, so
+ * without the history side he would fall off the board he is leading.
+ *
+ * Bench is included, not just starter: a preseason bench stud has real award
+ * equity, and in a dynasty league the rookie who breaks out in October is
+ * almost always on a bench in August. Taxi and IR are excluded: neither can
+ * bank started points without being activated first.
+ *
+ * `playedWeeks` is the set of fantasy weeks that have really kicked off (per
+ * nfl_games, computed once by the caller). Banked points and weeks-started are
+ * scoped to exactly those weeks: the lineup sync writes a player_week_points
+ * row with started=true for every week of the schedule the moment the season
+ * is created, so an unscoped "started=true" sum would count preseason weeks
+ * that have not been played as banked, and a preseason player would show 14
+ * starts he never took.
  *
  * Rookie is years_exp = 0. A NULL years_exp is treated as NOT a rookie: the
  * column is a snapshot of the current NFL season and a missing value is a gap
@@ -352,34 +362,45 @@ async function getBankedWeekCount(season: FuturesSeason): Promise<number> {
  */
 async function getPlayerCandidates(
   season: FuturesSeason,
+  playedWeeks: number[],
+  lineupProjectedTotals: Map<string, number>,
 ): Promise<PlayerCandidateRow[]> {
-  const startedRows = await db
-    .select({
-      playerId: playerWeekPoints.playerId,
-      bankedPoints: sql<number>`coalesce(sum(${playerWeekPoints.points}), 0)`,
-      weeksStarted: sql<number>`count(*)`,
-    })
-    .from(playerWeekPoints)
-    .where(
-      and(
-        eq(playerWeekPoints.seasonId, season.seasonId),
-        eq(playerWeekPoints.started, true),
-        lte(playerWeekPoints.week, season.finalRegularWeek),
-      ),
-    )
-    .groupBy(playerWeekPoints.playerId);
+  const startedRows = playedWeeks.length
+    ? await db
+        .select({
+          playerId: playerWeekPoints.playerId,
+          bankedPoints: sql<number>`coalesce(sum(${playerWeekPoints.points}), 0)`,
+          weeksStarted: sql<number>`count(*)`,
+        })
+        .from(playerWeekPoints)
+        .where(
+          and(
+            eq(playerWeekPoints.seasonId, season.seasonId),
+            eq(playerWeekPoints.started, true),
+            inArray(playerWeekPoints.week, playedWeeks),
+          ),
+        )
+        .groupBy(playerWeekPoints.playerId)
+    : [];
 
+  // starter AND bench: taxi/IR stay excluded (see the doc comment above).
   const rosterRows = await db
-    .select({ playerId: rosterPlayers.playerId })
+    .select({
+      playerId: rosterPlayers.playerId,
+      rosterId: rosterPlayers.rosterId,
+      slot: rosterPlayers.slot,
+    })
     .from(rosterPlayers)
     .where(
       and(
         eq(rosterPlayers.seasonId, season.seasonId),
-        eq(rosterPlayers.slot, "starter"),
+        inArray(rosterPlayers.slot, ["starter", "bench"]),
       ),
     );
 
-  const starterIds = new Set(rosterRows.map((r) => r.playerId));
+  const rosterByPlayer = new Map(
+    rosterRows.map((r) => [r.playerId, { rosterId: r.rosterId, slot: r.slot }]),
+  );
   const bankedById = new Map(
     startedRows.map((r) => [
       r.playerId,
@@ -390,7 +411,7 @@ async function getPlayerCandidates(
     ]),
   );
 
-  const allIds = [...new Set([...bankedById.keys(), ...starterIds])];
+  const allIds = [...new Set([...bankedById.keys(), ...rosterByPlayer.keys()])];
   if (allIds.length === 0) return [];
 
   const playerRows = await db
@@ -406,8 +427,9 @@ async function getPlayerCandidates(
     .from(players)
     .where(inArray(players.id, allIds));
 
-  return playerRows.map((p) => {
-    const banked = bankedById.get(p.id);
+  const projectedPerWeekById = new Map<string, number>();
+  const positionById = new Map<string, string | null>();
+  for (const p of playerRows) {
     // The league-scored season projection, spread across the season. Same
     // source the weekly board falls back to, so a player's pace here and his
     // team's line there cannot disagree.
@@ -415,6 +437,45 @@ async function getPlayerCandidates(
       p.projSeason === season.seasonYear && p.projPointsPpr != null
         ? p.projPointsPpr / REGULAR_SEASON_GAMES
         : 0;
+    projectedPerWeekById.set(p.id, projectedPerWeek);
+    positionById.set(p.id, p.position);
+  }
+
+  // Best same-position teammate's pace, computed in TypeScript over rows
+  // already fetched rather than as a correlated subquery. Grouped by
+  // rosterId + position, over every player carried in the pool (starter and
+  // bench, taxi/IR excluded), which is the full comparison set the plan asks
+  // for.
+  const byRosterPosition = new Map<string, { playerId: string; perWeek: number }[]>();
+  for (const [playerId, roster] of rosterByPlayer) {
+    const position = positionById.get(playerId);
+    if (!position) continue;
+    const key = `${roster.rosterId}:${position}`;
+    const list = byRosterPosition.get(key) ?? [];
+    list.push({ playerId, perWeek: projectedPerWeekById.get(playerId) ?? 0 });
+    byRosterPosition.set(key, list);
+  }
+
+  function bestAlternativeFor(
+    playerId: string,
+    rosterId: string,
+    position: string | null,
+  ): number {
+    if (!position) return 0;
+    const teammates = byRosterPosition.get(`${rosterId}:${position}`) ?? [];
+    let best = 0;
+    for (const t of teammates) {
+      if (t.playerId === playerId) continue;
+      if (t.perWeek > best) best = t.perWeek;
+    }
+    return best;
+  }
+
+  return playerRows.map((p) => {
+    const banked = bankedById.get(p.id);
+    const roster = rosterByPlayer.get(p.id);
+    const projectedPerWeek = projectedPerWeekById.get(p.id) ?? 0;
+    const rosterId = roster?.rosterId ?? "";
 
     return {
       playerId: p.id,
@@ -424,8 +485,11 @@ async function getPlayerCandidates(
       isRookie: p.yearsExp === 0,
       bankedPoints: banked?.bankedPoints ?? 0,
       weeksStarted: banked?.weeksStarted ?? 0,
-      isStarter: starterIds.has(p.id),
+      startShare: startShareFor(roster?.slot === "bench" ? "bench" : "starter"),
       projectedPerWeek,
+      rosterId,
+      lineupProjectedPerWeek: lineupProjectedTotals.get(rosterId) ?? 0,
+      bestAlternativePerWeek: bestAlternativeFor(p.id, rosterId, p.position),
     };
   });
 }
@@ -487,6 +551,8 @@ interface FuturesDetail {
   playoffProb?: number;
   bankedPoints?: number;
   weeksStarted?: number;
+  /** This player's raw share of his franchise's projected lineup, as a fraction. Not yet rendered; see issue #236. */
+  lineupShare?: number;
 }
 
 /**

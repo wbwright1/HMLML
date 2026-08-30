@@ -130,12 +130,53 @@ export const MIN_FUTURES_FAVORITE_ODDS = -400;
 /**
  * Softmax temperature for player markets, in fantasy points.
  *
- * It answers "how big a season-points gap makes somebody a clear favorite". At
- * 30, a candidate 30 points clear of the next is about 2.7x likelier to take
- * the award, which matches how these races actually finish: a real lead
- * matters, and nobody is ever locked in with weeks to play.
+ * Real MVP/ROTY scores span roughly 150-360 season points, not the 30-point
+ * gaps this constant was originally reasoned about with in the abstract. It
+ * was retuned against the live 2026 board: 45 posts a favorite around +400 to
+ * +500 with roughly five prices clear of the +1900 "basically nobody" cap
+ * (MIN_IMPLIED_PROB) before the rest of the pool compresses onto it. Lower
+ * (30) over-concentrates and can print a season-long favorite as short as
+ * -155; higher (80+) drives every candidate under the implied-probability
+ * floor and the whole board reprints as a wall of +1900, which is the exact
+ * failure this retune exists to avoid.
  */
-export const PLAYER_SOFTMAX_TEMPERATURE = 30;
+export const PLAYER_SOFTMAX_TEMPERATURE = 45;
+
+/**
+ * Rest-of-season credit for a player currently in a starting slot: full pace.
+ */
+export const STARTER_START_SHARE = 1.0;
+
+/**
+ * Rest-of-season credit for a rostered bench player: a quarter of a starter's
+ * pace. Byes, injuries and flex churn genuinely promote bench players onto
+ * the field, so a bench stud keeps real equity rather than being priced at
+ * zero until the week he happens to start.
+ */
+export const BENCH_START_SHARE = 0.25;
+
+/**
+ * Starting lineup slots per franchise (12 rosters x 10 starters, verified
+ * against live roster_players rows). The denominator for "a normal starter's
+ * share of his lineup".
+ */
+export const STARTER_SLOTS = 10;
+
+/** How much the team-impact leverage term can move the volume score. */
+export const IMPACT_WEIGHT = 0.35;
+
+/** Lineup-share leads the leverage blend: the more robust of the two signals. */
+export const IMPACT_SHARE_WEIGHT = 0.6;
+
+/** Replacement-swing is noisier (one comparison), so it carries less weight. */
+export const IMPACT_SWING_WEIGHT = 0.4;
+
+/** Points/week gap over the next-best same-position teammate that reads as "irreplaceable". */
+export const SWING_REFERENCE = 3.0;
+
+/** Every impact ratio is clamped to this range before it can move a score. */
+export const IMPACT_RATIO_MIN = 0.5;
+export const IMPACT_RATIO_MAX = 2.0;
 
 /** Seasons simulated per team market. */
 export const FUTURES_SIMULATIONS = 4000;
@@ -501,22 +542,118 @@ export function softmaxProbabilities(
   return weights.map((w) => w / total);
 }
 
+/** Rest-of-season start credit for a roster slot. */
+export function startShareFor(slot: "starter" | "bench"): number {
+  return slot === "starter" ? STARTER_START_SHARE : BENCH_START_SHARE;
+}
+
+/** Clamp a ratio to the shared impact range, [IMPACT_RATIO_MIN, IMPACT_RATIO_MAX]. */
+function clampImpactRatio(ratio: number): number {
+  return Math.min(IMPACT_RATIO_MAX, Math.max(IMPACT_RATIO_MIN, ratio));
+}
+
 /**
- * A candidate's award score: points already banked in the starting lineup, plus
- * the pace they are on for the rest of the regular season.
+ * How much of his franchise's projected starting lineup a player represents,
+ * as a ratio to "a normal starter's share" (1 / STARTER_SLOTS).
  *
- * Rest-of-season is credited ONLY to a player currently in a starting slot. The
- * award is "most points scored while started", so a player riding a bench is
- * not on pace for anything, however good he is.
+ * 1.0 means an exactly average starter; 2.0 (the clamp ceiling) means he is
+ * carrying twice his share of the lineup. A zero or missing lineup total (a
+ * data gap, or a roster with no priced starters) reads as neutral rather than
+ * dividing by zero or blowing up to Infinity.
  */
-export function candidateScore(
-  bankedPoints: number,
+export function lineupShareRatio(
   projectedPerWeek: number,
-  weeksRemaining: number,
-  isStarter: boolean,
+  lineupProjectedPerWeek: number,
 ): number {
-  const rest = isStarter ? projectedPerWeek * Math.max(0, weeksRemaining) : 0;
-  return bankedPoints + rest;
+  if (!(lineupProjectedPerWeek > 0)) return 1;
+  const share = projectedPerWeek / lineupProjectedPerWeek;
+  return clampImpactRatio(share / (1 / STARTER_SLOTS));
+}
+
+/**
+ * How irreplaceable a player is: the points/week gap over the best other
+ * player at his position on the same roster, relative to SWING_REFERENCE.
+ *
+ * A player with a near-equal teammate behind him swings nothing and floors at
+ * IMPACT_RATIO_MIN. A player projected BELOW his backup also floors there
+ * (the max(0, ...) guard), rather than going negative. A player with no
+ * comparable backup swings a lot and clamps at IMPACT_RATIO_MAX.
+ */
+export function replacementSwingRatio(
+  projectedPerWeek: number,
+  bestAlternativePerWeek: number,
+): number {
+  const swing = Math.max(0, projectedPerWeek - bestAlternativePerWeek);
+  return clampImpactRatio(swing / SWING_REFERENCE);
+}
+
+/**
+ * The team-impact multiplier applied to a candidate's volume score.
+ *
+ * `leverage` blends the two ratios (share leads at 0.6, the noisier swing
+ * term carries 0.4) and lands in [IMPACT_RATIO_MIN, IMPACT_RATIO_MAX]; the
+ * multiplier then scales that around 1.0 by IMPACT_WEIGHT, so team impact can
+ * meaningfully move a candidate but can never overturn a large projection
+ * gap by itself. Neutral inputs (both ratios 1.0) return exactly 1.0.
+ */
+export function teamImpactMultiplier(
+  shareRatio: number,
+  swingRatio: number,
+): number {
+  const leverage =
+    IMPACT_SHARE_WEIGHT * shareRatio + IMPACT_SWING_WEIGHT * swingRatio;
+  return 1 + IMPACT_WEIGHT * (leverage - 1);
+}
+
+export interface CandidateScoreInput {
+  /** Points already banked in the starting lineup this regular season. */
+  bankedPoints: number;
+  /** League-scored season projection, spread per week. */
+  projectedPerWeek: number;
+  /** Regular-season weeks still to be played. */
+  weeksRemaining: number;
+  /** Rest-of-season start credit: 1.0 for a starter, BENCH_START_SHARE for bench. */
+  startShare: number;
+  /** The player's franchise's projected starting-lineup total, per week. */
+  lineupProjectedPerWeek: number;
+  /** Best other same-position teammate's projected total, per week. */
+  bestAlternativePerWeek: number;
+}
+
+/**
+ * A candidate's award score: points already banked in the starting lineup,
+ * plus the pace they are on for the rest of the regular season, scaled by
+ * how much of that pace a real lineup will actually put on the field.
+ *
+ * The award is "most points scored while started", so a raw projection is
+ * only half the story: `startShare` slopes rest-of-season credit down for a
+ * bench player instead of gating it to zero (byes and flex churn genuinely
+ * promote bench players), and the team-impact multiplier estimates how
+ * reliably a player's projected pace actually lands in a starting lineup
+ * week after week, rather than being a separate editorial opinion about who
+ * "matters". Impact is a MULTIPLIER on volume, never an additive term, which
+ * is what keeps a modest edge from overturning a large projection gap: an
+ * average starter with 300 projected points still outranks a high-leverage
+ * player projected for 200.
+ */
+export function candidateScore(input: CandidateScoreInput): number {
+  const rest =
+    input.startShare *
+    input.projectedPerWeek *
+    Math.max(0, input.weeksRemaining);
+  const volume = input.bankedPoints + rest;
+
+  const shareRatio = lineupShareRatio(
+    input.projectedPerWeek,
+    input.lineupProjectedPerWeek,
+  );
+  const swingRatio = replacementSwingRatio(
+    input.projectedPerWeek,
+    input.bestAlternativePerWeek,
+  );
+  const multiplier = teamImpactMultiplier(shareRatio, swingRatio);
+
+  return volume * multiplier;
 }
 
 export interface FuturesRow {
