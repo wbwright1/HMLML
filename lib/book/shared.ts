@@ -6,6 +6,7 @@ export type BookSideKey = "home" | "away";
 
 /** Re-exported so the client island types covers from one place. */
 import type { CoverResult } from "@/lib/book/pricing";
+import { formatMoney, formatMoneyline, formatSpread, pay } from "@/lib/book/pricing";
 export type { CoverResult };
 
 // ---------------------------------------------------------------------------
@@ -75,6 +76,89 @@ export interface BookChip {
  * not "50% of the league", and one person is definitely not 100% of it.
  */
 export const MIN_PICKS_FOR_CONSENSUS = 3;
+
+// ---------------------------------------------------------------------------
+// Hub line footer: the compact strip the hub's own matchup cards borrow from
+// The Book, so a member never has to leave the hub to see the number. Pure so
+// the format is unit-tested without a database; shared by the live-window
+// GameCard, the between-weeks SlateCard, and any future upcoming-card variant.
+// ---------------------------------------------------------------------------
+
+type HubFooterSide = Pick<BookSide, "abbreviation" | "name" | "moneyline">;
+export interface HubFooterGame {
+  spread: number;
+  status: BookGameStatus;
+  home: HubFooterSide;
+  away: HubFooterSide;
+  homePicks: number;
+  awayPicks: number;
+}
+
+/** "CT -3.5 · ML -165/+140" -- favorite's abbreviation and spread, then both moneylines home/away. */
+export function bookLineText(game: Pick<HubFooterGame, "spread" | "home" | "away">): string {
+  const favorite = game.spread < 0 ? game.home : game.away;
+  const favoriteAbbr = favorite.abbreviation ?? favorite.name;
+  const favoriteSpread = formatSpread(-Math.abs(game.spread));
+  return `${favoriteAbbr} ${favoriteSpread} · ML ${formatMoneyline(game.home.moneyline)}/${formatMoneyline(game.away.moneyline)}`;
+}
+
+/** "64% on CT", or null under MIN_PICKS_FOR_CONSENSUS (not yet a true claim about the league). */
+export function bookConsensusText(
+  game: Pick<HubFooterGame, "home" | "away" | "homePicks" | "awayPicks">,
+): string | null {
+  const total = game.homePicks + game.awayPicks;
+  if (total < MIN_PICKS_FOR_CONSENSUS) return null;
+  const homePct = Math.round((game.homePicks / total) * 100);
+  const favorsHome = homePct >= 100 - homePct;
+  const favorite = favorsHome ? game.home : game.away;
+  const pct = favorsHome ? homePct : 100 - homePct;
+  return `${pct}% on ${favorite.abbreviation ?? favorite.name}`;
+}
+
+/** "The Book →" once a game has kicked off, "Pick →" while it is still open. */
+export function bookCtaLabel(status: BookGameStatus): string {
+  return status === "open" ? "Pick →" : "The Book →";
+}
+
+/**
+ * "A $10 friendly on WW +140 pays $24.00 if it lands." -- the underdog payout
+ * line under an upcoming hub card. Only meaningful before kickoff (an
+ * in-progress or final game's odds are history, not an offer), so callers
+ * gate this to `status === "open"`.
+ */
+export function bookDogPayoutLine(
+  game: Pick<HubFooterGame, "home" | "away">,
+  stake: number = DEFAULT_STAKE,
+): string {
+  const dog = game.home.moneyline > 0 ? game.home : game.away;
+  const winnings = pay(dog.moneyline, stake);
+  return `A $${stake} friendly on ${dog.abbreviation ?? dog.name} ${formatMoneyline(
+    dog.moneyline,
+  )} pays ${formatMoney(winnings)} if it lands.`;
+}
+
+/**
+ * Assembles a hub card's full line footer from a priced game. The dog-payout
+ * line only renders while the game is genuinely open: once it has kicked off
+ * the posted odds are history, not an offer.
+ */
+export function buildHubLineFooter(game: HubFooterGame): BookLineFooter {
+  return {
+    lineText: bookLineText(game),
+    consensusText: bookConsensusText(game),
+    ctaLabel: bookCtaLabel(game.status),
+    dogPayoutLine: game.status === "open" ? bookDogPayoutLine(game) : null,
+  };
+}
+
+/** Mirrors components/book/line-footer.tsx's shape without importing a
+ * client-adjacent component module into server query code. */
+export interface BookLineFooter {
+  lineText: string;
+  consensusText: string | null;
+  ctaLabel: string;
+  dogPayoutLine: string | null;
+}
 
 export interface BookActionResult {
   ok: boolean;

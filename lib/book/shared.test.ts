@@ -1,8 +1,13 @@
 import { describe, it, expect } from "vitest";
 import {
   BOOK_ERRORS,
+  bookConsensusText,
+  bookCtaLabel,
+  bookDogPayoutLine,
+  bookLineText,
   picksForBoardWeek,
   pickRejectionReason,
+  type HubFooterGame,
   type MemberBookPick,
   type PickGuardFacts,
 } from "./shared";
@@ -100,5 +105,77 @@ describe("picksForBoardWeek", () => {
   it("handles a missing payload", () => {
     expect(picksForBoardWeek(null, 4)).toBeNull();
     expect(picksForBoardWeek(undefined, 4)).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Hub line footer
+// ---------------------------------------------------------------------------
+
+const HOME_FAVORED: HubFooterGame = {
+  spread: -3.5,
+  status: "open",
+  home: { abbreviation: "CT", name: "Coaching Tree", moneyline: -165 },
+  away: { abbreviation: "WW", name: "Wild West", moneyline: 140 },
+  homePicks: 5,
+  awayPicks: 2,
+};
+
+const AWAY_FAVORED: HubFooterGame = {
+  ...HOME_FAVORED,
+  spread: 3.5,
+  home: { abbreviation: "GT", name: "Gorilla Trap", moneyline: 140 },
+  away: { abbreviation: "MA", name: "Mahomes Alone", moneyline: -165 },
+};
+
+describe("bookLineText", () => {
+  it("leads with the favorite when home is favored", () => {
+    expect(bookLineText(HOME_FAVORED)).toBe("CT -3.5 · ML -165/+140");
+  });
+
+  it("leads with the favorite when away is favored", () => {
+    expect(bookLineText(AWAY_FAVORED)).toBe("MA -3.5 · ML +140/-165");
+  });
+});
+
+describe("bookConsensusText", () => {
+  it("suppresses consensus under the minimum pick threshold", () => {
+    expect(bookConsensusText({ ...HOME_FAVORED, homePicks: 1, awayPicks: 1 })).toBeNull();
+  });
+
+  it("reports the leading side's share once enough picks exist", () => {
+    // 5 of 7 on home = 71%.
+    expect(bookConsensusText(HOME_FAVORED)).toBe("71% on CT");
+  });
+
+  it("reports the away side when it leads", () => {
+    expect(
+      bookConsensusText({ ...HOME_FAVORED, homePicks: 2, awayPicks: 5 }),
+    ).toBe("71% on WW");
+  });
+});
+
+describe("bookCtaLabel", () => {
+  it("invites a pick while the game is open", () => {
+    expect(bookCtaLabel("open")).toBe("Pick →");
+  });
+
+  it("points to The Book once a game has kicked off", () => {
+    expect(bookCtaLabel("live")).toBe("The Book →");
+    expect(bookCtaLabel("final")).toBe("The Book →");
+  });
+});
+
+describe("bookDogPayoutLine", () => {
+  it("prices a $10 friendly on the underdog", () => {
+    expect(bookDogPayoutLine(HOME_FAVORED)).toBe(
+      "A $10 friendly on WW +140 pays $14.00 if it lands.",
+    );
+  });
+
+  it("finds the dog regardless of which side it is stored on", () => {
+    expect(bookDogPayoutLine(AWAY_FAVORED)).toBe(
+      "A $10 friendly on GT +140 pays $14.00 if it lands.",
+    );
   });
 });

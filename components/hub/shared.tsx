@@ -1,11 +1,13 @@
 import { LiveMatchupCard } from "@/components/live-matchup-card";
 import { computeWinProbability } from "@/lib/win-probability";
 import { deriveLiveAside } from "@/lib/live-aside";
+import { buildHubLineFooter } from "@/lib/book/shared";
 import type { HubLiveData } from "@/lib/queries/homepage";
 import type { PairedMatchup } from "@/lib/queries/matchups";
 import type { getSeasonStandings } from "@/lib/queries/seasons";
 import type { getPlayoffProjection } from "@/lib/queries/divisions";
 import type { PlayoffRaceTag } from "@/lib/queries/playoff-race";
+import type { BookGame } from "@/lib/queries/book";
 
 /** Small left-aligned stat card for the hub hero row. */
 export function StatChip({
@@ -47,6 +49,7 @@ export function GameCard({
   hubLive,
   avatars,
   isRivalry,
+  bookGame,
 }: {
   matchup: PairedMatchup;
   week: number;
@@ -56,6 +59,9 @@ export function GameCard({
   avatars?: ReadonlyMap<string, string>;
   /** True when this pairing is a mutual-top-rival Rivalry Week matchup. */
   isRivalry?: boolean;
+  /** The Book's priced line for this matchup, when one exists. Omitted
+   * entirely (no footer at all) when book_lines has no row for the week. */
+  bookGame?: BookGame;
 }) {
   const status = cardStatus(matchup.status);
   const homeRoster = matchup.homeTeam.rosterId;
@@ -89,6 +95,11 @@ export function GameCard({
       }) ?? undefined;
   }
 
+  // The Book's line text is computed from BookGame's own home/away pinning
+  // (the lower roster_id), which is independent of which side the hub shows
+  // first: it is a fact about the game, not about display order.
+  const bookFooter = bookGame ? buildHubLineFooter(bookGame) : undefined;
+
   return (
     <LiveMatchupCard
       matchupId={matchup.matchupId}
@@ -115,6 +126,7 @@ export function GameCard({
       playersLeft={playersLeft}
       aside={aside}
       isRivalry={isRivalry}
+      bookFooter={bookFooter}
     />
   );
 }
