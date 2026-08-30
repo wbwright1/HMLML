@@ -10,6 +10,7 @@ import {
   timestamp,
   date,
   uniqueIndex,
+  unique,
   index,
 } from "drizzle-orm/pg-core";
 
@@ -760,13 +761,21 @@ export const bookProps = pgTable(
       .defaultNow(),
   },
   (table) => [
-    uniqueIndex("uq_book_props_season_week_kind_subject").on(
-      table.seasonId,
-      table.week,
-      table.kind,
-      table.subjectType,
-      table.subjectId,
-    ),
+    // A unique CONSTRAINT rather than a unique index, because only the
+    // constraint builder can express NULLS NOT DISTINCT in this Drizzle
+    // version, and this key needs it: subjectId is null for league-wide props,
+    // and Postgres counts distinct NULLs as distinct by default, so a plain
+    // unique key would happily accept a second "league total" prop for the same
+    // week, which is the exact duplicate it exists to prevent.
+    unique("uq_book_props_season_week_kind_subject")
+      .on(
+        table.seasonId,
+        table.week,
+        table.kind,
+        table.subjectType,
+        table.subjectId,
+      )
+      .nullsNotDistinct(),
     index("idx_book_props_season_week").on(table.seasonId, table.week),
   ],
 );

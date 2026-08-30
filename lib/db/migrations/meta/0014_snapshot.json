@@ -562,45 +562,6 @@
         }
       },
       "indexes": {
-        "uq_book_props_season_week_kind_subject": {
-          "name": "uq_book_props_season_week_kind_subject",
-          "columns": [
-            {
-              "expression": "season_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "week",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "kind",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "subject_type",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "subject_id",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "idx_book_props_season_week": {
           "name": "idx_book_props_season_week",
           "columns": [
@@ -639,7 +600,19 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "uq_book_props_season_week_kind_subject": {
+          "name": "uq_book_props_season_week_kind_subject",
+          "nullsNotDistinct": true,
+          "columns": [
+            "season_id",
+            "week",
+            "kind",
+            "subject_type",
+            "subject_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

@@ -70,5 +70,5 @@ CREATE INDEX "idx_book_picks_season_week" ON "book_picks" USING btree ("season_i
 CREATE INDEX "idx_book_picks_member" ON "book_picks" USING btree ("member_id");--> statement-breakpoint
 CREATE UNIQUE INDEX "uq_book_prop_picks_member_prop" ON "book_prop_picks" USING btree ("member_id","prop_id");--> statement-breakpoint
 CREATE INDEX "idx_book_prop_picks_prop" ON "book_prop_picks" USING btree ("prop_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "uq_book_props_season_week_kind_subject" ON "book_props" USING btree ("season_id","week","kind","subject_type","subject_id");--> statement-breakpoint
+ALTER TABLE "book_props" ADD CONSTRAINT "uq_book_props_season_week_kind_subject" UNIQUE NULLS NOT DISTINCT("season_id","week","kind","subject_type","subject_id");--> statement-breakpoint
 CREATE INDEX "idx_book_props_season_week" ON "book_props" USING btree ("season_id","week");
