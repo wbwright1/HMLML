@@ -4,7 +4,8 @@ import { BookTabs } from "@/components/book/book-tabs";
 import { BoardIsland } from "@/components/book/board-island";
 import { TrackingPane } from "@/components/book/tracking-pane";
 import { PropsIsland } from "@/components/book/props-island";
-import { BOOK_COPY, type BookPropView } from "@/lib/book/shared";
+import { FuturesIsland } from "@/components/book/futures-island";
+import { BOOK_COPY, FUTURES_COPY, type BookPropView } from "@/lib/book/shared";
 import {
   buildBoardChips,
   getBookBoard,
@@ -21,6 +22,11 @@ import {
   type WhoPickedWhomData,
 } from "@/lib/queries/book-tracking";
 import { getBookProps } from "@/lib/queries/book-props";
+import {
+  getFuturesBoards,
+  resolveFuturesSeason,
+  type FuturesBoard,
+} from "@/lib/queries/book-futures";
 
 // ISR: rendered once, then served from cache until a successful sync calls
 // revalidatePath("/", "layout"). The hourly sync re-prices the lines and
@@ -41,18 +47,41 @@ export default async function BookPage() {
   let grid: WhoPickedWhomData = { header: [], rows: [] };
   let streakTiles: StreakTile[] = [];
   let props: BookPropView[] = [];
+  let futures: FuturesBoard[] = [];
+  let futuresSeasonId: number | null = null;
+  let finalRegularWeek = 14;
 
   try {
-    const bookWeek = await resolveBookWeek();
+    // Which week the weekly board trades and which season the futures book
+    // trades are two independent questions; asking them together keeps the
+    // page's fetch depth at two round trips rather than three.
+    const [bookWeek, futuresSeason] = await Promise.all([
+      resolveBookWeek(),
+      resolveFuturesSeason(),
+    ]);
+
+    if (futuresSeason) {
+      futuresSeasonId = futuresSeason.seasonId;
+      finalRegularWeek = futuresSeason.finalRegularWeek;
+    }
+    // Started here so it runs alongside the weekly reads below. Awaited on
+    // both branches, so it is never a floating promise.
+    const futuresBoards = futuresSeason
+      ? getFuturesBoards(futuresSeason)
+      : Promise.resolve<FuturesBoard[]>([]);
+
     if (bookWeek) {
       week = bookWeek.week;
-      [games, leaderboard, grid, streakTiles, props] = await Promise.all([
+      [games, leaderboard, grid, streakTiles, props, futures] = await Promise.all([
         getBookBoard(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week),
         getSeasonAtsLeaderboard(bookWeek.seasonId),
         getWhoPickedWhomGrid(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week),
         getStreakWatch(bookWeek.seasonId),
         getBookProps(bookWeek.seasonId, bookWeek.week),
+        futuresBoards,
       ]);
+    } else {
+      futures = await futuresBoards;
     }
   } catch (e) {
     // An empty board cached as a "successful" render would serve a dead
@@ -69,6 +98,25 @@ export default async function BookPage() {
 
       <BookTabs
         board={<BoardIsland games={games} week={week} />}
+        futures={
+          <div className="flex flex-col gap-4">
+            <div>
+              <p className="text-kicker mb-1.5">{FUTURES_COPY.kicker}</p>
+              <h2 className="text-h2">{FUTURES_COPY.title}</h2>
+              <p className="mt-1.5 font-serif text-body-sm italic text-text-tertiary">
+                {FUTURES_COPY.subline}
+              </p>
+            </div>
+            <FuturesIsland
+              boards={futures}
+              seasonId={futuresSeasonId}
+              finalRegularWeek={finalRegularWeek}
+            />
+            <p className="text-caption normal-case tracking-normal text-text-tertiary">
+              {FUTURES_COPY.syncNote}
+            </p>
+          </div>
+        }
         tracking={
           hasTrackingData ? (
             <TrackingPane

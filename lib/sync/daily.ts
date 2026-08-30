@@ -42,6 +42,9 @@ import {
   resolveBrandingColor,
 } from "@/lib/franchise-colors";
 import { runAtomic } from "@/lib/db/atomic";
+import { repriceFutures, gradeFutures } from "@/lib/sync/book-futures";
+import { resolveFuturesSeason } from "@/lib/queries/book-futures";
+import { resolveBookWeek } from "@/lib/queries/book";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -1237,6 +1240,90 @@ async function syncPlayerValues(): Promise<SyncStepResult> {
 }
 
 // ---------------------------------------------------------------------------
+// Step G: The Book's futures (champion, toilet bowl, MVP, ROTY)
+// ---------------------------------------------------------------------------
+
+/**
+ * Re-prices the four season-long markets and settles them once the season's
+ * outcomes are real (see lib/sync/book-futures.ts for the pricing, lock and
+ * grading rules).
+ *
+ * Daily rather than hourly on purpose: these markets move on standings and
+ * banked points, which change once a week, and the Monte Carlo behind the team
+ * boards is not worth running twenty-four times to say the same thing.
+ *
+ * Runs LAST in the daily sync, because it prices off what the earlier steps
+ * just wrote: rosters (standings and starters), players (rookie status and
+ * projections) and playoffs (the champion and Toilet Bowl the grading pass
+ * reads). Logs its own sync_log row, so a pricing failure is visible and never
+ * takes league data down with it.
+ */
+async function syncBookFutures(): Promise<SyncStepResult> {
+  const startTime = Date.now();
+  const logId = await logSyncStart("daily", "book_futures");
+
+  try {
+    const season = await resolveFuturesSeason();
+    if (!season) {
+      const durationMs = Date.now() - startTime;
+      await logSyncComplete(logId, "success", 0);
+      return {
+        dataType: "book_futures",
+        status: "success",
+        rowCount: 0,
+        durationMs,
+        note: "No season to price futures for yet.",
+      };
+    }
+
+    // The same week resolver the board and the server action use, so the
+    // projections behind a futures price and the ones behind a weekly line are
+    // never taken from two different weeks.
+    const bookWeek = await resolveBookWeek();
+    const week =
+      bookWeek && bookWeek.seasonId === season.seasonId ? bookWeek.week : 1;
+
+    const priced = await repriceFutures(season, week);
+    // Grading after pricing: a market that just closed is stamped by the
+    // pricing pass, and this settles it in the same run when the season is done.
+    const graded = await gradeFutures(season);
+
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "success", priced.rowCount, undefined, {
+      week,
+      marketsPriced: priced.priced,
+      marketsLockedNow: priced.lockedNow,
+      marketsAlreadyLocked: priced.alreadyLocked,
+      rowsGraded: graded.rowCount,
+      marketsGraded: graded.markets,
+    });
+    return {
+      dataType: "book_futures",
+      status: "success",
+      rowCount: priced.rowCount,
+      durationMs,
+      note:
+        graded.markets > 0
+          ? `${graded.markets} market(s) settled.`
+          : priced.alreadyLocked > 0
+            ? `${priced.alreadyLocked} market(s) closed, left at their booked price.`
+            : undefined,
+    };
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    const durationMs = Date.now() - startTime;
+    await logSyncComplete(logId, "failure", 0, errorMessage);
+    return {
+      dataType: "book_futures",
+      status: "failure",
+      rowCount: 0,
+      durationMs,
+      error: errorMessage,
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
 // League chain auto-advance
 // ---------------------------------------------------------------------------
 
@@ -1458,6 +1545,24 @@ export async function runDailySync(): Promise<DailySyncSummary> {
           error:
             membersResult[0].reason instanceof Error
               ? membersResult[0].reason.message
+              : "Unknown error",
+        },
+  );
+
+  // Futures price off everything above (standings, players, playoff results),
+  // so they go last and never race the steps they read.
+  const futuresResult = await Promise.allSettled([syncBookFutures()]);
+  stepResults.push(
+    futuresResult[0].status === "fulfilled"
+      ? futuresResult[0].value
+      : {
+          dataType: "book_futures",
+          status: "failure" as const,
+          rowCount: 0,
+          durationMs: 0,
+          error:
+            futuresResult[0].reason instanceof Error
+              ? futuresResult[0].reason.message
               : "Unknown error",
         },
   );

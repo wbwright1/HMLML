@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { bookPicks, bookPropPicks } from "@/lib/db/schema";
+import { bookFuturePicks, bookPicks, bookPropPicks } from "@/lib/db/schema";
 import { getSessionMember } from "@/lib/auth";
 import {
   getBookBoard,
@@ -15,10 +15,18 @@ import {
 } from "@/lib/queries/book";
 import { getBookPropById, isWeekLocked } from "@/lib/queries/book-props";
 import {
+  getFutureRow,
+  isFuturesMarketLocked,
+  resolveFuturesSeason,
+} from "@/lib/queries/book-futures";
+import { isFuturesMarket, type FuturesMarket } from "@/lib/book/futures";
+import {
   BOOK_ERRORS,
+  futurePickRejectionReason,
   pickRejectionReason,
   propPickRejectionReason,
   type BookActionResult,
+  type FuturePickActionResult,
 } from "@/lib/book/shared";
 
 const pickInput = z.object({
@@ -31,8 +39,20 @@ const lockInput = z.object({
   week: z.number().int().min(1).max(22),
 });
 
+// The market list comes from the registry rather than being restated here, so
+// a market added to FUTURES_MARKETS is accepted by the action automatically and
+// one removed stops being accepted the same day.
+const futurePickInput = z.object({
+  market: z.custom<FuturesMarket>(isFuturesMarket),
+  subjectId: z.string().min(1).max(64),
+});
+
 function fail(error: string): BookActionResult {
   return { ok: false, error };
+}
+
+function failFuture(error: string): FuturePickActionResult {
+  return { ok: false, error, oddsAtPick: null };
 }
 
 /**
@@ -163,6 +183,158 @@ export async function togglePick(input: {
   // Consensus is part of the cached page, so everyone's board picks this up.
   revalidatePath("/book");
   return { ok: true, error: null };
+}
+
+/**
+ * Books, switches, or clears a member's call on one futures market.
+ *
+ * Same discipline as togglePick: the session is the only identity trusted, the
+ * season comes from the server's own view of the calendar rather than from the
+ * client, and every rule the board shows is re-enforced here. The odds are
+ * SNAPSHOTTED onto the row, so the daily repricing that runs for months
+ * afterwards never moves a number somebody already took.
+ *
+ * One pick per market is the unique index's job, not a read-then-write check;
+ * a repick lands on the conflict clause and replaces the row in place. Picking
+ * the subject you already hold clears the pick, which is the same toggle the
+ * weekly board uses.
+ */
+export async function pickFuture(input: {
+  market: FuturesMarket;
+  subjectId: string;
+}): Promise<FuturePickActionResult> {
+  const parsed = futurePickInput.safeParse(input);
+  if (!parsed.success) return failFuture(BOOK_ERRORS.badInput);
+  const { market, subjectId } = parsed.data;
+
+  const member = await getSessionMember();
+  if (!member) return failFuture(BOOK_ERRORS.signedOut);
+
+  const season = await resolveFuturesSeason();
+  if (!season) return failFuture(BOOK_ERRORS.noSeason);
+
+  const row = await getFutureRow(season.seasonId, market, subjectId);
+  const rejection = futurePickRejectionReason({
+    subjectExists: row !== null,
+    marketLocked: await isFuturesMarketLocked(season, market),
+  });
+  if (rejection) return failFuture(rejection);
+  // Narrowing for the write below; futurePickRejectionReason already refused a
+  // subject with no priced row.
+  if (!row) return failFuture(BOOK_ERRORS.noFuture);
+
+  const [existing] = await db
+    .select({
+      id: bookFuturePicks.id,
+      subjectId: bookFuturePicks.subjectId,
+      oddsAtPick: bookFuturePicks.oddsAtPick,
+    })
+    .from(bookFuturePicks)
+    .where(
+      and(
+        eq(bookFuturePicks.memberId, member.id),
+        eq(bookFuturePicks.seasonId, season.seasonId),
+        eq(bookFuturePicks.market, market),
+      ),
+    )
+    .limit(1);
+
+  const clearing = existing != null && existing.subjectId === subjectId;
+
+  if (clearing) {
+    await db.delete(bookFuturePicks).where(eq(bookFuturePicks.id, existing.id));
+  } else {
+    await db
+      .insert(bookFuturePicks)
+      .values({
+        memberId: member.id,
+        seasonId: season.seasonId,
+        market,
+        subjectId,
+        oddsAtPick: row.odds,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: [
+          bookFuturePicks.memberId,
+          bookFuturePicks.seasonId,
+          bookFuturePicks.market,
+        ],
+        set: { subjectId, oddsAtPick: row.odds, updatedAt: new Date() },
+      });
+  }
+
+  // The lock check above and the write below are separate statements, and the
+  // thing that closes a futures market is a sync landing between them (the
+  // pricing pass stamping locked_at, or the schedule sync flipping the lock
+  // week's first game off pre_game). togglePick closes its own version of this
+  // by pushing isNull(lockedAt) into the write, which is not available here:
+  // the lock lives on book_futures, not on the pick row, and Drizzle's
+  // insert-select (the one construct that could read it in the same statement)
+  // demands the table's full column list including the serial id. So the write
+  // is verified instead, and undone if the market shut underneath it. A pick
+  // that survives on a closed market is the one outcome this must never allow.
+  if (await isFuturesMarketLocked(season, market)) {
+    await restoreFuturePick(member.id, season.seasonId, market, existing ?? null);
+    return failFuture(BOOK_ERRORS.futureLocked);
+  }
+
+  // Consensus is part of the cached page, so everyone's board picks this up.
+  revalidatePath("/book");
+  return {
+    ok: true,
+    error: null,
+    // The odds actually written, which the island needs: its board came from
+    // the ISR cache and can be quoting an older number than this row.
+    oddsAtPick: clearing ? null : row.odds,
+  };
+}
+
+/**
+ * Puts a member's futures pick back exactly as it was before a refused write.
+ *
+ * Takes the previous row verbatim, odds included, because re-deriving them from
+ * today's board would hand somebody a price they never accepted.
+ */
+async function restoreFuturePick(
+  memberId: number,
+  seasonId: number,
+  market: FuturesMarket,
+  previous: { subjectId: string; oddsAtPick: number } | null,
+): Promise<void> {
+  const scope = and(
+    eq(bookFuturePicks.memberId, memberId),
+    eq(bookFuturePicks.seasonId, seasonId),
+    eq(bookFuturePicks.market, market),
+  );
+
+  if (!previous) {
+    await db.delete(bookFuturePicks).where(scope);
+    return;
+  }
+
+  await db
+    .insert(bookFuturePicks)
+    .values({
+      memberId,
+      seasonId,
+      market,
+      subjectId: previous.subjectId,
+      oddsAtPick: previous.oddsAtPick,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [
+        bookFuturePicks.memberId,
+        bookFuturePicks.seasonId,
+        bookFuturePicks.market,
+      ],
+      set: {
+        subjectId: previous.subjectId,
+        oddsAtPick: previous.oddsAtPick,
+        updatedAt: new Date(),
+      },
+    });
 }
 
 /**
