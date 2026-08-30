@@ -9,6 +9,10 @@ import type { CoverResult } from "@/lib/book/pricing";
 import { formatMoney, formatMoneyline, formatSpread, pay } from "@/lib/book/pricing";
 export type { CoverResult };
 
+/** Re-exported so the props island types picks and results from one place. */
+import type { PropKind, PropResult, PropSide } from "@/lib/book/props";
+export type { PropKind, PropResult, PropSide };
+
 // ---------------------------------------------------------------------------
 // Board shapes
 // ---------------------------------------------------------------------------
@@ -68,6 +72,38 @@ export interface BookChip {
   label: string;
   value: string;
   context: string;
+}
+
+// ---------------------------------------------------------------------------
+// Props tab shapes
+// ---------------------------------------------------------------------------
+// Live here for the same reason the board shapes do: the props island imports
+// them and must not drag lib/db into the client bundle.
+
+export interface BookPropView {
+  id: number;
+  kind: PropKind;
+  /** "Prop 01 · League Total", etc. */
+  label: string;
+  question: string;
+  /** "O/U 1,178.5" or "YES / NO". */
+  lineDisplay: string;
+  overLabel: string;
+  underLabel: string;
+  overOdds: string;
+  underOdds: string;
+  overPayout: string;
+  underPayout: string;
+  snark: string | null;
+  /** null until the Tuesday grading pass fills it in. */
+  result: PropResult | null;
+}
+
+export interface MemberPropPick {
+  propId: number;
+  side: PropSide;
+  oddsAtPick: number;
+  lockedAt: string | null;
 }
 
 /**
@@ -195,6 +231,13 @@ export const BOOK_COPY = {
   propsSoon: "Props post the week they can be graded honestly. Not yet.",
   houseRules:
     "Props grade Tuesday morning after stat corrections. Disputes go to the commish, who is biased. Lines move when projections re-sync every hour.",
+  /**
+   * League Total's snark is a joke about the bet itself, not a claim about the
+   * league (unlike Ceiling Watch's snark, which cites a real season-high
+   * score and so is generated per week). Static and fine to be: it never
+   * needs to be true.
+   */
+  leagueTotalSnark: "Vegas would call this a lottery. We call it Sunday.",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -319,4 +362,37 @@ export const BOOK_ERRORS = {
   incomplete: "Pick every open game before you lock the slip.",
   badInput: "That pick did not make sense.",
   noSeason: "No season is open for business.",
+  noProp: "There is no such prop.",
 } as const;
+
+// ---------------------------------------------------------------------------
+// Props guard (unit-tested in shared.test.ts)
+// ---------------------------------------------------------------------------
+
+export interface PropPickGuardFacts {
+  /** The board the click came from is the week the server is trading. */
+  weekMatchesBoard: boolean;
+  /** The prop belongs to this season and week. */
+  propExists: boolean;
+  /** Any NFL game this fantasy week has kicked off. */
+  weekLocked: boolean;
+  /** This particular pick row is already locked. */
+  existingPickLocked: boolean;
+}
+
+/**
+ * Why a prop pick must be refused, or null when it may go through.
+ *
+ * Simpler than pickRejectionReason: props have no per-member "lock the whole
+ * slip" concept (the issue names no lock-in-picks CTA for Props), so a pick
+ * only fails for a stale board, a prop that does not exist, or the week
+ * having moved past its first kickoff.
+ */
+export function propPickRejectionReason(
+  facts: PropPickGuardFacts,
+): string | null {
+  if (!facts.weekMatchesBoard) return BOOK_ERRORS.locked;
+  if (!facts.propExists) return BOOK_ERRORS.noProp;
+  if (facts.weekLocked || facts.existingPickLocked) return BOOK_ERRORS.locked;
+  return null;
+}

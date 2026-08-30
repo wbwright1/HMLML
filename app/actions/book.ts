@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { and, eq, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { bookPicks } from "@/lib/db/schema";
+import { bookPicks, bookPropPicks } from "@/lib/db/schema";
 import { getSessionMember } from "@/lib/auth";
 import {
   getBookBoard,
@@ -13,9 +13,11 @@ import {
   getRosterKickoffStates,
   resolveBookWeek,
 } from "@/lib/queries/book";
+import { getBookPropById, isWeekLocked } from "@/lib/queries/book-props";
 import {
   BOOK_ERRORS,
   pickRejectionReason,
+  propPickRejectionReason,
   type BookActionResult,
 } from "@/lib/book/shared";
 
@@ -202,6 +204,92 @@ export async function lockSlip(input: { week: number }): Promise<BookActionResul
         isNull(bookPicks.lockedAt),
       ),
     );
+
+  revalidatePath("/book");
+  return { ok: true, error: null };
+}
+
+const propPickInput = z.object({
+  week: z.number().int().min(1).max(22),
+  propId: z.number().int().min(1),
+  side: z.enum(["over", "under"]),
+});
+
+/**
+ * Books, switches, or clears a member's side on one prop.
+ *
+ * Modeled on togglePick, simplified: props have no slip-level lock concept
+ * (see propPickRejectionReason). The whole board locks as ONE unit once the
+ * week's first kickoff passes, checked live against nfl_games via
+ * isWeekLocked, never a stored timestamp on book_props itself (props keep the
+ * same id across hourly repricing, same reasoning as book_lines).
+ */
+export async function togglePropPick(input: {
+  week: number;
+  propId: number;
+  side: "over" | "under";
+}): Promise<BookActionResult> {
+  const parsed = propPickInput.safeParse(input);
+  if (!parsed.success) return fail(BOOK_ERRORS.badInput);
+  const { week, propId, side } = parsed.data;
+
+  const member = await getSessionMember();
+  if (!member) return fail(BOOK_ERRORS.signedOut);
+
+  const bookWeek = await resolveBookWeek();
+  if (!bookWeek) return fail(BOOK_ERRORS.noSeason);
+
+  const prop = await getBookPropById(propId);
+  const propExists = Boolean(
+    prop && prop.seasonId === bookWeek.seasonId && prop.week === week,
+  );
+
+  const weekLocked = propExists
+    ? await isWeekLocked(bookWeek.seasonYear, week)
+    : false;
+
+  const [existing] = await db
+    .select()
+    .from(bookPropPicks)
+    .where(and(eq(bookPropPicks.memberId, member.id), eq(bookPropPicks.propId, propId)))
+    .limit(1);
+
+  const rejection = propPickRejectionReason({
+    weekMatchesBoard: bookWeek.week === week,
+    propExists,
+    weekLocked,
+    existingPickLocked: existing?.lockedAt != null,
+  });
+  if (rejection) return fail(rejection);
+  // Narrowing for the writes below; propPickRejectionReason already refused a
+  // missing prop.
+  if (!prop) return fail(BOOK_ERRORS.noProp);
+
+  if (existing && existing.side === side) {
+    await db
+      .delete(bookPropPicks)
+      .where(and(eq(bookPropPicks.id, existing.id), isNull(bookPropPicks.lockedAt)));
+    revalidatePath("/book");
+    return { ok: true, error: null };
+  }
+
+  const oddsAtPick = side === "over" ? prop.overOdds : prop.underOdds;
+
+  await db
+    .insert(bookPropPicks)
+    .values({
+      memberId: member.id,
+      propId,
+      side,
+      oddsAtPick,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [bookPropPicks.memberId, bookPropPicks.propId],
+      set: { side, oddsAtPick, updatedAt: new Date() },
+      // Never move a pick that locked between the read above and this write.
+      setWhere: isNull(bookPropPicks.lockedAt),
+    });
 
   revalidatePath("/book");
   return { ok: true, error: null };

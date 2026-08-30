@@ -7,9 +7,11 @@ import {
   bookLineText,
   picksForBoardWeek,
   pickRejectionReason,
+  propPickRejectionReason,
   type HubFooterGame,
   type MemberBookPick,
   type PickGuardFacts,
+  type PropPickGuardFacts,
 } from "./shared";
 
 const OPEN: PickGuardFacts = {
@@ -177,5 +179,53 @@ describe("bookDogPayoutLine", () => {
     expect(bookDogPayoutLine(AWAY_FAVORED)).toBe(
       "A $10 friendly on GT +140 pays $14.00 if it lands.",
     );
+  });
+});
+
+const PROP_OPEN: PropPickGuardFacts = {
+  weekMatchesBoard: true,
+  propExists: true,
+  weekLocked: false,
+  existingPickLocked: false,
+};
+
+describe("propPickRejectionReason", () => {
+  it("lets a normal prop pick through", () => {
+    expect(propPickRejectionReason(PROP_OPEN)).toBeNull();
+  });
+
+  it("refuses a pick from a board that has moved on", () => {
+    expect(
+      propPickRejectionReason({ ...PROP_OPEN, weekMatchesBoard: false }),
+    ).toBe(BOOK_ERRORS.locked);
+  });
+
+  it("refuses a prop that does not exist for this season/week", () => {
+    expect(
+      propPickRejectionReason({ ...PROP_OPEN, propExists: false }),
+    ).toBe(BOOK_ERRORS.noProp);
+  });
+
+  it("refuses a pick once the week has locked (past first kickoff)", () => {
+    expect(
+      propPickRejectionReason({ ...PROP_OPEN, weekLocked: true }),
+    ).toBe(BOOK_ERRORS.locked);
+  });
+
+  it("refuses a pick whose own row is already locked", () => {
+    expect(
+      propPickRejectionReason({ ...PROP_OPEN, existingPickLocked: true }),
+    ).toBe(BOOK_ERRORS.locked);
+  });
+
+  it("checks the week and the prop's existence before lock state", () => {
+    expect(
+      propPickRejectionReason({
+        weekMatchesBoard: false,
+        propExists: false,
+        weekLocked: true,
+        existingPickLocked: true,
+      }),
+    ).toBe(BOOK_ERRORS.locked);
   });
 });

@@ -3,7 +3,8 @@ import { SyncTimestamp } from "@/components/sync-timestamp";
 import { BookTabs } from "@/components/book/book-tabs";
 import { BoardIsland } from "@/components/book/board-island";
 import { TrackingPane } from "@/components/book/tracking-pane";
-import { BOOK_COPY } from "@/lib/book/shared";
+import { PropsIsland } from "@/components/book/props-island";
+import { BOOK_COPY, type BookPropView } from "@/lib/book/shared";
 import {
   buildBoardChips,
   getBookBoard,
@@ -19,6 +20,7 @@ import {
   type StreakTile,
   type WhoPickedWhomData,
 } from "@/lib/queries/book-tracking";
+import { getBookProps } from "@/lib/queries/book-props";
 
 // ISR: rendered once, then served from cache until a successful sync calls
 // revalidatePath("/", "layout"). The hourly sync re-prices the lines and
@@ -38,16 +40,18 @@ export default async function BookPage() {
   let leaderboard: AtsLeaderboardRow[] = [];
   let grid: WhoPickedWhomData = { header: [], rows: [] };
   let streakTiles: StreakTile[] = [];
+  let props: BookPropView[] = [];
 
   try {
     const bookWeek = await resolveBookWeek();
     if (bookWeek) {
       week = bookWeek.week;
-      [games, leaderboard, grid, streakTiles] = await Promise.all([
+      [games, leaderboard, grid, streakTiles, props] = await Promise.all([
         getBookBoard(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week),
         getSeasonAtsLeaderboard(bookWeek.seasonId),
         getWhoPickedWhomGrid(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week),
         getStreakWatch(bookWeek.seasonId),
+        getBookProps(bookWeek.seasonId, bookWeek.week),
       ]);
     }
   } catch (e) {
@@ -77,9 +81,7 @@ export default async function BookPage() {
             <ComingSoonPane kicker="Tracking" line={BOOK_COPY.trackingSoon} />
           )
         }
-        props={
-          <ComingSoonPane kicker="Props" line={BOOK_COPY.propsSoon} rules />
-        }
+        props={<PropsIsland props={props} week={week} />}
       />
 
       <p className="mt-10 flex flex-wrap items-center justify-center gap-2 text-caption normal-case tracking-normal text-text-tertiary">
@@ -131,29 +133,11 @@ function BookHeader({ week, chips }: { week: number; chips: BookChip[] }) {
  * A tab that is not open yet. Deliberately a kicker plus one serif line and
  * nothing else: a dead control that looks live is worse than an honest gap.
  */
-function ComingSoonPane({
-  kicker,
-  line,
-  rules = false,
-}: {
-  kicker: string;
-  line: string;
-  rules?: boolean;
-}) {
+function ComingSoonPane({ kicker, line }: { kicker: string; line: string }) {
   return (
-    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-      <div className="card-surface p-6">
-        <p className="text-kicker mb-2">{kicker}</p>
-        <p className="font-serif text-h3 italic text-text-secondary">{line}</p>
-      </div>
-      {rules && (
-        <div className="rounded-[14px] border border-dashed border-border-strong p-6">
-          <p className="text-kicker mb-1.5">House Rules</p>
-          <p className="text-body-sm leading-relaxed text-text-secondary">
-            {BOOK_COPY.houseRules}
-          </p>
-        </div>
-      )}
+    <div className="card-surface p-6">
+      <p className="text-kicker mb-2">{kicker}</p>
+      <p className="font-serif text-h3 italic text-text-secondary">{line}</p>
     </div>
   );
 }
