@@ -14,6 +14,8 @@ import {
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 import { getNflState } from "@/lib/queries/nfl-state";
+import { formatRecord } from "@/lib/format-record";
+import { coverSide } from "@/lib/book/pricing";
 import type {
   BookChip,
   BookGame,
@@ -46,18 +48,6 @@ export function pairRosterIds(rosterIds: string[]): [string, string] | null {
   if (rosterIds.length !== 2) return null;
   const [a, b] = [...rosterIds].sort((x, y) => Number(x) - Number(y));
   return [a, b];
-}
-
-/** "7-2", or "7-2-1" when there are ties to report. */
-export function formatRecord(
-  wins: number | null,
-  losses: number | null,
-  ties: number | null,
-): string {
-  const w = wins ?? 0;
-  const l = losses ?? 0;
-  const t = ties ?? 0;
-  return t > 0 ? `${w}-${l}-${t}` : `${w}-${l}`;
 }
 
 const WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"];
@@ -494,12 +484,13 @@ export async function getBookBoard(
       home: toSide(homeRow, line.spread, line.mlHome, homePoints, line.homeProjected),
       away: toSide(awayRow, -line.spread, line.mlAway, awayPoints, line.awayProjected),
       kickoffLabel: kickoffWeekday(earliest),
+      // The game-level cover, against the line as it stands. A member's OWN
+      // pick is graded separately against the spread snapshotted onto their
+      // row, which is the only number they agreed to.
       coveringSide:
         status === "open"
           ? null
-          : homePoints - awayPoints + line.spread > 0
-            ? "home"
-            : "away",
+          : coverSide(homePoints, awayPoints, line.spread),
       homePicks: counts.home,
       awayPicks: counts.away,
     });

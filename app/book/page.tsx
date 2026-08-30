@@ -62,7 +62,7 @@ export default async function BookPage() {
         }
       />
 
-      <p className="mt-10 flex flex-wrap items-center justify-center gap-2 text-caption normal-case tracking-normal text-text-muted">
+      <p className="mt-10 flex flex-wrap items-center justify-center gap-2 text-caption normal-case tracking-normal text-text-tertiary">
         <SyncTimestamp dataType="book_lines" />
         <span aria-hidden="true">·</span>
         <span>{BOOK_COPY.syncNote}</span>

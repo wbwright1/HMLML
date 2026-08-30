@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   bookWeekFor,
   chooseProjectedTotals,
-  formatRecord,
   kickoffWeekday,
   pairRosterIds,
   REGULAR_SEASON_GAMES,
@@ -36,21 +35,6 @@ describe("bookWeekFor", () => {
 
   it("never returns week zero", () => {
     expect(bookWeekFor("regular", 0)).toBe(1);
-  });
-});
-
-describe("formatRecord", () => {
-  it("renders wins and losses", () => {
-    expect(formatRecord(7, 2, 0)).toBe("7-2");
-    expect(formatRecord(0, 0, 0)).toBe("0-0");
-  });
-
-  it("adds ties only when there are some", () => {
-    expect(formatRecord(6, 2, 1)).toBe("6-2-1");
-  });
-
-  it("treats missing values as zero", () => {
-    expect(formatRecord(null, null, null)).toBe("0-0");
   });
 });
 
