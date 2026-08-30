@@ -9,6 +9,10 @@ import type { CoverResult } from "@/lib/book/pricing";
 import { formatMoney, formatMoneyline, formatSpread, pay, payoutTotal } from "@/lib/book/pricing";
 export type { CoverResult };
 
+/** Grading is pure math with no I/O, so the pick'ems cell builder below can
+ * live here (and be unit-tested) without dragging a database into the bundle. */
+import { pickOutcome } from "@/lib/book/grading";
+
 /** Re-exported so the props island types picks and results from one place. */
 import type { PropKind, PropResult, PropSide } from "@/lib/book/props";
 export type { PropKind, PropResult, PropSide };
@@ -222,7 +226,21 @@ export const BOOK_COPY = {
   lockNoteLocked: "Graded live as games play out.",
   lockNoteReady: "Open picks auto-lock at each kickoff.",
   lockNoteIncomplete: "Pick every open game to lock the slip early.",
-  trackingSoon: "The season ledger opens once there are results worth ranking.",
+  trackingSoon:
+    "Nothing to pick yet. The pick'ems sheet opens the moment the week's lines post.",
+  pickemsTitle: "Your Picks",
+  pickemsSnark:
+    "Tap a side. Each game locks at its own kickoff, and the sheet grades itself.",
+  pickemsSignedOut: "Claim your team to get on the sheet.",
+  pickemsGridKicker: "Who Picked Whom",
+  pickemsFootnote:
+    "Picks reveal at kickoff and grade when the game goes final. You always see your own slip; nobody sees an open pick but its owner.",
+  pickemsLegend: "✓ hit · ✗ missed · PUSH refunded · — no pick yet",
+  pickemsLocked: "Locked",
+  pickemsNoGames:
+    "No games on the board this week, so there is nothing to pick.",
+  /** A server action that never landed (offline, 500). Calm, never panicked. */
+  actionFailed: "That did not reach the book. Nothing was booked. Try again.",
   propsSoon: "Props post the week they can be graded honestly. Not yet.",
   houseRules:
     "Props grade Tuesday morning after stat corrections. Disputes go to the commish, who is biased. Lines move when projections re-sync every hour.",
@@ -259,30 +277,136 @@ export interface AtsLeaderboardRow {
 
 export type PickOutcome = "win" | "loss" | "push";
 
-export interface WhoPickedWhomHeader {
-  matchupId: number;
-  label: string;
-  homeAbbreviation: string;
-  awayAbbreviation: string;
-}
+// ---------------------------------------------------------------------------
+// Pick'ems grid shapes
+// ---------------------------------------------------------------------------
+// The grid is TRANSPOSED relative to the old Who Picked Whom table: one column
+// per member (clustered under their division), one row per game. That is the
+// shape a pick'ems sheet has always had, and it is the shape that lets a
+// narrow viewport show one division's columns instead of scrolling a matrix.
 
-export interface WhoPickedWhomCell {
-  /** Whether this game's own pick may be shown at all right now. */
-  revealed: boolean;
-  abbreviation: string | null;
-  outcome: PickOutcome | null;
-}
-
-export interface WhoPickedWhomRow {
+/** One member's column: who they are, and how their season is going. */
+export interface PickerColumn {
   memberId: number;
   displayName: string;
   franchiseSlug: string;
-  cells: WhoPickedWhomCell[];
+  franchiseName: string;
+  abbreviation: string;
+  color: string | null;
+  /** Season ATS record, or "" for a member with nothing graded yet (never a fabricated 0-0). */
+  record: string;
 }
 
-export interface WhoPickedWhomData {
-  header: WhoPickedWhomHeader[];
-  rows: WhoPickedWhomRow[];
+export interface PickemsDivision {
+  name: string;
+  pickers: PickerColumn[];
+}
+
+export interface PickemsCell {
+  /** Whether this member's pick on this game may be shown at all right now. */
+  revealed: boolean;
+  abbreviation: string | null;
+  /** Only ever set on a FINAL game: there is no live cover tracking. */
+  outcome: PickOutcome | null;
+}
+
+export interface PickemsRow {
+  matchupId: number;
+  /** "HOME/AWAY", home side first. */
+  label: string;
+  homeAbbreviation: string;
+  awayAbbreviation: string;
+  /** The home side's number, e.g. "-3.5". */
+  spreadLabel: string;
+  status: BookGameStatus;
+  /** Keyed by memberId as a string: JSON-safe, unlike a Map. */
+  cells: Record<string, PickemsCell>;
+}
+
+export interface PickemsGridData {
+  divisions: PickemsDivision[];
+  rows: PickemsRow[];
+}
+
+/** The bucket a franchise lands in when its season carries no division. */
+export const UNDIVIDED_DIVISION_LABEL = "League";
+
+/** What the query hands the grouping helper, before columns are clustered. */
+export interface PickerSeed extends PickerColumn {
+  divisionName: string | null;
+}
+
+/**
+ * Clusters picker columns under division headers.
+ *
+ * Divisions sort alphabetically, with the undivided "League" bucket always
+ * last (legacy seasons have no divisions at all, and a bucket that means "no
+ * division" should not sit between two that do). Members sort by franchise
+ * name inside their division, so a column never moves between page loads.
+ */
+export function groupPickersByDivision(
+  pickers: PickerSeed[],
+): PickemsDivision[] {
+  const byDivision = new Map<string, PickerColumn[]>();
+  for (const { divisionName, ...column } of pickers) {
+    const name = divisionName ?? UNDIVIDED_DIVISION_LABEL;
+    const list = byDivision.get(name) ?? [];
+    list.push(column);
+    byDivision.set(name, list);
+  }
+
+  return [...byDivision.entries()]
+    .sort(([a], [b]) => {
+      if (a === UNDIVIDED_DIVISION_LABEL) return 1;
+      if (b === UNDIVIDED_DIVISION_LABEL) return -1;
+      return a.localeCompare(b);
+    })
+    .map(([name, columns]) => ({
+      name,
+      pickers: [...columns].sort((a, b) =>
+        a.franchiseName.localeCompare(b.franchiseName),
+      ),
+    }));
+}
+
+/**
+ * One member's cell on one game.
+ *
+ * Three states, and no fourth: before kickoff nothing is revealed to anybody
+ * (the anti-tailing rule; the viewer's own pick is overlaid client-side from
+ * their own session-scoped call), at kickoff the pick becomes public but
+ * carries NO cover state, and once the game is final it grades against the
+ * spread snapshotted on the pick itself. There is deliberately no live
+ * grading: a cover that flips three times on Sunday afternoon is noise, not a
+ * result.
+ */
+export function buildPickemsCell(input: {
+  status: BookGameStatus;
+  pick: { side: BookSideKey; spreadAtPick: number } | null;
+  homeAbbreviation: string;
+  awayAbbreviation: string;
+  homePoints: number;
+  awayPoints: number;
+}): PickemsCell {
+  if (input.status === "open") {
+    return { revealed: false, abbreviation: null, outcome: null };
+  }
+  if (!input.pick) {
+    return { revealed: true, abbreviation: null, outcome: null };
+  }
+
+  const abbreviation =
+    input.pick.side === "home" ? input.homeAbbreviation : input.awayAbbreviation;
+
+  if (input.status === "live") {
+    return { revealed: true, abbreviation, outcome: null };
+  }
+
+  return {
+    revealed: true,
+    abbreviation,
+    outcome: pickOutcome(input.homePoints, input.awayPoints, input.pick),
+  };
 }
 
 export interface StreakTile {
