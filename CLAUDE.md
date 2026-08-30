@@ -260,6 +260,11 @@ No feature is complete until tested against real running code. Not mocked. Not s
 ### Where Real Unit Tests Are Allowed
 Pure utility functions with no dependencies to mock. Co-located as `*.test.ts` next to source.
 
+### Running E2E Locally or in a Worktree
+`.env.local` is gitignored and does not follow a `git worktree`: a fresh worktree has no `POSTGRES_URL`. Copy it in before running Playwright there, e.g. `cp /path/to/main/checkout/.env.local .`. `e2e/global-setup.ts` (`lib/e2e-preflight.ts`) fails the whole run fast with that exact fix if you forget, rather than letting specs silently pass or skip against a broken environment. Set `POSTGRES_DRIVER=pg` for a local Postgres; the live Neon database (the default `.env.local` target) works either way. Run targeted, chromium-only specs, never the full suite: `POSTGRES_URL` points at the live database and the transfer quota is real.
+
+Three specs run against dedicated dev servers pinned to a forced `NFL_STATE_OVERRIDE` instead of the shared default server, via two extra Playwright projects (`hub-preseason`, `hub-in-season`) declared in `playwright.config.ts`: `e2e/hub-preseason.spec.ts` (`NFL_STATE_OVERRIDE=pre:1`), `e2e/hub-between-weeks.spec.ts` and `e2e/book-hub.spec.ts` (`NFL_STATE_OVERRIDE=regular:1:force`). They must be `next dev`, not `next build && next start`: the hub pages declare `revalidate = 3600`, so their HTML is prerendered at build time with whatever env the build saw, and a start-time override would be ignored until that ISR entry expired. `next dev` re-renders per request, so the override takes effect immediately, still against the real Postgres. Run them with `npx playwright test e2e/hub-preseason.spec.ts --project=hub-preseason` (etc.).
+
 ### Agent Review Protocol (Adversarial)
 After tests are written and run, a separate agent team reviews with extreme prejudice:
 1. Do the tests actually exercise the acceptance criteria, line by line?

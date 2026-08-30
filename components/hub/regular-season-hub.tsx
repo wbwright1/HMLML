@@ -24,7 +24,7 @@ import { getRivalryWeek, rivalryPairKey } from "@/lib/queries/rivalry-week";
 import { computeStandingsRaceTags } from "@/lib/queries/playoff-race";
 import { StatChip, GameCard, toLadderEntries } from "@/components/hub/shared";
 import { BetweenWeeksHub } from "@/components/hub/between-weeks-hub";
-import { getBookBoard, type BookGame } from "@/lib/queries/book";
+import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { BookRailCard } from "@/components/hub/book-rail-card";
 
 export async function RegularSeasonHub({
@@ -158,11 +158,17 @@ export async function RegularSeasonHub({
 
   // The Book's priced lines for this week, keyed by matchup id. Genuinely
   // optional (book_lines can be empty pre-first-sync, or the whole feature
-  // predates a given season), so an empty catch is correct here.
+  // predates a given season), so an empty catch is correct here. The week
+  // must agree with resolveBookWeek() (the same source /book, the pick
+  // server actions, and the sync all use), or the hub can advertise a line
+  // for a week The Book is not actually trading (#244).
   let bookGames: BookGame[] = [];
   if (latestSeason) {
     try {
-      bookGames = await getBookBoard(latestSeason.id, seasonYear, week);
+      const bookWeek = await resolveBookWeek();
+      if (bookWeek != null && bookWeek.week === week) {
+        bookGames = await getBookBoard(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week);
+      }
     } catch {
       // The Book is an aside on the hub; absence is fine.
     }
