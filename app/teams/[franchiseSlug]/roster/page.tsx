@@ -383,7 +383,14 @@ export default async function RosterPage({ params }: RosterPageProps) {
       ? getFranchiseRoster(franchise.id, latestSeason.seasonId).catch(() => null)
       : Promise.resolve(null),
     getAllFranchises().catch(() => null),
-    getNflState().catch(() => null),
+    // Not optional data: nflState drives the season segment and therefore which
+    // column leads the roster table, so a DB outage behind it must reach the
+    // error boundary rather than ISR-cache a roster with the wrong lead column
+    // (see lib/db-guard.ts). A Sleeper outage still degrades to null.
+    getNflState().catch((e) => {
+      rethrowUnlessTolerable(e);
+      return null;
+    }),
     getLatestSeason().catch(() => null),
   ]);
 

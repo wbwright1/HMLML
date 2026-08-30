@@ -1251,6 +1251,21 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
 
   const nflState = resolved.state;
 
+  // One season_type vocabulary for the whole run. The field is free-form
+  // z.string() from Sleeper and can also be synthesized by the DB fallback in
+  // lib/sync/nfl-state.ts, so an unrecognized value is normalized once here
+  // rather than being interpreted differently by each helper downstream.
+  // Without this, a single unknown value made the run half-fire: the prior-week
+  // backstop's isNflSeasonUnderway denylist read it as "under way" and fired,
+  // while bookWeekFor's allowlist read it as "not under way" and pinned the
+  // week to 1, so week-N player points never accrued. "regular" is the safe
+  // landing spot because it agrees with the denylist's fail direction. The four
+  // known values pass through untouched, so nothing changes for them.
+  const KNOWN_SEASON_TYPES = ["pre", "regular", "post", "off"];
+  const nflSeasonType = KNOWN_SEASON_TYPES.includes(nflState.season_type)
+    ? nflState.season_type
+    : "regular";
+
   // Offseason throttle. The cron stays hourly (the endpoint knows the real NFL
   // state; a cron expression would need hardcoded month boundaries that drift),
   // but out of season most invocations become one cheap lookup and a logged
@@ -1263,11 +1278,11 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
     "hourly",
     "transactions"
   ).catch(() => null);
-  if (shouldSkipHourlySync(nflState.season_type, lastHourly?.startedAt ?? null, new Date())) {
+  if (shouldSkipHourlySync(nflSeasonType, lastHourly?.startedAt ?? null, new Date())) {
     const skipLogId = await logSyncStart("hourly", "skipped");
     await logSyncComplete(skipLogId, "success", 0, undefined, {
       reason: "offseason-throttle",
-      seasonType: nflState.season_type,
+      seasonType: nflSeasonType,
       lastSuccessAt: lastHourly?.startedAt?.toISOString() ?? null,
       intervalMs: OFFSEASON_SYNC_INTERVAL_MS,
     });
@@ -1296,7 +1311,7 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
   // counter counts PRESEASON weeks, and syncing week 3 writes 0.0 rows for a
   // league week nobody has played. bookWeekFor resolves the same week the board
   // and the matchup sync use.
-  const leagueWeek = bookWeekFor(nflState.season_type, currentWeek);
+  const leagueWeek = bookWeekFor(nflSeasonType, currentWeek);
   const nflStateNote = resolved.fromFallback
     ? "NFL state served from DB fallback (live /state/nfl unavailable)"
     : undefined;
@@ -1316,7 +1331,7 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
     // play IS a real problem (the daily sync should have created it), so keep
     // that a failure.
     const isPreOrOff =
-      nflState.season_type === "off" || nflState.season_type === "pre";
+      nflSeasonType === "off" || nflSeasonType === "pre";
     return {
       startedAt,
       completedAt: new Date().toISOString(),
@@ -1329,6 +1344,9 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
               status: "success",
               rowCount: 0,
               durationMs: 0,
+              // The RAW value on purpose: this note is for a human reading
+              // sync_log, so it should show what Sleeper actually sent rather
+              // than the normalized value the run acted on.
               note: `Season ${seasonYear} not in database yet (season_type "${nflState.season_type}"); nothing to sync until the new league is created. Waiting.`,
             }
           : {
@@ -1359,9 +1377,12 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
   // others. Per-player points are a separate step so a failure there does not
   // corrupt the team-level matchup sync (atomic-per-data-type rule).
   const results = await Promise.allSettled([
-    syncTransactions(leagueId, seasonId, currentWeek),
+    // Sleeper's transactions endpoint is indexed by fantasy ROUND, the same
+    // axis as the fantasy week, so it takes leagueWeek too. With the raw state
+    // week, preseason waivers and trades filed under round 1 were missed.
+    syncTransactions(leagueId, seasonId, leagueWeek),
     syncRostersAndPicks(leagueId, seasonId),
-    syncMatchupScores(leagueId, seasonId, seasonYear, currentWeek, nflState.season_type),
+    syncMatchupScores(leagueId, seasonId, seasonYear, currentWeek, nflSeasonType),
     // The two arguments differ on purpose: player_week_points is keyed by the
     // FANTASY week (leagueWeek), while syncPlayerWeekStats reads Sleeper's NFL
     // stats endpoint, which is indexed by NFL week (currentWeek).
@@ -1400,7 +1421,7 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
       await syncBookLines(
         seasonId,
         seasonYear,
-        nflState.season_type,
+        nflSeasonType,
         currentWeek,
       ),
     );
@@ -1419,7 +1440,7 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
       await syncBookProps(
         seasonId,
         seasonYear,
-        nflState.season_type,
+        nflSeasonType,
         currentWeek,
       ),
     );

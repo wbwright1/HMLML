@@ -130,7 +130,14 @@ export const getNflState = cache(async function getNflState(): Promise<NflState 
       week,
       season,
     };
-  } catch {
+  } catch (e) {
+    // The only realistic throw source here is the DB read behind
+    // isWeekOneLeadWindowActive above: a Sleeper outage comes back as a result
+    // object from fetchSleeper, never as an exception. Swallowing that read
+    // would undo the guard it just gained, turning a Postgres outage into
+    // getNflState() === null and letting the book/players/roster paths
+    // ISR-cache degraded output.
+    rethrowUnlessTolerable(e);
     console.error("[nfl-state] Unexpected error fetching NFL state");
     return null;
   }
