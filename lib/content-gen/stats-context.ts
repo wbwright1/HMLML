@@ -2,6 +2,7 @@ import { getDivisionStandings } from "@/lib/queries/divisions";
 import {
   getLastCompletedSeason,
   getSeasonStandings,
+  getTitleGamePair,
 } from "@/lib/queries/seasons";
 import { getMatchupsByWeek } from "@/lib/queries/matchups";
 import { getHeadToHead } from "@/lib/queries/records";
@@ -10,7 +11,11 @@ import { getWeekBenchLeader } from "@/lib/queries/lineup-efficiency";
 import { getWeekStandouts } from "@/lib/queries/week-standouts";
 import { getRecentTransactions } from "@/lib/queries/offseason";
 import { matchupPairKey } from "@/lib/content";
-import { selectGameOfTheWeek, type GotwCandidate } from "@/lib/hub/between-weeks";
+import {
+  selectGameOfTheWeek,
+  markTitleRematch,
+  type GotwCandidate,
+} from "@/lib/hub/between-weeks";
 import type { NflSeasonType } from "@/lib/queries/nfl-state";
 import { getLeagueLongevity } from "@/lib/queries/franchise-longevity";
 import { getRosterProjections } from "@/lib/queries/roster-projections";
@@ -255,12 +260,15 @@ export async function buildStatsContext(
   const { seasonId, seasonYear, week, seasonType } = input;
   const priorWeek = week > 1 ? week - 1 : week;
 
-  const [divisionGroups, currentMatchupRows, lastCompleted, recentTransactions] =
+  const [divisionGroups, currentMatchupRows, lastCompleted, recentTransactions, titlePair] =
     await Promise.all([
       getDivisionStandings(seasonId),
       getMatchupsByWeek(seasonId, week),
       getLastCompletedSeason(),
       getRecentTransactions(seasonId, 6),
+      // Only relevant at week 1 (the "HMLML Bowl" rematch override below);
+      // skip the query entirely for every other week.
+      week === 1 ? getTitleGamePair() : Promise.resolve(null),
     ]);
 
   const divisions: StatsDivision[] = divisionGroups.map((g) => {
@@ -321,7 +329,8 @@ export async function buildStatsContext(
 
   // Game of the Week: the same selection the between-weeks hub makes, so the
   // generated blurb targets the matchup the hub features. Uses division +
-  // records from the standings map (the fields selectGameOfTheWeek weighs).
+  // records from the standings map (the fields selectGameOfTheWeek weighs),
+  // plus franchiseId so markTitleRematch can identify the week-1 rematch.
   const gotwCandidates: GotwCandidate[] = currentMatchupRows.map((m) => {
     const a = standingBy.get(m.homeTeam.franchiseId);
     const b = standingBy.get(m.awayTeam.franchiseId);
@@ -333,6 +342,7 @@ export async function buildStatsContext(
         ties: a?.ties ?? 0,
         pointsFor: Number(a?.pointsScored ?? 0),
         division: a?.division ?? null,
+        franchiseId: m.homeTeam.franchiseId,
       },
       teamB: {
         wins: b?.wins ?? 0,
@@ -340,10 +350,12 @@ export async function buildStatsContext(
         ties: b?.ties ?? 0,
         pointsFor: Number(b?.pointsScored ?? 0),
         division: b?.division ?? null,
+        franchiseId: m.awayTeam.franchiseId,
       },
     };
   });
-  const gotwId = selectGameOfTheWeek(gotwCandidates);
+  const markedGotwCandidates = markTitleRematch(gotwCandidates, titlePair);
+  const gotwId = selectGameOfTheWeek(markedGotwCandidates, undefined, week);
   const gotwRow = currentMatchupRows.find((m) => m.matchupId === gotwId);
   const gameOfWeekPairKey = gotwRow
     ? matchupPairKey(gotwRow.homeTeam.franchiseSlug, gotwRow.awayTeam.franchiseSlug)

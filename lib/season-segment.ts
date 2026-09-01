@@ -6,9 +6,9 @@
 //  - offseason:  the season has ended and the rookie draft has NOT happened
 //                yet (latest seasons.status is 'pre_draft' or 'drafting').
 //  - preseason:  the rookie draft has happened (status 'in_season') but the
-//                NFL season has not started and we are not within 5 days of
+//                NFL season has not started and we are not within 7 days of
 //                the week-1 kickoff.
-//  - in_season:  NFL state reads regular/post, OR we are within 5 days of the
+//  - in_season:  NFL state reads regular/post, OR we are within 7 days of the
 //                earliest week-1 game.
 //
 // Pure: no I/O, no dependencies, safe to unit test directly.
@@ -18,8 +18,11 @@ import { startOfDayInZone } from "@/lib/time-zone";
 export type SeasonSegment = "offseason" | "preseason" | "in_season";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
-// How early before week-1 kickoff we flip to in-season (the merged WK column).
-export const KICKOFF_LEAD_DAYS = 5;
+// Single shared lead-window constant: how early before week-1 kickoff the
+// site flips to in-season. Used by both resolveSeasonSegment (the
+// players-table WK column flip) and isWithinWeekOneLeadWindow (the hub/nav
+// kickoff-week flip), so both flip at the same instant.
+export const KICKOFF_LEAD_DAYS = 7;
 
 export interface SeasonSegmentInput {
   /** seasons.status of the latest season row ('pre_draft' | 'drafting' | 'in_season' | 'complete' | ...). */
@@ -46,19 +49,22 @@ export function parseGameDate(value: string | null | undefined): Date | null {
 }
 
 /**
- * True once we've reached league-timezone midnight on the Sunday before the
- * earliest week-1 game. This is the hub's "kickoff week" window: from that
- * Sunday on, the site presents as regular season (week banner, kickoff
- * countdown, standings) even though every team is still 0-0. Sunday rather
- * than Monday because week 1 can open on a Wednesday (2026 does). A kickoff
- * that itself falls on a Sunday anchors to the previous Sunday. Null/
- * unparseable date: false (no week-1 schedule rows means the window can never
- * fire).
+ * True once we've reached league-timezone midnight exactly KICKOFF_LEAD_DAYS
+ * (7) days before the earliest week-1 game. This is the hub's "kickoff week"
+ * window: from that instant on, the site presents as regular season (week
+ * banner, kickoff countdown, standings) even though every team is still 0-0.
+ * This replaces the old "Sunday before kickoff" rule (a weekday-anchored
+ * lookback) with a flat day count shared with resolveSeasonSegment below.
+ * Null/unparseable date: false (no week-1 schedule rows means the window can
+ * never fire).
  *
  * The anchor is shared with the countdown target in lib/queries/kickoff.ts
- * (both call startOfDayInZone / LEAGUE_TIME_ZONE from lib/time-zone.ts), which
- * is the whole point of this change: a countdown can no longer hit zero
- * before, or after, the window it is counting down to actually opens.
+ * (parseKickoff also targets league-midnight of the kickoff date via
+ * startOfDayInZone / LEAGUE_TIME_ZONE from lib/time-zone.ts), which is the
+ * whole point of this change: the window opens at the exact instant the
+ * preseason countdown reads 7d 00:00:00, not before or after. No DST
+ * transition falls between the window opening and kickoff in early September,
+ * so subtracting a flat KICKOFF_LEAD_DAYS * DAY_MS is safe.
  *
  * The window is intentionally open-ended: it is a `now >= threshold` test with
  * no upper bound, so it never closes on its own and reads true for a past
@@ -68,7 +74,10 @@ export function parseGameDate(value: string | null | undefined): Date | null {
  * starts (resolveHubSeasonType in lib/hub/season-state.ts). Bounding it would
  * need an end date, and if Sleeper's season_type ever lagged past that end the
  * site would fall back to the preseason hub during real play, which is a worse
- * failure than the one being guarded against.
+ * failure than the one being guarded against. Sharing one flat-7 rule with
+ * resolveSeasonSegment also only ever opens the window earlier or the same as
+ * before, never later, so the countdown can never hit zero before the window
+ * opens.
  */
 export function isWithinWeekOneLeadWindow(
   week1EarliestGameDate: string | null,
@@ -76,9 +85,7 @@ export function isWithinWeekOneLeadWindow(
 ): boolean {
   const week1 = parseGameDate(week1EarliestGameDate);
   if (!week1) return false;
-  const weekday = week1.getUTCDay(); // Sun=0 .. Sat=6
-  const daysBack = weekday === 0 ? 7 : weekday;
-  return now.getTime() >= startOfDayInZone(week1).getTime() - daysBack * DAY_MS;
+  return now.getTime() >= startOfDayInZone(week1).getTime() - KICKOFF_LEAD_DAYS * DAY_MS;
 }
 
 /**
@@ -101,8 +108,8 @@ export function isNflSeasonUnderway(seasonType: string | null | undefined): bool
 /**
  * Resolves the season segment. See the module header for the three cases and
  * the boundaries. When nfl_games has no week-1 rows (week1EarliestGameDate is
- * null) the 5-day rule cannot fire, so in-season falls back to season_type
- * regular/post alone.
+ * null) the KICKOFF_LEAD_DAYS rule cannot fire, so in-season falls back to
+ * season_type regular/post alone.
  */
 export function resolveSeasonSegment(input: SeasonSegmentInput): SeasonSegment {
   const { seasonStatus, seasonType, week1EarliestGameDate, now } = input;

@@ -96,6 +96,31 @@ test.describe("Between-Weeks Hub (1d)", () => {
       await expect(
         page.getByText(/Players to Watch/i).first()
       ).toBeVisible();
+      // Every pick carries a story kicker: the headliner, or one of the
+      // archetype slots (see lib/queries/players-to-watch.ts).
+      // Case-insensitive: the kicker line renders through CSS `uppercase`,
+      // and innerText returns the rendered casing.
+      expect(text).toMatch(
+        /The Headliner|The Debut|Revenge Game|New Face|The Leap/i
+      );
+    }
+  });
+
+  test("T09: the rail reads the league's own data, never Sleeper trending", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const text = await page.locator("main").innerText();
+    // The Trending module is gone; the hub makes no live Sleeper call.
+    expect(text).not.toContain("Most-added player in the league");
+    // League Moves and the history card are both optional (empty renders
+    // nothing), so assert their shape only when they are on the page.
+    if (/League Moves/i.test(text)) {
+      expect(text).toMatch(/\bADD\b|\bDROP\b|\bTRADE\b/);
+    }
+    if (/This Week in HMLML History/i.test(text)) {
+      // Case-insensitive for the same CSS `uppercase` reason as T06.
+      expect(text).toMatch(/High Water|Beatdown|Nail-Biter/i);
     }
   });
 
@@ -139,9 +164,13 @@ test.describe("Between-Weeks Hub (1d)", () => {
     await expect(hero(page).locator("h1")).toBeVisible();
     await expect(page.getByText("Game of the Week", { exact: true })).toBeVisible();
 
-    // Right-rail modules (Trending, Left On The Bench) are desktop-only.
+    // Right-rail modules (League Moves, This Week in HMLML History, Left On
+    // The Bench) are desktop-only.
     await expect(page.getByText("Left On The Bench", { exact: true })).toBeHidden();
-    await expect(page.getByText("Trending", { exact: true })).toBeHidden();
+    await expect(page.getByText("League Moves", { exact: true })).toBeHidden();
+    await expect(
+      page.getByText("This Week in HMLML History", { exact: true })
+    ).toBeHidden();
 
     // Page does not scroll horizontally.
     const overflow = await page.evaluate(

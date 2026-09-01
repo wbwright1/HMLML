@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   selectGameOfTheWeek,
+  markTitleRematch,
   betweenWeeksHeadline,
   formatH2HLine,
   formatSlateH2H,
@@ -15,9 +16,10 @@ function team(
   wins: number,
   losses: number,
   pointsFor: number,
-  division: number | null
+  division: number | null,
+  franchiseId?: string
 ): GotwTeam {
-  return { wins, losses, ties: 0, pointsFor, division };
+  return { wins, losses, ties: 0, pointsFor, division, franchiseId };
 }
 
 function candidate(
@@ -97,6 +99,115 @@ describe("selectGameOfTheWeek", () => {
     const a = { matchupId: 1, teamA: team(3, 0, 400, null), teamB: team(0, 3, 300, null), projectedA: 80, projectedB: 80 };
     const b = { matchupId: 2, teamA: team(1, 2, 350, null), teamB: team(2, 1, 340, null), projectedA: 100, projectedB: 100 };
     expect(selectGameOfTheWeek([a, b], false)).toBe(2);
+  });
+
+  it("at week 1, the flagged title rematch wins outright over a higher-projected matchup", () => {
+    const zero = () => team(0, 0, 0, null);
+    const rematch: GotwCandidate = {
+      matchupId: 1,
+      teamA: zero(),
+      teamB: zero(),
+      projectedA: 50,
+      projectedB: 50,
+      isTitleRematch: true,
+    };
+    const higherProjected: GotwCandidate = {
+      matchupId: 2,
+      teamA: zero(),
+      teamB: zero(),
+      projectedA: 200,
+      projectedB: 200,
+    };
+    expect(selectGameOfTheWeek([higherProjected, rematch], false, 1)).toBe(1);
+  });
+
+  it("ignores the title rematch flag for weeks 2+, keeping the existing heuristic", () => {
+    const zero = () => team(0, 0, 0, null);
+    const rematch: GotwCandidate = {
+      matchupId: 1,
+      teamA: zero(),
+      teamB: zero(),
+      projectedA: 50,
+      projectedB: 50,
+      isTitleRematch: true,
+    };
+    const higherProjected: GotwCandidate = {
+      matchupId: 2,
+      teamA: zero(),
+      teamB: zero(),
+      projectedA: 200,
+      projectedB: 200,
+    };
+    // Same candidates as above, but week is 2 (or omitted): the flag is inert.
+    expect(selectGameOfTheWeek([higherProjected, rematch], false, 2)).toBe(2);
+    expect(selectGameOfTheWeek([higherProjected, rematch], false)).toBe(2);
+  });
+
+  it("falls through to the existing ranking when no candidate is flagged", () => {
+    const zero = () => team(0, 0, 0, null);
+    const a: GotwCandidate = { matchupId: 1, teamA: zero(), teamB: zero(), projectedA: 50, projectedB: 50 };
+    const b: GotwCandidate = { matchupId: 2, teamA: zero(), teamB: zero(), projectedA: 200, projectedB: 200 };
+    expect(selectGameOfTheWeek([a, b], false, 1)).toBe(2);
+  });
+
+  it("falls through to the existing ranking if somehow two candidates are flagged", () => {
+    const zero = () => team(0, 0, 0, null);
+    const a: GotwCandidate = { matchupId: 1, teamA: zero(), teamB: zero(), projectedA: 50, projectedB: 50, isTitleRematch: true };
+    const b: GotwCandidate = { matchupId: 2, teamA: zero(), teamB: zero(), projectedA: 200, projectedB: 200, isTitleRematch: true };
+    expect(selectGameOfTheWeek([a, b], false, 1)).toBe(2);
+  });
+});
+
+describe("markTitleRematch", () => {
+  it("flags the candidate whose two franchises are exactly {champion, runnerUp}", () => {
+    const rematch = candidate(
+      1,
+      team(0, 0, 0, null, "champ-id"),
+      team(0, 0, 0, null, "runner-id")
+    );
+    const other = candidate(
+      2,
+      team(0, 0, 0, null, "other-a"),
+      team(0, 0, 0, null, "other-b")
+    );
+    const marked = markTitleRematch([rematch, other], {
+      championFranchiseId: "champ-id",
+      runnerUpFranchiseId: "runner-id",
+    });
+    expect(marked.find((c) => c.matchupId === 1)?.isTitleRematch).toBe(true);
+    expect(marked.find((c) => c.matchupId === 2)?.isTitleRematch).toBeUndefined();
+  });
+
+  it("matches order-insensitively (runner-up as teamA, champion as teamB)", () => {
+    const rematch = candidate(
+      1,
+      team(0, 0, 0, null, "runner-id"),
+      team(0, 0, 0, null, "champ-id")
+    );
+    const marked = markTitleRematch([rematch], {
+      championFranchiseId: "champ-id",
+      runnerUpFranchiseId: "runner-id",
+    });
+    expect(marked[0].isTitleRematch).toBe(true);
+  });
+
+  it("is a no-op when titlePair is null", () => {
+    const a = candidate(1, team(0, 0, 0, null, "x"), team(0, 0, 0, null, "y"));
+    const marked = markTitleRematch([a], null);
+    expect(marked[0].isTitleRematch).toBeUndefined();
+  });
+
+  it("does not flag a matchup with only one of the two title-game franchises", () => {
+    const a = candidate(
+      1,
+      team(0, 0, 0, null, "champ-id"),
+      team(0, 0, 0, null, "someone-else")
+    );
+    const marked = markTitleRematch([a], {
+      championFranchiseId: "champ-id",
+      runnerUpFranchiseId: "runner-id",
+    });
+    expect(marked[0].isTitleRematch).toBeUndefined();
   });
 });
 

@@ -26,8 +26,9 @@ export interface NflState {
  * "<type>:<week>[:<season>][:force]", e.g. NFL_STATE_OVERRIDE=regular:1 or
  * regular:1:2026:force. The trailing ":force" also treats the week-one lead
  * window as active (see isWeekOneLeadWindowActive), so a preview can show the
- * regular-season hub before the real calendar reaches the Sunday before
- * kickoff. The week must be 1 to 22; anything outside that range is rejected
+ * regular-season hub before the real calendar reaches 7 days before the
+ * earliest week-1 game (KICKOFF_LEAD_DAYS). The week must be 1 to 22; anything
+ * outside that range is rejected
  * (week 0 used to render an empty regular-season hub that looked like a data
  * bug). Ignored in production (VERCEL_ENV === "production") and when unset
  * or malformed, so it can never lie on the live site.
@@ -77,8 +78,9 @@ function parseNflStateOverride(): { state: NflState; forceLeadWindow: boolean } 
  * stale the surrounding page content already is.
  */
 /**
- * True once the site should present as "kickoff week": from the Sunday before
- * the earliest week-1 game onward (isWithinWeekOneLeadWindow), or immediately
+ * True once the site should present as "kickoff week": from 7 days before
+ * the earliest week-1 game onward (KICKOFF_LEAD_DAYS, isWithinWeekOneLeadWindow),
+ * or immediately
  * when a ":force" NFL_STATE_OVERRIDE is active (preview/dev only). Shared by
  * the hub and the nav so they flip to the regular-season view on the same
  * request. React-cache()'d per request, so a rejection is shared by every
@@ -117,8 +119,9 @@ export const getNflState = cache(async function getNflState(): Promise<NflState 
       : "off";
 
     // Kickoff-week normalization: Sleeper's season_type can lag "pre" right up
-    // to opening night, but from the Sunday before the week-1 kickoff the site
-    // should already present as regular season, week 1 (regular-season hub,
+    // to opening night, but from 7 days before the earliest week-1 game
+    // (KICKOFF_LEAD_DAYS) the site should already present as regular season,
+    // week 1 (regular-season hub,
     // week-1 matchup slate, in-season player tables). Only "pre" is promoted;
     // post/off are real signals we never rewrite.
     if (seasonType === "pre" && (await isWeekOneLeadWindowActive(Number(season)))) {
@@ -146,7 +149,7 @@ export const getNflState = cache(async function getNflState(): Promise<NflState 
 /**
  * Returns the earliest week-1 game date (YYYY-MM-DD text) for a season year,
  * or null when nfl_games has no week-1 rows for it. Feeds the season-segment
- * resolver's 5-day-before-kickoff rule.
+ * resolver's 7-days-before-kickoff rule (KICKOFF_LEAD_DAYS).
  */
 export async function getWeek1EarliestGameDate(
   seasonYear: number

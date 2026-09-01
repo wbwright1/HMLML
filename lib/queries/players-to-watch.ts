@@ -26,6 +26,39 @@ export type BaselineMeta =
   | { kind: "priorSeason"; seasonYear: number }
   | { kind: "currentSeason"; throughWeek: number };
 
+/**
+ * One player's prior production over the baseline window. `gamesByFranchise`
+ * is optional so older callers (and tests) can pass the plain ppg/games pair;
+ * without it the franchise-aware archetypes (Revenge Game, New Face) simply
+ * find no candidates and the slot falls back to the next-best headliner.
+ */
+export interface BaselineEntry {
+  ppg: number;
+  games: number;
+  /** Started games per franchise across the baseline window. */
+  gamesByFranchise?: Map<string, number>;
+}
+
+/** Which story a Player to Watch is on the card for. */
+export type PlayerStoryKey =
+  | "headliner"
+  | "debut"
+  | "revenge"
+  | "newFace"
+  | "leap";
+
+/**
+ * The one place the story kicker strings live. The rail prints these verbatim,
+ * so a copy change happens here and nowhere else.
+ */
+export const PLAYER_STORY_LABELS: Record<PlayerStoryKey, string> = {
+  headliner: "The Headliner",
+  debut: "The Debut",
+  revenge: "Revenge Game",
+  newFace: "New Face",
+  leap: "The Leap",
+};
+
 export interface PlayerToWatch {
   playerId: string;
   name: string;
@@ -39,6 +72,12 @@ export interface PlayerToWatch {
   franchiseSlug: string;
   opponentName: string;
   inFeaturedMatchup: boolean;
+  /** Which slot this player filled. */
+  storyKey: PlayerStoryKey;
+  /** PLAYER_STORY_LABELS[storyKey], resolved for the UI. */
+  storyLabel: string;
+  /** One true sentence backing the story, or null for the headliner. */
+  storyDetail: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -52,6 +91,18 @@ export const SWING_BOOST = 1.15;
 const PROJECTED_WEIGHT = 0.6;
 const BASELINE_WEIGHT = 0.4;
 const DEFAULT_LIMIT = 3;
+
+/** A Leap needs a projection at least this multiple of the player's baseline ppg. */
+export const LEAP_PROJECTION_MULTIPLE = 1.3;
+/** ...and a baseline of at least this many started games, so the jump is off something real. */
+export const LEAP_MIN_BASELINE_GAMES = 6;
+
+/**
+ * Story slots are filled in this order after the headliner. At most one player
+ * per archetype per week; any archetype with no honest candidate is skipped and
+ * the slot falls back to the next-best headliner score.
+ */
+const STORY_ORDER: PlayerStoryKey[] = ["debut", "revenge", "newFace", "leap"];
 
 // ---------------------------------------------------------------------------
 // Pure helpers (unit-tested in players-to-watch.test.ts)
@@ -142,6 +193,76 @@ function computeOpponentNames(pool: PoolRow[]): Map<string, string> {
   return opponentByFranchise;
 }
 
+/** The opposing franchise's id for each franchise sharing a matchupId. */
+function computeOpponentIds(pool: PoolRow[]): Map<string, string> {
+  const franchisesByMatchup = new Map<number, Set<string>>();
+  for (const r of pool) {
+    if (r.matchupId == null) continue;
+    const ids = franchisesByMatchup.get(r.matchupId) ?? new Set<string>();
+    ids.add(r.franchiseId);
+    franchisesByMatchup.set(r.matchupId, ids);
+  }
+
+  const opponentByFranchise = new Map<string, string>();
+  for (const ids of franchisesByMatchup.values()) {
+    const [idA, idB] = [...ids];
+    if (ids.size !== 2) continue;
+    opponentByFranchise.set(idA, idB);
+    opponentByFranchise.set(idB, idA);
+  }
+  return opponentByFranchise;
+}
+
+/** Median projection across the players carrying one, the bar a Debut must clear. */
+function medianProjection(projectable: PoolRow[]): number {
+  const values = projectable
+    .map((r) => r.projectedPoints ?? 0)
+    .sort((a, b) => a - b);
+  if (values.length === 0) return 0;
+  const mid = Math.floor(values.length / 2);
+  return values.length % 2 === 1
+    ? values[mid]
+    : (values[mid - 1] + values[mid]) / 2;
+}
+
+/** "in 2025" / "earlier this season", for story details that cite the window. */
+function baselineWindowPhrase(meta: BaselineMeta): string {
+  return meta.kind === "priorSeason"
+    ? `in ${meta.seasonYear}`
+    : "earlier this season";
+}
+
+/** "Started 12 games for Vanilla Vick in 2025": the shared former-franchise line. */
+function formerFranchiseDetail(
+  games: number,
+  franchiseName: string,
+  meta: BaselineMeta
+): string {
+  const noun = games === 1 ? "game" : "games";
+  return `Started ${games} ${noun} for ${franchiseName} ${baselineWindowPhrase(meta)}`;
+}
+
+/**
+ * The franchise a player started the most games for over the baseline window,
+ * when that franchise is not the one starting him this week. Null when the
+ * baseline carries no per-franchise detail, or when he never moved.
+ */
+function priorFranchiseId(
+  baseline: BaselineEntry | null,
+  currentFranchiseId: string
+): { franchiseId: string; games: number } | null {
+  const byFranchise = baseline?.gamesByFranchise;
+  if (!byFranchise) return null;
+  let best: { franchiseId: string; games: number } | null = null;
+  for (const [franchiseId, games] of byFranchise) {
+    if (franchiseId === currentFranchiseId || games <= 0) continue;
+    if (best == null || games > best.games || (games === best.games && franchiseId < best.franchiseId)) {
+      best = { franchiseId, games };
+    }
+  }
+  return best;
+}
+
 export interface SelectPlayersToWatchOptions {
   featuredMatchupId: number | null;
   limit?: number;
@@ -149,20 +270,31 @@ export interface SelectPlayersToWatchOptions {
 
 /**
  * Scores and selects up to `limit` Players to Watch from the week's starter
- * pool, one per franchise, weighted toward players likely to swing this
- * week's matchups. Pure function: no DB access, fully unit-testable.
+ * pool, one per franchise. Pure function: no DB access, fully unit-testable.
  *
- * Score = 0.6 * norm(projectedPoints) + 0.4 * norm(baselinePpg), each
- * normalized against the pool max so the two scales are comparable, then
- * multiplied by SWING_BOOST for players in a swing/featured matchup.
- * Players who carry no projection at all are excluded (nothing honest to
- * rank them on); ties break deterministically on playerId.
+ * Slot 1 is THE HEADLINER: the top blended score, where score =
+ * 0.6 * norm(projectedPoints) + 0.4 * norm(baselinePpg), each normalized
+ * against the pool max so the two scales are comparable, then multiplied by
+ * SWING_BOOST for players in a swing/featured matchup.
+ *
+ * The remaining slots are story picks, tried in STORY_ORDER and each filled by
+ * the highest-scoring player who honestly qualifies:
+ *   - THE DEBUT: no started games in the baseline window, but a projection at
+ *     or above the pool's median (a real starter, not a dart throw).
+ *   - REVENGE GAME: started for the exact franchise he faces this week.
+ *   - NEW FACE: started for a different franchise in the baseline window.
+ *   - THE LEAP: projected 30%+ above a baseline of 6 or more started games.
+ * Any archetype with no candidate is skipped; leftover slots fall back to the
+ * next-best headliner score, so the rail never shrinks and never fabricates.
+ *
+ * Players who carry no projection at all are excluded (nothing honest to rank
+ * them on); ties break deterministically on playerId.
  *
  * Returns [] when the pool is empty or nothing in it carries a projection.
  */
 export function selectPlayersToWatch(
   pool: PoolRow[],
-  baselineByPlayer: Map<string, { ppg: number; games: number }>,
+  baselineByPlayer: Map<string, BaselineEntry>,
   baselineMeta: BaselineMeta,
   opts: SelectPlayersToWatchOptions
 ): PlayerToWatch[] {
@@ -172,6 +304,9 @@ export function selectPlayersToWatch(
   const limit = opts.limit ?? DEFAULT_LIMIT;
   const swingMatchups = computeSwingMatchups(pool, opts.featuredMatchupId);
   const opponentByFranchise = computeOpponentNames(pool);
+  const opponentIdByFranchise = computeOpponentIds(pool);
+  const franchiseNameById = new Map(pool.map((r) => [r.franchiseId, r.franchiseName]));
+  const debutBar = medianProjection(projectable);
 
   const maxProjected = Math.max(...projectable.map((r) => r.projectedPoints ?? 0));
   const maxBaseline = Math.max(
@@ -196,31 +331,113 @@ export function selectPlayersToWatch(
     return a.row.playerId.localeCompare(b.row.playerId);
   });
 
+  type Scored = (typeof scored)[number];
+
+  /**
+   * The story detail for a candidate under one archetype, or null when the
+   * claim would not be literally true. Returning null is how an archetype
+   * declines a candidate, so every printed line is backed by real rows.
+   */
+  const storyDetailFor = (s: Scored, key: PlayerStoryKey): string | null => {
+    const games = s.baseline?.games ?? 0;
+    const projected = s.row.projectedPoints ?? 0;
+
+    if (key === "debut") {
+      if (games > 0 || projected < debutBar) return null;
+      return baselineMeta.kind === "priorSeason"
+        ? `No starts in ${baselineMeta.seasonYear}, in the lineup anyway`
+        : `No starts through Week ${baselineMeta.throughWeek}, in the lineup anyway`;
+    }
+
+    if (key === "revenge") {
+      const opponentId = opponentIdByFranchise.get(s.row.franchiseId);
+      const startedFor = s.baseline?.gamesByFranchise;
+      if (!opponentId || !startedFor) return null;
+      const gamesForOpponent = startedFor.get(opponentId) ?? 0;
+      if (gamesForOpponent <= 0) return null;
+      const opponentName = franchiseNameById.get(opponentId);
+      if (!opponentName) return null;
+      return formerFranchiseDetail(gamesForOpponent, opponentName, baselineMeta);
+    }
+
+    if (key === "newFace") {
+      const prior = priorFranchiseId(s.baseline, s.row.franchiseId);
+      if (!prior) return null;
+      const priorName = franchiseNameById.get(prior.franchiseId);
+      if (!priorName) return null;
+      return formerFranchiseDetail(prior.games, priorName, baselineMeta);
+    }
+
+    // The Leap.
+    const ppg = s.baseline?.ppg ?? 0;
+    if (games < LEAP_MIN_BASELINE_GAMES || ppg <= 0) return null;
+    if (projected < ppg * LEAP_PROJECTION_MULTIPLE) return null;
+    return `Projected ${projected.toFixed(1)} off ${ppg.toFixed(1)} ppg ${baselineWindowPhrase(baselineMeta)}`;
+  };
+
+  const toPlayer = (
+    s: Scored,
+    storyKey: PlayerStoryKey,
+    storyDetail: string | null
+  ): PlayerToWatch => ({
+    playerId: s.row.playerId,
+    name: s.row.name ?? "Unknown",
+    position: s.row.position,
+    team: s.row.team,
+    projectedPoints: s.row.projectedPoints ?? 0,
+    baselinePpg: s.baseline?.ppg ?? null,
+    baselineGames: s.baseline?.games ?? 0,
+    baselineLabel: formatBaselineLabel(
+      s.baseline?.ppg ?? null,
+      s.baseline?.games ?? 0,
+      baselineMeta
+    ),
+    franchiseName: s.row.franchiseName,
+    franchiseSlug: s.row.franchiseSlug,
+    opponentName: opponentByFranchise.get(s.row.franchiseId) ?? "the field",
+    inFeaturedMatchup: s.inFeaturedMatchup,
+    storyKey,
+    storyLabel: PLAYER_STORY_LABELS[storyKey],
+    storyDetail,
+  });
+
   const seenFranchise = new Set<string>();
+  const seenPlayer = new Set<string>();
   const picked: PlayerToWatch[] = [];
-  for (const s of scored) {
-    if (seenFranchise.has(s.row.franchiseId)) continue;
+
+  const take = (s: Scored, key: PlayerStoryKey, detail: string | null) => {
     seenFranchise.add(s.row.franchiseId);
-    picked.push({
-      playerId: s.row.playerId,
-      name: s.row.name ?? "Unknown",
-      position: s.row.position,
-      team: s.row.team,
-      projectedPoints: s.row.projectedPoints ?? 0,
-      baselinePpg: s.baseline?.ppg ?? null,
-      baselineGames: s.baseline?.games ?? 0,
-      baselineLabel: formatBaselineLabel(
-        s.baseline?.ppg ?? null,
-        s.baseline?.games ?? 0,
-        baselineMeta
-      ),
-      franchiseName: s.row.franchiseName,
-      franchiseSlug: s.row.franchiseSlug,
-      opponentName: opponentByFranchise.get(s.row.franchiseId) ?? "the field",
-      inFeaturedMatchup: s.inFeaturedMatchup,
-    });
+    seenPlayer.add(s.row.playerId);
+    picked.push(toPlayer(s, key, detail));
+  };
+
+  const available = (s: Scored): boolean =>
+    !seenPlayer.has(s.row.playerId) && !seenFranchise.has(s.row.franchiseId);
+
+  // Slot 1: the headliner, unchanged scoring.
+  const headliner = scored.find(available);
+  if (!headliner) return [];
+  take(headliner, "headliner", null);
+
+  // Slots 2..n: one player per archetype, best score first.
+  for (const key of STORY_ORDER) {
     if (picked.length >= limit) break;
+    for (const s of scored) {
+      if (!available(s)) continue;
+      const detail = storyDetailFor(s, key);
+      if (detail == null) continue;
+      take(s, key, detail);
+      break;
+    }
   }
+
+  // Anything left over falls back to the next-best headliner score.
+  for (const s of scored) {
+    if (picked.length >= limit) break;
+    if (!available(s)) continue;
+    take(s, "headliner", null);
+  }
+
   return picked;
 }
 
@@ -279,8 +496,8 @@ async function getBaseline(
   seasonId: number,
   week: number,
   playerIds: string[]
-): Promise<{ byPlayer: Map<string, { ppg: number; games: number }>; meta: BaselineMeta }> {
-  const byPlayer = new Map<string, { ppg: number; games: number }>();
+): Promise<{ byPlayer: Map<string, BaselineEntry>; meta: BaselineMeta }> {
+  const byPlayer = new Map<string, BaselineEntry>();
   if (playerIds.length === 0) {
     return { byPlayer, meta: { kind: "currentSeason", throughWeek: Math.max(week - 1, 0) } };
   }
@@ -291,7 +508,7 @@ async function getBaseline(
     eq(matchups.rosterId, playerWeekPoints.rosterId)
   );
 
-  let rows: { playerId: string; points: number }[] = [];
+  let rows: { playerId: string; points: number; franchiseId: string }[] = [];
   let meta: BaselineMeta;
 
   if (week === 1) {
@@ -299,7 +516,11 @@ async function getBaseline(
     meta = { kind: "priorSeason", seasonYear: priorSeason?.seasonYear ?? 0 };
     if (priorSeason) {
       rows = await db
-        .select({ playerId: playerWeekPoints.playerId, points: playerWeekPoints.points })
+        .select({
+          playerId: playerWeekPoints.playerId,
+          points: playerWeekPoints.points,
+          franchiseId: playerWeekPoints.franchiseId,
+        })
         .from(playerWeekPoints)
         .innerJoin(matchups, joinCompleteMatchup)
         .where(
@@ -314,7 +535,11 @@ async function getBaseline(
   } else {
     meta = { kind: "currentSeason", throughWeek: week - 1 };
     rows = await db
-      .select({ playerId: playerWeekPoints.playerId, points: playerWeekPoints.points })
+      .select({
+        playerId: playerWeekPoints.playerId,
+        points: playerWeekPoints.points,
+        franchiseId: playerWeekPoints.franchiseId,
+      })
       .from(playerWeekPoints)
       .innerJoin(matchups, joinCompleteMatchup)
       .where(
@@ -328,15 +553,27 @@ async function getBaseline(
       );
   }
 
-  const sums = new Map<string, { sum: number; games: number }>();
+  // Per-franchise game counts ride along with the ppg aggregate so the story
+  // archetypes (Revenge Game, New Face) can name the franchise a player
+  // actually started for, derived from the same started/complete rows.
+  const sums = new Map<
+    string,
+    { sum: number; games: number; byFranchise: Map<string, number> }
+  >();
   for (const r of rows) {
-    const cur = sums.get(r.playerId) ?? { sum: 0, games: 0 };
+    const cur =
+      sums.get(r.playerId) ?? { sum: 0, games: 0, byFranchise: new Map<string, number>() };
     cur.sum += r.points;
     cur.games += 1;
+    cur.byFranchise.set(r.franchiseId, (cur.byFranchise.get(r.franchiseId) ?? 0) + 1);
     sums.set(r.playerId, cur);
   }
-  for (const [playerId, { sum, games }] of sums) {
-    byPlayer.set(playerId, { ppg: games > 0 ? sum / games : 0, games });
+  for (const [playerId, { sum, games, byFranchise }] of sums) {
+    byPlayer.set(playerId, {
+      ppg: games > 0 ? sum / games : 0,
+      games,
+      gamesByFranchise: byFranchise,
+    });
   }
 
   return { byPlayer, meta };

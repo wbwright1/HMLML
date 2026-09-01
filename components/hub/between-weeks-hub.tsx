@@ -13,8 +13,9 @@ import { GameOfTheWeekCard } from "@/components/hub/game-of-the-week-card";
 import { SlateCard } from "@/components/hub/slate-card";
 import { teamAcronym } from "@/lib/team-acronym";
 import type { PairedMatchup } from "@/lib/queries/matchups";
-import type { getSeasonStandings } from "@/lib/queries/seasons";
+import { getTitleGamePair, type getSeasonStandings } from "@/lib/queries/seasons";
 import { getHeadToHead } from "@/lib/queries/records";
+import { getBowlName } from "@/lib/bowl-names";
 import { getDivisionStandings } from "@/lib/queries/divisions";
 import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
 import { getWeekBenchLeader } from "@/lib/queries/lineup-efficiency";
@@ -24,12 +25,15 @@ import {
   sumProjectedByFranchise,
   type PlayerToWatch,
 } from "@/lib/queries/players-to-watch";
-import { getTrendingAddPlayers } from "@/lib/queries/player-points";
+import { getRecentLeagueMoves, type LeagueMove } from "@/lib/queries/league-moves";
+import { getWeekInHistory, type WeekReceipt } from "@/lib/queries/week-history";
+import { FranchiseLogo } from "@/components/franchise-logo";
 import { getHubEditorial, matchupPairKey, type HubEditorial } from "@/lib/content";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { buildHubLineFooter } from "@/lib/book/shared";
 import {
   selectGameOfTheWeek,
+  markTitleRematch,
   betweenWeeksHeadline,
   formatH2HLine,
   formatSlateH2H,
@@ -117,7 +121,8 @@ export async function BetweenWeeksHub({
     null;
   let benchLeader: Awaited<ReturnType<typeof getWeekBenchLeader>> = null;
   let pool: Awaited<ReturnType<typeof getWeekStarterPool>> = [];
-  let trending: Awaited<ReturnType<typeof getTrendingAddPlayers>> = [];
+  let leagueMoves: LeagueMove[] = [];
+  let weekReceipts: WeekReceipt[] = [];
   let bookGames: BookGame[] = [];
   const h2hByMatchup = new Map<
     number,
@@ -136,29 +141,43 @@ export async function BetweenWeeksHub({
       // The Bench" about week 0 would either return null by luck or (if a
       // future data change ever lets it) resurrect a false claim. Skip the
       // fetches outright rather than relying on the empty-shape fallback.
-      const [divisions, superlatives, bench, weekPool, trend, board, ...h2hResults] =
-        await Promise.all([
-          getDivisionStandings(seasonId),
-          week === 1
-            ? Promise.resolve(null)
-            : getWeeklySuperlatives(seasonId, priorWeek),
-          week === 1
-            ? Promise.resolve(null)
-            : getWeekBenchLeader(seasonId, priorWeek),
-          getWeekStarterPool(seasonId, week),
-          getTrendingAddPlayers(3),
-          bookMatchesSlate
-            ? getBookBoard(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week)
-            : Promise.resolve([]),
-          ...matchups.map((m) =>
-            getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
-          ),
-        ]);
+      const [
+        divisions,
+        superlatives,
+        bench,
+        weekPool,
+        moves,
+        receipts,
+        board,
+        ...h2hResults
+      ] = await Promise.all([
+        getDivisionStandings(seasonId),
+        week === 1
+          ? Promise.resolve(null)
+          : getWeeklySuperlatives(seasonId, priorWeek),
+        week === 1
+          ? Promise.resolve(null)
+          : getWeekBenchLeader(seasonId, priorWeek),
+        getWeekStarterPool(seasonId, week),
+        // Both rail cards below read Postgres only: League Moves replaced the
+        // Sleeper-backed Trending module, and the history card is our own
+        // completed matchups. Neither is week-1 gated; both have real data on
+        // opening week (preseason churn, and 2021 onward).
+        getRecentLeagueMoves(seasonId, 4),
+        getWeekInHistory(seasonYear, week),
+        bookMatchesSlate
+          ? getBookBoard(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week)
+          : Promise.resolve([]),
+        ...matchups.map((m) =>
+          getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
+        ),
+      ]);
 
       weeklySuperlatives = superlatives;
       benchLeader = bench;
       pool = weekPool;
-      trending = trend;
+      leagueMoves = moves;
+      weekReceipts = receipts;
       bookGames = board;
 
       if (anyGamesPlayed) {
@@ -183,6 +202,11 @@ export async function BetweenWeeksHub({
     }
   }
 
+  // Week-1 title rematch: this league opens every season with a rematch of
+  // last season's championship game. Only queried at week 1 (weeks 2+ have no
+  // use for it), and null degrades to the existing heuristic untouched.
+  const titlePair = week === 1 ? await getTitleGamePair() : null;
+
   // Game of the Week selection from the current slate. Projected totals come
   // from the same starter pool Players to Watch scores over, so no extra
   // query; they only drive the ranking when anyGamesPlayed is false.
@@ -198,6 +222,7 @@ export async function BetweenWeeksHub({
         ties: a?.ties ?? 0,
         pointsFor: Number(a?.pointsScored ?? 0),
         division: a?.division ?? null,
+        franchiseId: m.homeTeam.franchiseId,
       },
       teamB: {
         wins: b?.wins ?? 0,
@@ -205,15 +230,21 @@ export async function BetweenWeeksHub({
         ties: b?.ties ?? 0,
         pointsFor: Number(b?.pointsScored ?? 0),
         division: b?.division ?? null,
+        franchiseId: m.awayTeam.franchiseId,
       },
       projectedA: projectedByFranchise.get(m.homeTeam.franchiseId) ?? 0,
       projectedB: projectedByFranchise.get(m.awayTeam.franchiseId) ?? 0,
     };
   });
+  const markedCandidates = markTitleRematch(candidates, titlePair);
 
-  const gotwId = selectGameOfTheWeek(candidates, anyGamesPlayed);
+  const gotwId = selectGameOfTheWeek(markedCandidates, anyGamesPlayed, week);
   const gameOfWeek = matchups.find((m) => m.matchupId === gotwId) ?? null;
   const restOfSlate = matchups.filter((m) => m.matchupId !== gotwId);
+  const isTitleRematchGame = Boolean(
+    markedCandidates.find((c) => c.matchupId === gotwId)?.isTitleRematch
+  );
+  const bowlName = titlePair ? getBowlName(titlePair.seasonYear) : null;
   const kickoffWeekday = kickoffWeekdayName(nextKickoff);
   const bookGameByMatchup = new Map(bookGames.map((g) => [g.matchupId, g]));
 
@@ -273,6 +304,8 @@ export async function BetweenWeeksHub({
               leadsDivision={leadsDivision}
               anyGamesPlayed={anyGamesPlayed}
               editorial={editorial}
+              isTitleRematch={isTitleRematchGame}
+              bowlName={bowlName}
             />
           )}
 
@@ -357,7 +390,10 @@ export async function BetweenWeeksHub({
           {playersToWatch.length > 0 && (
             <PlayersToWatchCard week={week} players={playersToWatch} />
           )}
-          {trending.length > 0 && <TrendingCard players={trending} />}
+          {leagueMoves.length > 0 && <LeagueMovesCard moves={leagueMoves} />}
+          {weekReceipts.length > 0 && (
+            <WeekInHistoryCard week={week} receipts={weekReceipts} />
+          )}
         </aside>
       </div>
     </>
@@ -379,6 +415,8 @@ function GameOfWeekSection({
   leadsDivision,
   anyGamesPlayed,
   editorial,
+  isTitleRematch,
+  bowlName,
 }: {
   matchup: PairedMatchup;
   h2h: { wins: number; losses: number; ties: number } | null;
@@ -390,6 +428,10 @@ function GameOfWeekSection({
   leadsDivision: Set<string>;
   anyGamesPlayed: boolean;
   editorial: HubEditorial;
+  /** True when this matchup is the week-1 rematch of last season's title game. */
+  isTitleRematch: boolean;
+  /** "HMLML Bowl {roman}" name for last completed season, or null (legacy era). */
+  bowlName: string | null;
 }) {
   const home = matchup.homeTeam;
   const away = matchup.awayTeam;
@@ -407,7 +449,17 @@ function GameOfWeekSection({
   const divisionName = isDivisionRematch
     ? divisionNameOf(home.franchiseId)
     : null;
-  const kickerLead = divisionName ? `${divisionName} Rematch` : "Cross-Division";
+  // The week-1 title rematch framing wins over the division/cross-division
+  // framing (a rematch of last season's championship is the whole point of
+  // opening week, division-mate or not). Falls back to "Title Game Rematch"
+  // when the champion's season predates the "HMLML Bowl" naming (legacy era).
+  const kickerLead = isTitleRematch
+    ? bowlName
+      ? `${bowlName} Rematch`
+      : "Title Game Rematch"
+    : divisionName
+      ? `${divisionName} Rematch`
+      : "Cross-Division";
   const stakes = stakesClause(
     leadsDivision.has(home.franchiseId),
     leadsDivision.has(away.franchiseId),
@@ -627,12 +679,18 @@ function PlayerToWatchRow({ player }: { player: PlayerToWatch }) {
         nflTeam={player.team}
       />
       <div className="min-w-0 flex-1">
+        <p className="text-kicker text-accent-gold truncate">{player.storyLabel}</p>
         <p className="text-body-sm font-semibold text-text-primary truncate">
           {player.name}
         </p>
         <p className="text-caption text-text-tertiary truncate">
           {player.team ?? "FA"} &middot; {player.position ?? "?"}
         </p>
+        {player.storyDetail && (
+          <p className="text-body-sm text-text-secondary truncate">
+            <MonoNumerals text={player.storyDetail} />
+          </p>
+        )}
         <p className="text-body-sm text-text-tertiary truncate">
           Projected{" "}
           <span className="text-stat tabular-nums text-text-secondary">
@@ -673,42 +731,115 @@ function PlayersToWatchCard({
   );
 }
 
-function TrendingCard({
-  players,
-}: {
-  players: Awaited<ReturnType<typeof getTrendingAddPlayers>>;
-}) {
+/**
+ * Prints a sentence with every numeral in the mono/tabular face, so a story
+ * line like "Started 12 games for X in 2025" still obeys the three-font rule
+ * without the query layer having to hand back pre-split fragments.
+ */
+function MonoNumerals({ text }: { text: string }) {
+  const parts = text.split(/(\d[\d.,]*)/g);
+  return (
+    <>
+      {parts.map((part, i) =>
+        /^\d/.test(part) ? (
+          <span key={i} className="text-stat tabular-nums">
+            {part}
+          </span>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
+
+/**
+ * What the league actually did, straight from our own synced transactions
+ * table. Replaced the Sleeper-backed Trending module: this rail is about
+ * these twelve teams, not the waiver wire at large, and it costs no live API
+ * call on a page path. Renders nothing when there is nothing to show.
+ */
+function LeagueMovesCard({ moves }: { moves: LeagueMove[] }) {
+  if (moves.length === 0) return null;
   return (
     <section className="space-y-3">
-      <p className="text-kicker">Trending</p>
+      <p className="text-kicker">League Moves</p>
       <RailCard>
-        <div className="space-y-4">
-          {players.map((p, i) => (
-            <div key={p.playerId} className="flex items-center gap-3">
-              <PlayerHeadshot
-                playerId={p.playerId}
-                name={p.name ?? "Unknown"}
-                size={56}
-                nflTeam={p.nflTeam}
-              />
+        <div className="divide-y divide-divider [&>*:not(:first-child)]:pt-3 space-y-3">
+          {moves.map((move) => (
+            <div key={move.transactionId} className="flex items-center gap-3">
+              <div className="flex shrink-0 -space-x-2">
+                {move.franchises.map((f) => (
+                  <FranchiseLogo
+                    key={f.id}
+                    slug={f.slug}
+                    name={f.name}
+                    abbreviation={f.abbreviation ?? undefined}
+                    brandingColor={f.brandingColor ?? undefined}
+                    avatarUrl={f.avatarUrl}
+                    size={28}
+                    decorative
+                  />
+                ))}
+              </div>
               <div className="min-w-0 flex-1">
-                <p className="text-body-sm font-semibold text-text-primary truncate">
-                  {p.name ?? "Unknown"}{" "}
-                  <span className="font-normal text-text-tertiary">
-                    {p.nflTeam ?? "FA"} &middot; {p.position ?? "?"}
-                  </span>
+                <p className="text-caption text-text-tertiary truncate">
+                  <span className="text-accent-gold">{move.kind}</span>
+                  {" · "}
+                  {move.franchises.map((f) => f.name).join(" / ")}
                 </p>
-                <p className="text-body-sm text-text-tertiary truncate">
-                  {i === 0
-                    ? "Most-added player in the league right now."
-                    : "Adds climbing across the league this week."}
+                <p className="text-body-sm text-text-secondary truncate">
+                  {move.detail}
                 </p>
               </div>
-              <span
-                className="text-accent-green shrink-0"
-                aria-label="trending up"
-              >
-                &#9650;
+              {move.age && (
+                <span className="text-caption text-text-tertiary shrink-0">
+                  <MonoNumerals text={move.age} />
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      </RailCard>
+    </section>
+  );
+}
+
+/**
+ * On-this-week receipts from past seasons: the highest score, the worst
+ * beating, and the closest call this league has ever produced in this week
+ * number. Every line is a real completed game (see lib/queries/week-history).
+ */
+function WeekInHistoryCard({
+  week,
+  receipts,
+}: {
+  week: number;
+  receipts: WeekReceipt[];
+}) {
+  if (receipts.length === 0) return null;
+  return (
+    <section className="space-y-3">
+      <p className="text-kicker">This Week in HMLML History</p>
+      <RailCard>
+        <div className="divide-y divide-divider">
+          {receipts.map((r) => (
+            <div
+              key={`${r.kind}-${r.seasonYear}`}
+              className="flex items-center justify-between gap-3 py-2"
+            >
+              <div className="min-w-0">
+                <p className="text-kicker text-accent-gold">
+                  {r.label} &middot;{" "}
+                  <span className="text-stat tabular-nums">{r.seasonYear}</span>{" "}
+                  Week <span className="text-stat tabular-nums">{week}</span>
+                </p>
+                <p className="text-body-sm text-text-secondary truncate">
+                  {r.claim}
+                </p>
+              </div>
+              <span className="text-stat tabular-nums text-body text-text-primary shrink-0">
+                {r.value}
               </span>
             </div>
           ))}

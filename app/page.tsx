@@ -42,8 +42,9 @@ export default async function HomePage() {
   // in progress renders the preseason hub, not an empty regular-season hub.
   const nothingPlayedYet = isPreWeekOne(standings);
 
-  // Kickoff-week window: from the Sunday before the week-1 kickoff, the 0-0
-  // demotion above stops firing and the regular-season hub takes over.
+  // Kickoff-week window: from 7 days before the earliest week-1 game
+  // (KICKOFF_LEAD_DAYS), the 0-0 demotion above stops firing and the
+  // regular-season hub takes over.
   //
   // This call is deliberately OUTSIDE the page's data-fetch try/catch. On a DB
   // failure it throws (lib/queries/nfl-state.ts), Next serves the error
