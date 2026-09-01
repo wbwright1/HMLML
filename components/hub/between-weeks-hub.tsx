@@ -695,13 +695,18 @@ function PlayerToWatchRow({ player }: { player: PlayerToWatch }) {
             <MonoNumerals text={player.storyDetail} />
           </p>
         )}
-        <p className="text-body-sm text-text-tertiary line-clamp-2">
-          Projected{" "}
-          <span className="text-stat tabular-nums text-text-secondary">
-            {player.projectedPoints.toFixed(1)}
-          </span>{" "}
-          &middot; {player.baselineLabel}
-        </p>
+        {/* The Leap's storyDetail already states the projection and the
+            baseline ppg ("Projected 20.8 off 15.3 ppg in 2025"), so a second
+            line repeating the same two numbers is redundant, not a new fact. */}
+        {player.storyKey !== "leap" && (
+          <p className="text-body-sm text-text-tertiary line-clamp-2">
+            Projected{" "}
+            <span className="text-stat tabular-nums text-text-secondary">
+              {player.projectedPoints.toFixed(1)}
+            </span>{" "}
+            &middot; {player.baselineLabel}
+          </p>
+        )}
       </div>
     </div>
   );
