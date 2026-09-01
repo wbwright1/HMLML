@@ -287,11 +287,21 @@ export function promptStatsView(ctx: StatsContext): unknown {
       teams: d.teams.map(bareTeam),
     })),
     leagueStandings: ctx.leagueStandings.map(bareTeam),
+    // This branch REBUILDS each matchup field by field, so anything added to
+    // StatsMatchup has to be listed here too or the model silently loses it in
+    // exactly the case (week 1, nothing played) where it matters most. The
+    // stripped fields are only the current-season ones; head-to-head history,
+    // the title rematch flag and the projected starter are completed or
+    // forward-looking facts, and they are the ONLY receipts a week-1 angle has.
     currentMatchups: ctx.currentMatchups.map((m) => ({
       pairKey: m.pairKey,
       home: bareTeam(m.home),
       away: bareTeam(m.away),
       h2h: m.h2h,
+      lastMeeting: m.lastMeeting,
+      playoffMeetingYears: m.playoffMeetingYears,
+      isTitleRematch: m.isTitleRematch,
+      topProjected: m.topProjected,
     })),
   };
 }
@@ -342,7 +352,11 @@ function regularSpec(ctx: StatsContext): string {
     : "the marquee matchup of the week";
   return `This is REGULAR SEASON content for week ${ctx.week} (week-scoped). Produce this exact JSON shape. Character budgets are HARD limits: a field over its budget gets that entire row discarded downstream (the response is not rejected, but that row is), so stay comfortably under, not right at, the number.
 {
-  "matchup_angles": [ { "pairKey": <one of ${JSON.stringify(pairKeys)}>, "body": "trash-talk angle for this matchup, under ${BODY_MAX} characters", "claims": [] } ]  // one per current matchup
+  "matchup_angles": [ { "pairKey": <one of ${JSON.stringify(pairKeys)}>, "body": "trash-talk angle for this matchup, under ${BODY_MAX} characters", "claims": [] } ]  // one per current matchup${
+    ctx.week === 1
+      ? `. WEEK 1: no team has a current-season record, so NEVER write one (a "0-0" line is an automatic rejection) and never call anyone hot, cold, or slumping. Each angle must hang on a real receipt from that matchup's own JSON: h2h (including its streak, written from the HOME team's perspective), lastMeeting, playoffMeetingYears, isTitleRematch, or topProjected. When h2h is all zeros and lastMeeting is null, say plainly that it is their first meeting; do not invent a rivalry. Every angle must have its OWN hook, so two cards never read the same`
+      : ""
+  }
   "game_of_week_blurb": "blurb for ${gotwClause}, under ${BODY_MAX} characters",
   "hero_dek": "one-sentence hero subhead for the week, under ${BODY_MAX} characters. Do NOT mention a specific number of days until kickoff; the live day count is added at render time.",
   "smack_posts": [ { "text": "site desk post, under ${BODY_MAX} characters", "claims": [] }, ... ]  // 5 to 6, MORE than the ~5 that will ship: over-generate so a diverse subset can be picked

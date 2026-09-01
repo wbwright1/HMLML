@@ -463,7 +463,11 @@ async function getHeadToHeadUncached(
     // Find matchups where both franchises share the same matchup_id in the same season/week
     const games = await db
       .select({
-        seasonId: sql<number>`a.season_id`,
+        // seasonYear, NOT season_id: the ids are insertion order, and the
+        // legacy import gave 2021/2022 HIGHER ids than 2023-2026. Ordering the
+        // streak by id therefore treated the oldest seasons as the most recent
+        // games and reported the streak backwards.
+        seasonYear: seasons.seasonYear,
         week: sql<number>`a.week`,
         pointsA: sql<number | null>`a.points`,
         pointsB: sql<number | null>`b.points`,
@@ -475,6 +479,7 @@ async function getHeadToHeadUncached(
       .from(
         sql`${matchups} a INNER JOIN ${matchups} b ON a.season_id = b.season_id AND a.week = b.week AND a.matchup_id = b.matchup_id AND a.franchise_id != b.franchise_id`
       )
+      .innerJoin(seasons, eq(seasons.id, sql`a.season_id`))
       .where(
         sql`a.franchise_id = ${franchiseIdA} AND b.franchise_id = ${franchiseIdB}`
       );
@@ -487,9 +492,10 @@ async function getHeadToHeadUncached(
     let currentStreakTeam: string | null = null;
     let currentStreakCount = 0;
 
-    // Sort by season/week for streak calculation
+    // Chronological order (oldest first) so the streak is the run at the END
+    // of the list, i.e. the most recent games.
     const sorted = [...games].sort((a, b) => {
-      if (a.seasonId !== b.seasonId) return a.seasonId - b.seasonId;
+      if (a.seasonYear !== b.seasonYear) return a.seasonYear - b.seasonYear;
       return a.week - b.week;
     });
 

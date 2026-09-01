@@ -477,10 +477,15 @@ const OFFSEASON_RECEIPTS: readonly OffseasonReceipt[] = Object.freeze([
   },
 ]);
 
-// No seeded per-pair blurbs: a pair-specific angle would fabricate a rivalry
-// narrative for real teams. byPair is intentionally empty so the between-weeks
-// slate falls back to genericSlateAngle (a truthful records-based line) for
-// every matchup; Phase 2 fills byPair from real head-to-head data. The
+// No seeded per-pair blurbs: a HAND-WRITTEN pair-specific angle would
+// fabricate a rivalry narrative for real teams, so byPair stays empty. The
+// fallback under it is no longer genericSlateAngle: it is the derived builder
+// in lib/hub/slate-angle.ts, which writes each card's line from that pair's
+// real head-to-head rows (streak, series lead, playoff meetings, last score)
+// and says "first meeting" when there is nothing on file. That is derivation,
+// not a seed, which is why it is allowed where a seed is not. Precedence is
+// unchanged: an LLM-authored matchup_angle row from hub_content still wins
+// over the builder, and the builder wins over nothing at all. The
 // game-of-the-week blurb stays generic (no team names, no invented stats).
 const MATCHUP_ANGLES: MatchupTrashAngles = Object.freeze({
   byPair: Object.freeze({}),

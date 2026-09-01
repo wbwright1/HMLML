@@ -94,12 +94,25 @@ ${exampleBlock(
 - The season is ${ctx.week <= 1 ? "just underway" : `only ${ctx.week - 1} week(s) old`}. Records are a tiny sample.
 - NEVER declare a division winner, a playoff lock, or a lost season. Nobody has clinched or been eliminated from anything.
 - ${championClause(ctx)}
-- Good angles: hot starts vs slow starts, preseason expectations meeting reality, overreaction bait framed AS overreaction, early statement wins, 0-X panic watch.
-${exampleBlock(
-  `"Example Team is 2-0 and already talking like it is December. Two weeks of football has cured nobody's delusions before."`,
-  `"Example Team has locked up its division and can start resting starters."`,
-  `nothing is clinched this early; a 2-0 start is a hot start, not a decided race.`,
-)}`;
+- Good angles: hot starts vs slow starts, preseason expectations meeting reality, overreaction bait framed AS overreaction, early statement wins, 0-X panic watch.${
+        ctx.week <= 1
+          ? `
+- WEEK 1 SPECIFICALLY: nobody has a record at all. Every angle must hang on all-time head-to-head, last season, a past playoff meeting, the title rematch, or a projection. A current-season record ("0-0", "unbeaten", "still winless") is a fabrication this week. Two teams with no head-to-head history have a FIRST meeting; say so and leave it there.`
+          : ""
+      }
+${
+        ctx.week <= 1
+          ? exampleBlock(
+              `"Example Team has taken the last three from Other Team, all by double digits. The rematch tour opens right where it left off."`,
+              `"Example Team is 0-0 and Other Team is 0-0, so somebody's number finally moves."`,
+              `a 0-0 record is not a fact about a team; it is the absence of one. Week 1 angles come from head-to-head history, last season, or a projection.`,
+            )
+          : exampleBlock(
+              `"Example Team is 2-0 and already talking like it is December. Two weeks of football has cured nobody's delusions before."`,
+              `"Example Team has locked up its division and can start resting starters."`,
+              `nothing is clinched this early; a 2-0 start is a hot start, not a decided race.`,
+            )
+      }`;
 
     case "mid_season":
       return `${header}

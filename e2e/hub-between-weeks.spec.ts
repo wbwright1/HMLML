@@ -75,6 +75,34 @@ test.describe("Between-Weeks Hub (1d)", () => {
     ).toBeVisible();
   });
 
+  test("T11: every slate card carries its own angle, never the 0-0 placeholder", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(
+      page.getByText("The Rest of the Slate", { exact: true })
+    ).toBeVisible();
+
+    const angles = (
+      await page.getByTestId("slate-angle").allInnerTexts()
+    ).map((a) => a.trim());
+
+    // The slate is the whole week minus the Game of the Week, so a real week
+    // always has several cards.
+    expect(angles.length).toBeGreaterThanOrEqual(2);
+
+    // AC 2: no two cards say the same thing.
+    expect(new Set(angles).size).toBe(angles.length);
+
+    for (const angle of angles) {
+      // AC 1: never the records placeholder, and never a 0-0 claim at all.
+      expect(angle).not.toMatch(/\d+-\d+ against \d+-\d+/);
+      expect(angle).not.toContain("0-0");
+      // Substantive copy, not a bare fragment.
+      expect(angle.length).toBeGreaterThan(20);
+    }
+  });
+
   test("T04: no em-dashes anywhere in the hub copy", async ({ page }) => {
     await page.goto("/");
     const text = await page.locator("main").innerText();

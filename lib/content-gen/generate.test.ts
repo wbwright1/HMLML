@@ -182,12 +182,20 @@ describe("applyDiversityLayer", () => {
           home: { name: "Foopus", slug: "foopus", record: "4-0", pointsFor: 500 },
           away: { name: "Olave Garden", slug: "olave-garden", record: "3-1", pointsFor: 480 },
           h2h: null,
+          lastMeeting: null,
+          playoffMeetingYears: [],
+          isTitleRematch: false,
+          topProjected: null,
         },
         {
           pairKey: "mccarthyism__team-c",
           home: { name: "McCarthyism", slug: "mccarthyism", record: "2-2", pointsFor: 450 },
           away: { name: "Team C", slug: "team-c", record: "4-0", pointsFor: 510 },
           h2h: null,
+          lastMeeting: null,
+          playoffMeetingYears: [],
+          isTitleRematch: false,
+          topProjected: null,
         },
       ],
     });
@@ -544,6 +552,58 @@ describe("promptStatsView", () => {
     expect(view.statsNote).toContain("No games have been played");
     // Completed facts pass through untouched.
     expect(JSON.stringify(view.lastSeason)).toContain('"11-3"');
+  });
+
+  it("carries the week-1 matchup receipts through the unplayed branch", () => {
+    // Regression guard: the unplayed branch REBUILDS currentMatchups field by
+    // field, so a new StatsMatchup field silently vanishes unless it is listed
+    // there. Week 1 is exactly that branch, and these fields are the only
+    // receipts a week-1 angle has.
+    const view = promptStatsView(
+      preseasonContext({
+        seasonType: "regular",
+        week: 1,
+        currentMatchups: [
+          {
+            pairKey: "foopus__olave-garden",
+            home: { name: "Foopus", slug: "foopus", record: "0-0", pointsFor: 0 },
+            away: {
+              name: "Olave Garden",
+              slug: "olave-garden",
+              record: "0-0",
+              pointsFor: 0,
+            },
+            h2h: { wins: 4, losses: 1, ties: 0, streak: "3-game win streak" },
+            lastMeeting: {
+              seasonYear: 2025,
+              week: 17,
+              winner: "home",
+              homePoints: 142.6,
+              awayPoints: 98.1,
+              isPlayoff: true,
+            },
+            playoffMeetingYears: [2025],
+            isTitleRematch: true,
+            topProjected: {
+              playerName: "Bijan Robinson",
+              position: "RB",
+              side: "away",
+              projectedPoints: 22.4,
+            },
+          },
+        ],
+      }),
+    ) as Record<string, unknown>;
+    const matchups = view.currentMatchups as Record<string, unknown>[];
+    expect(matchups).toHaveLength(1);
+    const m = matchups[0];
+    expect(m.h2h).toMatchObject({ streak: "3-game win streak" });
+    expect(m.lastMeeting).toMatchObject({ seasonYear: 2025, winner: "home" });
+    expect(m.playoffMeetingYears).toEqual([2025]);
+    expect(m.isTitleRematch).toBe(true);
+    expect(m.topProjected).toMatchObject({ playerName: "Bijan Robinson" });
+    // The current-season noise is still stripped.
+    expect(JSON.stringify(m.home)).not.toContain('"record"');
   });
 
   it("returns the context unchanged once any game has been played", () => {

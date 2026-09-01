@@ -14,7 +14,17 @@ import { SlateCard } from "@/components/hub/slate-card";
 import { teamAcronym } from "@/lib/team-acronym";
 import type { PairedMatchup } from "@/lib/queries/matchups";
 import { getTitleGamePair, type getSeasonStandings } from "@/lib/queries/seasons";
-import { getHeadToHead } from "@/lib/queries/records";
+import {
+  getHeadToHead,
+  getHeadToHeadHistory,
+  type HeadToHeadRecord,
+} from "@/lib/queries/records";
+import {
+  buildSlateAngles,
+  type SlateAngleInput,
+  type SlateAngleLastMeeting,
+  type SlateAngleStar,
+} from "@/lib/hub/slate-angle";
 import { getBowlName } from "@/lib/bowl-names";
 import { getDivisionStandings } from "@/lib/queries/divisions";
 import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
@@ -38,7 +48,6 @@ import {
   formatH2HLine,
   formatSlateH2H,
   stakesClause,
-  genericSlateAngle,
   kickoffWeekdayName,
   type GotwCandidate,
 } from "@/lib/hub/between-weeks";
@@ -124,9 +133,16 @@ export async function BetweenWeeksHub({
   let leagueMoves: LeagueMove[] = [];
   let weekReceipts: WeekReceipt[] = [];
   let bookGames: BookGame[] = [];
-  const h2hByMatchup = new Map<
+  // The full record (streak included), not just the counts: the derived slate
+  // angle reads the streak, and it is oriented from the HOME team's
+  // perspective because getHeadToHead is called as (home, away) below.
+  const h2hByMatchup = new Map<number, HeadToHeadRecord>();
+  // Completed-meeting history per matchup, reduced to what the angle ladder
+  // needs. Genuinely optional enrichment: an empty entry degrades the ladder
+  // to the counts-only rungs rather than blanking the card.
+  const h2hHistoryByMatchup = new Map<
     number,
-    { wins: number; losses: number; ties: number }
+    { lastMeeting: SlateAngleLastMeeting | null; playoffMeetingYears: number[] }
   >();
 
   if (seasonId != null) {
@@ -149,7 +165,8 @@ export async function BetweenWeeksHub({
         moves,
         receipts,
         board,
-        ...h2hResults
+        h2hResults,
+        historyResults,
       ] = await Promise.all([
         getDivisionStandings(seasonId),
         week === 1
@@ -168,8 +185,21 @@ export async function BetweenWeeksHub({
         bookMatchesSlate
           ? getBookBoard(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week)
           : Promise.resolve([]),
-        ...matchups.map((m) =>
-          getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
+        // Both per-matchup batches stay inside this one Promise.all (nested so
+        // the outer tuple keeps its types): the all-time counts drive the
+        // card's top-right record, the meeting history drives the last-meeting
+        // and playoff rungs of the derived angle. Both are cachedQuery-backed
+        // and this page is ISR-cached, so the extra round trip is paid once
+        // per sync, not per request.
+        Promise.all(
+          matchups.map((m) =>
+            getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
+          )
+        ),
+        Promise.all(
+          matchups.map((m) =>
+            getHeadToHeadHistory(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
+          )
         ),
       ]);
 
@@ -196,6 +226,35 @@ export async function BetweenWeeksHub({
 
       matchups.forEach((m, i) => {
         h2hByMatchup.set(m.matchupId, h2hResults[i]);
+
+        // Only COMPLETED meetings count as history. A scheduled or in-progress
+        // row (this very week's game, before kickoff) carries no winner and
+        // 0-0 points; calling that "last time out" would report a game that
+        // has not been played.
+        const played = (historyResults[i] ?? []).filter(
+          (g) => g.winnerFranchiseId != null || g.pointsA > 0 || g.pointsB > 0
+        );
+        const latest = played[0] ?? null; // already ordered newest first
+        h2hHistoryByMatchup.set(m.matchupId, {
+          lastMeeting: latest
+            ? {
+                seasonYear: latest.seasonYear,
+                week: latest.week,
+                winner:
+                  latest.winnerFranchiseId == null
+                    ? null
+                    : latest.winnerFranchiseId === m.homeTeam.franchiseId
+                      ? "A"
+                      : "B",
+                pointsA: latest.pointsA,
+                pointsB: latest.pointsB,
+                isPlayoff: latest.isPlayoff,
+              }
+            : null,
+          playoffMeetingYears: played
+            .filter((g) => g.isPlayoff)
+            .map((g) => g.seasonYear),
+        });
       });
     } catch {
       // DB may be unavailable; the hero + countdown still render.
@@ -247,6 +306,59 @@ export async function BetweenWeeksHub({
   const bowlName = titlePair ? getBowlName(titlePair.seasonYear) : null;
   const kickoffWeekday = kickoffWeekdayName(nextKickoff);
   const bookGameByMatchup = new Map(bookGames.map((g) => [g.matchupId, g]));
+
+  // Highest projected starter per matchup, from the SAME pool Players to Watch
+  // scores over, so the angle ladder's projected-star rung costs no new query.
+  const topProjectedByMatchup = new Map<number, SlateAngleStar>();
+  for (const row of pool) {
+    if (row.matchupId == null || row.name == null) continue;
+    const projected = row.projectedPoints ?? 0;
+    if (projected <= 0) continue;
+    const current = topProjectedByMatchup.get(row.matchupId);
+    if (current && current.projectedPoints >= projected) continue;
+    const matchup = matchups.find((m) => m.matchupId === row.matchupId);
+    if (!matchup) continue;
+    topProjectedByMatchup.set(row.matchupId, {
+      playerName: row.name,
+      position: row.position,
+      side: row.franchiseId === matchup.homeTeam.franchiseId ? "A" : "B",
+      projectedPoints: Math.round(projected * 10) / 10,
+    });
+  }
+
+  // Angles for the whole slate at once: the batch is what makes the cards
+  // provably distinct (buildSlateAngles advances a colliding card to its next
+  // supported hook). An LLM-authored angle from hub_content still wins per
+  // pair; the builder only fills the gaps.
+  const slateAngleInputs: SlateAngleInput[] = restOfSlate.map((m) => {
+    const history = h2hHistoryByMatchup.get(m.matchupId);
+    return {
+      teamA: {
+        name: m.homeTeam.franchiseName,
+        abbreviation: m.homeTeam.franchiseAbbreviation,
+      },
+      teamB: {
+        name: m.awayTeam.franchiseName,
+        abbreviation: m.awayTeam.franchiseAbbreviation,
+      },
+      h2h: h2hByMatchup.get(m.matchupId) ?? null,
+      lastMeeting: history?.lastMeeting ?? null,
+      playoffMeetingYears: history?.playoffMeetingYears ?? [],
+      topProjected: topProjectedByMatchup.get(m.matchupId) ?? null,
+      isTitleRematch: Boolean(
+        markedCandidates.find((c) => c.matchupId === m.matchupId)?.isTitleRematch
+      ),
+      bowlName,
+      recordA: record(m.homeTeam.franchiseId),
+      recordB: record(m.awayTeam.franchiseId),
+      anyGamesPlayed,
+      kickoffWeekday,
+    };
+  });
+  const builtAngles = buildSlateAngles(slateAngleInputs);
+  const angleByMatchup = new Map(
+    restOfSlate.map((m, i) => [m.matchupId, builtAngles[i]])
+  );
 
   // Players to Watch: the pre-kickoff replacement for the retrospective
   // "Standouts" rail. Uses the same pool fetched above; empty (never
@@ -320,11 +432,8 @@ export async function BetweenWeeksHub({
                     editorial.matchupAngles.byPair[
                       matchupPairKey(m.homeTeam.franchiseSlug, m.awayTeam.franchiseSlug)
                     ] ??
-                    genericSlateAngle(
-                      record(m.homeTeam.franchiseId),
-                      record(m.awayTeam.franchiseId),
-                      kickoffWeekday
-                    );
+                    angleByMatchup.get(m.matchupId) ??
+                    "";
                   const bookGame = bookGameByMatchup.get(m.matchupId);
                   return (
                     <SlateCard
