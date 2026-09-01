@@ -154,6 +154,68 @@ test.describe("Between-Weeks Hub (1d)", () => {
     }
   });
 
+  test("T10: rail story text wraps instead of clipping, at desktop and mobile widths", async ({
+    page,
+  }) => {
+    for (const viewport of [
+      { width: 1440, height: 900 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      const main = page.locator("main");
+      const text = await main.innerText();
+
+      // Players to Watch: story-detail and projection paragraphs.
+      if (/Players to Watch/i.test(text)) {
+        const storyParagraphs = page.locator(
+          "p.text-body-sm.text-text-secondary.line-clamp-3, p.text-body-sm.text-text-tertiary.line-clamp-2"
+        );
+        const count = await storyParagraphs.count();
+        for (let i = 0; i < count; i++) {
+          const el = storyParagraphs.nth(i);
+          const { scrollWidth, clientWidth, fontSize, textTransform } =
+            await el.evaluate((node) => {
+              const style = getComputedStyle(node);
+              return {
+                scrollWidth: node.scrollWidth,
+                clientWidth: node.clientWidth,
+                fontSize: parseFloat(style.fontSize),
+                textTransform: style.textTransform,
+              };
+            });
+          expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+          expect(fontSize).toBeGreaterThanOrEqual(14);
+          expect(textTransform).toBe("none");
+        }
+      }
+
+      // This Week in HMLML History: the claim paragraph.
+      if (/This Week in HMLML History/i.test(text)) {
+        const claimParagraphs = page.locator(
+          "p.mt-1.text-body-sm.text-text-secondary"
+        );
+        const count = await claimParagraphs.count();
+        for (let i = 0; i < count; i++) {
+          const el = claimParagraphs.nth(i);
+          const { scrollWidth, clientWidth, fontSize, textTransform } =
+            await el.evaluate((node) => {
+              const style = getComputedStyle(node);
+              return {
+                scrollWidth: node.scrollWidth,
+                clientWidth: node.clientWidth,
+                fontSize: parseFloat(style.fontSize),
+                textTransform: style.textTransform,
+              };
+            });
+          expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+          expect(fontSize).toBeGreaterThanOrEqual(14);
+          expect(textTransform).toBe("none");
+        }
+      }
+    }
+  });
+
   test("T05: mobile keeps the top of the funnel and hides the rail", async ({
     page,
   }) => {

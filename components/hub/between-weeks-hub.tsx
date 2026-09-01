@@ -671,27 +671,31 @@ function BenchCallout({
 
 function PlayerToWatchRow({ player }: { player: PlayerToWatch }) {
   return (
-    <div className="flex items-center gap-3">
-      <PlayerHeadshot
-        playerId={player.playerId}
-        name={player.name}
-        size={56}
-        nflTeam={player.team}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="text-kicker text-accent-gold truncate">{player.storyLabel}</p>
-        <p className="text-body-sm font-semibold text-text-primary truncate">
-          {player.name}
-        </p>
-        <p className="text-caption text-text-tertiary truncate">
-          {player.team ?? "FA"} &middot; {player.position ?? "?"}
-        </p>
+    <div>
+      <div className="flex items-center gap-3">
+        <PlayerHeadshot
+          playerId={player.playerId}
+          name={player.name}
+          size={56}
+          nflTeam={player.team}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-kicker text-accent-gold">{player.storyLabel}</p>
+          <p className="text-body-sm font-semibold text-text-primary line-clamp-2">
+            {player.name}
+          </p>
+          <p className="text-caption text-text-tertiary truncate">
+            {player.team ?? "FA"} &middot; {player.position ?? "?"}
+          </p>
+        </div>
+      </div>
+      <div className="mt-2 space-y-1">
         {player.storyDetail && (
-          <p className="text-body-sm text-text-secondary truncate">
+          <p className="text-body-sm text-text-secondary line-clamp-3">
             <MonoNumerals text={player.storyDetail} />
           </p>
         )}
-        <p className="text-body-sm text-text-tertiary truncate">
+        <p className="text-body-sm text-text-tertiary line-clamp-2">
           Projected{" "}
           <span className="text-stat tabular-nums text-text-secondary">
             {player.projectedPoints.toFixed(1)}
@@ -721,7 +725,7 @@ function PlayersToWatchCard({
     <section className="space-y-3">
       <p className="text-kicker">Players to Watch &middot; Week {week}</p>
       <RailCard>
-        <div className="space-y-4 divide-y divide-divider [&>*:not(:first-child)]:pt-4">
+        <div className="space-y-4 divide-y divide-border [&>*:not(:first-child)]:pt-4">
           {players.map((p) => (
             <PlayerToWatchRow key={p.playerId} player={p} />
           ))}
@@ -765,7 +769,7 @@ function LeagueMovesCard({ moves }: { moves: LeagueMove[] }) {
     <section className="space-y-3">
       <p className="text-kicker">League Moves</p>
       <RailCard>
-        <div className="divide-y divide-divider [&>*:not(:first-child)]:pt-3 space-y-3">
+        <div className="divide-y divide-border [&>*:not(:first-child)]:pt-3 space-y-3">
           {moves.map((move) => (
             <div key={move.transactionId} className="flex items-center gap-3">
               <div className="flex shrink-0 -space-x-2">
@@ -788,7 +792,7 @@ function LeagueMovesCard({ moves }: { moves: LeagueMove[] }) {
                   {" · "}
                   {move.franchises.map((f) => f.name).join(" / ")}
                 </p>
-                <p className="text-body-sm text-text-secondary truncate">
+                <p className="text-body-sm text-text-secondary line-clamp-2">
                   {move.detail}
                 </p>
               </div>
@@ -822,25 +826,20 @@ function WeekInHistoryCard({
     <section className="space-y-3">
       <p className="text-kicker">This Week in HMLML History</p>
       <RailCard>
-        <div className="divide-y divide-divider">
+        <div className="divide-y divide-border">
           {receipts.map((r) => (
-            <div
-              key={`${r.kind}-${r.seasonYear}`}
-              className="flex items-center justify-between gap-3 py-2"
-            >
-              <div className="min-w-0">
+            <div key={`${r.kind}-${r.seasonYear}`} className="py-3">
+              <div className="flex items-baseline justify-between gap-3">
                 <p className="text-kicker text-accent-gold">
                   {r.label} &middot;{" "}
                   <span className="text-stat tabular-nums">{r.seasonYear}</span>{" "}
                   Week <span className="text-stat tabular-nums">{week}</span>
                 </p>
-                <p className="text-body-sm text-text-secondary truncate">
-                  {r.claim}
-                </p>
+                <span className="text-stat tabular-nums text-body text-text-primary shrink-0">
+                  {r.value}
+                </span>
               </div>
-              <span className="text-stat tabular-nums text-body text-text-primary shrink-0">
-                {r.value}
-              </span>
+              <p className="mt-1 text-body-sm text-text-secondary">{r.claim}</p>
             </div>
           ))}
         </div>
