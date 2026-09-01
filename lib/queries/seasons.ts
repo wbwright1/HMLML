@@ -118,6 +118,48 @@ export async function getLastCompletedSeason() {
   }
 }
 
+/** Last completed season's title-game participants, for the week-1 GOTW rematch. */
+export interface TitleGamePair {
+  seasonYear: number;
+  championFranchiseId: string;
+  runnerUpFranchiseId: string;
+}
+
+/**
+ * Returns the champion and runner-up franchise ids from the last completed
+ * season, for the week-1 "HMLML Bowl" rematch Game of the Week override.
+ * Optional flavor data: returns null (never throws) when there is no
+ * completed season, when either playoff_result is missing (an incomplete
+ * legacy-era row), or on any query failure.
+ */
+export async function getTitleGamePair(): Promise<TitleGamePair | null> {
+  try {
+    const last = await getLastCompletedSeason();
+    if (!last) return null;
+
+    const rows = await db
+      .select({
+        franchiseId: franchiseSeasons.franchiseId,
+        playoffResult: franchiseSeasons.playoffResult,
+      })
+      .from(franchiseSeasons)
+      .where(eq(franchiseSeasons.seasonId, last.id));
+
+    const champion = rows.find((r) => r.playoffResult === "champion");
+    const runnerUp = rows.find((r) => r.playoffResult === "runner_up");
+    if (!champion || !runnerUp) return null;
+
+    return {
+      seasonYear: last.seasonYear,
+      championFranchiseId: champion.franchiseId,
+      runnerUpFranchiseId: runnerUp.franchiseId,
+    };
+  } catch (e) {
+    console.error("[seasons] getTitleGamePair error:", e);
+    return null;
+  }
+}
+
 /**
  * Returns a single season by year, with its franchise_seasons data joined.
  */

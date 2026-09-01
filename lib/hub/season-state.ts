@@ -17,8 +17,9 @@ export function resolveHubSeasonType({
   hasLiveMatchups: boolean;
   nothingPlayedYet: boolean;
   /**
-   * True from the Sunday before the week-1 kickoff onward (or forced via the
-   * preview NFL_STATE_OVERRIDE). Suppresses the "everyone's 0-0" demotion so
+   * True from 7 days before the earliest week-1 game onward (KICKOFF_LEAD_DAYS,
+   * or forced via the preview NFL_STATE_OVERRIDE). Suppresses the "everyone's
+   * 0-0" demotion so
    * kickoff week shows the regular-season hub, not the preseason one.
    * Source: isWeekOneLeadWindowActive (lib/queries/nfl-state.ts).
    */

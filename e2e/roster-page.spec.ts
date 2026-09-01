@@ -187,7 +187,7 @@ test.describe("Roster page", () => {
     // KICKOFF_LEAD_DAYS in lib/season-segment.ts: within this window before
     // week-1 kickoff the page (deliberately) flips to the in-season WK
     // layout, even while the pill still says PRESEASON.
-    const KICKOFF_LEAD_DAYS = 5;
+    const KICKOFF_LEAD_DAYS = 7;
     const daysToKickoff = preseasonKickoff ? Number(preseasonKickoff[1]) : null;
     const inKickoffSeam =
       daysToKickoff != null && daysToKickoff <= KICKOFF_LEAD_DAYS;

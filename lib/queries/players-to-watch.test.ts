@@ -3,8 +3,10 @@ import {
   selectPlayersToWatch,
   sumProjectedByFranchise,
   formatBaselineLabel,
+  PLAYER_STORY_LABELS,
   type PoolRow,
   type BaselineMeta,
+  type BaselineEntry,
 } from "./players-to-watch";
 
 function row(overrides: Partial<PoolRow> & Pick<PoolRow, "playerId" | "franchiseId">): PoolRow {
@@ -147,6 +149,194 @@ describe("selectPlayersToWatch", () => {
       limit: 1,
     });
     expect(picked[0].opponentName).toBe("Vanilla Vick");
+  });
+});
+
+describe("selectPlayersToWatch story slots", () => {
+  /** Four evenly projected franchises; the headliner is always the top score. */
+  function storyPool(): PoolRow[] {
+    return [
+      row({ playerId: "star", franchiseId: "f1", projectedPoints: 30 }),
+      row({ playerId: "rookie", franchiseId: "f2", projectedPoints: 20 }),
+      row({ playerId: "traded", franchiseId: "f3", projectedPoints: 18 }),
+      row({ playerId: "filler", franchiseId: "f4", projectedPoints: 17 }),
+    ];
+  }
+
+  it("labels slot 1 The Headliner with no story detail", () => {
+    const picked = selectPlayersToWatch(storyPool(), new Map(), priorSeasonMeta, {
+      featuredMatchupId: null,
+      limit: 1,
+    });
+    expect(picked[0].playerId).toBe("star");
+    expect(picked[0].storyKey).toBe("headliner");
+    expect(picked[0].storyLabel).toBe(PLAYER_STORY_LABELS.headliner);
+    expect(picked[0].storyDetail).toBeNull();
+  });
+
+  it("takes a Debut only when the projection clears the pool median", () => {
+    // Median of 30/20/18/17 is 19: the rookie at 20 clears it, the dart throw
+    // at 3 does not.
+    const pool = [
+      ...storyPool(),
+      row({ playerId: "dart", franchiseId: "f5", projectedPoints: 3 }),
+    ];
+    const baselines = new Map<string, BaselineEntry>([
+      ["star", { ppg: 20, games: 15 }],
+      ["traded", { ppg: 12, games: 12 }],
+      ["filler", { ppg: 11, games: 12 }],
+    ]);
+    const picked = selectPlayersToWatch(pool, baselines, priorSeasonMeta, {
+      featuredMatchupId: null,
+    });
+    const debut = picked.find((p) => p.storyKey === "debut");
+    expect(debut?.playerId).toBe("rookie");
+    expect(debut?.storyLabel).toBe(PLAYER_STORY_LABELS.debut);
+    expect(debut?.storyDetail).toBe("No starts in 2025, in the lineup anyway");
+    expect(picked.some((p) => p.playerId === "dart")).toBe(false);
+  });
+
+  it("claims a Revenge Game only when the former franchise is this week's opponent", () => {
+    const pool = [
+      row({
+        playerId: "star",
+        franchiseId: "f1",
+        franchiseName: "McCarthyism",
+        matchupId: 1,
+        projectedPoints: 30,
+      }),
+      row({
+        playerId: "exile",
+        franchiseId: "f2",
+        franchiseName: "Vanilla Vick",
+        matchupId: 1,
+        projectedPoints: 20,
+      }),
+    ];
+    const baselines = new Map<string, BaselineEntry>([
+      ["star", { ppg: 22, games: 15 }],
+      [
+        "exile",
+        { ppg: 14, games: 12, gamesByFranchise: new Map([["f1", 12]]) },
+      ],
+    ]);
+    const picked = selectPlayersToWatch(pool, baselines, priorSeasonMeta, {
+      featuredMatchupId: null,
+    });
+    const revenge = picked.find((p) => p.storyKey === "revenge");
+    expect(revenge?.playerId).toBe("exile");
+    expect(revenge?.storyDetail).toBe("Started 12 games for McCarthyism in 2025");
+  });
+
+  it("does not claim revenge when the former franchise is not the opponent", () => {
+    const pool = [
+      row({ playerId: "star", franchiseId: "f1", matchupId: 1, projectedPoints: 30 }),
+      row({ playerId: "exile", franchiseId: "f2", matchupId: 1, projectedPoints: 20 }),
+      row({ playerId: "other", franchiseId: "f3", matchupId: 2, projectedPoints: 19 }),
+      row({ playerId: "rival", franchiseId: "f4", matchupId: 2, projectedPoints: 18 }),
+    ];
+    // exile started for f3, who is playing someone else this week.
+    const baselines = new Map<string, BaselineEntry>([
+      ["star", { ppg: 20, games: 15 }],
+      ["exile", { ppg: 8, games: 9, gamesByFranchise: new Map([["f3", 9]]) }],
+    ]);
+    const picked = selectPlayersToWatch(pool, baselines, priorSeasonMeta, {
+      featuredMatchupId: null,
+    });
+    expect(picked.some((p) => p.storyKey === "revenge")).toBe(false);
+    // The same player is still an honest New Face.
+    const newFace = picked.find((p) => p.storyKey === "newFace");
+    expect(newFace?.playerId).toBe("exile");
+    expect(newFace?.storyDetail).toBe("Started 9 games for Franchise f3 in 2025");
+  });
+
+  it("takes The Leap on a 30%-plus jump off a real baseline", () => {
+    const pool = [
+      row({ playerId: "star", franchiseId: "f1", projectedPoints: 30 }),
+      row({ playerId: "leaper", franchiseId: "f2", projectedPoints: 20 }),
+      row({ playerId: "steady", franchiseId: "f3", projectedPoints: 18 }),
+    ];
+    const baselines = new Map<string, BaselineEntry>([
+      ["star", { ppg: 24, games: 15 }],
+      // 20 projected off 14.0 ppg is a 43% jump over 12 games.
+      ["leaper", { ppg: 14, games: 12 }],
+      // 18 projected off 17.0 ppg is not a leap.
+      ["steady", { ppg: 17, games: 12 }],
+    ]);
+    const picked = selectPlayersToWatch(pool, baselines, priorSeasonMeta, {
+      featuredMatchupId: null,
+    });
+    const leap = picked.find((p) => p.storyKey === "leap");
+    expect(leap?.playerId).toBe("leaper");
+    expect(leap?.storyDetail).toBe("Projected 20.0 off 14.0 ppg in 2025");
+  });
+
+  it("refuses The Leap on a baseline of fewer than 6 started games", () => {
+    const pool = [
+      row({ playerId: "star", franchiseId: "f1", projectedPoints: 30 }),
+      row({ playerId: "smallsample", franchiseId: "f2", projectedPoints: 20 }),
+    ];
+    const baselines = new Map<string, BaselineEntry>([
+      ["star", { ppg: 24, games: 15 }],
+      ["smallsample", { ppg: 10, games: 3 }],
+    ]);
+    const picked = selectPlayersToWatch(pool, baselines, priorSeasonMeta, {
+      featuredMatchupId: null,
+    });
+    expect(picked.some((p) => p.storyKey === "leap")).toBe(false);
+    // The slot falls back to a headliner rather than shrinking the rail.
+    expect(picked.length).toBe(2);
+    expect(picked[1].storyKey).toBe("headliner");
+  });
+
+  it("fills every slot with headliners when no archetype has a candidate", () => {
+    const pool = storyPool();
+    const baselines = new Map<string, BaselineEntry>(
+      pool.map((r) => [r.playerId, { ppg: 25, games: 15 } as BaselineEntry])
+    );
+    const picked = selectPlayersToWatch(pool, baselines, priorSeasonMeta, {
+      featuredMatchupId: null,
+    });
+    expect(picked.length).toBe(3);
+    expect(picked.every((p) => p.storyKey === "headliner")).toBe(true);
+    expect(picked.map((p) => p.playerId)).toEqual(["star", "rookie", "traded"]);
+  });
+
+  it("takes at most one player per archetype and never repeats a franchise", () => {
+    const pool = [
+      row({ playerId: "star", franchiseId: "f1", projectedPoints: 30 }),
+      row({ playerId: "rookieA", franchiseId: "f2", projectedPoints: 25 }),
+      row({ playerId: "rookieB", franchiseId: "f3", projectedPoints: 24 }),
+      row({ playerId: "rookieC", franchiseId: "f4", projectedPoints: 23 }),
+    ];
+    const picked = selectPlayersToWatch(pool, new Map(), priorSeasonMeta, {
+      featuredMatchupId: null,
+    });
+    expect(picked.filter((p) => p.storyKey === "debut").length).toBe(1);
+    expect(new Set(picked.map((p) => p.franchiseSlug)).size).toBe(picked.length);
+  });
+
+  it("phrases a current-season window as 'earlier this season'", () => {
+    const pool = [
+      row({
+        playerId: "star",
+        franchiseId: "f1",
+        franchiseName: "McCarthyism",
+        matchupId: 1,
+        projectedPoints: 30,
+      }),
+      row({ playerId: "exile", franchiseId: "f2", matchupId: 1, projectedPoints: 20 }),
+    ];
+    const baselines = new Map<string, BaselineEntry>([
+      ["star", { ppg: 20, games: 15 }],
+      ["exile", { ppg: 12, games: 1, gamesByFranchise: new Map([["f1", 1]]) }],
+    ]);
+    const picked = selectPlayersToWatch(pool, baselines, currentSeasonMeta, {
+      featuredMatchupId: null,
+    });
+    expect(picked.find((p) => p.storyKey === "revenge")?.storyDetail).toBe(
+      "Started 1 game for McCarthyism earlier this season"
+    );
   });
 });
 

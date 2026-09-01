@@ -66,7 +66,7 @@ describe("resolveSeasonSegment", () => {
     ).toBe("preseason");
   });
 
-  it("in_season status + season_type 'pre', 6 days before kickoff -> still preseason", () => {
+  it("in_season status + season_type 'pre', one day before the KICKOFF_LEAD_DAYS boundary -> still preseason", () => {
     expect(
       resolveSeasonSegment({
         seasonStatus: "in_season",
@@ -77,7 +77,7 @@ describe("resolveSeasonSegment", () => {
     ).toBe("preseason");
   });
 
-  it("in_season status + season_type 'pre', 4 days before kickoff -> in_season (5-day rule)", () => {
+  it("in_season status + season_type 'pre', one day inside the KICKOFF_LEAD_DAYS boundary -> in_season", () => {
     expect(
       resolveSeasonSegment({
         seasonStatus: "in_season",
@@ -88,7 +88,7 @@ describe("resolveSeasonSegment", () => {
     ).toBe("in_season");
   });
 
-  it("exactly 5 days before kickoff -> in_season (boundary is inclusive)", () => {
+  it("exactly KICKOFF_LEAD_DAYS (7) before kickoff -> in_season (boundary is inclusive)", () => {
     expect(
       resolveSeasonSegment({
         seasonStatus: "in_season",
@@ -99,16 +99,17 @@ describe("resolveSeasonSegment", () => {
     ).toBe("in_season");
   });
 
-  it("the 5-day window opens at league-timezone midnight, not UTC midnight", () => {
-    // Kickoff 2026-09-09; CT threshold is 2026-09-04T00:00-05:00 (05:00 UTC).
-    // The old UTC anchor put it at 2026-09-03T19:00-05:00 (00:00 UTC), so this
-    // instant used to pass under the pre-#254 UTC-anchor bug.
+  it("the KICKOFF_LEAD_DAYS window opens at league-timezone midnight, not UTC midnight", () => {
+    // Kickoff 2026-09-09; CT threshold is 2026-09-02T00:00-05:00 (05:00 UTC),
+    // 7 days (KICKOFF_LEAD_DAYS) earlier. The old UTC anchor would have put it
+    // at 2026-09-01T19:00-05:00 (00:00 UTC), so this instant would have passed
+    // under the pre-#254 UTC-anchor bug.
     expect(
       resolveSeasonSegment({
         seasonStatus: "in_season",
         seasonType: "pre",
         week1EarliestGameDate: WEEK1,
-        now: new Date("2026-09-03T22:00:00-05:00"),
+        now: new Date("2026-09-01T22:00:00-05:00"),
       })
     ).toBe("preseason");
     expect(
@@ -116,7 +117,7 @@ describe("resolveSeasonSegment", () => {
         seasonStatus: "in_season",
         seasonType: "pre",
         week1EarliestGameDate: WEEK1,
-        now: new Date("2026-09-04T00:00:00-05:00"),
+        now: new Date("2026-09-02T00:00:00-05:00"),
       })
     ).toBe("in_season");
   });
@@ -212,35 +213,38 @@ describe("isNflSeasonUnderway", () => {
 });
 
 describe("isWithinWeekOneLeadWindow", () => {
-  // 2026 week 1 opens Wednesday 2026-09-09; the window opens league-timezone
-  // (CT) midnight Sunday 2026-09-06 (2026-09-06T05:00:00Z).
+  // 2026 week 1 opens Wednesday 2026-09-09; the window now opens a flat
+  // KICKOFF_LEAD_DAYS (7) days earlier at league-timezone (CT) midnight:
+  // 2026-09-02T00:00:00-05:00 (2026-09-02T05:00:00Z). This replaces the old
+  // Sunday-anchored (weekday-lookback) rule.
   const wednesdayKickoff = "2026-09-09";
 
-  it("is false right up to CT midnight on the Sunday preceding kickoff", () => {
+  it("is false right up to CT midnight 7 days before kickoff", () => {
     expect(
-      isWithinWeekOneLeadWindow(wednesdayKickoff, new Date("2026-09-05T23:59:59-05:00"))
+      isWithinWeekOneLeadWindow(wednesdayKickoff, new Date("2026-09-01T23:59:59-05:00"))
     ).toBe(false);
   });
 
-  it("opens at CT midnight on the Sunday preceding kickoff", () => {
+  it("opens at CT midnight exactly KICKOFF_LEAD_DAYS (7) before kickoff", () => {
     expect(
-      isWithinWeekOneLeadWindow(wednesdayKickoff, new Date("2026-09-06T00:00:00-05:00"))
+      isWithinWeekOneLeadWindow(wednesdayKickoff, new Date("2026-09-02T00:00:00-05:00"))
     ).toBe(true);
   });
 
-  it("does not open on the Saturday evening before (the old UTC-anchor bug)", () => {
-    // 2026-09-05T22:00-05:00 is 2026-09-06T03:00Z, past UTC midnight Sunday.
+  it("does not open on the evening before the boundary (the old UTC-anchor bug)", () => {
+    // 2026-09-01T22:00-05:00 is 2026-09-02T03:00Z, before the CT boundary
+    // (2026-09-02T05:00Z) but past a naive UTC-midnight boundary.
     expect(
-      isWithinWeekOneLeadWindow(wednesdayKickoff, new Date("2026-09-05T22:00:00-05:00"))
+      isWithinWeekOneLeadWindow(wednesdayKickoff, new Date("2026-09-01T22:00:00-05:00"))
     ).toBe(false);
   });
 
-  it("does not open at the old ET-anchor instant either (the #250 skew bug)", () => {
-    // 2026-09-06T00:00-04:00 (ET midnight) is 2026-09-06T04:00Z, one hour
-    // before the CT anchor (2026-09-06T05:00Z). Previously true under the ET
-    // anchor introduced by #254; must now be false.
+  it("does not open at the equivalent ET-midnight instant (a timezone-anchor skew bug)", () => {
+    // 2026-09-02T00:00-04:00 (ET midnight) is 2026-09-02T04:00Z, one hour
+    // before the CT anchor (2026-09-02T05:00Z). Must be false under the CT
+    // anchor even though it reads as "midnight" in a different zone.
     expect(
-      isWithinWeekOneLeadWindow(wednesdayKickoff, new Date("2026-09-06T00:00:00-04:00"))
+      isWithinWeekOneLeadWindow(wednesdayKickoff, new Date("2026-09-02T00:00:00-04:00"))
     ).toBe(false);
   });
 
@@ -259,15 +263,15 @@ describe("isWithinWeekOneLeadWindow", () => {
     ).toBe(true);
   });
 
-  it("anchors a Thursday kickoff to the same week's Sunday, at CT midnight", () => {
-    // 2025-09-04 was a Thursday; its preceding Sunday is 2025-08-31.
-    expect(isWithinWeekOneLeadWindow("2025-09-04", new Date("2025-08-30T12:00:00-05:00"))).toBe(false);
-    expect(isWithinWeekOneLeadWindow("2025-09-04", new Date("2025-08-30T22:00:00-05:00"))).toBe(false);
-    expect(isWithinWeekOneLeadWindow("2025-09-04", new Date("2025-08-31T00:00:00-05:00"))).toBe(true);
+  it("opens a flat 7 days before a Thursday kickoff, at CT midnight (no weekday anchoring)", () => {
+    // 2025-09-04 is a Thursday; 7 days earlier is 2025-08-28.
+    expect(isWithinWeekOneLeadWindow("2025-09-04", new Date("2025-08-27T12:00:00-05:00"))).toBe(false);
+    expect(isWithinWeekOneLeadWindow("2025-09-04", new Date("2025-08-27T22:00:00-05:00"))).toBe(false);
+    expect(isWithinWeekOneLeadWindow("2025-09-04", new Date("2025-08-28T00:00:00-05:00"))).toBe(true);
   });
 
-  it("anchors a Sunday kickoff to the previous Sunday, at CT midnight", () => {
-    // 2026-09-13 is a Sunday; the window opens 2026-09-06.
+  it("opens a flat 7 days before a Sunday kickoff, at CT midnight (no weekday anchoring)", () => {
+    // 2026-09-13 is a Sunday; 7 days earlier is 2026-09-06.
     expect(isWithinWeekOneLeadWindow("2026-09-13", new Date("2026-09-05T12:00:00-05:00"))).toBe(false);
     expect(isWithinWeekOneLeadWindow("2026-09-13", new Date("2026-09-05T22:00:00-05:00"))).toBe(false);
     expect(isWithinWeekOneLeadWindow("2026-09-13", new Date("2026-09-06T00:00:00-05:00"))).toBe(true);

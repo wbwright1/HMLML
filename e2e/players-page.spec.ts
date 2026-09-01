@@ -169,7 +169,7 @@ test.describe("Players page", () => {
     // week-1 kickoff the page (deliberately) flips to the in-season WK layout,
     // even while the pill still says PRESEASON. That is the accepted seam, so
     // skip only there, with a logged reason (never an unconditional skip).
-    const KICKOFF_LEAD_DAYS = 5;
+    const KICKOFF_LEAD_DAYS = 7;
     const daysToKickoff = preseasonKickoff
       ? Number(preseasonKickoff[1])
       : null;

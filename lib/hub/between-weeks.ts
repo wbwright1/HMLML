@@ -17,6 +17,9 @@ export interface GotwTeam {
   pointsFor: number;
   /** Division id, or null for a season with no divisions. */
   division: number | null;
+  /** Franchise id, used only to identify the week-1 title-game rematch via
+   * markTitleRematch; optional since ranking itself never needs it. */
+  franchiseId?: string;
 }
 
 export interface GotwCandidate {
@@ -29,6 +32,35 @@ export interface GotwCandidate {
    * treated as 0. */
   projectedA?: number;
   projectedB?: number;
+  /** Set by markTitleRematch when this pairing is exactly last season's
+   * champion vs. runner-up. Only honored by selectGameOfTheWeek at week 1. */
+  isTitleRematch?: boolean;
+}
+
+/** Last completed season's title-game participants, order-insensitive. */
+export interface TitleGamePair {
+  championFranchiseId: string;
+  runnerUpFranchiseId: string;
+}
+
+/**
+ * Flags the candidate whose two franchises are exactly {champion, runnerUp}
+ * from last season's title game (order-insensitive). Pure and shared by both
+ * Game of the Week callers (the hub RSC and the content generator) so they
+ * agree on the same pick. A null titlePair (no completed season, or the query
+ * failed) is a no-op.
+ */
+export function markTitleRematch(
+  candidates: GotwCandidate[],
+  titlePair: TitleGamePair | null
+): GotwCandidate[] {
+  if (!titlePair) return candidates;
+  const { championFranchiseId, runnerUpFranchiseId } = titlePair;
+  return candidates.map((c) => {
+    const ids = new Set([c.teamA.franchiseId, c.teamB.franchiseId]);
+    const isRematch = ids.has(championFranchiseId) && ids.has(runnerUpFranchiseId);
+    return isRematch ? { ...c, isTitleRematch: true } : c;
+  });
 }
 
 function teamGames(t: GotwTeam): number {
@@ -91,12 +123,27 @@ export function isDivisionGame(c: GotwCandidate): boolean {
  * projections are, then matchupId. `anyGamesPlayed` defaults to an
  * auto-detection from the candidates' records so existing callers keep their
  * current behavior unchanged.
+ *
+ * Week-1 title rematch override: this league opens every season with a
+ * rematch of the prior season's championship game (the "HMLML Bowl"). When
+ * `week` is exactly 1 and exactly one candidate carries `isTitleRematch`
+ * (set by markTitleRematch), that candidate wins outright, before any
+ * record- or projection-based ranking runs. The override is scoped to week 1
+ * only (weeks 2+ pass `week` unset or non-1 and keep the existing heuristic
+ * untouched), and stays inert if zero or more than one candidate is flagged,
+ * so the function degrades safely rather than guessing.
  */
 export function selectGameOfTheWeek(
   candidates: GotwCandidate[],
-  anyGamesPlayed?: boolean
+  anyGamesPlayed?: boolean,
+  week?: number
 ): number | null {
   if (candidates.length === 0) return null;
+
+  if (week === 1) {
+    const flagged = candidates.filter((c) => c.isTitleRematch);
+    if (flagged.length === 1) return flagged[0].matchupId;
+  }
 
   const played =
     anyGamesPlayed ??
