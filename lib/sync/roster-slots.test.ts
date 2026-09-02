@@ -53,6 +53,17 @@ describe("buildRosterSlotRows", () => {
     ).toEqual([{ playerId: "9", slot: "bench" }]);
   });
 
+  it('drops Sleeper\'s "0" empty-slot placeholder from every array', () => {
+    const rows = buildRosterSlotRows({
+      starters: ["1", "0", "2"],
+      players: ["1", "2", "0", "3"],
+      reserve: ["0"],
+      taxi: ["0"],
+    });
+    expect(rows.map((r) => r.playerId)).toEqual(["1", "2", "3"]);
+    expect(rows.some((r) => r.playerId === "0")).toBe(false);
+  });
+
   it("emits one row per roster slot with no duplicates", () => {
     const rows = buildRosterSlotRows({
       starters: ["a", "b"],

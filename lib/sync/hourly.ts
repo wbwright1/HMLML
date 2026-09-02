@@ -185,6 +185,14 @@ async function syncTransactions(
 // Step B: Sync Rosters and Traded Picks
 // ---------------------------------------------------------------------------
 
+/**
+ * How many player stubs one hourly run may create before it stops calling the
+ * outcome routine. A waiver claim or two between daily snapshots is normal;
+ * dozens means the daily players sync is stale or broken, and the rosters step
+ * should say so loudly instead of filling the league with Unknown Players.
+ */
+const MAX_ROUTINE_STUBS = 10;
+
 async function syncRostersAndPicks(
   leagueId: string,
   seasonId: number
@@ -217,17 +225,18 @@ async function syncRostersAndPicks(
 
     // Pre-flight the whole league once: every id that will be written to
     // roster_players must already exist in players, or the FK kills the insert.
-    // One existence query for all twelve rosters beats twelve, and stubbing here
-    // (rather than inside the loop) means a mid-week waiver add never costs a
-    // roster its write. See lib/sync/ensure-players.ts for why a stub beats
-    // skipping the player.
+    // One pass for all twelve rosters beats twelve, and stubbing here (rather
+    // than inside the loop) means a mid-week waiver add never costs a roster its
+    // write. See lib/sync/ensure-players.ts for why a stub beats skipping the
+    // player. Only rosters the loop will actually write are pre-flighted: an
+    // unmapped roster is skipped below, so stubbing its players would create
+    // rows nothing references. buildRosterSlotRows is the same expansion the
+    // loop uses, so the two can never disagree about which ids get written
+    // (Sleeper's "0" empty-slot placeholder included).
     const stubbedPlayerIds = await ensurePlayersExist(
-      rosters.flatMap((roster) => [
-        ...(roster.starters ?? []),
-        ...(roster.players ?? []),
-        ...(roster.reserve ?? []),
-        ...(roster.taxi ?? []),
-      ])
+      rosters
+        .filter((roster) => rosterToFranchise.has(String(roster.roster_id)))
+        .flatMap((roster) => buildRosterSlotRows(roster).map((r) => r.playerId))
     );
     if (stubbedPlayerIds.length > 0) {
       console.warn(
@@ -258,32 +267,18 @@ async function syncRostersAndPicks(
             ? resolveDivisionName(leagueMetadata, divisionNumber)
             : null;
 
-        await db
-          .update(franchiseSeasons)
-          .set({
-            division: divisionNumber,
-            divisionName,
-            wins: roster.settings.wins ?? 0,
-            losses: roster.settings.losses ?? 0,
-            ties: roster.settings.ties ?? 0,
-            pointsScored,
-            pointsAgainst,
-            updatedAt: new Date(),
-          })
-          .where(
-            and(
-              eq(franchiseSeasons.franchiseId, franchiseId),
-              eq(franchiseSeasons.seasonId, seasonId)
-            )
-          );
-
         // Sync roster players
         const allPlayers = buildRosterSlotRows(roster);
 
-        // Delete existing roster_players for this franchise+season so dropped
-        // players are cleaned up, then re-insert the current roster. Wrapped in
-        // a transaction so a mid-loop failure can't leave a partial wipe (the
-        // delete rolls back with the failed insert).
+        // One transaction per roster: the standings update and the
+        // roster_players delete + re-insert land together or not at all. The
+        // standings write used to commit on its own, so a roster that failed on
+        // the lineup wrote new wins and points while keeping last run's lineup,
+        // and failedRosterIds implied nothing had landed for it.
+        //
+        // The delete cleans up dropped players before the current roster is
+        // re-inserted; it rolls back with a failed insert, so a mid-loop failure
+        // can never leave a wiped roster behind.
         //
         // Every id here is guaranteed to exist in players by the pre-flight
         // ensurePlayersExist above, which stubs anything Sleeper added since the
@@ -294,6 +289,24 @@ async function syncRostersAndPicks(
         // records it and the loop moves on, so one bad roster can no longer cost
         // the other eleven their standings and lineups.
         await runAtomic((tx) => [
+          tx
+            .update(franchiseSeasons)
+            .set({
+              division: divisionNumber,
+              divisionName,
+              wins: roster.settings.wins ?? 0,
+              losses: roster.settings.losses ?? 0,
+              ties: roster.settings.ties ?? 0,
+              pointsScored,
+              pointsAgainst,
+              updatedAt: new Date(),
+            })
+            .where(
+              and(
+                eq(franchiseSeasons.franchiseId, franchiseId),
+                eq(franchiseSeasons.seasonId, seasonId)
+              )
+            ),
           tx
             .delete(rosterPlayers)
             .where(
@@ -363,8 +376,27 @@ async function syncRostersAndPicks(
       };
     }
 
-    // Stubbing an unknown id is a routine outcome (a waiver add between daily
-    // snapshots), not a partial failure: the run stays green.
+    if (stubbedPlayerIds.length > MAX_ROUTINE_STUBS) {
+      // A handful of stubs is a waiver add. A flood of them means the daily
+      // players snapshot is not landing, and quietly filling twelve rosters with
+      // "Unknown Player" while reporting success is exactly the silent rot this
+      // whole change exists to prevent. Page instead.
+      const errorMessage = `Stubbed ${stubbedPlayerIds.length} unknown player ids in one run (threshold ${MAX_ROUTINE_STUBS}), which points at a stale or failing daily players sync rather than routine waiver adds: ${stubbedPlayerIds.join(", ")}`;
+      console.error(`[sync-hourly] ${errorMessage}`);
+      await logSyncComplete(logId, "partial", rowCount, errorMessage, {
+        stubbedPlayerIds,
+      });
+      return {
+        dataType: "rosters",
+        status: "failure",
+        rowCount,
+        durationMs,
+        error: errorMessage,
+      };
+    }
+
+    // Stubbing a few unknown ids is a routine outcome (a waiver add between
+    // daily snapshots), not a partial failure: the run stays green.
     const note =
       stubbedPlayerIds.length > 0
         ? `Stubbed ${stubbedPlayerIds.length} unknown player ids: ${stubbedPlayerIds.join(", ")}`

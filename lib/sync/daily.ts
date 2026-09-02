@@ -44,6 +44,7 @@ import {
 import { runAtomic } from "@/lib/db/atomic";
 import { chunk } from "@/lib/chunk";
 import { ensurePlayersExist } from "@/lib/sync/ensure-players";
+import { describeDbError } from "@/lib/db-error";
 import { repriceFutures, gradeFutures } from "@/lib/sync/book-futures";
 import { resolveFuturesSeason } from "@/lib/queries/book-futures";
 import { resolveBookWeek } from "@/lib/queries/book";
@@ -983,7 +984,9 @@ async function syncDrafts(leagueId: string): Promise<SyncStepResult> {
       durationMs,
     };
   } catch (e) {
-    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    // describeDbError, not e.message: draft_picks writes can trip the player FK,
+    // and Postgres puts the offending id in DETAIL.
+    const errorMessage = describeDbError(e);
     const durationMs = Date.now() - startTime;
     await logSyncComplete(logId, "failure", 0, errorMessage);
     return {

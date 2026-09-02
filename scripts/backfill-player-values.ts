@@ -17,6 +17,7 @@ config({ path: ".env.local" });
 import { db } from "@/lib/db";
 import { playerValues } from "@/lib/db/schema";
 import { sql } from "drizzle-orm";
+import { chunk } from "@/lib/chunk";
 import { getTrades } from "@/lib/queries/trades";
 
 const PLAYER_IDS_CSV_URL =
@@ -31,15 +32,6 @@ interface ValuesRow {
   value_2qb: string;
   scrape_date: string;
   fp_id: string;
-}
-
-/** Split an array into chunks of the given size. */
-function chunk<T>(arr: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
-  return chunks;
 }
 
 /**
