@@ -139,6 +139,10 @@ function toClaims(raw: readonly unknown[]): Claim[] {
 const BODY_MAX = 400;
 const KICKER_MAX = 40;
 const QUESTION_MAX = 200;
+// A pairKey is two franchise slugs joined by "__" (matchupPairKey), echoed
+// verbatim from the prompt's list, so it can far exceed KICKER_MAX; membership
+// in the real pair set is enforced separately after parse.
+const PAIR_KEY_MAX = 160;
 
 // ---------------------------------------------------------------------------
 // Strict vs. wire schemas
@@ -211,7 +215,7 @@ function regularSchemaShape(bodyField: z.ZodString, claimSchema: z.ZodTypeAny) {
   const claims = z.array(claimSchema).max(4).default([]);
   return z.object({
     matchup_angles: z
-      .array(z.object({ pairKey: z.string().max(KICKER_MAX), body: bodyField, claims }))
+      .array(z.object({ pairKey: z.string().max(PAIR_KEY_MAX), body: bodyField, claims }))
       .max(8)
       .default([]),
     game_of_week_blurb: bodyField.default(""),
