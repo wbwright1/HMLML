@@ -1,5 +1,14 @@
 import type { HubContentKind } from "@/lib/queries/hub-content";
 import type { StatsContext } from "@/lib/content-gen/stats-context";
+import {
+  normalize,
+  phraseSetsOverlap,
+  signaturePhrasesIn,
+} from "@/lib/content-gen/phrases";
+
+// The canonical copy normalizer lives in phrases.ts (the leaf module); it is
+// re-exported here under its historical name for existing callers.
+export { normalize };
 
 // ---------------------------------------------------------------------------
 // Content diversity layer
@@ -25,20 +34,14 @@ export interface Anchors {
   franchiseKey: string | null;
   numbers: number[];
   playerNames: string[];
+  /** Stock idioms this body leans on; see lib/content-gen/phrases.ts. */
+  phrases: Set<string>;
   trigrams: Set<string>;
 }
 
 // ---------------------------------------------------------------------------
 // Text similarity primitives
 // ---------------------------------------------------------------------------
-
-export function normalize(s: string): string {
-  return s
-    .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
 
 /** Character trigrams of the normalized string, padded so short strings still produce grams. */
 export function trigramSet(s: string): Set<string> {
@@ -132,14 +135,21 @@ export function extractAnchors(row: CandidateRow, ctx: StatsContext): Anchors {
     franchiseKey: deriveFranchiseKey(row, ctx),
     numbers: extractNumbers(row.body),
     playerNames: derivePlayerNames(row, ctx),
+    phrases: signaturePhrasesIn(row.body),
     trigrams: trigramSet(row.body),
   };
 }
 
 /**
  * The PRIMARY duplicate signal, on its own: two rows share a hook when they
- * are about the same franchise AND cite an overlapping central number, or
- * when they name the same central player. Exported so callers outside
+ * are about the same franchise AND cite an overlapping central number, when
+ * they name the same central player, or when they lean on the same signature
+ * phrase (a stock idiom two independent generators can both reach for; see
+ * lib/content-gen/phrases.ts). The phrase signal is deliberately PRIMARY
+ * rather than part of the fuzzy trigram tier: it is global and cross-kind,
+ * which is exactly the scope "no two visible lines share a phrase" needs, and
+ * it costs nothing on the far more common case of a body with no stock idiom
+ * in it at all. Exported so callers outside
  * selectDiverseSubset (e.g. the template top-up in generate.ts) can apply the
  * exact same rule when merging rows into an already-selected set.
  */
@@ -152,6 +162,9 @@ export function sharesPrimaryHook(a: Anchors, b: Anchors): boolean {
     return true;
   }
   if (a.playerNames.length > 0 && a.playerNames.some((p) => b.playerNames.includes(p))) {
+    return true;
+  }
+  if (phraseSetsOverlap(a.phrases, b.phrases)) {
     return true;
   }
   return false;
@@ -174,14 +187,48 @@ export interface SelectOptions {
   kindPriority?: HubContentKind[];
   /** Kinds where at most ONE row per franchise may ever be kept, overriding maxPerFranchise. */
   franchiseUniqueKinds?: Set<HubContentKind>;
+  /**
+   * Kinds that bypass the caps and the duplicate gate entirely (see the
+   * keepAllKinds comment inside selectDiverseSubset for why matchup_angle and
+   * trade_verdict need this). Pass it EXPLICITLY: when omitted, the legacy
+   * derived behavior applies ("target >= candidate count"), which silently
+   * sweeps in any single-candidate kind and lets it skip the gate. That
+   * fallback exists so no caller has to change, not because it is correct.
+   * franchiseUniqueKinds always wins over this set.
+   */
+  keepAllKinds?: Set<HubContentKind>;
+  /**
+   * Kinds where a signature-phrase echo is worse than an empty slot, so a row
+   * dropped for one is NEVER re-admitted by the coverage-first relaxation
+   * pass. Without this the write-time phrase gate is a no-op for any kind
+   * shipping a single candidate (the LLM path's one hero_dek): the row is
+   * dropped and immediately handed back. Defaults to PHRASE_STRICT_KINDS.
+   * Only put a kind here when something downstream can still fill the hole:
+   * hero_dek qualifies because fillMissingKinds backfills it from the
+   * template pool and the hub renders HERO_DEK_FALLBACK if even that fails.
+   */
+  phraseStrictKinds?: Set<HubContentKind>;
 }
 
 /** Kinds where every row must come from a distinct franchise (e.g. offseason receipts). */
 export const FRANCHISE_UNIQUE_KINDS: Set<HubContentKind> = new Set(["offseason_receipt"]);
 
+/**
+ * The one kind where shipping an echo is worse than shipping nothing: the
+ * hero dek sits directly above the Game of the Week card, and every layer
+ * below this one can still fill an empty hero_dek (fillMissingKinds from the
+ * template pool, then HERO_DEK_FALLBACK at render).
+ */
+export const PHRASE_STRICT_KINDS: Set<HubContentKind> = new Set(["hero_dek"]);
+
 export interface DroppedRow {
   row: CandidateRow;
-  reason: "duplicate" | "franchise-cap" | "player-cap";
+  /**
+   * "phrase-echo" is a duplicate too, split out because the relaxation pass
+   * treats it differently: those rows are re-admitted last, and never at all
+   * for a phraseStrictKinds kind.
+   */
+  reason: "duplicate" | "phrase-echo" | "franchise-cap" | "player-cap";
 }
 
 export interface SelectResult {
@@ -210,6 +257,7 @@ export function selectDiverseSubset(
   const maxPerPlayer = opts.maxPerPlayer ?? 1;
   const targetCounts = opts.targetCountsByKind ?? {};
   const franchiseUniqueKinds = opts.franchiseUniqueKinds ?? new Set<HubContentKind>();
+  const phraseStrictKinds = opts.phraseStrictKinds ?? PHRASE_STRICT_KINDS;
   const kinds: HubContentKind[] =
     opts.kindPriority ?? (Object.keys(candidatesByKind) as HubContentKind[]);
 
@@ -218,16 +266,26 @@ export function selectDiverseSubset(
   const keptAnchors: Anchors[] = [];
   const dropped: DroppedRow[] = [];
   const droppedSet = new Set<CandidateRow>();
+  /** Rows the strict pass rejected specifically for a signature-phrase echo. */
+  const phraseEchoed = new Set<CandidateRow>();
   const franchiseCounts = new Map<string, number>();
   const playerCounts = new Map<string, number>();
   const relaxedKinds: HubContentKind[] = [];
 
-  function isDuplicate(anchors: Anchors): boolean {
+  /**
+   * null when the row is not a duplicate of anything kept. Otherwise the
+   * reason, with "phrase-echo" reported whenever the collision is (also) a
+   * shared signature phrase, since that is the reason the relaxation pass
+   * treats specially.
+   */
+  function duplicateReason(anchors: Anchors): "duplicate" | "phrase-echo" | null {
+    let hit: "duplicate" | null = null;
     for (const k of keptAnchors) {
-      if (sharesPrimaryHook(anchors, k)) return true;
-      if (jaccard(anchors.trigrams, k.trigrams) >= similarityThreshold) return true;
+      if (phraseSetsOverlap(anchors.phrases, k.phrases)) return "phrase-echo";
+      if (sharesPrimaryHook(anchors, k)) hit = "duplicate";
+      else if (jaccard(anchors.trigrams, k.trigrams) >= similarityThreshold) hit = "duplicate";
     }
-    return false;
+    return hit;
   }
 
   // Franchise/player caps are scoped PER KIND (e.g. "at most 2 offseason
@@ -278,9 +336,11 @@ export function selectDiverseSubset(
       droppedSet.add(row);
       return false;
     }
-    if (isDuplicate(anchors)) {
-      dropped.push({ row, reason: "duplicate" });
+    const dupReason = duplicateReason(anchors);
+    if (dupReason) {
+      dropped.push({ row, reason: dupReason });
       droppedSet.add(row);
+      if (dupReason === "phrase-echo") phraseEchoed.add(row);
       return false;
     }
     accept(row, anchors);
@@ -301,10 +361,21 @@ export function selectDiverseSubset(
   // recorded so OTHER kinds' candidates dedupe against these rows. Excludes
   // franchiseUniqueKinds: those kinds must ALWAYS enforce the one-per-franchise
   // cap, even when candidate count happens to equal the target.
+  //
+  // Callers SHOULD pass this explicitly. Derived from candidate counts, the
+  // set also swallowed every kind that ships exactly one candidate for a
+  // target of one (hero_dek, game_of_week_blurb), which is how the hub dek
+  // and the Game of the Week blurb both shipped "receipts to settle" on the
+  // same page: neither row ever reached the duplicate gate. Kind order does
+  // the tie-breaking when a real collision is found: "regular" runs
+  // matchup_angle, game_of_week_blurb, hero_dek, smack_post, so the GotW
+  // blurb is admitted first and the dek is the row that must yield. That
+  // ordering is now load-bearing, not incidental.
   const keepAllKinds = new Set(
-    kinds.filter(
-      (k) => targetFor(k) >= (candidatesByKind[k] ?? []).length && !franchiseUniqueKinds.has(k),
-    ),
+    (opts.keepAllKinds
+      ? [...opts.keepAllKinds]
+      : kinds.filter((k) => targetFor(k) >= (candidatesByKind[k] ?? []).length)
+    ).filter((k) => !franchiseUniqueKinds.has(k)),
   );
 
   const addedPerKind = new Map<HubContentKind, number>();
@@ -347,34 +418,50 @@ export function selectDiverseSubset(
   // the slot with the exact line already on the page buys nothing, and
   // leaving the kind short hands the slot to topUpShortKinds' deterministic
   // template instead.
+  //
+  // Signature-phrase echoes are the other exception, and they run in TWO
+  // sub-passes rather than one: every candidate that is not an echo gets
+  // considered first, and only if the kind is still short do the echoes come
+  // back. That way a phrase-clean sibling always beats an echo, without
+  // costing a single row of coverage. For a phraseStrictKinds kind the second
+  // sub-pass never runs at all: a lone hero_dek that echoed the Game of the
+  // Week card is dropped for good, because handing it straight back would
+  // make the whole write-time gate a no-op on the LLM path (one candidate,
+  // target one). The hole is filled downstream by fillMissingKinds from the
+  // template pool, and by HERO_DEK_FALLBACK at render if even that collides.
   for (const kind of kinds) {
     const target = targetFor(kind);
     let added = addedPerKind.get(kind) ?? 0;
     if (added >= target) continue;
     let pushedRelaxedKind = false;
-    for (const row of candidatesByKind[kind] ?? []) {
+    const allowEchoPasses = phraseStrictKinds.has(kind) ? [false] : [false, true];
+    for (const allowEchoes of allowEchoPasses) {
+      for (const row of candidatesByKind[kind] ?? []) {
+        if (added >= target) break;
+        if (keptSet.has(row)) continue;
+        if (keptBodies.has(normalizedBody(row.body))) continue;
+        if (!allowEchoes && phraseEchoed.has(row)) continue;
+        const anchors = extractAnchors(row, ctx);
+        if (
+          franchiseUniqueKinds.has(row.kind) &&
+          anchors.franchiseKey &&
+          (franchiseCounts.get(`${row.kind}::${anchors.franchiseKey}`) ?? 0) >= 1
+        ) {
+          continue;
+        }
+        if (droppedSet.has(row)) {
+          const idx = dropped.findIndex((d) => d.row === row);
+          if (idx >= 0) dropped.splice(idx, 1);
+          droppedSet.delete(row);
+        }
+        accept(row, anchors);
+        added++;
+        if (!pushedRelaxedKind) {
+          relaxedKinds.push(kind);
+          pushedRelaxedKind = true;
+        }
+      }
       if (added >= target) break;
-      if (keptSet.has(row)) continue;
-      if (keptBodies.has(normalizedBody(row.body))) continue;
-      const anchors = extractAnchors(row, ctx);
-      if (
-        franchiseUniqueKinds.has(row.kind) &&
-        anchors.franchiseKey &&
-        (franchiseCounts.get(`${row.kind}::${anchors.franchiseKey}`) ?? 0) >= 1
-      ) {
-        continue;
-      }
-      if (droppedSet.has(row)) {
-        const idx = dropped.findIndex((d) => d.row === row);
-        if (idx >= 0) dropped.splice(idx, 1);
-        droppedSet.delete(row);
-      }
-      accept(row, anchors);
-      added++;
-      if (!pushedRelaxedKind) {
-        relaxedKinds.push(kind);
-        pushedRelaxedKind = true;
-      }
     }
     addedPerKind.set(kind, added);
   }

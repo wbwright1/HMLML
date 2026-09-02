@@ -40,7 +40,13 @@ import {
 import { getRecentLeagueMoves, type LeagueMove } from "@/lib/queries/league-moves";
 import { getWeekInHistory, type WeekReceipt } from "@/lib/queries/week-history";
 import { FranchiseLogo } from "@/components/franchise-logo";
-import { getHubEditorial, matchupPairKey, type HubEditorial } from "@/lib/content";
+import {
+  getHubEditorial,
+  HERO_DEK_FALLBACK,
+  matchupPairKey,
+  type HubEditorial,
+} from "@/lib/content";
+import { sharesPhraseWithAny } from "@/lib/content-gen/phrases";
 import { getHubPowerPreview, type HubPowerPreview } from "@/lib/queries/power-preview";
 import { PowerPulseCard } from "@/components/hub/power-pulse-card";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
@@ -364,6 +370,33 @@ export async function BetweenWeeksHub({
     }
   }
 
+  // Last line of defense on the copy-echo fix (issue #274). The generator's
+  // diversity layer stops a dek that echoes the Game of the Week card from
+  // ever being WRITTEN, but hub_content rows persist: a dek generated before
+  // that gate existed keeps rendering until the next generate-content run
+  // replaces it. Rather than ship the echo for hours, fall back to the seeded
+  // dek, which is phrase-distinct from every line below it by construction.
+  //
+  // BOTH generated lines on the Game of the Week card are compared, not just
+  // the blurb: the kicker's stakes clause is generated copy too, and "at
+  // stake" is itself a signature phrase. Computed here with the same inputs
+  // GameOfWeekSection uses below, so the two can never disagree.
+  const gotwStakes = gameOfWeek
+    ? stakesClause(
+        leadsDivision.has(gameOfWeek.homeTeam.franchiseId),
+        leadsDivision.has(gameOfWeek.awayTeam.franchiseId),
+        anyGamesPlayed
+      )
+    : null;
+  const linesBelowHero = [
+    editorial.matchupAngles.gameOfWeekBlurb,
+    gotwStakes ?? "",
+  ].filter(Boolean);
+  const heroDek =
+    editorial.heroDek && !sharesPhraseWithAny(editorial.heroDek, linesBelowHero)
+      ? editorial.heroDek
+      : HERO_DEK_FALLBACK;
+
   return (
     <>
       {/* Hero + countdown */}
@@ -373,13 +406,8 @@ export async function BetweenWeeksHub({
             Harambe Memorial League &middot; Week {week} &middot; The Slate Is Set
           </p>
           <h1 className="text-display">{headline}</h1>
-          <p className="mt-3 text-body-lg text-text-secondary">
-            <EditorialBody
-              body={
-                editorial.heroDek ??
-                "One grudge match at the top, one annual sacrifice at the bottom, and a week of receipts to settle by Thursday night."
-              }
-            />
+          <p className="mt-3 text-body-lg text-text-secondary" data-testid="hero-dek">
+            <EditorialBody body={heroDek} />
           </p>
         </div>
 

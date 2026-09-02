@@ -397,3 +397,176 @@ describe("keep-all kinds still reject an identical body", () => {
     expect(result.kept).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Signature-phrase signal + explicit keepAllKinds (issue #274)
+// ---------------------------------------------------------------------------
+
+describe("signature-phrase duplicate signal", () => {
+  it("treats two rows sharing only a stock idiom as duplicates", () => {
+    // No shared franchise, no shared number, no shared player, and trigram
+    // similarity far below the 0.5 threshold: the ONLY thing these have in
+    // common is the idiom, which is exactly the case that used to slip
+    // through.
+    const dek = row(
+      "Week 1 is set. 6 matchups and a week of receipts to settle by Sunday.",
+      { kind: "hero_dek" },
+    );
+    const gotw = row(
+      "Foopus and Olave Garden headline it. There are receipts to settle by Thursday night.",
+      { kind: "game_of_week_blurb" },
+    );
+    const result = selectDiverseSubset(
+      { game_of_week_blurb: [gotw], hero_dek: [dek] },
+      ctx({ seasonType: "regular", week: 1 }),
+      {
+        targetCountsByKind: { game_of_week_blurb: 1, hero_dek: 1 },
+        kindPriority: ["game_of_week_blurb", "hero_dek"],
+        keepAllKinds: new Set(["matchup_angle", "trade_verdict"]),
+      },
+    );
+    expect(result.kept).toContain(gotw);
+    // hero_dek is phrase-strict: the echo is dropped for good rather than
+    // handed back by the relaxation pass, which is what makes the gate real
+    // for a kind shipping one candidate.
+    expect(result.kept).not.toContain(dek);
+    expect(
+      result.dropped.some((d) => d.row === dek && d.reason === "phrase-echo"),
+    ).toBe(true);
+  });
+
+  it("re-admits an echo for a non-strict kind, but only after every clean candidate", () => {
+    // Coverage still wins for kinds with no downstream fallback: the echo
+    // comes back, just last.
+    const gotw = row("There are receipts to settle by Thursday night.", {
+      kind: "game_of_week_blurb",
+    });
+    const echo = row("Somebody has receipts to settle after that one.", {
+      kind: "smack_post",
+    });
+    const clean = row("Somebody left 33.5 on the bench and lost anyway.", {
+      kind: "smack_post",
+    });
+    const result = selectDiverseSubset(
+      { game_of_week_blurb: [gotw], smack_post: [echo, clean] },
+      ctx({ seasonType: "regular", week: 1 }),
+      {
+        targetCountsByKind: { game_of_week_blurb: 1, smack_post: 2 },
+        kindPriority: ["game_of_week_blurb", "smack_post"],
+        keepAllKinds: new Set(["matchup_angle", "trade_verdict"]),
+      },
+    );
+    const smack = result.kept.filter((r) => r.kind === "smack_post");
+    expect(smack).toHaveLength(2);
+    // The clean row was admitted by the strict pass, the echo only by
+    // relaxation, so the clean one comes first.
+    expect(smack[0]).toBe(clean);
+    expect(smack[1]).toBe(echo);
+  });
+
+  it("lets a phrase-free alternative take the slot instead", () => {
+    const gotw = row(
+      "Foopus and Olave Garden headline it. There are receipts to settle by Thursday night.",
+      { kind: "game_of_week_blurb" },
+    );
+    const echo = row("A week of receipts to settle by Sunday.", { kind: "hero_dek" });
+    const clean = row(
+      "Six games, twelve rosters, and nobody hiding behind a projection.",
+      { kind: "hero_dek" },
+    );
+    const result = selectDiverseSubset(
+      { game_of_week_blurb: [gotw], hero_dek: [echo, clean] },
+      ctx({ seasonType: "regular", week: 1 }),
+      {
+        targetCountsByKind: { game_of_week_blurb: 1, hero_dek: 1 },
+        kindPriority: ["game_of_week_blurb", "hero_dek"],
+        keepAllKinds: new Set(["matchup_angle", "trade_verdict"]),
+      },
+    );
+    expect(result.kept.filter((r) => r.kind === "hero_dek")).toEqual([clean]);
+    expect(result.relaxedKinds).not.toContain("hero_dek");
+    expect(
+      result.dropped.some((d) => d.row === echo && d.reason === "phrase-echo"),
+    ).toBe(true);
+  });
+});
+
+describe("explicit keepAllKinds", () => {
+  const gotw = row(
+    "Foopus and Olave Garden headline it. There are receipts to settle by Thursday night.",
+    { kind: "game_of_week_blurb" },
+  );
+  const dek = row("A week of receipts to settle by Sunday.", { kind: "hero_dek" });
+
+  it("no longer lets a single-candidate kind bypass the gate", () => {
+    const result = selectDiverseSubset(
+      { game_of_week_blurb: [gotw], hero_dek: [dek] },
+      ctx({ seasonType: "regular", week: 1 }),
+      {
+        targetCountsByKind: { game_of_week_blurb: 1, hero_dek: 1 },
+        kindPriority: ["game_of_week_blurb", "hero_dek"],
+        keepAllKinds: new Set(["matchup_angle", "trade_verdict"]),
+      },
+    );
+    // And with no alternative it ships NOTHING for that kind rather than the
+    // echo: fillMissingKinds backfills hero_dek from the template pool, and
+    // the hub falls back to HERO_DEK_FALLBACK if even that collides.
+    expect(result.kept.filter((r) => r.kind === "hero_dek")).toEqual([]);
+    expect(result.relaxedKinds).not.toContain("hero_dek");
+  });
+
+  it("keeps the legacy derived behavior when the option is omitted", () => {
+    const result = selectDiverseSubset(
+      { game_of_week_blurb: [gotw], hero_dek: [dek] },
+      ctx({ seasonType: "regular", week: 1 }),
+      {
+        targetCountsByKind: { game_of_week_blurb: 1, hero_dek: 1 },
+        kindPriority: ["game_of_week_blurb", "hero_dek"],
+      },
+    );
+    expect(result.dropped).toEqual([]);
+    expect(result.relaxedKinds).toEqual([]);
+  });
+
+  it("still keeps every matchup_angle row and reports no relaxation", () => {
+    // The regression this option most risks: matchup_angle boilerplate must
+    // keep going through untouched, with no spurious drop-then-relax cycle,
+    // even when every angle shares a signature phrase.
+    const angles: CandidateRow[] = [
+      row(
+        "Foopus (0-0) hosts Olave Garden (0-0). First meeting, and first place is on the line.",
+        { kind: "matchup_angle", refKey: "foopus__olave-garden" },
+      ),
+      row(
+        "Team C (0-0) hosts Foopus (0-0). First meeting, and first place is on the line too.",
+        { kind: "matchup_angle", refKey: "foopus__team-c" },
+      ),
+    ];
+    const result = selectDiverseSubset({ matchup_angle: angles }, ctx(), {
+      targetCountsByKind: { matchup_angle: 2 },
+      keepAllKinds: new Set(["matchup_angle", "trade_verdict"]),
+    });
+    expect(result.kept).toHaveLength(2);
+    expect(result.dropped).toEqual([]);
+    expect(result.relaxedKinds).toEqual([]);
+  });
+
+  it("never lets keepAllKinds override franchiseUniqueKinds", () => {
+    const a = row("Foopus torched its FAAB budget in March.", {
+      kind: "offseason_receipt",
+      refKey: "foopus",
+      extras: { category: "WAIVERS" },
+    });
+    const b = row("Foopus also shipped out two veterans for picks.", {
+      kind: "offseason_receipt",
+      refKey: "foopus",
+      extras: { category: "FIRE_SALE" },
+    });
+    const result = selectDiverseSubset({ offseason_receipt: [a, b] }, ctx(), {
+      targetCountsByKind: { offseason_receipt: 2 },
+      franchiseUniqueKinds: FRANCHISE_UNIQUE_KINDS,
+      keepAllKinds: new Set(["matchup_angle", "trade_verdict", "offseason_receipt"]),
+    });
+    expect(result.kept).toHaveLength(1);
+  });
+});

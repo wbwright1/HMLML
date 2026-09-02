@@ -10,6 +10,8 @@
 // the same ladder ever read the same sentence. Nothing here fabricates a
 // stat: the numbers on the card come from the query layer; this is pure voice.
 
+import { phraseSetsOverlap, signaturePhrasesIn } from "@/lib/content-gen/phrases";
+
 export type GoatArchetype =
   | "goat"
   | "dynasty"
@@ -126,7 +128,7 @@ const GOAT_BLURBS: Readonly<Record<GoatArchetype, readonly string[]>> = Object.f
 // deliberately generic so it can follow any archetype without contradicting
 // its label.
 const GOAT_GENERIC_OVERFLOW: readonly string[] = [
-  "The numbers are on the card. The verdict is up to the group chat.",
+  "The numbers are on the card. The verdict writes itself from there.",
   "Every ladder needs a name here. This is the one occupying it this season.",
   "Read the record, not the résumé. The record is the only thing that doesn't lie.",
   "Filed under: also participated. The stats do the rest of the talking.",
@@ -136,7 +138,11 @@ const GOAT_GENERIC_OVERFLOW: readonly string[] = [
  * Assign every franchise on the ladder a distinct blurb. Walks entries in
  * RANK ORDER (the caller must pass entries already sorted 1..N) and, for each
  * one, classifies its archetype and hands out the first unused variant from
- * that archetype's pool. If a pool runs dry, falls through to the
+ * that archetype's pool. "Unused" means more than not-yet-handed-out: a
+ * candidate that leans on a signature phrase already spent on this ladder is
+ * skipped too, since every blurb here renders on the same page and two lines
+ * reaching for the same stock idiom read as one template (issue #274; see
+ * lib/content-gen/phrases.ts). If a pool runs dry, falls through to the
  * used-set-guarded overflow pool rather than repeating a line. Rank order
  * (rather than franchise-id order) means ties for a shared archetype resolve
  * in ladder position, which is the only ordering a reader can see on the
@@ -147,20 +153,35 @@ export function assignGoatBlurbs<T extends GoatArchetypeInput>(
 ): Array<T & { archetype: GoatArchetype; blurb: string }> {
   const used = new Set<string>();
   const overflowUsed = new Set<string>();
+  const spentPhrases = new Set<string>();
+
+  const phraseFree = (candidate: string): boolean =>
+    !phraseSetsOverlap(signaturePhrasesIn(candidate), spentPhrases);
+  const spend = (candidate: string): void => {
+    for (const p of signaturePhrasesIn(candidate)) spentPhrases.add(p);
+  };
 
   return entries.map((entry) => {
     const archetype = goatArchetype(entry);
     const pool = GOAT_BLURBS[archetype];
 
-    let blurb = pool.find((candidate) => !used.has(candidate));
+    // Phrase-distinct first; a merely-unused variant second. Never repeating a
+    // line is the stronger guarantee of the two, so a phrase echo is accepted
+    // before a verbatim repeat is.
+    let blurb =
+      pool.find((candidate) => !used.has(candidate) && phraseFree(candidate)) ??
+      pool.find((candidate) => !used.has(candidate));
     if (blurb) {
       used.add(blurb);
+      spend(blurb);
     } else {
-      blurb = GOAT_GENERIC_OVERFLOW.find(
-        (candidate) => !overflowUsed.has(candidate),
-      );
+      blurb =
+        GOAT_GENERIC_OVERFLOW.find(
+          (candidate) => !overflowUsed.has(candidate) && phraseFree(candidate),
+        ) ?? GOAT_GENERIC_OVERFLOW.find((candidate) => !overflowUsed.has(candidate));
       if (blurb) {
         overflowUsed.add(blurb);
+        spend(blurb);
       } else {
         // Pathological case (more franchises than every pool combined): fall
         // back to the archetype's first variant rather than throwing.

@@ -5,6 +5,7 @@ import {
   type GoatArchetype,
   type GoatArchetypeInput,
 } from "./goat-content";
+import { signaturePhrasesIn } from "./content-gen/phrases";
 
 /** Minimal fixture shape: whatever assignGoatBlurbs needs plus an id to key by. */
 interface Fixture extends GoatArchetypeInput {
@@ -152,5 +153,45 @@ describe("assignGoatBlurbs", () => {
     const goatEntry = result.find((r) => r.archetype === "goat")!;
     const basementEntry = result.find((r) => r.archetype === "basement")!;
     expect(goatEntry.blurb).not.toBe(basementEntry.blurb);
+  });
+
+  // Issue #274: every blurb on the ladder renders on the same page, so two
+  // lines reaching for the same stock idiom read as one template.
+  it("never spends the same signature phrase twice on one ladder", () => {
+    const spend = (entries: Fixture[]) => {
+      const seen = new Set<string>();
+      for (const r of assignGoatBlurbs(entries)) {
+        for (const p of signaturePhrasesIn(r.blurb)) {
+          expect(seen.has(p), `repeated phrase "${p}" in: ${r.blurb}`).toBe(false);
+          seen.add(p);
+        }
+      }
+    };
+    spend(liveDistributionFixtures());
+    // And under overflow pressure, where the generic pool gets pulled in.
+    spend(
+      Array.from({ length: 6 }, (_, i) =>
+        makeEntry(`x${i}`, {
+          rank: i + 1,
+          leagueSize: 12,
+          championships: 1,
+          winPct: 0.4,
+        }),
+      ),
+    );
+  });
+
+  it("still never repeats a blurb verbatim, even when the phrase guard bites", () => {
+    const result = assignGoatBlurbs(
+      Array.from({ length: 6 }, (_, i) =>
+        makeEntry(`x${i}`, {
+          rank: i + 1,
+          leagueSize: 12,
+          championships: 1,
+          winPct: 0.4,
+        }),
+      ),
+    );
+    expect(new Set(result.map((r) => r.blurb)).size).toBe(result.length);
   });
 });

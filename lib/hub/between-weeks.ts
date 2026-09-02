@@ -257,11 +257,16 @@ export function formatSlateH2H(h2h: H2HInput): string {
 
 /**
  * The Game of the Week kicker's second clause, kept truthful and generic.
- * Before a single game has been played, "first place" and "bragging rights"
+ * Before a single game has been played, a division lead and bragging rights
  * are both fabrications (nobody has won or lost anything yet), so that case
  * gets its own truthful branch. Once games exist: either team leading its
- * division means first place is on the line; otherwise we fall back to
- * bragging rights so we never overstate the stakes.
+ * division means the division lead is at stake; otherwise we fall back to
+ * pride so we never overstate the stakes.
+ *
+ * Wording note (issue #274): this kicker renders directly above the Game of
+ * the Week blurb, which says "First place is on the line and there are
+ * receipts to settle...". The blurb keeps its phrasing (owner's call), so the
+ * kicker is what avoids the echo: "at stake", never "on the line".
  */
 export function stakesClause(
   aLeadsDivision: boolean,
@@ -270,8 +275,8 @@ export function stakesClause(
 ): string {
   if (!anyGamesPlayed) return "Season openers";
   return aLeadsDivision || bLeadsDivision
-    ? "First place on the line"
-    : "Bragging rights on the line";
+    ? "Division lead at stake"
+    : "Pride at stake";
 }
 
 /**
