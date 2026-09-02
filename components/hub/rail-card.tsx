@@ -45,8 +45,12 @@ export function HubSection({
 /**
  * The rail / secondary card shell: 24px padding, one value for every card in
  * the rail. Deliberately has no padding variant; one padding value is the
- * point. `tinted` layers the existing gold gradient wash (existing tokens, not
- * a new one) used by the Left On The Bench callout.
+ * point.
+ *
+ * `tinted` uses `.card-tint-gold` from globals.css, the shipped tint variant
+ * whose stops are exactly the gold wash the Left On The Bench callout used to
+ * inline as a literal gradient in an absolutely-positioned overlay div. The
+ * class is the shared definition; the literal was a duplicate of it.
  */
 export function RailCard({
   children,
@@ -56,18 +60,12 @@ export function RailCard({
   tinted?: boolean;
 }) {
   return (
-    <div className="card-surface relative overflow-hidden p-6">
-      {tinted && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(180deg, rgba(226,184,88,0.10), rgba(226,184,88,0.02))",
-          }}
-        />
-      )}
-      <div className="relative">{children}</div>
+    <div
+      className={`card-surface relative overflow-hidden p-6 ${
+        tinted ? "card-tint-gold" : ""
+      }`.trim()}
+    >
+      {children}
     </div>
   );
 }

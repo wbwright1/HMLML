@@ -439,6 +439,7 @@ test.describe("Between-Weeks Hub (1d)", () => {
     }
 
     let comparedRows = 0;
+    let comparedFooters = 0;
     for (const bucket of rows.values()) {
       if (bucket.length < 2) continue;
       comparedRows++;
@@ -456,12 +457,17 @@ test.describe("Between-Weeks Hub (1d)", () => {
         .map((c) => c.footerY)
         .filter((y): y is number => y !== null);
       if (footerYs.length > 1) {
+        comparedFooters++;
         for (const y of footerYs) {
           expect(Math.abs(y - footerYs[0])).toBeLessThanOrEqual(1);
         }
       }
     }
     expect(comparedRows).toBeGreaterThan(0);
+    // Same guard as the count check in T10: without it, a slate that stopped
+    // rendering Book footers would take the `length > 1` branch zero times and
+    // this test would report green having compared nothing.
+    expect(comparedFooters).toBeGreaterThan(0);
   });
 
   test("T21: every rail card uses the one row rhythm", async ({ page }) => {

@@ -51,7 +51,7 @@ export function DivisionFieldCard({
   recordsSeasonYear,
 }: DivisionFieldCardProps) {
   return (
-    <div className="card-surface flex h-full flex-col p-5">
+    <div className="card-surface flex h-full flex-col p-6">
       <div className="flex items-baseline justify-between gap-3">
         <h3 className="text-body-lg font-semibold text-text-primary">
           {division.divisionName}

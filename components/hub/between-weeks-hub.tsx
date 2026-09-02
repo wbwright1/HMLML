@@ -818,10 +818,15 @@ function PlayerToWatchRow({
         </span>
       </PlayerLink>
       <div className="mt-2 space-y-1">
+        {/* min-h reserves the region so every row is the same height; the
+            clamp is the ceiling prod already shipped (3 lines), NOT a tighter
+            one. Tightening it to 2 would newly clip a long story detail, and
+            silently dropping the end of a real claim is worse than a row that
+            runs one line taller than its neighbour. */}
         {showStory && (
           <p
             data-testid="ptw-story"
-            className="text-body-sm text-text-secondary line-clamp-2 min-h-[2lh]"
+            className="text-body-sm text-text-secondary line-clamp-3 min-h-[2lh]"
           >
             {player.storyDetail && <MonoNumerals text={player.storyDetail} />}
           </p>
@@ -831,10 +836,16 @@ function PlayerToWatchRow({
             line repeating the same two numbers is redundant, not a new fact.
             The row still reserves that line (empty) when a sibling renders one,
             so the rows stay the same height instead of jittering. */}
+        {/* Not clamped. The rail narrowed to 24px padding, and a mid-season
+            baseline label ("Projected 20.8 · 15.3 ppg through Week 12") sits
+            right at the wrap boundary at this width, so a one-line clamp would
+            silently drop "Week 12" off a real number. min-h reserves the line
+            for the rows that suppress it; a rare wrap costs one line rather
+            than a fact. */}
         {showProjected && (
           <p
             data-testid="ptw-projected"
-            className="text-body-sm text-text-tertiary line-clamp-1 min-h-[1lh]"
+            className="text-body-sm text-text-tertiary min-h-[1lh]"
           >
             {player.storyKey !== "leap" && (
               <>

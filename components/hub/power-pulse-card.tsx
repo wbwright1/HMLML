@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { TeamLink } from "@/components/team-link";
-import { HubSection } from "@/components/hub/rail-card";
+import { HubSection, RailCard, RailRows } from "@/components/hub/rail-card";
 import type { HubPowerPreview, PowerPreviewMover } from "@/lib/queries/power-preview";
 
 /** Trend vs. season standings: sage ▲ for climbers, rust ▼ for sliders. Never
@@ -91,15 +91,15 @@ export function PowerPulseCard({
 
   return (
     <HubSection kicker={kicker}>
-      <div className="card-surface relative overflow-hidden p-6">
-        <div className="divide-y divide-divider">
+      <RailCard>
+        <RailRows>
           {preview.top.map((row) => {
             const rankColor = row.rank <= 3 ? "text-accent-gold" : "text-text-tertiary";
             return (
               <TeamLink
                 key={row.id}
                 slug={row.slug}
-                className="flex items-center gap-3 py-4 first:pt-0 last:pb-0 hover:opacity-80"
+                className="flex items-center gap-3 hover:opacity-80"
               >
                 <span className={`font-mono text-sm font-black tabular-nums w-5 text-center shrink-0 ${rankColor}`}>
                   {row.rank}
@@ -131,7 +131,7 @@ export function PowerPulseCard({
               </TeamLink>
             );
           })}
-        </div>
+        </RailRows>
 
         <div className="mt-4 pt-4 border-t border-divider">
           {preview.mode === "regular" ? (
@@ -158,7 +158,7 @@ export function PowerPulseCard({
             Full power rankings &rarr;
           </Link>
         </div>
-      </div>
+      </RailCard>
     </HubSection>
   );
 }

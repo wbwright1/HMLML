@@ -34,6 +34,7 @@ import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book
 import { BookRailCard } from "@/components/hub/book-rail-card";
 import { getHubPowerPreview, type HubPowerPreview } from "@/lib/queries/power-preview";
 import { PowerPulseCard } from "@/components/hub/power-pulse-card";
+import { HubSection } from "@/components/hub/rail-card";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 
 export async function RegularSeasonHub({
@@ -258,16 +259,17 @@ export async function RegularSeasonHub({
       {isGameWindow && matchupData && matchupData.matchups.length > 0 && (
         <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
           {/* On the field */}
-          <div className="space-y-4">
-            <p className="text-kicker flex items-center justify-between">
-              <span>On the Field &middot; All Live</span>
+          <HubSection
+            kicker={<>On the Field &middot; All Live</>}
+            action={
               <Link
                 href="/matchups"
-                className="text-accent-gold hover:brightness-110 normal-case tracking-normal"
+                className="text-caption text-accent-gold hover:brightness-110 normal-case tracking-normal"
               >
                 Matchup detail &rarr;
               </Link>
-            </p>
+            }
+          >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {matchupData.matchups.map((matchup) => (
                 <GameCard
@@ -288,35 +290,35 @@ export async function RegularSeasonHub({
               ))}
             </div>
             <ScorePoller initialIsGameWindow={isGameWindow} />
-          </div>
+          </HubSection>
 
           {/* The ladder + weekly damage rail */}
           <aside className="space-y-8">
             {bookGames.length > 0 && <BookRailCard games={bookGames} week={week} />}
 
             {ladderEntries.length > 0 && (
-              <div className="space-y-4">
-                <p className="text-kicker flex items-center justify-between">
-                  <span>The Ladder</span>
+              <HubSection
+                kicker="The Ladder"
+                action={
                   <Link
                     href="/records"
-                    className="text-accent-gold hover:brightness-110 normal-case tracking-normal"
+                    className="text-caption text-accent-gold hover:brightness-110 normal-case tracking-normal"
                   >
                     Records &rarr;
                   </Link>
-                </p>
+                }
+              >
                 <StandingsSnapshotCard
                   standings={ladderEntries}
                   week={week}
                   seasonYear={seasonYear}
                 />
-              </div>
+              </HubSection>
             )}
 
             {weeklySuperlatives &&
               (weeklySuperlatives.highestScorer || weeklySuperlatives.biggestBlowout) && (
-                <div className="space-y-4">
-                  <p className="text-kicker">Week {completedWeek} Damage</p>
+                <HubSection kicker={<>Week {completedWeek} Damage</>}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {weeklySuperlatives.highestScorer && (
                       <WeeklySuperlativeCard
@@ -339,7 +341,7 @@ export async function RegularSeasonHub({
                       />
                     )}
                   </div>
-                </div>
+                </HubSection>
               )}
           </aside>
         </div>

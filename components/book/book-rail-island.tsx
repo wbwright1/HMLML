@@ -89,15 +89,10 @@ export function BookRailIsland({
       <p className="text-kicker text-accent-gold">
         The Book &middot; Week <span className="font-mono tabular-nums">{week}</span>
       </p>
-      <div className="card-surface relative overflow-hidden p-5">
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(180deg, rgba(226,184,88,0.10), rgba(226,184,88,0.02))",
-          }}
-        />
+      {/* card-tint-gold is the shipped tint variant in globals.css; its stops
+          are exactly the gold wash this used to inline as a literal gradient
+          in an absolutely-positioned overlay div. */}
+      <div className="card-surface card-tint-gold relative overflow-hidden p-6">
         <div className="relative">
           {recordLine && (
             <p className="text-stat tabular-nums text-[30px] leading-none text-text-primary">
