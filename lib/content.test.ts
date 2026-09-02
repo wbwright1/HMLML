@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
-import { SNARKY_LABELS, getHubEditorial } from './content';
+import { SNARKY_LABELS, getHubEditorial, HERO_DEK_FALLBACK } from './content';
+import { sharesSignaturePhrase } from './content-gen/phrases';
 import type { SnarkyLabel, LabelTone } from './content';
 
 const VALID_TONES: LabelTone[] = ['positive', 'sting', 'neutral'];
@@ -220,5 +221,29 @@ describe('UT-28: opener-aware seeded GOTW blurb', () => {
     const editorial = await getHubEditorial({ anyGamesPlayed: false });
     expect(editorial.matchupAngles.gameOfWeekBlurb).not.toContain('—');
     expect(editorial.matchupAngles.gameOfWeekBlurb).not.toContain('–');
+  });
+});
+
+// Issue #274: with no generated hub_content row, the hub renders
+// HERO_DEK_FALLBACK directly above the seeded Game of the Week blurb. The two
+// used to share "receipts to settle".
+describe('seeded hero dek fallback vs the seeded GotW blurb', () => {
+  it('shares no signature phrase with either seeded blurb', async () => {
+    for (const anyGamesPlayed of [true, false]) {
+      const editorial = await getHubEditorial({ anyGamesPlayed });
+      expect(
+        sharesSignaturePhrase(
+          HERO_DEK_FALLBACK,
+          editorial.matchupAngles.gameOfWeekBlurb
+        ),
+        `anyGamesPlayed=${anyGamesPlayed}`
+      ).toBe(false);
+    }
+  });
+
+  it('carries no em-dash and stays in the site voice', () => {
+    expect(HERO_DEK_FALLBACK).not.toContain('—');
+    expect(HERO_DEK_FALLBACK).not.toContain('–');
+    expect(HERO_DEK_FALLBACK.length).toBeGreaterThan(24);
   });
 });

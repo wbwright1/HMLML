@@ -74,7 +74,10 @@ export function FranchiseIdentity({
     return (
       <div className="flex items-center gap-2">
         <BrandedCrest franchise={franchise} size="sm" />
-        <span className="text-body-sm font-semibold text-text-primary truncate min-w-0 flex-1">
+        {/* group-hover is inert unless an ancestor carries `group`; a caller
+            that wraps this in a TeamLink gets the same gold hover every other
+            linked identity has, and one that does not is unaffected. */}
+        <span className="text-body-sm font-semibold text-text-primary truncate min-w-0 flex-1 transition-colors group-hover:text-accent-gold">
           {franchise.name}
         </span>
         <span className="shrink-0">
@@ -92,7 +95,9 @@ export function FranchiseIdentity({
           {division && (
             <p className="text-kicker text-accent-gold">{division}</p>
           )}
-          <h1 className="text-h1">{franchise.name}</h1>
+          <h1 className="text-h1 transition-colors group-hover:text-accent-gold">
+            {franchise.name}
+          </h1>
           <ChampionshipStars count={championships} variant="hero" />
           {ownerName && (
             <p className="text-body-sm text-text-tertiary">

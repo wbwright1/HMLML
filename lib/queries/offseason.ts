@@ -137,13 +137,15 @@ export async function getOffseasonRecap(seasonId: number) {
     }
 
     let streakFranchiseName: string | null = null;
+    let streakFranchiseSlug: string | null = null;
     if (longestStreak.franchiseId && longestStreak.streak > 1) {
       const [f] = await db
-        .select({ name: franchises.name })
+        .select({ name: franchises.name, slug: franchises.slug })
         .from(franchises)
         .where(eq(franchises.id, longestStreak.franchiseId))
         .limit(1);
       streakFranchiseName = f?.name ?? null;
+      streakFranchiseSlug = f?.slug ?? null;
     }
 
     return {
@@ -169,6 +171,7 @@ export async function getOffseasonRecap(seasonId: number) {
         longestStreak.streak > 1 && streakFranchiseName
           ? {
               franchiseName: streakFranchiseName,
+              franchiseSlug: streakFranchiseSlug,
               streak: longestStreak.streak,
             }
           : null,

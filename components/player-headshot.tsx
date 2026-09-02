@@ -28,6 +28,13 @@ export interface PlayerHeadshotProps {
    * crest's rounded-square shape.
    */
   franchiseBadge?: PlayerHeadshotFranchiseBadge | null;
+  /**
+   * Renders alt="" and drops the monogram's role="img"/aria-label. Pass only
+   * when the player's name is already visible immediately adjacent (the same
+   * contract as FranchiseLogo's `decorative`), so the identity isn't
+   * announced twice by a screen reader. Defaults to false.
+   */
+  decorative?: boolean;
   className?: string;
 }
 
@@ -55,6 +62,7 @@ export function PlayerHeadshot({
   nflTeam,
   showTeamBadge = true,
   franchiseBadge,
+  decorative = false,
   className = "",
 }: PlayerHeadshotProps) {
   const [failed, setFailed] = useState(false);
@@ -71,15 +79,14 @@ export function PlayerHeadshot({
         <div
           className="flex h-full w-full items-center justify-center rounded-full bg-surface text-text-tertiary select-none"
           style={{ fontSize: Math.max(9, Math.round(size * 0.36)) }}
-          role="img"
-          aria-label={name}
+          {...(decorative ? {} : { role: "img", "aria-label": name })}
         >
           <span className="font-bold">{getInitials(name)}</span>
         </div>
       ) : (
         <Image
           src={`https://sleepercdn.com/content/nfl/players/${playerId}.jpg`}
-          alt={name}
+          alt={decorative ? "" : name}
           width={size}
           height={size}
           className="rounded-full object-cover"

@@ -3,6 +3,7 @@ import {
   selectLeagueMoves,
   formatMoveAge,
   type MoveFranchise,
+  type MovePlayer,
   type TransactionRow,
 } from "./league-moves";
 
@@ -25,10 +26,14 @@ const franchiseByRoster = new Map<string, MoveFranchise>([
   ["2", franchise("vanilla-vick", "Vanilla Vick")],
 ]);
 
-const playerNames = new Map<string, string>([
-  ["p1", "Ja'Marr Chase"],
-  ["p2", "Bijan Robinson"],
-  ["p3", "Puka Nacua"],
+function player(id: string, name: string, position: string, nflTeam: string): MovePlayer {
+  return { id, name, position, nflTeam };
+}
+
+const playerById = new Map<string, MovePlayer>([
+  ["p1", player("p1", "Ja'Marr Chase", "WR", "CIN")],
+  ["p2", player("p2", "Bijan Robinson", "RB", "ATL")],
+  ["p3", player("p3", "Puka Nacua", "WR", "LAR")],
 ]);
 
 function txn(overrides: Partial<TransactionRow> & Pick<TransactionRow, "transactionId">): TransactionRow {
@@ -44,7 +49,7 @@ function txn(overrides: Partial<TransactionRow> & Pick<TransactionRow, "transact
 }
 
 function select(rows: TransactionRow[], limit = 4) {
-  return selectLeagueMoves(rows, franchiseByRoster, playerNames, { limit, now: NOW });
+  return selectLeagueMoves(rows, franchiseByRoster, playerById, { limit, now: NOW });
 }
 
 describe("selectLeagueMoves", () => {
@@ -52,30 +57,33 @@ describe("selectLeagueMoves", () => {
     expect(select([])).toEqual([]);
   });
 
-  it("labels an add and names the adding franchise", () => {
+  it("labels an add and names the adding franchise, headlining the added player", () => {
     const [move] = select([txn({ transactionId: "t1", adds: { p1: 1 } })]);
     expect(move.kind).toBe("ADD");
     expect(move.franchises.map((f) => f.name)).toEqual(["McCarthyism"]);
-    expect(move.detail).toBe("Added Ja'Marr Chase");
+    expect(move.headline).toEqual(player("p1", "Ja'Marr Chase", "WR", "CIN"));
+    expect(move.support).toBe("");
     expect(move.age).toBe("1h ago");
   });
 
-  it("folds a same-transaction drop into the add row", () => {
+  it("folds a same-transaction drop into the support line", () => {
     const [move] = select([
       txn({ transactionId: "t1", adds: { p1: 1 }, drops: { p2: 1 } }),
     ]);
     expect(move.kind).toBe("ADD");
-    expect(move.detail).toBe("Added Ja'Marr Chase, dropped Bijan Robinson");
+    expect(move.headline.name).toBe("Ja'Marr Chase");
+    expect(move.support).toBe("Dropped Bijan Robinson");
   });
 
-  it("labels a drop-only transaction DROP", () => {
+  it("labels a drop-only transaction DROP and headlines the dropped player", () => {
     const [move] = select([txn({ transactionId: "t1", drops: { p3: 2 } })]);
     expect(move.kind).toBe("DROP");
     expect(move.franchises.map((f) => f.name)).toEqual(["Vanilla Vick"]);
-    expect(move.detail).toBe("Dropped Puka Nacua");
+    expect(move.headline.name).toBe("Puka Nacua");
+    expect(move.support).toBe("");
   });
 
-  it("names both sides of a trade", () => {
+  it("names both sides of a trade and headlines the first acquired player", () => {
     const [move] = select([
       txn({
         transactionId: "t1",
@@ -89,14 +97,21 @@ describe("selectLeagueMoves", () => {
       "McCarthyism",
       "Vanilla Vick",
     ]);
-    expect(move.detail).toBe("Ja'Marr Chase, Bijan Robinson");
+    expect(move.headline.name).toBe("Ja'Marr Chase");
+    expect(move.support).toBe("Bijan Robinson");
   });
 
-  it("says so when a trade moved only picks", () => {
+  it("says so when a trade moved only picks, with a null-id headline", () => {
     const [move] = select([
       txn({ transactionId: "t1", type: "trade", rosterIds: [1, 2] }),
     ]);
-    expect(move.detail).toBe("Draft picks only");
+    expect(move.headline).toEqual({
+      id: null,
+      name: "a player",
+      position: null,
+      nflTeam: null,
+    });
+    expect(move.support).toBe("Draft picks only");
   });
 
   it("drops a failed waiver claim", () => {
@@ -117,16 +132,22 @@ describe("selectLeagueMoves", () => {
     ).toEqual([]);
   });
 
-  it("collapses more than two player names onto one line", () => {
+  it("collapses more than two support names onto one line", () => {
     const [move] = select([
       txn({ transactionId: "t1", adds: { p1: 1, p2: 1, p3: 1 } }),
     ]);
-    expect(move.detail).toBe("Added Ja'Marr Chase, Bijan Robinson +1 more");
+    expect(move.headline.name).toBe("Ja'Marr Chase");
+    expect(move.support).toBe("Bijan Robinson, Puka Nacua");
   });
 
-  it("falls back to 'a player' for an unsynced player id", () => {
+  it("falls back to a null-id headline for an unsynced player id", () => {
     const [move] = select([txn({ transactionId: "t1", adds: { unknown: 1 } })]);
-    expect(move.detail).toBe("Added a player");
+    expect(move.headline).toEqual({
+      id: null,
+      name: "a player",
+      position: null,
+      nflTeam: null,
+    });
   });
 
   it("honors the limit and keeps the newest-first order it was given", () => {

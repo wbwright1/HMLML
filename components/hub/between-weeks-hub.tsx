@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { TeamLink } from "@/components/team-link";
+import { PlayerLink } from "@/components/player-link";
 import { EditorialBody } from "@/components/editorial-emphasis";
 import { KickoffCountdown } from "@/components/kickoff-countdown";
 import {
@@ -39,7 +41,16 @@ import {
 import { getRecentLeagueMoves, type LeagueMove } from "@/lib/queries/league-moves";
 import { getWeekInHistory, type WeekReceipt } from "@/lib/queries/week-history";
 import { FranchiseLogo } from "@/components/franchise-logo";
-import { getHubEditorial, matchupPairKey, type HubEditorial } from "@/lib/content";
+import {
+  getHubEditorial,
+  HERO_DEK_FALLBACK,
+  matchupPairKey,
+  type HubEditorial,
+} from "@/lib/content";
+import { sharesPhraseWithAny } from "@/lib/content-gen/phrases";
+import { getHubPowerPreview, type HubPowerPreview } from "@/lib/queries/power-preview";
+import { PowerPulseCard } from "@/components/hub/power-pulse-card";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { buildHubLineFooter } from "@/lib/book/shared";
 import {
@@ -134,6 +145,7 @@ export async function BetweenWeeksHub({
   let leagueMoves: LeagueMove[] = [];
   let weekReceipts: WeekReceipt[] = [];
   let bookGames: BookGame[] = [];
+  let powerPreview: HubPowerPreview | null = null;
   // The full record (streak included), not just the counts: the derived slate
   // angle reads the streak, and it is oriented from the HOME team's
   // perspective because getHeadToHead is called as (home, away) below.
@@ -144,6 +156,12 @@ export async function BetweenWeeksHub({
   const h2hHistoryByMatchup = new Map<number, MeetingHistorySummary>();
 
   if (seasonId != null) {
+    // Fired concurrently with the batch below (not awaited inside it) so it
+    // adds no serial round trip, but settled in its own try/catch so a DB
+    // error here goes through rethrowUnlessTolerable rather than being
+    // swallowed by the batch's bare catch below (#277).
+    const powerPreviewPromise = getHubPowerPreview();
+
     try {
       // The Book's week must agree with resolveBookWeek() (the same source
       // /book, the pick server actions, and the sync all use), or the hub can
@@ -234,6 +252,13 @@ export async function BetweenWeeksHub({
       });
     } catch {
       // DB may be unavailable; the hero + countdown still render.
+    }
+
+    try {
+      powerPreview = await powerPreviewPromise;
+    } catch (e) {
+      rethrowUnlessTolerable(e);
+      powerPreview = null;
     }
   }
 
@@ -346,6 +371,33 @@ export async function BetweenWeeksHub({
     }
   }
 
+  // Last line of defense on the copy-echo fix (issue #274). The generator's
+  // diversity layer stops a dek that echoes the Game of the Week card from
+  // ever being WRITTEN, but hub_content rows persist: a dek generated before
+  // that gate existed keeps rendering until the next generate-content run
+  // replaces it. Rather than ship the echo for hours, fall back to the seeded
+  // dek, which is phrase-distinct from every line below it by construction.
+  //
+  // BOTH generated lines on the Game of the Week card are compared, not just
+  // the blurb: the kicker's stakes clause is generated copy too, and "at
+  // stake" is itself a signature phrase. Computed here with the same inputs
+  // GameOfWeekSection uses below, so the two can never disagree.
+  const gotwStakes = gameOfWeek
+    ? stakesClause(
+        leadsDivision.has(gameOfWeek.homeTeam.franchiseId),
+        leadsDivision.has(gameOfWeek.awayTeam.franchiseId),
+        anyGamesPlayed
+      )
+    : null;
+  const linesBelowHero = [
+    editorial.matchupAngles.gameOfWeekBlurb,
+    gotwStakes ?? "",
+  ].filter(Boolean);
+  const heroDek =
+    editorial.heroDek && !sharesPhraseWithAny(editorial.heroDek, linesBelowHero)
+      ? editorial.heroDek
+      : HERO_DEK_FALLBACK;
+
   return (
     <>
       {/* Hero + countdown */}
@@ -355,13 +407,8 @@ export async function BetweenWeeksHub({
             Harambe Memorial League &middot; Week {week} &middot; The Slate Is Set
           </p>
           <h1 className="text-display">{headline}</h1>
-          <p className="mt-3 text-body-lg text-text-secondary">
-            <EditorialBody
-              body={
-                editorial.heroDek ??
-                "One grudge match at the top, one annual sacrifice at the bottom, and a week of receipts to settle by Thursday night."
-              }
-            />
+          <p className="mt-3 text-body-lg text-text-secondary" data-testid="hero-dek">
+            <EditorialBody body={heroDek} />
           </p>
         </div>
 
@@ -431,6 +478,9 @@ export async function BetweenWeeksHub({
               </div>
             </section>
           )}
+
+          {/* Power Rankings preview */}
+          {powerPreview && <PowerPulseCard preview={powerPreview} week={week} />}
 
           {/* The Smack Feed */}
           <section className="space-y-4">
@@ -623,7 +673,9 @@ function RecapRow({
   tone,
 }: {
   label: string;
-  desc: string;
+  /** ReactNode so a single-franchise recap row can link its identity; the
+   * two-name rows ("X def. Y") stay plain strings. */
+  desc: React.ReactNode;
   value: string;
   tone: "ink" | "gold" | "warm";
 }) {
@@ -638,7 +690,7 @@ function RecapRow({
     <div className="flex items-center justify-between gap-3 py-2">
       <div className="min-w-0">
         <p className={`text-kicker ${labelClass}`}>{label}</p>
-        <p className="text-body-sm text-text-secondary truncate">{desc}</p>
+        <div className="text-body-sm text-text-secondary truncate">{desc}</div>
       </div>
       <span className={`text-stat tabular-nums text-body ${valueClass} shrink-0`}>
         {value}
@@ -674,7 +726,11 @@ function WeekInBooksCard({
           {highestScorer && (
             <RecapRow
               label="High"
-              desc={highestScorer.franchiseName}
+              desc={
+                <TeamLink slug={highestScorer.franchiseSlug}>
+                  {highestScorer.franchiseName}
+                </TeamLink>
+              }
               value={highestScorer.points.toFixed(1)}
               tone="gold"
             />
@@ -698,7 +754,11 @@ function WeekInBooksCard({
           {lowestScorer && (
             <RecapRow
               label="Stinker"
-              desc={lowestScorer.franchiseName}
+              desc={
+                <TeamLink slug={lowestScorer.franchiseSlug}>
+                  {lowestScorer.franchiseName}
+                </TeamLink>
+              }
               value={lowestScorer.points.toFixed(1)}
               tone="warm"
             />
@@ -749,23 +809,26 @@ function BenchCallout({
 function PlayerToWatchRow({ player }: { player: PlayerToWatch }) {
   return (
     <div>
-      <div className="flex items-center gap-3">
+      <PlayerLink
+        playerId={player.playerId}
+        className="flex items-center gap-3"
+      >
         <PlayerHeadshot
           playerId={player.playerId}
           name={player.name}
           size={56}
           nflTeam={player.team}
         />
-        <div className="min-w-0 flex-1">
-          <p className="text-kicker text-accent-gold">{player.storyLabel}</p>
-          <p className="text-body-sm font-semibold text-text-primary line-clamp-2">
+        <span className="min-w-0 flex-1">
+          <span className="text-kicker text-accent-gold block">{player.storyLabel}</span>
+          <span className="text-body-sm font-semibold text-text-primary line-clamp-2 block">
             {player.name}
-          </p>
-          <p className="text-caption text-text-tertiary truncate">
+          </span>
+          <span className="text-caption text-text-tertiary truncate block">
             {player.team ?? "FA"} &middot; {player.position ?? "?"}
-          </p>
-        </div>
-      </div>
+          </span>
+        </span>
+      </PlayerLink>
       <div className="mt-2 space-y-1">
         {player.storyDetail && (
           <p className="text-body-sm text-text-secondary line-clamp-3">
@@ -853,36 +916,70 @@ function LeagueMovesCard({ moves }: { moves: LeagueMove[] }) {
       <RailCard>
         <div className="divide-y divide-border [&>*:not(:first-child)]:pt-3 space-y-3">
           {moves.map((move) => (
-            <div key={move.transactionId} className="flex items-center gap-3">
-              <div className="flex shrink-0 -space-x-2">
-                {move.franchises.map((f) => (
-                  <FranchiseLogo
-                    key={f.id}
-                    slug={f.slug}
-                    name={f.name}
-                    abbreviation={f.abbreviation ?? undefined}
-                    brandingColor={f.brandingColor ?? undefined}
-                    avatarUrl={f.avatarUrl}
-                    size={28}
-                    decorative
-                  />
-                ))}
-              </div>
+            <div key={move.transactionId} className="flex items-start gap-3">
+              <PlayerLink playerId={move.headline.id} className="shrink-0">
+                <PlayerHeadshot
+                  playerId={move.headline.id}
+                  name={move.headline.name}
+                  size={44}
+                  nflTeam={move.headline.nflTeam}
+                  decorative
+                />
+              </PlayerLink>
               <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2">
+                  <PlayerLink playerId={move.headline.id} className="min-w-0">
+                    <p className="text-body-sm font-semibold text-text-primary truncate">
+                      {move.headline.name}
+                    </p>
+                  </PlayerLink>
+                  {move.age && (
+                    <span className="text-caption text-text-tertiary shrink-0">
+                      <MonoNumerals text={move.age} />
+                    </span>
+                  )}
+                </div>
                 <p className="text-caption text-text-tertiary truncate">
-                  <span className="text-accent-gold">{move.kind}</span>
-                  {" · "}
-                  {move.franchises.map((f) => f.name).join(" / ")}
+                  {move.headline.position ?? "?"} &middot; {move.headline.nflTeam ?? "FA"}
                 </p>
-                <p className="text-body-sm text-text-secondary line-clamp-2">
-                  {move.detail}
-                </p>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span className="text-caption text-accent-gold shrink-0">
+                    {move.kind}
+                  </span>
+                  <div className="flex shrink-0 -space-x-1.5">
+                    {move.franchises.map((f) => (
+                      <FranchiseLogo
+                        key={f.id}
+                        slug={f.slug}
+                        name={f.name}
+                        abbreviation={f.abbreviation ?? undefined}
+                        brandingColor={f.brandingColor ?? undefined}
+                        avatarUrl={f.avatarUrl}
+                        size={20}
+                        decorative
+                      />
+                    ))}
+                  </div>
+                  {/* Secondary attribution, clickable like every other
+                      franchise identity on the site. The crests above stay
+                      decorative because these names sit right beside them. */}
+                  <span className="text-caption text-text-tertiary truncate">
+                    {move.franchises.map((f, i) => (
+                      <span key={f.id}>
+                        {i > 0 && " / "}
+                        <TeamLink slug={f.slug} className="text-text-tertiary">
+                          {f.name}
+                        </TeamLink>
+                      </span>
+                    ))}
+                  </span>
+                </div>
+                {move.support && (
+                  <p className="mt-1 text-body-sm text-text-secondary truncate">
+                    {move.support}
+                  </p>
+                )}
               </div>
-              {move.age && (
-                <span className="text-caption text-text-tertiary shrink-0">
-                  <MonoNumerals text={move.age} />
-                </span>
-              )}
             </div>
           ))}
         </div>

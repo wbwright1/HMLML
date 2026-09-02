@@ -1,4 +1,5 @@
 import type { CSSProperties } from "react";
+import { TeamLink } from "@/components/team-link";
 import { ordinal, type BracketType } from "@/lib/playoff-bracket";
 import type { BracketRound } from "@/lib/queries/playoff-bracket";
 import {
@@ -199,7 +200,9 @@ export function PlayoffBracketStage({
                     : `${seasonYear} Champion`}
                 </p>
                 <p className="font-serif text-[16px] italic leading-[1.15] text-text-primary lg:text-[21px]">
-                  {stage.champion.franchiseName}
+                  <TeamLink slug={stage.champion.franchiseSlug}>
+                    {stage.champion.franchiseName}
+                  </TeamLink>
                 </p>
                 <p className="text-[9.5px] text-text-tertiary lg:text-[11px]">
                   {isToiletBowl ? (

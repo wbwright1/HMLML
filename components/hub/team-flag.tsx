@@ -1,4 +1,5 @@
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 
 /** Enough of a franchise for the hub to draw its crest beside its name. */
 export interface FlagTeam {
@@ -14,9 +15,11 @@ export interface FlagTeam {
  * letter codes the hero stat chips and the slate cards used to print (see
  * CLAUDE.md, Franchise Identity Display).
  *
- * The crest is decorative because the name is immediately beside it. Renders a
- * span so it drops into a flex row or an inline run either way; note that it
- * contains a div, so its host must not be a <p>.
+ * The crest is decorative because the name is immediately beside it. Links to
+ * the franchise page via TeamLink, which renders an inline-level `a`, so it
+ * still drops into a flex row or an inline run either way; note that it
+ * contains a div, so its host must not be a <p>, and it must not sit inside
+ * another link.
  */
 export function TeamFlag({
   team,
@@ -27,7 +30,7 @@ export function TeamFlag({
   compact?: boolean;
 }) {
   return (
-    <span className="flex min-w-0 items-center gap-1.5">
+    <TeamLink slug={team.slug} className="flex min-w-0 items-center gap-1.5">
       <FranchiseLogo
         slug={team.slug}
         name={team.name}
@@ -40,6 +43,6 @@ export function TeamFlag({
       <span className="truncate">
         {compact ? (team.abbreviation ?? team.name) : team.name}
       </span>
-    </span>
+    </TeamLink>
   );
 }

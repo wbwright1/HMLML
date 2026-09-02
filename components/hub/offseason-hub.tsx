@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TeamLink } from "@/components/team-link";
 import { EditorialBody } from "@/components/editorial-emphasis";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -174,7 +175,9 @@ export async function OffseasonHub({
               <StatHero
                 value={
                   <span className="flex flex-col items-center gap-1">
-                    <span>{leagueGlance.reigningChampion.championName}</span>
+                    <TeamLink slug={leagueGlance.reigningChampion.championSlug}>
+                      {leagueGlance.reigningChampion.championName}
+                    </TeamLink>
                     {leagueGlance.reigningChampionshipCount > 0 && (
                       <ChampionshipStars count={leagueGlance.reigningChampionshipCount} variant="inline" />
                     )}
@@ -197,7 +200,11 @@ export async function OffseasonHub({
               {leagueGlance.mostChampionships && (
                 <StatHero
                   value={leagueGlance.mostChampionships.championships}
-                  label={leagueGlance.mostChampionships.franchiseName}
+                  label={
+                    <TeamLink slug={leagueGlance.mostChampionships.franchiseSlug}>
+                      {leagueGlance.mostChampionships.franchiseName}
+                    </TeamLink>
+                  }
                   badge="Most Championships"
                   variant="md"
                 />
@@ -240,6 +247,9 @@ export async function OffseasonHub({
                   ? [{
                       label: "Longest Win Streak",
                       value: `${offseasonRecap.longestStreak.franchiseName} (${offseasonRecap.longestStreak.streak}W)`,
+                      href: offseasonRecap.longestStreak.franchiseSlug
+                        ? `/teams/${offseasonRecap.longestStreak.franchiseSlug}`
+                        : undefined,
                     }]
                   : []),
               ]}

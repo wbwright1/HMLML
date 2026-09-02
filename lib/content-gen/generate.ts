@@ -3,6 +3,8 @@ import type { HubContentInsert, HubContentKind } from "@/lib/queries/hub-content
 import type { StatsContext, StatsTeam } from "@/lib/content-gen/stats-context";
 import {
   generateFromTemplates,
+  heroDekCandidates,
+  KEEP_ALL_KINDS,
   kindsForSeason,
   type GeneratedContent,
 } from "@/lib/content-gen/templates";
@@ -362,7 +364,7 @@ function regularSpec(ctx: StatsContext): string {
       : ""
   }
   "game_of_week_blurb": "blurb for ${gotwClause}, under ${BODY_MAX} characters",
-  "hero_dek": "one-sentence hero subhead for the week, under ${BODY_MAX} characters. Do NOT mention a specific number of days until kickoff; the live day count is added at render time.",
+  "hero_dek": "one-sentence hero subhead for the week, under ${BODY_MAX} characters. Do NOT mention a specific number of days until kickoff; the live day count is added at render time. It renders directly above the Game of the Week card, whose own blurb and whose kicker (a short stakes line such as 'Division lead at stake' or 'Pride at stake') are both visible on the same screen, so it must not reuse ANY phrase from either (no shared 'receipts to settle', 'on the line', 'at stake', 'headline the slate' style idioms): different sentences, different angles.",
   "smack_posts": [ { "text": "site desk post, under ${BODY_MAX} characters", "claims": [] }, ... ]  // 5 to 6, MORE than the ~5 that will ship: over-generate so a diverse subset can be picked
 }
 
@@ -505,6 +507,18 @@ function makeClaimDropper(
  * would delete an omitted kind's previously-published rows and insert nothing,
  * blanking that hub module. Returns the merged rows plus the kinds that fell
  * back, for sync_log observability. Pure and unit-tested.
+ *
+ * The append is NOT unconditional. It happens after applyDiversityLayer, so a
+ * template row landing here has never been compared against the surviving LLM
+ * rows; without a check, a template game_of_week_blurb can ship beside an LLM
+ * hero_dek that leans on its exact idiom, which is the whole bug in #274 by
+ * another route. Each candidate is therefore screened with sharesPrimaryHook
+ * (same franchise + number, same central player, or same signature phrase)
+ * against everything already accepted. hero_dek is screened against its FULL
+ * template pool rather than the single row the template path already trimmed
+ * to, so a collision has somewhere to go. If a kind's every candidate
+ * collides, the first is taken anyway: this function's contract is that no
+ * kind ships empty, and an echo beats a blank module.
  */
 export function fillMissingKinds(
   kinds: HubContentKind[],
@@ -519,7 +533,39 @@ export function fillMissingKinds(
   const templateRows = generateFromTemplates(ctx).rows.filter((r) =>
     missingSet.has(r.kind),
   );
-  return { rows: [...llmRows, ...templateRows], templateFilledKinds: missing };
+
+  const rows = [...llmRows];
+  const acceptedAnchors = rows.map((r) => extractAnchors(r, ctx));
+
+  for (const kind of missing) {
+    // The template path's own display target for this kind: exactly as many
+    // rows as it would have shipped on its own.
+    const trimmed = templateRows.filter((r) => r.kind === kind);
+    if (trimmed.length === 0) continue;
+    const pool =
+      kind === "hero_dek"
+        ? [...heroDekCandidates(ctx), ...trimmed]
+        : trimmed;
+
+    let added = 0;
+    for (const candidate of pool) {
+      if (added >= trimmed.length) break;
+      const anchors = extractAnchors(candidate, ctx);
+      if (acceptedAnchors.some((a) => sharesPrimaryHook(anchors, a))) continue;
+      rows.push(candidate);
+      acceptedAnchors.push(anchors);
+      added++;
+    }
+    if (added === 0) {
+      console.warn(
+        `[content-gen] every template candidate for ${kind} echoed a kept row; shipping the first anyway`,
+      );
+      rows.push(trimmed[0]);
+      acceptedAnchors.push(extractAnchors(trimmed[0], ctx));
+    }
+  }
+
+  return { rows, templateFilledKinds: missing };
 }
 
 /**
@@ -587,6 +633,7 @@ export function applyDiversityLayer(
     targetCountsByKind: targetCountsForSeason(ctx),
     kindPriority: Object.keys(byKind) as HubContentKind[],
     franchiseUniqueKinds: FRANCHISE_UNIQUE_KINDS,
+    keepAllKinds: KEEP_ALL_KINDS,
   });
   return {
     rows: kept as HubContentInsert[],

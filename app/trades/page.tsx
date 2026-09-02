@@ -4,6 +4,7 @@ import { BackLink } from "@/components/back-link";
 import { EmptyState } from "@/components/empty-state";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { FranchiseIdentity } from "@/components/franchise-identity";
+import { TeamLink } from "@/components/team-link";
 import { TradeCard } from "@/components/trade-card";
 import { TradeScrollFocus } from "@/components/trades/trade-scroll-focus";
 import { GradeFormulaNugget } from "@/components/grade-formula-nugget";
@@ -92,17 +93,19 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
 
       {selectedFranchise && (
         <ScrollReveal>
-          <FranchiseIdentity
-            franchise={{
-              slug: selectedFranchise.slug,
-              name: selectedFranchise.name,
-              abbreviation: selectedFranchise.abbreviation,
-              brandingColor: selectedFranchise.brandingColor,
-              avatarUrl: selectedFranchise.avatarUrl,
-            }}
-            championships={selectedFranchise.championships}
-            variant="hero"
-          />
+          <TeamLink slug={selectedFranchise.slug} className="group block">
+            <FranchiseIdentity
+              franchise={{
+                slug: selectedFranchise.slug,
+                name: selectedFranchise.name,
+                abbreviation: selectedFranchise.abbreviation,
+                brandingColor: selectedFranchise.brandingColor,
+                avatarUrl: selectedFranchise.avatarUrl,
+              }}
+              championships={selectedFranchise.championships}
+              variant="hero"
+            />
+          </TeamLink>
         </ScrollReveal>
       )}
 

@@ -4,6 +4,10 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import {
+  BookEntityLink,
+  type BookEntityTarget,
+} from "@/components/book/entity-link";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { useSessionMember } from "@/components/use-session-member";
 import { pickFuture } from "@/app/actions/book";
@@ -364,6 +368,20 @@ function EntryRow({
 }
 
 /**
+ * A futures entry narrowed to the identity behind it, for BookEntityLink. The
+ * Field is nobody in particular, so it links nowhere.
+ */
+function entryTarget(entry: FuturesEntry | null): BookEntityTarget {
+  if (entry?.subjectType === "franchise") {
+    return { kind: "franchise", slug: entry.slug, name: entry.name };
+  }
+  if (entry?.subjectType === "player") {
+    return { kind: "player", playerId: entry.subjectId };
+  }
+  return { kind: "none" };
+}
+
+/**
  * The crest, the headshot, or the plain mark The Field gets.
  *
  * `size` defaults to the 28px board row; the slip rail passes 20.
@@ -496,10 +514,19 @@ function SlipRow({
       {/* Reuses the board's own mark (crest, headshot or "ALL") at rail size,
           so the slip identifies an entry the same way the board did. Absent
           when the pick fell off the board and there is no entry to mark. */}
-      {entry && <EntryMark entry={entry} size={20} />}
+      {entry && (
+        <BookEntityLink target={entryTarget(entry)} className="inline-flex">
+          <EntryMark entry={entry} size={20} />
+        </BookEntityLink>
+      )}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-body-sm font-semibold text-text-primary">
-          {name}{" "}
+          {/* No inline-flex here: the name shares a truncating line with the
+              price, and an inline-flex box would stop it wrapping and
+              truncating with the rest of it. */}
+          <BookEntityLink target={entryTarget(entry ?? null)} labelled={false}>
+            {name}
+          </BookEntityLink>{" "}
           <span className="font-mono tabular-nums text-text-secondary">
             {formatMoneyline(pick.oddsAtPick)}
           </span>

@@ -3,6 +3,7 @@ import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { PageSection } from "@/components/page-section";
 import { SectionHeader } from "@/components/section-header";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import {
   getLeaderboard,
@@ -83,6 +84,7 @@ interface RecordBookEntry {
   label: string;
   value: string;
   context: string;
+  contextSlug?: string;
 }
 
 /**
@@ -102,6 +104,7 @@ function buildRecordBook(data: LeaderboardEntry[]): RecordBookEntry[] {
       label: "Most Wins",
       value: String(mostWins.wins),
       context: mostWins.name,
+      contextSlug: mostWins.slug,
     });
   }
 
@@ -113,6 +116,7 @@ function buildRecordBook(data: LeaderboardEntry[]): RecordBookEntry[] {
       label: "Most Titles",
       value: `${mostTitles.championships}x`,
       context: mostTitles.name,
+      contextSlug: mostTitles.slug,
     });
   }
 
@@ -124,6 +128,7 @@ function buildRecordBook(data: LeaderboardEntry[]): RecordBookEntry[] {
         maximumFractionDigits: 0,
       }),
       context: mostPF.name,
+      contextSlug: mostPF.slug,
     });
   }
 
@@ -134,20 +139,23 @@ function buildRecordBook(data: LeaderboardEntry[]): RecordBookEntry[] {
       label: "Best Win%",
       value: `${(bestWinPct.winPct * 100).toFixed(1)}%`,
       context: bestWinPct.name,
+      contextSlug: bestWinPct.slug,
     });
   }
 
   return entries.slice(0, 4);
 }
 
-function RecordBookCard({ label, value, context }: RecordBookEntry) {
+function RecordBookCard({ label, value, context, contextSlug }: RecordBookEntry) {
   return (
     <div className="card-surface p-4">
       <p className="text-caption text-accent-gold mb-2">{label}</p>
       <p className="text-stat text-[28px] leading-none text-text-primary">
         {value}
       </p>
-      <p className="text-body-sm text-text-tertiary mt-2 truncate">{context}</p>
+      <div className="text-body-sm text-text-tertiary mt-2 truncate">
+        <TeamLink slug={contextSlug}>{context}</TeamLink>
+      </div>
     </div>
   );
 }
@@ -350,7 +358,10 @@ export default async function RecordsPage() {
               </Link>
             ))}
             {projection.firstOut && (
-              <div className="flex items-center gap-3 rounded-lg px-2 py-2 border-t border-divider mt-2 pt-3">
+              <TeamLink
+                slug={projection.firstOut.slug}
+                className="flex items-center gap-3 rounded-lg px-2 py-2 border-t border-divider mt-2 pt-3 text-text-secondary"
+              >
                 <span className="text-caption text-text-tertiary w-4 shrink-0">
                   &middot;
                 </span>
@@ -365,13 +376,13 @@ export default async function RecordsPage() {
                   size="sm"
                   decorative
                 />
-                <span className="text-body-sm font-medium text-text-secondary truncate flex-1">
+                <span className="text-body-sm font-medium truncate flex-1">
                   {projection.firstOut.name}
                 </span>
                 <span className="text-caption text-accent-warm shrink-0">
                   First Out
                 </span>
-              </div>
+              </TeamLink>
             )}
           </div>
         </div>

@@ -284,9 +284,23 @@ describe("formatSlateH2H", () => {
 });
 
 describe("stakesClause", () => {
-  it("promises first place when a team leads its division", () => {
-    expect(stakesClause(true, false, true)).toBe("First place on the line");
-    expect(stakesClause(false, false, true)).toBe("Bragging rights on the line");
+  it("promises the division lead when a team leads its division", () => {
+    expect(stakesClause(true, false, true)).toBe("Division lead at stake");
+    expect(stakesClause(false, false, true)).toBe("Pride at stake");
+  });
+
+  // The kicker renders directly above the Game of the Week blurb, which owns
+  // the "first place is on the line" phrasing (issue #274). The kicker must
+  // never echo it.
+  it("never reuses the Game of the Week blurb's signature phrase", () => {
+    for (const clause of [
+      stakesClause(true, false, true),
+      stakesClause(false, true, true),
+      stakesClause(false, false, true),
+      stakesClause(false, false, false),
+    ]) {
+      expect(clause.toLowerCase()).not.toContain("on the line");
+    }
   });
 
   it("calls it a season opener when no games have been played, even with a division-leader flag set", () => {

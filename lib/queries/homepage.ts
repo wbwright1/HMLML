@@ -73,6 +73,7 @@ export async function getHomepageSuperlatives(seasonId: number) {
       .select({
         franchiseId: matchups.franchiseId,
         franchiseName: franchises.name,
+        franchiseSlug: franchises.slug,
         week: matchups.week,
         isWinner: matchups.isWinner,
       })
@@ -88,11 +89,11 @@ export async function getHomepageSuperlatives(seasonId: number) {
       .orderBy(desc(matchups.week));
 
     // Group by franchise and find longest active streak
-    const streakMap = new Map<string, { name: string; streak: number }>();
-    const franchiseWeeks = new Map<string, { name: string; results: { week: number; won: boolean }[] }>();
+    const streakMap = new Map<string, { name: string; slug: string; streak: number }>();
+    const franchiseWeeks = new Map<string, { name: string; slug: string; results: { week: number; won: boolean }[] }>();
 
     for (const m of allMatchups) {
-      const entry = franchiseWeeks.get(m.franchiseId) ?? { name: m.franchiseName, results: [] };
+      const entry = franchiseWeeks.get(m.franchiseId) ?? { name: m.franchiseName, slug: m.franchiseSlug, results: [] };
       entry.results.push({ week: m.week, won: m.isWinner === true });
       franchiseWeeks.set(m.franchiseId, entry);
     }
@@ -105,14 +106,14 @@ export async function getHomepageSuperlatives(seasonId: number) {
         else break;
       }
       if (streak > 0) {
-        streakMap.set(fId, { name: data.name, streak });
+        streakMap.set(fId, { name: data.name, slug: data.slug, streak });
       }
     }
 
-    let longestStreak: { franchiseName: string; streak: number } | null = null;
+    let longestStreak: { franchiseName: string; franchiseSlug: string; streak: number } | null = null;
     for (const [, data] of streakMap) {
       if (!longestStreak || data.streak > longestStreak.streak) {
-        longestStreak = { franchiseName: data.name, streak: data.streak };
+        longestStreak = { franchiseName: data.name, franchiseSlug: data.slug, streak: data.streak };
       }
     }
 
@@ -176,11 +177,12 @@ export async function getHomepageSuperlatives(seasonId: number) {
     const mostWins = await db
       .select({
         franchiseName: franchises.name,
+        franchiseSlug: franchises.slug,
         totalWins: sql<number>`COALESCE(SUM(${franchiseSeasons.wins}), 0)`,
       })
       .from(franchiseSeasons)
       .innerJoin(franchises, eq(franchiseSeasons.franchiseId, franchises.id))
-      .groupBy(franchises.id, franchises.name)
+      .groupBy(franchises.id, franchises.name, franchises.slug)
       .orderBy(desc(sql`SUM(${franchiseSeasons.wins})`))
       .limit(1);
 
@@ -231,12 +233,20 @@ export async function getLastWeekResults(seasonId: number, currentWeek: number) 
       .orderBy(matchups.matchupId);
 
     // Pair them up
-    const paired: { winner: string; loser: string; winnerScore: number; loserScore: number; margin: number }[] = [];
-    const grouped = new Map<number, { name: string; points: number; won: boolean }[]>();
+    const paired: {
+      winner: string;
+      winnerSlug: string;
+      loser: string;
+      loserSlug: string;
+      winnerScore: number;
+      loserScore: number;
+      margin: number;
+    }[] = [];
+    const grouped = new Map<number, { name: string; slug: string; points: number; won: boolean }[]>();
 
     for (const r of results) {
       const group = grouped.get(r.matchupId) ?? [];
-      group.push({ name: r.franchiseName, points: r.points ?? 0, won: r.isWinner === true });
+      group.push({ name: r.franchiseName, slug: r.franchiseSlug, points: r.points ?? 0, won: r.isWinner === true });
       grouped.set(r.matchupId, group);
     }
 
@@ -246,7 +256,9 @@ export async function getLastWeekResults(seasonId: number, currentWeek: number) 
         const loser = pair.find((p) => !p.won) ?? pair[1];
         paired.push({
           winner: winner.name,
+          winnerSlug: winner.slug,
           loser: loser.name,
+          loserSlug: loser.slug,
           winnerScore: winner.points,
           loserScore: loser.points,
           margin: Math.abs(winner.points - loser.points),
@@ -306,11 +318,12 @@ export async function getLeagueAtAGlance() {
     const [mostChamps] = await db
       .select({
         franchiseName: franchises.name,
+        franchiseSlug: franchises.slug,
         championships: sql<number>`COUNT(*)`,
       })
       .from(seasons)
       .innerJoin(franchises, eq(seasons.championFranchiseId, franchises.id))
-      .groupBy(franchises.id, franchises.name)
+      .groupBy(franchises.id, franchises.name, franchises.slug)
       .orderBy(desc(sql`COUNT(*)`))
       .limit(1);
 

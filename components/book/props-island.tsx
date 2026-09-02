@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSessionMember } from "@/components/use-session-member";
 import { togglePropPick } from "@/app/actions/book";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { BookEntityLink } from "@/components/book/entity-link";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { PROP_GROUP_ORDER } from "@/lib/book/props";
 import {
@@ -367,7 +368,10 @@ function SubjectIdentity({ prop }: { prop: BookPropView }) {
 function EntityChip({ entity }: { entity: BookPropEntity }) {
   if (entity.kind === "player") {
     return (
-      <span className="flex min-w-0 items-center gap-2">
+      <BookEntityLink
+        target={{ kind: "player", playerId: entity.playerId }}
+        className="flex min-w-0 items-center gap-2 text-text-primary"
+      >
         <PlayerHeadshot
           playerId={entity.playerId}
           name={entity.name}
@@ -375,19 +379,23 @@ function EntityChip({ entity }: { entity: BookPropEntity }) {
           nflTeam={entity.nflTeam}
         />
         <span className="min-w-0">
-          <span className="block truncate text-body-sm font-semibold text-text-primary">
+          <span className="block truncate text-body-sm font-semibold">
             {entity.name}
           </span>
           <span className="text-kicker">
             {[entity.position, entity.nflTeam].filter(Boolean).join(" · ")}
           </span>
         </span>
-      </span>
+      </BookEntityLink>
     );
   }
 
   return (
-    <span className="flex min-w-0 items-center gap-2">
+    <BookEntityLink
+      target={{ kind: "franchise", slug: entity.slug, name: entity.name }}
+      labelled={false}
+      className="flex min-w-0 items-center gap-2 text-text-primary"
+    >
       <FranchiseLogo
         slug={entity.slug}
         name={entity.name}
@@ -401,11 +409,11 @@ function EntityChip({ entity }: { entity: BookPropEntity }) {
         {/* No abbreviation kicker under the name: the crest above it is the
             franchise's identity now, and reprinting its letter code beneath
             the full name only repeats what the crest already says. */}
-        <span className="block truncate text-body-sm font-semibold text-text-primary">
+        <span className="block truncate text-body-sm font-semibold">
           {entity.name}
         </span>
       </span>
-    </span>
+    </BookEntityLink>
   );
 }
 

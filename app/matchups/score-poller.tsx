@@ -2,14 +2,17 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { LiveIndicator } from "@/components/live-indicator";
+import { TeamLink } from "@/components/team-link";
 
 interface LiveScore {
   matchupId: number;
   homeTeamId: string;
   homeTeamName: string;
+  homeTeamSlug?: string | null;
   homeScore: number;
   awayTeamId: string;
   awayTeamName: string;
+  awayTeamSlug?: string | null;
   awayScore: number;
 }
 
@@ -120,9 +123,12 @@ export function ScorePoller({
             className="flex items-center justify-between rounded-lg border border-accent-green/20 bg-accent-green-light px-4 py-3"
           >
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <span className="text-sm font-semibold truncate">
+              <TeamLink
+                slug={score.homeTeamSlug}
+                className="text-sm font-semibold truncate"
+              >
                 {score.homeTeamName}
-              </span>
+              </TeamLink>
               <span className="text-sm font-bold tabular-nums">
                 {score.homeScore.toFixed(1)}
               </span>
@@ -132,9 +138,12 @@ export function ScorePoller({
               <span className="text-sm font-bold tabular-nums">
                 {score.awayScore.toFixed(1)}
               </span>
-              <span className="text-sm font-semibold truncate text-right">
+              <TeamLink
+                slug={score.awayTeamSlug}
+                className="text-sm font-semibold truncate text-right"
+              >
                 {score.awayTeamName}
-              </span>
+              </TeamLink>
             </div>
           </div>
         ))}

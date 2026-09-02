@@ -28,14 +28,25 @@ export interface MoveFranchise {
 
 export type LeagueMoveKind = "ADD" | "DROP" | "TRADE";
 
+/** The headline player a move's row is about. */
+export interface MovePlayer {
+  /** Null when the id resolves to no players row; PlayerLink/PlayerHeadshot degrade cleanly. */
+  id: string | null;
+  name: string;
+  position: string | null;
+  nflTeam: string | null;
+}
+
 export interface LeagueMove {
   transactionId: string;
   /** Always printed as a text label; never color alone. */
   kind: LeagueMoveKind;
+  /** The player the row headlines. */
+  headline: MovePlayer;
   /** One franchise for an add/drop, both sides for a trade. */
   franchises: MoveFranchise[];
-  /** One truncating line naming the players involved. */
-  detail: string;
+  /** One truncating line naming everything else on the move (other players, picks-only). */
+  support: string;
   /** Compact recency, e.g. "2d ago". Empty when Sleeper gave us no timestamp. */
   age: string;
 }
@@ -89,7 +100,7 @@ export interface SelectLeagueMovesOptions {
 export function selectLeagueMoves(
   rows: TransactionRow[],
   franchiseByRoster: Map<string, MoveFranchise>,
-  playerNameById: Map<string, string>,
+  playerById: Map<string, MovePlayer>,
   opts: SelectLeagueMovesOptions = {}
 ): LeagueMove[] {
   const limit = opts.limit ?? DEFAULT_LIMIT;
@@ -97,7 +108,15 @@ export function selectLeagueMoves(
   const moves: LeagueMove[] = [];
 
   const nameOf = (playerId: string): string =>
-    playerNameById.get(playerId) ?? "a player";
+    playerById.get(playerId)?.name ?? "a player";
+
+  const headlineOf = (playerId: string): MovePlayer =>
+    playerById.get(playerId) ?? {
+      id: null,
+      name: "a player",
+      position: null,
+      nflTeam: null,
+    };
 
   for (const row of rows) {
     if (moves.length >= limit) break;
@@ -117,25 +136,33 @@ export function selectLeagueMoves(
     };
 
     let kind: LeagueMoveKind;
-    let detail: string;
+    let headline: MovePlayer;
+    let support: string;
 
     if (isTrade) {
       kind = "TRADE";
       for (const rosterId of row.rosterIds ?? []) pushFranchise(rosterId);
       for (const rosterId of Object.values(row.adds ?? {})) pushFranchise(rosterId);
-      detail =
-        addIds.length > 0
-          ? formatNames(addIds.map(nameOf))
-          : "Draft picks only";
+      if (addIds.length > 0) {
+        headline = headlineOf(addIds[0]);
+        support = formatNames(addIds.slice(1).map(nameOf));
+      } else {
+        headline = { id: null, name: "a player", position: null, nflTeam: null };
+        support = "Draft picks only";
+      }
     } else if (addIds.length > 0) {
       kind = "ADD";
       pushFranchise(row.adds?.[addIds[0]]);
-      const dropTail = dropIds.length > 0 ? `, dropped ${formatNames(dropIds.map(nameOf))}` : "";
-      detail = `Added ${formatNames(addIds.map(nameOf))}${dropTail}`;
+      headline = headlineOf(addIds[0]);
+      const dropTail =
+        dropIds.length > 0 ? `Dropped ${formatNames(dropIds.map(nameOf))}` : "";
+      const extraAdds = formatNames(addIds.slice(1).map(nameOf));
+      support = [extraAdds, dropTail].filter(Boolean).join(", ");
     } else if (dropIds.length > 0) {
       kind = "DROP";
       pushFranchise(row.drops?.[dropIds[0]]);
-      detail = `Dropped ${formatNames(dropIds.map(nameOf))}`;
+      headline = headlineOf(dropIds[0]);
+      support = formatNames(dropIds.slice(1).map(nameOf));
     } else {
       continue;
     }
@@ -145,8 +172,9 @@ export function selectLeagueMoves(
     moves.push({
       transactionId: row.transactionId,
       kind,
+      headline,
       franchises: franchisesOnRow.slice(0, 2),
-      detail,
+      support,
       age: formatMoveAge(row.createdAtSleeper, now),
     });
   }
@@ -234,18 +262,30 @@ export async function getRecentLeagueMoves(
       ),
     ];
 
-    const playerNameById = new Map<string, string>();
+    const playerById = new Map<string, MovePlayer>();
     if (playerIds.length > 0) {
       const playerRows = await db
-        .select({ id: players.id, fullName: players.fullName })
+        .select({
+          id: players.id,
+          fullName: players.fullName,
+          position: players.position,
+          nflTeam: players.nflTeam,
+        })
         .from(players)
         .where(inArray(players.id, playerIds));
       for (const p of playerRows) {
-        if (p.fullName) playerNameById.set(p.id, p.fullName);
+        if (p.fullName) {
+          playerById.set(p.id, {
+            id: p.id,
+            name: p.fullName,
+            position: p.position ?? null,
+            nflTeam: p.nflTeam ?? null,
+          });
+        }
       }
     }
 
-    return selectLeagueMoves(typedRows, franchiseByRoster, playerNameById, { limit });
+    return selectLeagueMoves(typedRows, franchiseByRoster, playerById, { limit });
   } catch (e) {
     console.error("[league-moves] getRecentLeagueMoves error:", e);
     return [];

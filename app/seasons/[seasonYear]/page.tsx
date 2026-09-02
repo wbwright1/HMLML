@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
+import { TeamLink } from "@/components/team-link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { ChampionshipStars } from "@/components/championship-stars";
 import { SuperlativeBadge } from "@/components/superlative-badge";
@@ -126,8 +127,14 @@ export default async function SeasonDetailPage({
 
         {season.championName && (
           <div className="mt-6 card-surface card-tint-gold p-6 text-center space-y-3">
-            {championEntry && (
-              <div className="flex justify-center">
+            {/* ONE link over crest, stars and name, not two to the same
+                place: a single tap target and a single stop for keyboard and
+                screen-reader users. */}
+            <TeamLink
+              slug={championEntry?.franchiseSlug}
+              className="flex flex-col items-center gap-3 text-gold"
+            >
+              {championEntry && (
                 <FranchiseLogo
                   slug={championEntry.franchiseSlug}
                   name={championEntry.franchiseName}
@@ -137,10 +144,10 @@ export default async function SeasonDetailPage({
                   size="lg"
                   decorative
                 />
-              </div>
-            )}
-            <ChampionshipStars count={1} variant="hero" />
-            <p className="text-h3 text-gold">{season.championName}</p>
+              )}
+              <ChampionshipStars count={1} variant="hero" />
+              <span className="text-h3">{season.championName}</span>
+            </TeamLink>
             <SuperlativeBadge text="League Champion" variant="gold" />
           </div>
         )}
@@ -151,7 +158,10 @@ export default async function SeasonDetailPage({
             data-testid="season-toilet-bowl-sting"
             className="mt-4 card-surface card-tint-warm p-6 text-center space-y-3"
           >
-            <div className="flex justify-center">
+            <TeamLink
+              slug={toiletBowlChampion.franchiseSlug}
+              className="flex flex-col items-center gap-3 text-accent-warm"
+            >
               <FranchiseLogo
                 slug={toiletBowlChampion.franchiseSlug}
                 name={toiletBowlChampion.franchiseName}
@@ -161,10 +171,8 @@ export default async function SeasonDetailPage({
                 size="lg"
                 decorative
               />
-            </div>
-            <p className="text-h3 text-accent-warm">
-              {toiletBowlChampion.franchiseName}
-            </p>
+              <span className="text-h3">{toiletBowlChampion.franchiseName}</span>
+            </TeamLink>
             <p className="text-body-sm text-text-secondary max-w-prose mx-auto">
               {TOILET_BOWL_COPY.explainer}
             </p>
@@ -235,18 +243,23 @@ export default async function SeasonDetailPage({
                         </span>
                       </td>
                       <td className="py-4 pr-4">
-                        <FranchiseIdentity
-                          franchise={{
-                            slug: entry.franchiseSlug,
-                            name: entry.franchiseName,
-                            abbreviation:
-                              entry.franchiseAbbreviation ?? undefined,
-                            brandingColor:
-                              entry.franchiseBrandingColor ?? undefined,
-                            avatarUrl: entry.avatarUrl,
-                          }}
-                          variant="compact"
-                        />
+                        <TeamLink
+                          slug={entry.franchiseSlug}
+                          className="group block"
+                        >
+                          <FranchiseIdentity
+                            franchise={{
+                              slug: entry.franchiseSlug,
+                              name: entry.franchiseName,
+                              abbreviation:
+                                entry.franchiseAbbreviation ?? undefined,
+                              brandingColor:
+                                entry.franchiseBrandingColor ?? undefined,
+                              avatarUrl: entry.avatarUrl,
+                            }}
+                            variant="compact"
+                          />
+                        </TeamLink>
                         {entry.ownerDisplayName && (
                           <p className="text-xs text-text-tertiary mt-0.5 ml-10">
                             {entry.ownerDisplayName}{entry.coOwnerDisplayName ? ` & ${entry.coOwnerDisplayName}` : ""}
@@ -320,18 +333,23 @@ export default async function SeasonDetailPage({
                         {entry.standingsFinish ?? "-"}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <FranchiseIdentity
-                          franchise={{
-                            slug: entry.franchiseSlug,
-                            name: entry.franchiseName,
-                            abbreviation:
-                              entry.franchiseAbbreviation ?? undefined,
-                            brandingColor:
-                              entry.franchiseBrandingColor ?? undefined,
-                            avatarUrl: entry.avatarUrl,
-                          }}
-                          variant="compact"
-                        />
+                        <TeamLink
+                          slug={entry.franchiseSlug}
+                          className="group block"
+                        >
+                          <FranchiseIdentity
+                            franchise={{
+                              slug: entry.franchiseSlug,
+                              name: entry.franchiseName,
+                              abbreviation:
+                                entry.franchiseAbbreviation ?? undefined,
+                              brandingColor:
+                                entry.franchiseBrandingColor ?? undefined,
+                              avatarUrl: entry.avatarUrl,
+                            }}
+                            variant="compact"
+                          />
+                        </TeamLink>
                         {entry.ownerDisplayName && (
                           <p className="text-xs text-text-tertiary mt-0.5">
                             {entry.ownerDisplayName}{entry.coOwnerDisplayName ? ` & ${entry.coOwnerDisplayName}` : ""}

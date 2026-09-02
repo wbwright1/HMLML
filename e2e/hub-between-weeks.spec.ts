@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { Page, Locator } from "@playwright/test";
+import { signaturePhrasesIn } from "../lib/content-gen/phrases";
 
 // ============================================================================
 // Between-Weeks Hub (state 1d)
@@ -103,6 +104,45 @@ test.describe("Between-Weeks Hub (1d)", () => {
     }
   });
 
+  // Issue #274: the hero dek, the Game of the Week kicker and the Game of the
+  // Week blurb are three generated lines stacked on one screen. They used to
+  // share stock idioms ("receipts to settle", "first place on the line"),
+  // which made them read as one fill-in-the-blank template.
+  test("T12: hero dek, GotW kicker and GotW blurb share no signature phrase", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const dek = (await page.getByTestId("hero-dek").innerText()).trim();
+    const kicker = (await page.getByTestId("gotw-kicker").innerText()).trim();
+    const blurb = (await page.getByTestId("gotw-blurb").innerText()).trim();
+
+    for (const line of [dek, kicker, blurb]) {
+      expect(line.length).toBeGreaterThan(0);
+    }
+
+    const pairs: [string, string, string][] = [
+      ["dek/kicker", dek, kicker],
+      ["dek/blurb", dek, blurb],
+      ["kicker/blurb", kicker, blurb],
+    ];
+    for (const [label, a, b] of pairs) {
+      const shared = [...signaturePhrasesIn(a)].filter((p) =>
+        signaturePhrasesIn(b).has(p)
+      );
+      expect(shared, `${label} share: ${shared.join(", ")}`).toEqual([]);
+    }
+
+    // Deliberately NOT asserting literal copy here: the blurb is generated
+    // (or seeded from the opener variant, which says nothing about first
+    // place because nobody has a record yet), so pinning its words would
+    // fail for a correct page. The invariant is that all three lines are
+    // real and none of them echo each other; the exact wording of the GotW
+    // line is pinned in lib/content-gen/templates.test.ts, where the input
+    // is controlled.
+    expect(blurb.length).toBeGreaterThan(20);
+  });
+
   test("T04: no em-dashes anywhere in the hub copy", async ({ page }) => {
     await page.goto("/");
     const text = await page.locator("main").innerText();
@@ -145,6 +185,33 @@ test.describe("Between-Weeks Hub (1d)", () => {
     // nothing), so assert their shape only when they are on the page.
     if (/League Moves/i.test(text)) {
       expect(text).toMatch(/\bADD\b|\bDROP\b|\bTRADE\b/);
+      const card = page
+        .locator("section", { has: page.getByText("League Moves", { exact: true }) })
+        .first();
+      // The player is the focal, clickable identity: at least one row links
+      // through to its player page.
+      await expect(
+        card.locator('a[href^="/players/"]').first()
+      ).toBeVisible();
+      // Every row draws either a real headshot from the Sleeper CDN or the
+      // initials monogram fallback, never a bare franchise crest as the lead.
+      const hasHeadshot = await card
+        .locator('img[src*="sleepercdn.com/content/nfl/players"]')
+        .first()
+        .isVisible()
+        .catch(() => false);
+      const hasMonogram = await card
+        .getByText(/^[A-Z]{1,2}$/)
+        .first()
+        .isVisible()
+        .catch(() => false);
+      expect(hasHeadshot || hasMonogram).toBe(true);
+      // The fantasy franchise stays visible as secondary attribution: the
+      // kind label ("ADD"/"DROP"/"TRADE") sits on a row with the franchise
+      // name trailing it, so that row's text is more than the kind alone.
+      const kindSpan = card.getByText(/^(ADD|DROP|TRADE)$/).first();
+      const kindRowText = await kindSpan.locator("xpath=..").innerText();
+      expect(kindRowText.trim().length).toBeGreaterThan(4);
     }
     if (/This Week in HMLML History/i.test(text)) {
       // Case-insensitive for the same CSS `uppercase` reason as T06.
@@ -267,5 +334,78 @@ test.describe("Between-Weeks Hub (1d)", () => {
       () => document.documentElement.scrollWidth <= window.innerWidth + 1
     );
     expect(overflow).toBe(true);
+  });
+
+  // --------------------------------------------------------------------
+  // Power Rankings preview (#277)
+  // --------------------------------------------------------------------
+
+  test("T16: power rankings preview renders on the between-weeks hub", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const link = page.locator('a[href="/records/power-rankings"]');
+    await expect(link.first()).toBeVisible();
+
+    // Walk up to the module's card and assert it holds at least 3 ranked
+    // rows, each carrying a real franchise name (never a bare letter code).
+    const card = page.locator("section", { has: link.first() }).last();
+    const rows = card.locator('a[href^="/teams/"]');
+    const rowCount = await rows.count();
+    expect(rowCount).toBeGreaterThanOrEqual(3);
+
+    for (let i = 0; i < rowCount; i++) {
+      const text = (await rows.nth(i).innerText()).trim();
+      expect(text.length).toBeGreaterThan(2);
+    }
+  });
+
+  test("T17: the module names its edition honestly", async ({ page }) => {
+    await page.goto("/");
+
+    const main = page.locator("main");
+    const text = await main.innerText();
+
+    expect(text).toMatch(/Power Rankings|Preseason Power/i);
+
+    const isPreseason = /Preseason Power/i.test(text);
+    if (isPreseason) {
+      expect(text).toMatch(/Real rankings land after Week 1/i);
+    } else {
+      // Regular edition: at least one mover glyph on the page (riser/faller
+      // strip), though either half may be absent if nobody moved.
+      expect(text).toMatch(/Riser|Faller/i);
+    }
+  });
+
+  test("T18: the module links through to the full rankings page", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const link = page.locator('a[href="/records/power-rankings"]').first();
+    await expect(link).toBeVisible();
+    await link.click();
+
+    await page.waitForURL(/\/records\/power-rankings/);
+    await expect(page.getByText("Power Rankings.", { exact: true })).toBeVisible();
+  });
+
+  test("T19: every rank number renders in the mono numeral face", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const link = page.locator('a[href="/records/power-rankings"]').first();
+    await expect(link).toBeVisible();
+    const card = page.locator("section", { has: link }).last();
+    const rankCell = card.locator('a[href^="/teams/"] span.font-mono').first();
+    await expect(rankCell).toBeVisible();
+
+    const fontFamily = await rankCell.evaluate(
+      (el) => getComputedStyle(el).fontFamily
+    );
+    expect(fontFamily).toMatch(/JetBrains/i);
   });
 });

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TeamLink } from "@/components/team-link";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { MatchupRow } from "@/components/matchup-row";
@@ -31,6 +32,9 @@ import { StatChip, GameCard, toLadderEntries } from "@/components/hub/shared";
 import { BetweenWeeksHub } from "@/components/hub/between-weeks-hub";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { BookRailCard } from "@/components/hub/book-rail-card";
+import { getHubPowerPreview, type HubPowerPreview } from "@/lib/queries/power-preview";
+import { PowerPulseCard } from "@/components/hub/power-pulse-card";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 
 export async function RegularSeasonHub({
   matchupData,
@@ -82,6 +86,9 @@ export async function RegularSeasonHub({
   // Playoff projection drives the ladder's seed badges and playoff-line cutoff;
   // undefined when unavailable (RISK-A/RISK-B degrade to the current default).
   let projection: Awaited<ReturnType<typeof getPlayoffProjection>> | undefined;
+  // Power Rankings preview for the post-week branch (#277). Renders below
+  // "This Week's Damage", per CLAUDE.md's Regular Season hub table.
+  let powerPreview: HubPowerPreview | null = null;
 
   if (latestSeason) {
     try {
@@ -105,6 +112,13 @@ export async function RegularSeasonHub({
       projection = await getPlayoffProjection(latestSeason.id);
     } catch {
       // Projection may not be available; ladder falls back to plain standings.
+    }
+
+    try {
+      powerPreview = await getHubPowerPreview();
+    } catch (e) {
+      rethrowUnlessTolerable(e);
+      powerPreview = null;
     }
   }
 
@@ -474,6 +488,13 @@ export async function RegularSeasonHub({
               </ScrollReveal>
             )}
 
+          {/* Power Rankings preview */}
+          {powerPreview && (
+            <ScrollReveal>
+              <PowerPulseCard preview={powerPreview} week={completedWeek} />
+            </ScrollReveal>
+          )}
+
           {/* Season Superlatives */}
           {superlatives && (
             <ScrollReveal>
@@ -482,7 +503,11 @@ export async function RegularSeasonHub({
                   {superlatives.highestScore && (
                     <StatHero
                       value={superlatives.highestScore.points?.toFixed(1) ?? "0"}
-                      label={superlatives.highestScore.franchiseName ?? "Unknown"}
+                      label={
+                        <TeamLink slug={superlatives.highestScore.franchiseSlug}>
+                          {superlatives.highestScore.franchiseName ?? "Unknown"}
+                        </TeamLink>
+                      }
                       badge="High Score"
                       context={`Week ${superlatives.highestScore.week}`}
                       variant="md"
@@ -491,7 +516,11 @@ export async function RegularSeasonHub({
                   {superlatives.longestStreak && superlatives.longestStreak.streak > 1 && (
                     <StatHero
                       value={`${superlatives.longestStreak.streak}W`}
-                      label={superlatives.longestStreak.franchiseName}
+                      label={
+                        <TeamLink slug={superlatives.longestStreak.franchiseSlug}>
+                          {superlatives.longestStreak.franchiseName}
+                        </TeamLink>
+                      }
                       badge={SNARKY_LABELS.ON_FIRE.displayText}
                       variant="md"
                     />
@@ -507,7 +536,11 @@ export async function RegularSeasonHub({
                   {superlatives.mostAllTimeWins && (
                     <StatHero
                       value={superlatives.mostAllTimeWins.totalWins}
-                      label={superlatives.mostAllTimeWins.franchiseName}
+                      label={
+                        <TeamLink slug={superlatives.mostAllTimeWins.franchiseSlug}>
+                          {superlatives.mostAllTimeWins.franchiseName}
+                        </TeamLink>
+                      }
                       badge="Most All-Time Wins"
                       variant="md"
                     />
@@ -528,9 +561,16 @@ export async function RegularSeasonHub({
                       className="flex items-center justify-between rounded-[14px] border border-border bg-surface px-4 py-3 text-body-sm"
                     >
                       <span>
-                        <span className="font-semibold text-text-primary">{result.winner}</span>
+                        <TeamLink
+                          slug={result.winnerSlug}
+                          className="font-semibold text-text-primary"
+                        >
+                          {result.winner}
+                        </TeamLink>
                         <span className="text-text-tertiary"> def. </span>
-                        <span className="text-text-tertiary">{result.loser}</span>
+                        <TeamLink slug={result.loserSlug} className="text-text-tertiary">
+                          {result.loser}
+                        </TeamLink>
                       </span>
                       <span className="text-stat text-sm text-text-tertiary whitespace-nowrap ml-4">
                         {result.winnerScore.toFixed(1)} - {result.loserScore.toFixed(1)}
