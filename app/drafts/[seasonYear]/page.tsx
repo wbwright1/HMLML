@@ -344,6 +344,7 @@ function TeamCrest({
           brandingColor={brandingColor ?? undefined}
           avatarUrl={avatarUrl}
           size={size}
+          decorative
         />
       </TeamLink>
     );

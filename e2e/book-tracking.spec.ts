@@ -304,6 +304,10 @@ test.describe("Tracking tab pick'ems", () => {
     const label = fixtureHeader.locator("span[title]");
     await expect(label).toHaveAttribute("title", new RegExp(fx.franchiseName));
     await expect(label).toHaveText(/\S/);
+    // #259: the monogram path must announce the franchise, not just paint initials.
+    await expect(
+      fixtureHeader.getByRole("img", { name: fx.franchiseName }),
+    ).toBeVisible();
 
     // At least one real franchise carries a synced crest for this season; that
     // header must render a real <img> with a NON-EMPTY alt, which is what fails

@@ -56,10 +56,19 @@ export function FranchiseLogo({
   const altText = decorative ? "" : name;
   const radius = crestRadius(px);
 
+  // Announce the franchise when the monogram is the only thing rendered.
+  // The avatar branch below already carries its own <img alt>, so this
+  // role/label only applies when there is no avatar; otherwise it would
+  // nest a labelled image inside a labelled image. Mirrors the same
+  // pattern on the monogram branch of player-headshot.tsx.
+  const monogramA11yProps =
+    decorative || avatarUrl ? {} : { role: "img" as const, "aria-label": name };
+
   return (
     <div
       className="relative shrink-0 overflow-hidden"
       style={{ width: px, height: px, borderRadius: radius }}
+      {...monogramA11yProps}
     >
       {/* Fallback — always rendered behind the image */}
       <div

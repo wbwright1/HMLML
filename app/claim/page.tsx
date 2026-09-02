@@ -102,6 +102,7 @@ function SignedInCard({
             name={member.franchiseName}
             avatarUrl={member.franchiseAvatarUrl}
             size="lg"
+            decorative
           />
         ) : null}
         <div className="min-w-0">
