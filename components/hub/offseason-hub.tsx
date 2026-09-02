@@ -293,12 +293,12 @@ export async function OffseasonHub({
             label={smackFromDesk ? "Site Desk" : "The League"}
             title="The Smack Feed"
           >
-            <div className="space-y-3">
+            <div className="space-y-4">
               <SmackComposerSlot />
               {smackItems.length > 0 ? (
                 <SmackFeed
                   items={smackItems}
-                  className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                  className="grid grid-cols-1 sm:grid-cols-2 gap-4"
                 />
               ) : (
                 <p className="card-surface block p-4 text-body-sm text-text-tertiary">

@@ -291,11 +291,11 @@ export async function RegularSeasonHub({
           </div>
 
           {/* The ladder + weekly damage rail */}
-          <aside className="space-y-6">
+          <aside className="space-y-8">
             {bookGames.length > 0 && <BookRailCard games={bookGames} week={week} />}
 
             {ladderEntries.length > 0 && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <p className="text-kicker flex items-center justify-between">
                   <span>The Ladder</span>
                   <Link
@@ -315,9 +315,9 @@ export async function RegularSeasonHub({
 
             {weeklySuperlatives &&
               (weeklySuperlatives.highestScorer || weeklySuperlatives.biggestBlowout) && (
-                <div className="space-y-3">
+                <div className="space-y-4">
                   <p className="text-kicker">Week {completedWeek} Damage</p>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {weeklySuperlatives.highestScorer && (
                       <WeeklySuperlativeCard
                         type="highest-scorer"
