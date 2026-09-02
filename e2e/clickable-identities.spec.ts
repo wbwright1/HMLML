@@ -219,6 +219,10 @@ test("the hub links the franchises it names", async ({ page }) => {
   // The hub always names franchises in some module for the current calendar
   // state (matchup/slate cards, standings, superlatives, recap rows).
   const links = page.locator('main a[href^="/teams/"]');
+  // The hub's body streams in behind a Suspense skeleton, so a bare count()
+  // can read the fallback and see zero. Wait on the first link (auto-retrying)
+  // before asserting the count.
+  await expect(links.first()).toBeVisible();
   expect(await links.count(), "team links on the hub").toBeGreaterThan(0);
   const href = await links.first().getAttribute("href");
   await links.first().click();
