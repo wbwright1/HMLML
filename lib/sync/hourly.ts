@@ -250,9 +250,15 @@ async function syncRostersAndPicks(
           )
         );
 
-      // Sync roster players
+      // Sync roster players. Sleeper encodes an EMPTY starting slot as player
+      // id "0" in `starters`; it is a placeholder, not a player, and inserting
+      // it violates the players FK (it took down every hourly rosters sync the
+      // first time a manager left a slot open). Drop it everywhere.
+      const isRealPlayer = (pid: string) => pid !== "0";
       const allPlayers = [
-        ...(roster.starters ?? []).map((pid) => ({ playerId: pid, slot: "starter" })),
+        ...(roster.starters ?? [])
+          .filter(isRealPlayer)
+          .map((pid) => ({ playerId: pid, slot: "starter" })),
         ...(roster.players ?? [])
           .filter((pid) => !(roster.starters ?? []).includes(pid))
           .filter((pid) => !(roster.reserve ?? []).includes(pid))
