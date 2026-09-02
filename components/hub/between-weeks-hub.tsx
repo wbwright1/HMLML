@@ -40,6 +40,9 @@ import { getRecentLeagueMoves, type LeagueMove } from "@/lib/queries/league-move
 import { getWeekInHistory, type WeekReceipt } from "@/lib/queries/week-history";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { getHubEditorial, matchupPairKey, type HubEditorial } from "@/lib/content";
+import { getHubPowerPreview, type HubPowerPreview } from "@/lib/queries/power-preview";
+import { PowerPulseCard } from "@/components/hub/power-pulse-card";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { buildHubLineFooter } from "@/lib/book/shared";
 import {
@@ -134,6 +137,7 @@ export async function BetweenWeeksHub({
   let leagueMoves: LeagueMove[] = [];
   let weekReceipts: WeekReceipt[] = [];
   let bookGames: BookGame[] = [];
+  let powerPreview: HubPowerPreview | null = null;
   // The full record (streak included), not just the counts: the derived slate
   // angle reads the streak, and it is oriented from the HOME team's
   // perspective because getHeadToHead is called as (home, away) below.
@@ -144,6 +148,12 @@ export async function BetweenWeeksHub({
   const h2hHistoryByMatchup = new Map<number, MeetingHistorySummary>();
 
   if (seasonId != null) {
+    // Fired concurrently with the batch below (not awaited inside it) so it
+    // adds no serial round trip, but settled in its own try/catch so a DB
+    // error here goes through rethrowUnlessTolerable rather than being
+    // swallowed by the batch's bare catch below (#277).
+    const powerPreviewPromise = getHubPowerPreview();
+
     try {
       // The Book's week must agree with resolveBookWeek() (the same source
       // /book, the pick server actions, and the sync all use), or the hub can
@@ -234,6 +244,13 @@ export async function BetweenWeeksHub({
       });
     } catch {
       // DB may be unavailable; the hero + countdown still render.
+    }
+
+    try {
+      powerPreview = await powerPreviewPromise;
+    } catch (e) {
+      rethrowUnlessTolerable(e);
+      powerPreview = null;
     }
   }
 
@@ -431,6 +448,9 @@ export async function BetweenWeeksHub({
               </div>
             </section>
           )}
+
+          {/* Power Rankings preview */}
+          {powerPreview && <PowerPulseCard preview={powerPreview} week={week} />}
 
           {/* The Smack Feed */}
           <section className="space-y-4">
