@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { PositionBadge } from "@/components/position-badge";
 import { PlayerHeadshot } from "@/components/player-headshot";
@@ -73,9 +74,17 @@ export function TradeCard({
         {trade.sides.map((side, index) => (
           <div key={side.rosterId} className="flex flex-1 items-stretch gap-4">
             <div className="flex-1 rounded-[10px] border border-border bg-surface p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                {side.franchise ? (
-                  <>
+              {/* Crest and name are ONE link, and the "Received" caption stays
+                  stacked under them in both branches, so a known and an
+                  unknown franchise read the same way. The text colour sits on
+                  the anchor, not on the name span: a child text-* class beats
+                  the anchor's hover: and would kill the affordance. */}
+              <div className="min-w-0 space-y-0.5">
+                <TeamLink
+                  slug={side.franchise?.slug}
+                  className="flex min-w-0 items-center gap-2 text-text-primary"
+                >
+                  {side.franchise && (
                     <FranchiseLogo
                       slug={side.franchise.slug}
                       name={side.franchise.name}
@@ -84,24 +93,12 @@ export function TradeCard({
                       avatarUrl={side.franchise.avatarUrl}
                       size="sm"
                     />
-                    <div className="min-w-0">
-                      <Link
-                        href={`/teams/${side.franchise.slug}`}
-                        className="text-body-sm font-semibold text-text-primary hover:text-accent-gold transition-colors truncate block"
-                      >
-                        {side.franchise.name}
-                      </Link>
-                      <p className="text-caption text-text-tertiary">Received</p>
-                    </div>
-                  </>
-                ) : (
-                  <div className="min-w-0">
-                    <span className="text-body-sm font-semibold text-text-primary">
-                      Unknown Team
-                    </span>
-                    <p className="text-caption text-text-tertiary">Received</p>
-                  </div>
-                )}
+                  )}
+                  <span className="min-w-0 truncate text-body-sm font-semibold">
+                    {side.franchise?.name ?? "Unknown Team"}
+                  </span>
+                </TeamLink>
+                <p className="text-caption text-text-tertiary">Received</p>
               </div>
 
               {side.players.length === 0 && side.picks.length === 0 ? (
@@ -138,15 +135,21 @@ export function TradeCard({
                     >
                       <div className="flex items-center gap-2">
                         {pick.originalFranchise && (
-                          <FranchiseLogo
+                          <TeamLink
                             slug={pick.originalFranchise.slug}
-                            name={pick.originalFranchise.name}
-                            abbreviation={pick.originalFranchise.abbreviation}
-                            brandingColor={pick.originalFranchise.brandingColor}
-                            avatarUrl={pick.originalFranchise.avatarUrl}
-                            size={20}
-                            decorative
-                          />
+                            aria-label={pick.originalFranchise.name}
+                            className="inline-flex shrink-0"
+                          >
+                            <FranchiseLogo
+                              slug={pick.originalFranchise.slug}
+                              name={pick.originalFranchise.name}
+                              abbreviation={pick.originalFranchise.abbreviation}
+                              brandingColor={pick.originalFranchise.brandingColor}
+                              avatarUrl={pick.originalFranchise.avatarUrl}
+                              size={20}
+                              decorative
+                            />
+                          </TeamLink>
                         )}
                         <span
                           className={`font-mono tabular-nums ${pick.voided ? "text-text-muted line-through" : "text-accent-gold"}`}
@@ -237,9 +240,12 @@ export function TradeCard({
                     >
                       {s.grade}
                     </span>
-                    <span className="text-text-secondary font-semibold truncate">
+                    <TeamLink
+                      slug={side?.franchise?.slug}
+                      className="text-text-secondary font-semibold truncate"
+                    >
                       {side?.franchise?.name ?? "Unknown Team"}
-                    </span>
+                    </TeamLink>
                     <span className="text-caption font-mono tabular-nums text-text-tertiary">
                       {s.realizedPoints.toFixed(1)} pts realized &middot;{" "}
                       {s.startedPoints.toFixed(1)} started
@@ -273,9 +279,12 @@ export function TradeCard({
                   key={s.rosterId}
                   className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-sm"
                 >
-                  <span className="text-text-secondary font-semibold truncate">
+                  <TeamLink
+                    slug={side?.franchise?.slug}
+                    className="text-text-secondary font-semibold truncate"
+                  >
                     {name}
-                  </span>
+                  </TeamLink>
                   {s.coverage === "none" && (
                     <span className="text-caption text-text-muted">no market data</span>
                   )}

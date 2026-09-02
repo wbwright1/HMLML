@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TeamLink } from "@/components/team-link";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { MatchupRow } from "@/components/matchup-row";
@@ -502,7 +503,11 @@ export async function RegularSeasonHub({
                   {superlatives.highestScore && (
                     <StatHero
                       value={superlatives.highestScore.points?.toFixed(1) ?? "0"}
-                      label={superlatives.highestScore.franchiseName ?? "Unknown"}
+                      label={
+                        <TeamLink slug={superlatives.highestScore.franchiseSlug}>
+                          {superlatives.highestScore.franchiseName ?? "Unknown"}
+                        </TeamLink>
+                      }
                       badge="High Score"
                       context={`Week ${superlatives.highestScore.week}`}
                       variant="md"
@@ -511,7 +516,11 @@ export async function RegularSeasonHub({
                   {superlatives.longestStreak && superlatives.longestStreak.streak > 1 && (
                     <StatHero
                       value={`${superlatives.longestStreak.streak}W`}
-                      label={superlatives.longestStreak.franchiseName}
+                      label={
+                        <TeamLink slug={superlatives.longestStreak.franchiseSlug}>
+                          {superlatives.longestStreak.franchiseName}
+                        </TeamLink>
+                      }
                       badge={SNARKY_LABELS.ON_FIRE.displayText}
                       variant="md"
                     />
@@ -527,7 +536,11 @@ export async function RegularSeasonHub({
                   {superlatives.mostAllTimeWins && (
                     <StatHero
                       value={superlatives.mostAllTimeWins.totalWins}
-                      label={superlatives.mostAllTimeWins.franchiseName}
+                      label={
+                        <TeamLink slug={superlatives.mostAllTimeWins.franchiseSlug}>
+                          {superlatives.mostAllTimeWins.franchiseName}
+                        </TeamLink>
+                      }
                       badge="Most All-Time Wins"
                       variant="md"
                     />
@@ -548,9 +561,16 @@ export async function RegularSeasonHub({
                       className="flex items-center justify-between rounded-[14px] border border-border bg-surface px-4 py-3 text-body-sm"
                     >
                       <span>
-                        <span className="font-semibold text-text-primary">{result.winner}</span>
+                        <TeamLink
+                          slug={result.winnerSlug}
+                          className="font-semibold text-text-primary"
+                        >
+                          {result.winner}
+                        </TeamLink>
                         <span className="text-text-tertiary"> def. </span>
-                        <span className="text-text-tertiary">{result.loser}</span>
+                        <TeamLink slug={result.loserSlug} className="text-text-tertiary">
+                          {result.loser}
+                        </TeamLink>
                       </span>
                       <span className="text-stat text-sm text-text-tertiary whitespace-nowrap ml-4">
                         {result.winnerScore.toFixed(1)} - {result.loserScore.toFixed(1)}

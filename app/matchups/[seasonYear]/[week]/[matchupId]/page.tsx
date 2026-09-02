@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 import { MatchupLiveScore } from "@/components/matchup-live-score";
 import { MatchupLineups } from "@/components/matchup-lineups";
 import {
@@ -208,10 +209,14 @@ function TeamBlock({
 }) {
   const isEnd = align === "end";
   return (
-    <div
-      className={`flex items-center gap-3 min-w-0 ${
-        isEnd ? "md:flex-row-reverse md:text-right" : ""
-      }`}
+    // The colour lives on the anchor, not on the name span: a child span with
+    // its own text-* class wins over the anchor's hover:, which would leave
+    // the hover affordance dead.
+    <TeamLink
+      slug={team.franchiseSlug}
+      className={`flex min-w-0 items-center gap-3 ${
+        winner ? "text-text-primary" : "text-text-secondary"
+      } ${isEnd ? "md:flex-row-reverse md:text-right" : ""}`}
     >
       <FranchiseLogo
         slug={team.franchiseSlug}
@@ -222,16 +227,13 @@ function TeamBlock({
         size="md"
         decorative
       />
-      <div className="min-w-0">
-        <Link
-          href={`/teams/${team.franchiseSlug}`}
-          className={`block text-h3 truncate hover:text-accent-gold transition-colors ${
-            winner ? "font-bold text-text-primary" : "font-medium text-text-secondary"
-          }`}
-        >
-          {team.franchiseName}
-        </Link>
-      </div>
-    </div>
+      <span
+        className={`block min-w-0 truncate text-h3 ${
+          winner ? "font-bold" : "font-medium"
+        }`}
+      >
+        {team.franchiseName}
+      </span>
+    </TeamLink>
   );
 }

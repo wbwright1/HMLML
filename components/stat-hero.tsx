@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 
 interface StatHeroProps {
   value: ReactNode;
-  label: string;
+  /** ReactNode so a franchise-naming label can carry its team link. */
+  label: ReactNode;
   badge?: string;
   /** ReactNode so a franchise-naming context can carry its crest. */
   context?: ReactNode;

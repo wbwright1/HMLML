@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 import { useBookSlip } from "@/components/book/use-book-slip";
 import {
   gradePick,
@@ -489,22 +490,28 @@ function SlipRow({
 
   return (
     <li className="flex items-center justify-between gap-3 border-t border-divider py-2.5">
-      {/* Decorative: the code sits immediately beside it and the opponent's
-          full name is on the line below. 20px is the rail size. */}
-      <FranchiseLogo
-        slug={team.slug}
-        name={team.name}
-        abbreviation={team.abbreviation ?? undefined}
-        brandingColor={team.brandingColor ?? undefined}
-        avatarUrl={team.avatarUrl ?? undefined}
-        size={20}
-        decorative
-      />
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-mono text-body-sm font-bold tabular-nums text-text-primary">
-          {team.abbreviation ?? team.name} {formatSpread(spread)}
-        </span>
-        <span className="block truncate text-[11px] text-text-tertiary">
+        {/* ONE link over crest and code, not two to the same place. The
+            opponent line stays outside it: it names the other team, not this
+            one. */}
+        <TeamLink
+          slug={team.slug}
+          className="flex min-w-0 items-center gap-3 text-text-primary"
+        >
+          <FranchiseLogo
+            slug={team.slug}
+            name={team.name}
+            abbreviation={team.abbreviation ?? undefined}
+            brandingColor={team.brandingColor ?? undefined}
+            avatarUrl={team.avatarUrl ?? undefined}
+            size={20}
+            decorative
+          />
+          <span className="min-w-0 truncate font-mono text-body-sm font-bold tabular-nums">
+            {team.abbreviation ?? team.name} {formatSpread(spread)}
+          </span>
+        </TeamLink>
+        <span className="mt-0.5 block truncate text-[11px] text-text-tertiary">
           vs {other.name}
         </span>
       </span>

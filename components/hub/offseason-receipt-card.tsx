@@ -1,4 +1,5 @@
 import { EditorialBody } from "@/components/editorial-emphasis";
+import { TeamLink } from "@/components/team-link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import type { OffseasonReceipt, ReceiptCategory } from "@/lib/content";
 
@@ -37,15 +38,21 @@ export function OffseasonReceiptCard({ receipt, franchise }: OffseasonReceiptCar
         <p className={`text-kicker ${isSting ? "text-accent-warm" : "text-accent-gold"}`}>
           {CATEGORY_LABELS[receipt.category]}
         </p>
-        <FranchiseLogo
+        <TeamLink
           slug={franchise.slug}
-          name={franchise.name}
-          abbreviation={franchise.abbreviation ?? undefined}
-          brandingColor={franchise.brandingColor ?? undefined}
-          avatarUrl={franchise.avatarUrl}
-          size="sm"
-          decorative
-        />
+          aria-label={franchise.name}
+          className="inline-flex shrink-0"
+        >
+          <FranchiseLogo
+            slug={franchise.slug}
+            name={franchise.name}
+            abbreviation={franchise.abbreviation ?? undefined}
+            brandingColor={franchise.brandingColor ?? undefined}
+            avatarUrl={franchise.avatarUrl}
+            size="sm"
+            decorative
+          />
+        </TeamLink>
       </div>
       <p className="mt-3 text-body text-text-secondary">
         <EditorialBody body={receipt.body} />

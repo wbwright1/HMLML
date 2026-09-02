@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TeamLink } from "@/components/team-link";
 import type { BracketType } from "@/lib/playoff-bracket";
 import type {
   BracketMatchView,
@@ -72,7 +73,13 @@ function TeamRow({
         style={{ background: dotColor(team.franchiseBrandingColor) }}
         aria-hidden="true"
       />
-      <span className="bracket-name">{team.franchiseName}</span>
+      {isLinked(match) ? (
+        <span className="bracket-name">{team.franchiseName}</span>
+      ) : (
+        <TeamLink slug={team.franchiseSlug} className="bracket-name">
+          {team.franchiseName}
+        </TeamLink>
+      )}
       {advanced && (
         <span
           className="bracket-chip"
@@ -162,9 +169,12 @@ export function BracketCell({
               style={{ background: dotColor(cell.byeTeam.franchiseBrandingColor) }}
               aria-hidden="true"
             />
-            <span className="bracket-name font-bold text-text-primary">
+            <TeamLink
+              slug={cell.byeTeam.franchiseSlug}
+              className="bracket-name font-bold text-text-primary"
+            >
               {cell.byeTeam.franchiseName}
-            </span>
+            </TeamLink>
           </div>
           <div className="bracket-row">
             <span className="bracket-sub">First-round bye</span>

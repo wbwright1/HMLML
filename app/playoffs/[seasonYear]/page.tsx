@@ -4,6 +4,7 @@ import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 import { ChampionshipStars } from "@/components/championship-stars";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -86,7 +87,12 @@ export default async function PlayoffBracketPage({
           <ScrollReveal>
             <div className="mt-6 card-surface card-tint-gold p-8 text-center space-y-3">
               <p className="text-kicker text-gold mb-1">Champion</p>
-              <div className="flex justify-center">
+              {/* ONE link over crest, name and stars, not two to the same
+                  place. */}
+              <TeamLink
+                slug={champion.franchiseSlug}
+                className="flex flex-col items-center gap-3 text-gold"
+              >
                 <FranchiseLogo
                   slug={champion.franchiseSlug}
                   name={champion.franchiseName}
@@ -96,9 +102,9 @@ export default async function PlayoffBracketPage({
                   size="xl"
                   decorative
                 />
-              </div>
-              <p className="text-h1 text-gold">{champion.franchiseName}</p>
-              <ChampionshipStars count={1} variant="hero" />
+                <span className="text-h1">{champion.franchiseName}</span>
+                <ChampionshipStars count={1} variant="hero" />
+              </TeamLink>
             </div>
           </ScrollReveal>
         )}
@@ -211,16 +217,18 @@ function ToiletBowlStingCard({ champion }: { champion: ToiletBowlChampion }) {
       <p className="text-kicker text-accent-warm">
         {TOILET_BOWL_COPY.championKicker}
       </p>
-      <FranchiseIdentity
-        franchise={{
-          slug: champion.franchiseSlug,
-          name: champion.franchiseName,
-          abbreviation: champion.franchiseAbbreviation ?? undefined,
-          brandingColor: champion.franchiseBrandingColor ?? undefined,
-          avatarUrl: champion.avatarUrl,
-        }}
-        variant="compact"
-      />
+      <TeamLink slug={champion.franchiseSlug} className="group block">
+        <FranchiseIdentity
+          franchise={{
+            slug: champion.franchiseSlug,
+            name: champion.franchiseName,
+            abbreviation: champion.franchiseAbbreviation ?? undefined,
+            brandingColor: champion.franchiseBrandingColor ?? undefined,
+            avatarUrl: champion.avatarUrl,
+          }}
+          variant="compact"
+        />
+      </TeamLink>
       <p className="text-body-sm text-text-secondary">{label.description}.</p>
       <SuperlativeBadge text={label.displayText} variant="brown" />
     </div>

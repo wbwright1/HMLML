@@ -10,6 +10,7 @@ import { SuperlativeBadge } from "@/components/superlative-badge";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { PlayerLink } from "@/components/player-link";
+import { TeamLink } from "@/components/team-link";
 import { getPositionColor } from "@/lib/position-colors";
 import { teamAcronym } from "@/lib/team-acronym";
 import {
@@ -281,9 +282,18 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
  * franchise the board only knows by name. Decorative, since the origin's name
  * or code is the very next thing on the line.
  */
-function ViaCrest({ pick }: { pick: NormalizedPick }) {
+function ViaCrest({
+  pick,
+  linked = true,
+}: {
+  pick: NormalizedPick;
+  /** False where the crest already sits inside an outer anchor (the completed
+   * pick row wraps headshot, name and via note in one PlayerLink), since a
+   * nested anchor is invalid HTML and will not hydrate. */
+  linked?: boolean;
+}) {
   if (!pick.originalSlug || !pick.originalName) return null;
-  return (
+  const crest = (
     <FranchiseLogo
       slug={pick.originalSlug}
       name={pick.originalName}
@@ -292,6 +302,16 @@ function ViaCrest({ pick }: { pick: NormalizedPick }) {
       size={14}
       decorative
     />
+  );
+  if (!linked) return crest;
+  return (
+    <TeamLink
+      slug={pick.originalSlug}
+      aria-label={pick.originalName}
+      className="inline-flex"
+    >
+      {crest}
+    </TeamLink>
   );
 }
 
@@ -302,6 +322,7 @@ function TeamCrest({
   brandingColor,
   avatarUrl,
   size = "sm",
+  linked = true,
 }: {
   slug: string | null;
   name: string;
@@ -309,17 +330,22 @@ function TeamCrest({
   brandingColor: string | null;
   avatarUrl?: string | null;
   size?: "sm" | "md";
+  /** False where the caller supplies its own outer TeamLink (the board's
+   * column headers link crest and code together as one target). */
+  linked?: boolean;
 }) {
   if (slug) {
     return (
-      <FranchiseLogo
-        slug={slug}
-        name={name}
-        abbreviation={abbreviation ?? undefined}
-        brandingColor={brandingColor ?? undefined}
-        avatarUrl={avatarUrl}
-        size={size}
-      />
+      <TeamLink slug={linked ? slug : null} aria-label={name} className="inline-flex">
+        <FranchiseLogo
+          slug={slug}
+          name={name}
+          abbreviation={abbreviation ?? undefined}
+          brandingColor={brandingColor ?? undefined}
+          avatarUrl={avatarUrl}
+          size={size}
+        />
+      </TeamLink>
     );
   }
 
@@ -361,7 +387,7 @@ function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
             <p className="truncate text-body font-semibold text-text-primary">{pick.playerName}</p>
             {pick.originalName && (
               <div className="flex min-w-0 items-center gap-1 text-body-sm text-text-tertiary" data-testid="via-note">
-                <ViaCrest pick={pick} />
+                <ViaCrest pick={pick} linked={false} />
                 <span className="truncate">via {pick.originalName}</span>
               </div>
             )}
@@ -440,18 +466,30 @@ function DesktopBoard({ board }: { board: DraftBoard }) {
           // persisted abbreviation.
           const code = col.abbreviation ?? teamAcronym(col.name);
           return (
-            <div key={col.key} className="flex min-w-0 flex-col items-center gap-1.5 pb-2" title={col.name} data-testid="draft-column-header">
-              <TeamCrest
+            <div
+              key={col.key}
+              className="flex min-w-0 flex-col items-center pb-2"
+              title={col.name}
+              data-testid="draft-column-header"
+            >
+              <TeamLink
                 slug={col.slug}
-                name={col.name}
-                abbreviation={code}
-                brandingColor={col.brandingColor}
-                avatarUrl={col.avatarUrl}
-                size="sm"
-              />
-              <span className="max-w-full truncate text-[9px] font-bold text-text-tertiary">
-                {code}
-              </span>
+                aria-label={col.name}
+                className="flex min-w-0 flex-col items-center gap-1.5"
+              >
+                <TeamCrest
+                  slug={col.slug}
+                  name={col.name}
+                  abbreviation={code}
+                  brandingColor={col.brandingColor}
+                  avatarUrl={col.avatarUrl}
+                  size="sm"
+                  linked={false}
+                />
+                <span className="max-w-full truncate text-[9px] font-bold text-text-tertiary">
+                  {code}
+                </span>
+              </TeamLink>
             </div>
           );
         })}

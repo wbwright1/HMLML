@@ -9,6 +9,8 @@ import { SuperlativeBadge } from "@/components/superlative-badge";
 import { PositionBadge } from "@/components/position-badge";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
+import { PlayerLink } from "@/components/player-link";
 import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getFranchiseDraftHistory, type DraftPickWithFranchise } from "@/lib/queries/drafts";
 import { EmptyState } from "@/components/empty-state";
@@ -225,17 +227,25 @@ function DraftPicksList({
             <span className="w-10 shrink-0 font-mono text-body-sm tabular-nums text-accent-gold">
               {pick.round}.{pick.pickNumber}
             </span>
-            <PlayerHeadshot
-              size={40}
-              playerId={pick.playerId}
-              name={pick.playerName ?? "Unknown Player"}
-              showTeamBadge={false}
-              franchiseBadge={badgeFor(pick)}
-            />
-            <div className="min-w-0 flex-1">
-              <p className={`truncate text-body font-medium ${nameClass}`}>
-                {pick.playerName ?? "Unknown Player"}
-              </p>
+            {/* The via note stays stacked under the name, outside the anchor:
+                as a flex sibling it sat beside the name and its truncate
+                could never fire. */}
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <PlayerLink
+                playerId={pick.playerId}
+                className={`flex min-w-0 items-center gap-3 ${nameClass}`}
+              >
+                <PlayerHeadshot
+                  size={40}
+                  playerId={pick.playerId}
+                  name={pick.playerName ?? "Unknown Player"}
+                  showTeamBadge={false}
+                  franchiseBadge={badgeFor(pick)}
+                />
+                <span className="min-w-0 truncate text-body font-medium">
+                  {pick.playerName ?? "Unknown Player"}
+                </span>
+              </PlayerLink>
               <ViaNote pick={pick} />
             </div>
             <PositionBadge position={pick.playerPosition} />
@@ -264,20 +274,23 @@ function DraftPicksList({
                   #{pick.pickNumber}
                 </td>
                 <td className="py-3 pr-4">
-                  <div className="flex items-center gap-3">
-                    <PlayerHeadshot
-                      size={36}
+                  <div className="min-w-0 space-y-0.5">
+                    <PlayerLink
                       playerId={pick.playerId}
-                      name={pick.playerName ?? "Unknown Player"}
-                      showTeamBadge={false}
-                      franchiseBadge={badgeFor(pick)}
-                    />
-                    <div className="min-w-0">
-                      <span className={`block text-sm font-medium ${nameClass}`}>
+                      className={`flex min-w-0 items-center gap-3 ${nameClass}`}
+                    >
+                      <PlayerHeadshot
+                        size={36}
+                        playerId={pick.playerId}
+                        name={pick.playerName ?? "Unknown Player"}
+                        showTeamBadge={false}
+                        franchiseBadge={badgeFor(pick)}
+                      />
+                      <span className="min-w-0 truncate text-sm font-medium">
                         {pick.playerName ?? "Unknown Player"}
                       </span>
-                      <ViaNote pick={pick} />
-                    </div>
+                    </PlayerLink>
+                    <ViaNote pick={pick} />
                   </div>
                 </td>
                 <td className="py-3 pr-0">
@@ -298,16 +311,22 @@ function DraftPicksList({
 function ViaNote({ pick }: { pick: DraftPickWithFranchise }) {
   if (!pick.originalFranchiseName) return null;
   return (
-    <span className="mt-0.5 flex items-center gap-1 text-caption text-text-tertiary">
+    <span className="flex min-w-0 items-center gap-1 text-caption text-text-tertiary">
       {pick.originalFranchiseSlug && (
-        <FranchiseLogo
+        <TeamLink
           slug={pick.originalFranchiseSlug}
-          name={pick.originalFranchiseName}
-          abbreviation={pick.originalFranchiseAbbreviation ?? undefined}
-          brandingColor={pick.originalFranchiseBrandingColor ?? undefined}
-          size={14}
-          decorative
-        />
+          aria-label={pick.originalFranchiseName}
+          className="inline-flex"
+        >
+          <FranchiseLogo
+            slug={pick.originalFranchiseSlug}
+            name={pick.originalFranchiseName}
+            abbreviation={pick.originalFranchiseAbbreviation ?? undefined}
+            brandingColor={pick.originalFranchiseBrandingColor ?? undefined}
+            size={14}
+            decorative
+          />
+        </TeamLink>
       )}
       <span className="truncate">via {pick.originalFranchiseName}</span>
     </span>

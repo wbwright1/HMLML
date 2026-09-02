@@ -1,4 +1,5 @@
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 import { formatRelativeTime } from "@/lib/relative-time";
 import type { SmackPost } from "@/lib/content";
 import type { RecentSmackPost } from "@/lib/queries/smack";
@@ -83,30 +84,34 @@ export function SmackFeed({ items, className = "space-y-3" }: SmackFeedProps) {
         const meta = item.authorName ? `${item.authorName} · ${time}` : time;
         return (
           <div key={item.key} className="card-surface p-4">
-            <div className="flex items-start gap-3">
-              <FranchiseLogo
+            <div className="flex items-center justify-between gap-2">
+              {/* ONE link over crest and name, not two to the same place: the
+                  crest stays decorative because the name it names is inside
+                  the same link. */}
+              <TeamLink
                 slug={item.franchiseSlug}
-                name={item.franchiseName}
-                abbreviation={item.abbreviation ?? undefined}
-                brandingColor={item.brandingColor ?? undefined}
-                avatarUrl={item.avatarUrl}
-                size="sm"
-                decorative
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-body-sm font-semibold text-text-primary truncate">
-                    {item.franchiseName}
-                  </p>
-                  <span className="text-caption text-text-tertiary shrink-0 tabular-nums">
-                    {meta}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-body-sm text-text-secondary whitespace-pre-line">
-                  {item.body}
-                </p>
-              </div>
+                className="flex min-w-0 items-center gap-3 text-text-primary"
+              >
+                <FranchiseLogo
+                  slug={item.franchiseSlug}
+                  name={item.franchiseName}
+                  abbreviation={item.abbreviation ?? undefined}
+                  brandingColor={item.brandingColor ?? undefined}
+                  avatarUrl={item.avatarUrl}
+                  size="sm"
+                  decorative
+                />
+                <span className="min-w-0 truncate text-body-sm font-semibold">
+                  {item.franchiseName}
+                </span>
+              </TeamLink>
+              <span className="text-caption text-text-tertiary shrink-0 tabular-nums">
+                {meta}
+              </span>
             </div>
+            <p className="mt-2 text-body-sm text-text-secondary whitespace-pre-line">
+              {item.body}
+            </p>
           </div>
         );
       })}
