@@ -9,6 +9,7 @@ import {
 import { SmackComposerSlot } from "@/components/smack-composer-slot";
 import { getRecentSmackPosts, anySmackPostsExist } from "@/lib/queries/smack";
 import { PlayerHeadshot } from "@/components/player-headshot";
+import { PlayerLink } from "@/components/player-link";
 import { GameOfTheWeekCard } from "@/components/hub/game-of-the-week-card";
 import { SlateCard } from "@/components/hub/slate-card";
 import { teamAcronym } from "@/lib/team-acronym";
@@ -873,36 +874,60 @@ function LeagueMovesCard({ moves }: { moves: LeagueMove[] }) {
       <RailCard>
         <div className="divide-y divide-border [&>*:not(:first-child)]:pt-3 space-y-3">
           {moves.map((move) => (
-            <div key={move.transactionId} className="flex items-center gap-3">
-              <div className="flex shrink-0 -space-x-2">
-                {move.franchises.map((f) => (
-                  <FranchiseLogo
-                    key={f.id}
-                    slug={f.slug}
-                    name={f.name}
-                    abbreviation={f.abbreviation ?? undefined}
-                    brandingColor={f.brandingColor ?? undefined}
-                    avatarUrl={f.avatarUrl}
-                    size={28}
-                    decorative
-                  />
-                ))}
-              </div>
+            <div key={move.transactionId} className="flex items-start gap-3">
+              <PlayerLink playerId={move.headline.id} className="shrink-0">
+                <PlayerHeadshot
+                  playerId={move.headline.id}
+                  name={move.headline.name}
+                  size={44}
+                  nflTeam={move.headline.nflTeam}
+                  decorative
+                />
+              </PlayerLink>
               <div className="min-w-0 flex-1">
+                <div className="flex items-baseline justify-between gap-2">
+                  <PlayerLink playerId={move.headline.id} className="min-w-0">
+                    <p className="text-body-sm font-semibold text-text-primary truncate">
+                      {move.headline.name}
+                    </p>
+                  </PlayerLink>
+                  {move.age && (
+                    <span className="text-caption text-text-tertiary shrink-0">
+                      <MonoNumerals text={move.age} />
+                    </span>
+                  )}
+                </div>
                 <p className="text-caption text-text-tertiary truncate">
-                  <span className="text-accent-gold">{move.kind}</span>
-                  {" · "}
-                  {move.franchises.map((f) => f.name).join(" / ")}
+                  {move.headline.position ?? "?"} &middot; {move.headline.nflTeam ?? "FA"}
                 </p>
-                <p className="text-body-sm text-text-secondary line-clamp-2">
-                  {move.detail}
-                </p>
+                <div className="mt-1 flex items-center gap-1.5">
+                  <span className="text-caption text-accent-gold shrink-0">
+                    {move.kind}
+                  </span>
+                  <div className="flex shrink-0 -space-x-1.5">
+                    {move.franchises.map((f) => (
+                      <FranchiseLogo
+                        key={f.id}
+                        slug={f.slug}
+                        name={f.name}
+                        abbreviation={f.abbreviation ?? undefined}
+                        brandingColor={f.brandingColor ?? undefined}
+                        avatarUrl={f.avatarUrl}
+                        size={20}
+                        decorative
+                      />
+                    ))}
+                  </div>
+                  <span className="text-caption text-text-tertiary truncate">
+                    {move.franchises.map((f) => f.name).join(" / ")}
+                  </span>
+                </div>
+                {move.support && (
+                  <p className="mt-1 text-body-sm text-text-secondary truncate">
+                    {move.support}
+                  </p>
+                )}
               </div>
-              {move.age && (
-                <span className="text-caption text-text-tertiary shrink-0">
-                  <MonoNumerals text={move.age} />
-                </span>
-              )}
             </div>
           ))}
         </div>
