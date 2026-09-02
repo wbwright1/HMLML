@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { ClaimCodeManager } from "@/components/commish/claim-code-manager";
-import { getSessionMember, isClaimCodeExpired } from "@/lib/auth";
+import { getSessionMember } from "@/lib/auth";
 import { getAllMembersWithFranchise } from "@/lib/queries/members";
 import { getAllSmackPostsForModeration } from "@/lib/queries/moderation";
 import { formatRelativeTime } from "@/lib/relative-time";
@@ -50,11 +50,12 @@ type MemberRow = Awaited<
 >[number];
 
 function codeStatusLabel(row: MemberRow): string {
-  if (!row.claimCodeHash) return "No code yet";
+  if (!row.claimCode && !row.claimCodeHash) return "No code yet";
+  // A hash-only row predates the plaintext column, so its code can never be
+  // read back. Say so plainly rather than dangling an issued-time next to a
+  // code nobody can produce.
+  if (!row.claimCode) return "Legacy code";
   if (row.codeGeneratedAt) {
-    // An expired code can't be redeemed, so flag it for rotation rather than
-    // showing a stale issued-time the commish would have to reason about.
-    if (isClaimCodeExpired(row.codeGeneratedAt)) return "Code expired";
     const rel = formatRelativeTime(row.codeGeneratedAt.toISOString());
     return rel === "now" ? "Code issued just now" : `Code issued ${rel} ago`;
   }
@@ -111,7 +112,11 @@ function MembersSection({ members }: { members: MemberRow[] }) {
               </div>
             </div>
 
-            <ClaimCodeManager memberId={m.id} hasCode={!!m.claimCodeHash} />
+            <ClaimCodeManager
+              memberId={m.id}
+              code={m.claimCode}
+              hasCode={!!m.claimCode || !!m.claimCodeHash}
+            />
           </div>
         ))}
         {members.length === 0 && (

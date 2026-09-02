@@ -55,6 +55,7 @@ export async function createMemberTables(): Promise<void> {
     "display_name" text NOT NULL,
     "franchise_id" text,
     "role" text DEFAULT 'member' NOT NULL,
+    "claim_code" text,
     "claim_code_hash" text,
     "code_generated_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT now(),
@@ -124,7 +125,8 @@ export interface MemberFixtureScope {
 
 /**
  * Builds a fully scope-isolated fixture: a test franchise, a commish (known
- * claim code), a plain member (own known code), and two smack posts (one
+ * claim code, stored as a LEGACY scrypt hash), a plain member (own known code,
+ * stored as plaintext like every code issued today), and two smack posts (one
  * hidden, one visible). Every value is unique to the scope so two spec files
  * running in parallel workers cannot delete or match each other's rows either
  * in the DB or in shared page surfaces (/commish moderation, the hub feed).
@@ -161,12 +163,14 @@ export function memberFixtureScope(scope: string): MemberFixtureScope {
         RETURNING "id"`) as { id: number }[];
       const commishId = commishRows[0].id;
 
-      const memberHash = await hashClaimCode(fx.memberClaimCode);
+      // The plain member carries the CURRENT scheme (plaintext, no hash) while
+      // the commish above stays hash-only, so one fixture covers both storage
+      // shapes: every commish sign-in doubles as the legacy-path regression.
       const memberRows = (await sql`
         INSERT INTO "members"
-          ("sleeper_user_id", "display_name", "franchise_id", "role", "claim_code_hash", "code_generated_at")
+          ("sleeper_user_id", "display_name", "franchise_id", "role", "claim_code", "code_generated_at")
         VALUES
-          (${fx.memberSleeperId}, ${fx.memberDisplayName}, ${fx.franchiseId}, 'member', ${memberHash}, now())
+          (${fx.memberSleeperId}, ${fx.memberDisplayName}, ${fx.franchiseId}, 'member', ${fx.memberClaimCode}, now())
         RETURNING "id"`) as { id: number }[];
       const memberId = memberRows[0].id;
 

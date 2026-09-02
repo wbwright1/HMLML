@@ -8,6 +8,10 @@ import { resolveOwnerName } from "@/lib/owner-names";
  * All members with their currently-controlled franchise joined (slug, name,
  * branding, current-season crest). Powers the commish roster/claim-code page.
  * Ordered by display name. franchise columns are null for an unattached member.
+ *
+ * Returns the plaintext claimCode. Only /commish reads this, and that page is
+ * dynamic and commish-gated, so the codes never reach a cache or a non-commish
+ * response. Do not call this from a public surface.
  */
 export async function getAllMembersWithFranchise() {
   try {
@@ -18,6 +22,7 @@ export async function getAllMembersWithFranchise() {
         displayName: members.displayName,
         role: members.role,
         franchiseId: members.franchiseId,
+        claimCode: members.claimCode,
         claimCodeHash: members.claimCodeHash,
         codeGeneratedAt: members.codeGeneratedAt,
         createdAt: members.createdAt,

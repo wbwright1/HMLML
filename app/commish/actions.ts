@@ -22,7 +22,9 @@ async function requireCommish() {
 
 /**
  * Issues (generates or rotates) a claim code for a member and returns the
- * plaintext ONCE as action state so the client island can reveal it in-page.
+ * plaintext as action state so the island can reveal it immediately. Codes are
+ * stored in plaintext and retrievable from the console afterwards, so this is
+ * no longer a one-shot reveal; the action state just saves a page round-trip.
  * Always revokes the member's existing sessions: rotating must sign the old
  * device out, and on a first-time generate there are no sessions so it's a
  * harmless no-op. useActionState signature: (prevState, formData) => newState.
