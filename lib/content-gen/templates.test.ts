@@ -49,13 +49,21 @@ function baseContext(overrides: Partial<StatsContext> = {}): StatsContext {
         pairKey: "foopus__olave-garden",
         home: { name: "Foopus", slug: "foopus", record: "4-1", pointsFor: 620.5 },
         away: { name: "Olave Garden", slug: "olave-garden", record: "2-3", pointsFor: 540.1 },
-        h2h: { wins: 3, losses: 1, ties: 0 },
+        h2h: { wins: 3, losses: 1, ties: 0, streak: null },
+        lastMeeting: null,
+        playoffMeetingYears: [],
+        isTitleRematch: false,
+        topProjected: null,
       },
       {
         pairKey: "better-call-hall__mccarthyism",
         home: { name: "McCarthyism", slug: "mccarthyism", record: "3-2", pointsFor: 580.0 },
         away: { name: "Better Call Hall", slug: "better-call-hall", record: "1-4", pointsFor: 500.2 },
-        h2h: { wins: 0, losses: 0, ties: 0 },
+        h2h: { wins: 0, losses: 0, ties: 0, streak: null },
+        lastMeeting: null,
+        playoffMeetingYears: [],
+        isTitleRematch: false,
+        topProjected: null,
       },
     ],
     gameOfWeekPairKey: null,
@@ -490,5 +498,114 @@ describe("generateFromTemplates (offseason)", () => {
 
   it("never emits an em-dash", () => {
     for (const r of rows) expect(hasEmDash(r.body)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Week 1: every record is 0-0, so the angles must come from head-to-head.
+// ---------------------------------------------------------------------------
+
+describe("generateFromTemplates (week 1 matchup angles)", () => {
+  const zero = (name: string, slug: string) => ({
+    name,
+    slug,
+    record: "0-0",
+    pointsFor: 0,
+  });
+  const ctx = baseContext({
+    seasonType: "regular",
+    week: 1,
+    divisions: [
+      {
+        name: "Division 1",
+        leader: zero("Foopus", "foopus"),
+        teams: [zero("Foopus", "foopus"), zero("Olave Garden", "olave-garden")],
+      },
+    ],
+    leagueStandings: [
+      zero("Foopus", "foopus"),
+      zero("Olave Garden", "olave-garden"),
+      zero("McCarthyism", "mccarthyism"),
+      zero("Better Call Hall", "better-call-hall"),
+      zero("Team C", "team-c"),
+      zero("Team D", "team-d"),
+    ],
+    currentMatchups: [
+      {
+        // A lopsided series with an active streak.
+        pairKey: "foopus__olave-garden",
+        home: zero("Foopus", "foopus"),
+        away: zero("Olave Garden", "olave-garden"),
+        h2h: { wins: 6, losses: 1, ties: 0, streak: "3-game win streak" },
+        lastMeeting: {
+          seasonYear: 2025,
+          week: 12,
+          winner: "home" as const,
+          homePoints: 140.2,
+          awayPoints: 99.8,
+          isPlayoff: false,
+        },
+        playoffMeetingYears: [],
+        isTitleRematch: false,
+        topProjected: null,
+      },
+      {
+        // A first meeting: no series claim allowed.
+        pairKey: "mccarthyism__team-c",
+        home: zero("McCarthyism", "mccarthyism"),
+        away: zero("Team C", "team-c"),
+        h2h: { wins: 0, losses: 0, ties: 0, streak: null },
+        lastMeeting: null,
+        playoffMeetingYears: [],
+        isTitleRematch: false,
+        topProjected: null,
+      },
+      {
+        // An even series whose only receipt is the last meeting.
+        pairKey: "better-call-hall__team-d",
+        home: zero("Better Call Hall", "better-call-hall"),
+        away: zero("Team D", "team-d"),
+        h2h: { wins: 2, losses: 2, ties: 0, streak: null },
+        lastMeeting: {
+          seasonYear: 2024,
+          week: 6,
+          winner: "away" as const,
+          homePoints: 88.4,
+          awayPoints: 121.9,
+          isPlayoff: false,
+        },
+        playoffMeetingYears: [],
+        isTitleRematch: false,
+        topProjected: null,
+      },
+    ],
+  });
+  const angles = generateFromTemplates(ctx).rows.filter(
+    (r) => r.kind === "matchup_angle",
+  );
+
+  it("writes one distinct angle per matchup", () => {
+    expect(angles).toHaveLength(3);
+    expect(new Set(angles.map((a) => a.body)).size).toBe(3);
+  });
+
+  it("never cites a 0-0 record", () => {
+    for (const a of angles) expect(a.body).not.toContain("0-0");
+  });
+
+  it("hangs each angle on that pair's own receipt", () => {
+    const byPair = new Map(angles.map((a) => [a.refKey, a.body]));
+    expect(byPair.get("foopus__olave-garden")).toContain("Foopus has taken the last 3");
+    expect(byPair.get("better-call-hall__team-d")).toContain("Team D 121.9");
+  });
+
+  it("makes no series claim for a first meeting", () => {
+    const first = angles.find((a) => a.refKey === "mccarthyism__team-c")?.body ?? "";
+    expect(first).toContain("never played");
+    expect(first).not.toMatch(/\d+-\d+/);
+  });
+
+  it("never emits an em-dash", () => {
+    for (const a of angles) expect(hasEmDash(a.body)).toBe(false);
   });
 });

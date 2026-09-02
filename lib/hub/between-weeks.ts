@@ -275,10 +275,14 @@ export function stakesClause(
 }
 
 /**
- * A truthful, records-based angle for a slate matchup when no editorial blurb
- * exists for the pair. Site voice, no em-dashes. `kickoffWeekday` names the
- * actual day the slate opens (e.g. "Wednesday" for the 2026 week-1 opener),
- * never a hardcoded day.
+ * A truthful, records-based angle for a slate matchup. Site voice, no
+ * em-dashes. `kickoffWeekday` names the actual day the slate opens (e.g.
+ * "Wednesday" for the 2026 week-1 opener), never a hardcoded day.
+ *
+ * No longer the slate's default: it is the LAST rung of the ladder in
+ * lib/hub/slate-angle.ts, reachable only from week 2 on. Before a game has
+ * been played both records are "0-0", which is the absence of a fact rather
+ * than a fact, so the builder gates this rung off at week 1 entirely.
  */
 export function genericSlateAngle(
   recordA: string,

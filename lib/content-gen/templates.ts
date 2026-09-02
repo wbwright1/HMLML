@@ -9,6 +9,10 @@ import type {
   StatsTradeSide,
 } from "@/lib/content-gen/stats-context";
 import { validateRow } from "@/lib/content-gen/validate";
+import {
+  buildSlateAngles,
+  type SlateAngleInput,
+} from "@/lib/hub/slate-angle";
 import { FRANCHISE_UNIQUE_KINDS, selectDiverseSubset } from "@/lib/content-gen/dedupe";
 
 // ---------------------------------------------------------------------------
@@ -587,22 +591,74 @@ function verdictLine(t: StatsTrade): string {
 // ---------------------------------------------------------------------------
 
 function matchupAngles(ctx: StatsContext): HubContentInsert[] {
-  return ctx.currentMatchups.map((m) => ({
+  // Built as a batch so the template fallback inherits the same distinctness
+  // guarantee the hub gets: identical copy on two cards is impossible, not
+  // merely unlikely.
+  // One slate-wide flag, computed once: a season record is only a fact after
+  // a game has been played, and it is the same answer for every matchup.
+  const anyGamesPlayed = ctx.leagueStandings.some(
+    (t) => !ZERO_TEAM_RECORD.test(t.record),
+  );
+  const bodies = buildSlateAngles(
+    ctx.currentMatchups.map((m) => slateAngleInput(m, anyGamesPlayed)),
+  );
+  return ctx.currentMatchups.map((m, i) => ({
     week: ctx.week,
     kind: "matchup_angle" as const,
     refKey: m.pairKey,
-    body: slateAngle(m),
+    body: bodies[i],
     extras: null,
   }));
 }
 
-function slateAngle(m: StatsMatchup): string {
-  const h2h = m.h2h;
-  const h2hClause =
-    h2h && h2h.wins + h2h.losses + h2h.ties > 0
-      ? `They have met before: ${m.home.name} leads the all-time series ${h2h.wins}-${h2h.losses}${h2h.ties > 0 ? `-${h2h.ties}` : ""}.`
-      : "First-ever meeting between these two.";
-  return `${m.home.name} (${m.home.record}) hosts ${m.away.name} (${m.away.record}). ${h2hClause}`;
+const ZERO_TEAM_RECORD = /^0-0(-0)?$/;
+
+/**
+ * Adapts a StatsMatchup into the shared angle builder's input. Side "A" is
+ * always the HOME team, which is the perspective getHeadToHead's counts and
+ * streak are written from, so the streak never names the wrong franchise.
+ */
+function slateAngleInput(
+  m: StatsMatchup,
+  anyGamesPlayed: boolean,
+): SlateAngleInput {
+  return {
+    teamA: { name: m.home.name },
+    teamB: { name: m.away.name },
+    h2h: m.h2h,
+    lastMeeting: m.lastMeeting
+      ? {
+          seasonYear: m.lastMeeting.seasonYear,
+          week: m.lastMeeting.week,
+          winner:
+            m.lastMeeting.winner == null
+              ? null
+              : m.lastMeeting.winner === "home"
+                ? "A"
+                : "B",
+          pointsA: m.lastMeeting.homePoints,
+          pointsB: m.lastMeeting.awayPoints,
+          isPlayoff: m.lastMeeting.isPlayoff,
+        }
+      : null,
+    playoffMeetingYears: m.playoffMeetingYears,
+    topProjected: m.topProjected
+      ? {
+          playerName: m.topProjected.playerName,
+          position: m.topProjected.position,
+          side: m.topProjected.side === "home" ? "A" : "B",
+          projectedPoints: m.topProjected.projectedPoints,
+        }
+      : null,
+    isTitleRematch: m.isTitleRematch,
+    // The generator has no bowl-name lookup on the context; the ladder falls
+    // back to "the title game", which is still a true statement.
+    bowlName: null,
+    recordA: m.home.record,
+    recordB: m.away.record,
+    anyGamesPlayed,
+    kickoffWeekday: "this week",
+  };
 }
 
 function gameOfWeek(ctx: StatsContext): HubContentInsert | null {

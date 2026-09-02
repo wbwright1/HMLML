@@ -64,6 +64,15 @@ export function jaccard(a: Set<string>, b: Set<string>): number {
 // Anchor extraction
 // ---------------------------------------------------------------------------
 
+/**
+ * A body reduced to its identity for exact-duplicate detection: case folded,
+ * whitespace collapsed. Deliberately NOT a similarity measure; two rows that
+ * merely rhyme are a different problem, handled by the trigram gate.
+ */
+function normalizedBody(body: string): string {
+  return body.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 function extractNumbers(body: string): number[] {
   const matches = body.match(/\d+(?:\.\d+)?/g) ?? [];
   return matches.map((m) => parseFloat(m));
@@ -229,9 +238,15 @@ export function selectDiverseSubset(
   // hook (same franchise + number, or same central player) is still caught
   // unconditionally by the primary duplicate check in isDuplicate above,
   // which IS global.
+  // Exact bodies already kept, for the identity check the keep-all path and
+  // the relaxation pass share. Case- and whitespace-insensitive, so trivial
+  // reformatting of the same sentence still counts as the same sentence.
+  const keptBodies = new Set<string>();
+
   function accept(row: CandidateRow, anchors: Anchors): void {
     kept.push(row);
     keptSet.add(row);
+    keptBodies.add(normalizedBody(row.body));
     keptAnchors.push(anchors);
     if (anchors.franchiseKey) {
       const key = `${row.kind}::${anchors.franchiseKey}`;
@@ -303,6 +318,18 @@ export function selectDiverseSubset(
       if (!row) continue;
       if ((addedPerKind.get(kind) ?? 0) >= targetFor(kind)) continue;
       if (keepAllKinds.has(kind)) {
+        // Keep-all bypasses the SIMILARITY gate (the trigram threshold that
+        // boilerplate skeletons trip), but never the identity one: two rows
+        // with the exact same body are not two angles, they are one angle
+        // printed twice, and shipping both puts visibly identical copy on two
+        // cards. The dropped row leaves its kind short, so topUpShortKinds
+        // refills that pairKey from the deterministic builder instead.
+        const bodyKey = normalizedBody(row.body);
+        if (keptBodies.has(bodyKey)) {
+          dropped.push({ row, reason: "duplicate" });
+          droppedSet.add(row);
+          continue;
+        }
         accept(row, extractAnchors(row, ctx));
         addedPerKind.set(kind, (addedPerKind.get(kind) ?? 0) + 1);
         continue;
@@ -315,7 +342,11 @@ export function selectDiverseSubset(
 
   // Coverage-first relaxation: any kind still under target accepts its best
   // remaining (not-yet-kept) candidates outright, ignoring caps/dup checks.
-  // An empty module is worse than a mild echo.
+  // An empty module is worse than a mild echo. A character-identical body is
+  // not a mild echo though, so that one gate survives relaxation: refilling
+  // the slot with the exact line already on the page buys nothing, and
+  // leaving the kind short hands the slot to topUpShortKinds' deterministic
+  // template instead.
   for (const kind of kinds) {
     const target = targetFor(kind);
     let added = addedPerKind.get(kind) ?? 0;
@@ -324,6 +355,7 @@ export function selectDiverseSubset(
     for (const row of candidatesByKind[kind] ?? []) {
       if (added >= target) break;
       if (keptSet.has(row)) continue;
+      if (keptBodies.has(normalizedBody(row.body))) continue;
       const anchors = extractAnchors(row, ctx);
       if (
         franchiseUniqueKinds.has(row.kind) &&

@@ -5,7 +5,17 @@ import {
   getTitleGamePair,
 } from "@/lib/queries/seasons";
 import { getMatchupsByWeek } from "@/lib/queries/matchups";
-import { getHeadToHead } from "@/lib/queries/records";
+import {
+  getHeadToHead,
+  getHeadToHeadHistory,
+  type HeadToHeadGame,
+} from "@/lib/queries/records";
+import {
+  getWeekStarterPool,
+  topProjectedStarterByMatchup,
+  type PoolRow,
+} from "@/lib/queries/players-to-watch";
+import { summarizeMeetingHistory } from "@/lib/hub/slate-angle";
 import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
 import { getWeekBenchLeader } from "@/lib/queries/lineup-efficiency";
 import { getWeekStandouts } from "@/lib/queries/week-standouts";
@@ -45,12 +55,53 @@ export interface StatsDivision {
   leader: StatsTeam | null;
 }
 
+/** Which side of a matchup a fact belongs to. */
+export type StatsMatchupSide = "home" | "away";
+
+export interface StatsLastMeeting {
+  seasonYear: number;
+  week: number;
+  /** Winning side, or null for a tie. */
+  winner: StatsMatchupSide | null;
+  homePoints: number;
+  awayPoints: number;
+  isPlayoff: boolean;
+}
+
+export interface StatsTopProjected {
+  playerName: string;
+  position: string | null;
+  side: StatsMatchupSide;
+  projectedPoints: number;
+}
+
 export interface StatsMatchup {
   pairKey: string;
   home: StatsTeam;
   away: StatsTeam;
-  /** All-time head-to-head from the home team's perspective. */
-  h2h: { wins: number; losses: number; ties: number } | null;
+  /**
+   * All-time head-to-head from the home team's perspective. `streak` is the
+   * active run in the same orientation ("3-game win streak" means the HOME
+   * team has won the last three).
+   */
+  h2h: {
+    wins: number;
+    losses: number;
+    ties: number;
+    streak: string | null;
+  } | null;
+  /**
+   * The most recent COMPLETED meeting between the pair, or null when they
+   * have never played. At week 1 this and the two fields below are the only
+   * real receipts that exist, since no current-season game has been played.
+   */
+  lastMeeting: StatsLastMeeting | null;
+  /** Season years in which the pair met in a playoff game, newest first. */
+  playoffMeetingYears: number[];
+  /** True when this matchup is a rematch of last season's title game. */
+  isTitleRematch: boolean;
+  /** Highest projected starter in this matchup, either side. */
+  topProjected: StatsTopProjected | null;
 }
 
 export interface StatsScorer {
@@ -283,12 +334,28 @@ export async function buildStatsContext(
 
   const leagueStandings = [...divisions.flatMap((d) => d.teams)];
 
-  // Current-week matchups + all-time head-to-head for each pairing.
-  const h2hResults = await Promise.all(
-    currentMatchupRows.map((m) =>
-      getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId),
+  // Current-week matchups + all-time head-to-head for each pairing, plus the
+  // receipts the week-1 angles hang on: the completed meeting history and the
+  // week's projected starters. Both extras are best-effort (an empty result
+  // just drops a rung off the angle ladder), which is why they are settled
+  // separately from the counts rather than allowed to fail the whole context.
+  const [h2hResults, historyResults, starterPool] = await Promise.all([
+    Promise.all(
+      currentMatchupRows.map((m) =>
+        getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId),
+      ),
     ),
-  );
+    Promise.all(
+      currentMatchupRows.map((m) =>
+        getHeadToHeadHistory(m.homeTeam.franchiseId, m.awayTeam.franchiseId),
+      ),
+    ).catch((): HeadToHeadGame[][] => []),
+    getWeekStarterPool(seasonId, week).catch((): PoolRow[] => []),
+  ]);
+
+  // Highest projected starter per Sleeper matchupId, from the same pool the
+  // hub's Players to Watch rail scores over.
+  const topProjectedByMatchup = topProjectedStarterByMatchup(starterPool);
   // Records + division identity come from the division standings map so the
   // matchup preview shows season records (not the single-game points from the
   // matchup row) and the Game of the Week selection can weigh divisions.
@@ -297,36 +364,6 @@ export async function buildStatsContext(
       g.teams.map((t) => [t.franchiseId, t] as const),
     ),
   );
-  const currentMatchups: StatsMatchup[] = currentMatchupRows.map((m, i) => {
-    const record = (t: {
-      wins?: number;
-      losses?: number;
-      ties?: number;
-    }): string => fmtRecord(t.wins ?? 0, t.losses ?? 0, t.ties ?? 0);
-    const home = standingBy.get(m.homeTeam.franchiseId);
-    const away = standingBy.get(m.awayTeam.franchiseId);
-    return {
-      pairKey: matchupPairKey(m.homeTeam.franchiseSlug, m.awayTeam.franchiseSlug),
-      home: {
-        name: m.homeTeam.franchiseName,
-        slug: m.homeTeam.franchiseSlug,
-        record: home ? record(home) : "0-0",
-        pointsFor: home ? Math.round((home.pointsScored ?? 0) * 10) / 10 : 0,
-      },
-      away: {
-        name: m.awayTeam.franchiseName,
-        slug: m.awayTeam.franchiseSlug,
-        record: away ? record(away) : "0-0",
-        pointsFor: away ? Math.round((away.pointsScored ?? 0) * 10) / 10 : 0,
-      },
-      h2h: {
-        wins: h2hResults[i].wins,
-        losses: h2hResults[i].losses,
-        ties: h2hResults[i].ties,
-      },
-    };
-  });
-
   // Game of the Week: the same selection the between-weeks hub makes, so the
   // generated blurb targets the matchup the hub features. Uses division +
   // records from the standings map (the fields selectGameOfTheWeek weighs),
@@ -360,6 +397,81 @@ export async function buildStatsContext(
   const gameOfWeekPairKey = gotwRow
     ? matchupPairKey(gotwRow.homeTeam.franchiseSlug, gotwRow.awayTeam.franchiseSlug)
     : null;
+
+  const currentMatchups: StatsMatchup[] = currentMatchupRows.map((m, i) => {
+    const record = (t: {
+      wins?: number;
+      losses?: number;
+      ties?: number;
+    }): string => fmtRecord(t.wins ?? 0, t.losses ?? 0, t.ties ?? 0);
+    const home = standingBy.get(m.homeTeam.franchiseId);
+    const away = standingBy.get(m.awayTeam.franchiseId);
+    return {
+      pairKey: matchupPairKey(m.homeTeam.franchiseSlug, m.awayTeam.franchiseSlug),
+      home: {
+        name: m.homeTeam.franchiseName,
+        slug: m.homeTeam.franchiseSlug,
+        record: home ? record(home) : "0-0",
+        pointsFor: home ? Math.round((home.pointsScored ?? 0) * 10) / 10 : 0,
+      },
+      away: {
+        name: m.awayTeam.franchiseName,
+        slug: m.awayTeam.franchiseSlug,
+        record: away ? record(away) : "0-0",
+        pointsFor: away ? Math.round((away.pointsScored ?? 0) * 10) / 10 : 0,
+      },
+      h2h: {
+        wins: h2hResults[i].wins,
+        losses: h2hResults[i].losses,
+        ties: h2hResults[i].ties,
+        streak: h2hResults[i].streak,
+      },
+      // Same reduction the hub uses, in the same (home, away) orientation;
+      // only the A/B side labels are renamed to home/away for the STATS JSON.
+      ...(() => {
+        const summary = summarizeMeetingHistory(
+          historyResults[i] ?? [],
+          m.homeTeam.franchiseId,
+        );
+        const last = summary.lastMeeting;
+        return {
+          lastMeeting: last
+            ? {
+                seasonYear: last.seasonYear,
+                week: last.week,
+                winner:
+                  last.winner == null
+                    ? null
+                    : last.winner === "A"
+                      ? ("home" as const)
+                      : ("away" as const),
+                homePoints: last.pointsA,
+                awayPoints: last.pointsB,
+                isPlayoff: last.isPlayoff,
+              }
+            : null,
+          playoffMeetingYears: summary.playoffMeetingYears,
+        };
+      })(),
+      isTitleRematch: Boolean(
+        markedGotwCandidates.find((c) => c.matchupId === m.matchupId)
+          ?.isTitleRematch,
+      ),
+      topProjected: (() => {
+        const top = topProjectedByMatchup.get(m.matchupId);
+        if (!top) return null;
+        return {
+          playerName: top.playerName,
+          position: top.position,
+          side:
+            top.franchiseId === m.homeTeam.franchiseId
+              ? ("home" as const)
+              : ("away" as const),
+          projectedPoints: top.projectedPoints,
+        };
+      })(),
+    };
+  });
 
   // Last completed season superlatives (champion / doormat / point machine).
   let lastSeason: StatsContext["lastSeason"] = null;

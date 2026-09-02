@@ -14,7 +14,17 @@ import { SlateCard } from "@/components/hub/slate-card";
 import { teamAcronym } from "@/lib/team-acronym";
 import type { PairedMatchup } from "@/lib/queries/matchups";
 import { getTitleGamePair, type getSeasonStandings } from "@/lib/queries/seasons";
-import { getHeadToHead } from "@/lib/queries/records";
+import {
+  getHeadToHead,
+  getHeadToHeadHistory,
+  type HeadToHeadRecord,
+} from "@/lib/queries/records";
+import {
+  buildSlateAngles,
+  summarizeMeetingHistory,
+  type MeetingHistorySummary,
+  type SlateAngleInput,
+} from "@/lib/hub/slate-angle";
 import { getBowlName } from "@/lib/bowl-names";
 import { getDivisionStandings } from "@/lib/queries/divisions";
 import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
@@ -23,6 +33,7 @@ import {
   getWeekStarterPool,
   getPlayersToWatchFromPool,
   sumProjectedByFranchise,
+  topProjectedStarterByMatchup,
   type PlayerToWatch,
 } from "@/lib/queries/players-to-watch";
 import { getRecentLeagueMoves, type LeagueMove } from "@/lib/queries/league-moves";
@@ -38,7 +49,6 @@ import {
   formatH2HLine,
   formatSlateH2H,
   stakesClause,
-  genericSlateAngle,
   kickoffWeekdayName,
   type GotwCandidate,
 } from "@/lib/hub/between-weeks";
@@ -124,10 +134,14 @@ export async function BetweenWeeksHub({
   let leagueMoves: LeagueMove[] = [];
   let weekReceipts: WeekReceipt[] = [];
   let bookGames: BookGame[] = [];
-  const h2hByMatchup = new Map<
-    number,
-    { wins: number; losses: number; ties: number }
-  >();
+  // The full record (streak included), not just the counts: the derived slate
+  // angle reads the streak, and it is oriented from the HOME team's
+  // perspective because getHeadToHead is called as (home, away) below.
+  const h2hByMatchup = new Map<number, HeadToHeadRecord>();
+  // Completed-meeting history per matchup, reduced to what the angle ladder
+  // needs. Genuinely optional enrichment: an empty entry degrades the ladder
+  // to the counts-only rungs rather than blanking the card.
+  const h2hHistoryByMatchup = new Map<number, MeetingHistorySummary>();
 
   if (seasonId != null) {
     try {
@@ -149,7 +163,8 @@ export async function BetweenWeeksHub({
         moves,
         receipts,
         board,
-        ...h2hResults
+        h2hResults,
+        historyResults,
       ] = await Promise.all([
         getDivisionStandings(seasonId),
         week === 1
@@ -168,8 +183,21 @@ export async function BetweenWeeksHub({
         bookMatchesSlate
           ? getBookBoard(bookWeek.seasonId, bookWeek.seasonYear, bookWeek.week)
           : Promise.resolve([]),
-        ...matchups.map((m) =>
-          getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
+        // Both per-matchup batches stay inside this one Promise.all (nested so
+        // the outer tuple keeps its types): the all-time counts drive the
+        // card's top-right record, the meeting history drives the last-meeting
+        // and playoff rungs of the derived angle. Both are cachedQuery-backed
+        // and this page is ISR-cached, so the extra round trip is paid once
+        // per sync, not per request.
+        Promise.all(
+          matchups.map((m) =>
+            getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
+          )
+        ),
+        Promise.all(
+          matchups.map((m) =>
+            getHeadToHeadHistory(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
+          )
         ),
       ]);
 
@@ -196,6 +224,13 @@ export async function BetweenWeeksHub({
 
       matchups.forEach((m, i) => {
         h2hByMatchup.set(m.matchupId, h2hResults[i]);
+
+        // Side A is the HOME team, matching the (home, away) orientation the
+        // getHeadToHead call above uses.
+        h2hHistoryByMatchup.set(
+          m.matchupId,
+          summarizeMeetingHistory(historyResults[i] ?? [], m.homeTeam.franchiseId)
+        );
       });
     } catch {
       // DB may be unavailable; the hero + countdown still render.
@@ -247,6 +282,55 @@ export async function BetweenWeeksHub({
   const bowlName = titlePair ? getBowlName(titlePair.seasonYear) : null;
   const kickoffWeekday = kickoffWeekdayName(nextKickoff);
   const bookGameByMatchup = new Map(bookGames.map((g) => [g.matchupId, g]));
+
+  // Highest projected starter per matchup, from the SAME pool Players to Watch
+  // scores over, so the angle ladder's projected-star rung costs no new query.
+  const topStarterByMatchup = topProjectedStarterByMatchup(pool);
+
+  // An LLM-authored angle from hub_content outranks the builder, so those
+  // cards are settled first and left OUT of the batch below. Otherwise an
+  // overridden card would silently consume a hook (the streak, say) that a
+  // builder-driven card could have used, and the visible slate would be less
+  // varied than it needed to be.
+  const angleOverrideOf = (m: PairedMatchup): string | null =>
+    editorial.matchupAngles.byPair[
+      matchupPairKey(m.homeTeam.franchiseSlug, m.awayTeam.franchiseSlug)
+    ] ?? null;
+  const needsBuiltAngle = restOfSlate.filter((m) => angleOverrideOf(m) == null);
+
+  // Built as one batch: that is what makes the cards provably distinct
+  // (buildSlateAngles moves a later card off a hook an earlier one took).
+  const slateAngleInputs: SlateAngleInput[] = needsBuiltAngle.map((m) => {
+    const history = h2hHistoryByMatchup.get(m.matchupId);
+    const star = topStarterByMatchup.get(m.matchupId);
+    return {
+      teamA: { name: m.homeTeam.franchiseName },
+      teamB: { name: m.awayTeam.franchiseName },
+      h2h: h2hByMatchup.get(m.matchupId) ?? null,
+      lastMeeting: history?.lastMeeting ?? null,
+      playoffMeetingYears: history?.playoffMeetingYears ?? [],
+      topProjected: star
+        ? {
+            playerName: star.playerName,
+            position: star.position,
+            side: star.franchiseId === m.homeTeam.franchiseId ? "A" : "B",
+            projectedPoints: star.projectedPoints,
+          }
+        : null,
+      isTitleRematch: Boolean(
+        markedCandidates.find((c) => c.matchupId === m.matchupId)?.isTitleRematch
+      ),
+      bowlName,
+      recordA: record(m.homeTeam.franchiseId),
+      recordB: record(m.awayTeam.franchiseId),
+      anyGamesPlayed,
+      kickoffWeekday,
+    };
+  });
+  const builtAngles = buildSlateAngles(slateAngleInputs);
+  const angleByMatchup = new Map(
+    needsBuiltAngle.map((m, i) => [m.matchupId, builtAngles[i]])
+  );
 
   // Players to Watch: the pre-kickoff replacement for the retrospective
   // "Standouts" rail. Uses the same pool fetched above; empty (never
@@ -317,14 +401,7 @@ export async function BetweenWeeksHub({
                 {restOfSlate.map((m) => {
                   const h2h = h2hByMatchup.get(m.matchupId);
                   const angle =
-                    editorial.matchupAngles.byPair[
-                      matchupPairKey(m.homeTeam.franchiseSlug, m.awayTeam.franchiseSlug)
-                    ] ??
-                    genericSlateAngle(
-                      record(m.homeTeam.franchiseId),
-                      record(m.awayTeam.franchiseId),
-                      kickoffWeekday
-                    );
+                    angleOverrideOf(m) ?? angleByMatchup.get(m.matchupId) ?? "";
                   const bookGame = bookGameByMatchup.get(m.matchupId);
                   return (
                     <SlateCard
@@ -671,33 +748,42 @@ function BenchCallout({
 
 function PlayerToWatchRow({ player }: { player: PlayerToWatch }) {
   return (
-    <div className="flex items-center gap-3">
-      <PlayerHeadshot
-        playerId={player.playerId}
-        name={player.name}
-        size={56}
-        nflTeam={player.team}
-      />
-      <div className="min-w-0 flex-1">
-        <p className="text-kicker text-accent-gold truncate">{player.storyLabel}</p>
-        <p className="text-body-sm font-semibold text-text-primary truncate">
-          {player.name}
-        </p>
-        <p className="text-caption text-text-tertiary truncate">
-          {player.team ?? "FA"} &middot; {player.position ?? "?"}
-        </p>
+    <div>
+      <div className="flex items-center gap-3">
+        <PlayerHeadshot
+          playerId={player.playerId}
+          name={player.name}
+          size={56}
+          nflTeam={player.team}
+        />
+        <div className="min-w-0 flex-1">
+          <p className="text-kicker text-accent-gold">{player.storyLabel}</p>
+          <p className="text-body-sm font-semibold text-text-primary line-clamp-2">
+            {player.name}
+          </p>
+          <p className="text-caption text-text-tertiary truncate">
+            {player.team ?? "FA"} &middot; {player.position ?? "?"}
+          </p>
+        </div>
+      </div>
+      <div className="mt-2 space-y-1">
         {player.storyDetail && (
-          <p className="text-body-sm text-text-secondary truncate">
+          <p className="text-body-sm text-text-secondary line-clamp-3">
             <MonoNumerals text={player.storyDetail} />
           </p>
         )}
-        <p className="text-body-sm text-text-tertiary truncate">
-          Projected{" "}
-          <span className="text-stat tabular-nums text-text-secondary">
-            {player.projectedPoints.toFixed(1)}
-          </span>{" "}
-          &middot; {player.baselineLabel}
-        </p>
+        {/* The Leap's storyDetail already states the projection and the
+            baseline ppg ("Projected 20.8 off 15.3 ppg in 2025"), so a second
+            line repeating the same two numbers is redundant, not a new fact. */}
+        {player.storyKey !== "leap" && (
+          <p className="text-body-sm text-text-tertiary line-clamp-2">
+            Projected{" "}
+            <span className="text-stat tabular-nums text-text-secondary">
+              {player.projectedPoints.toFixed(1)}
+            </span>{" "}
+            &middot; {player.baselineLabel}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -721,7 +807,7 @@ function PlayersToWatchCard({
     <section className="space-y-3">
       <p className="text-kicker">Players to Watch &middot; Week {week}</p>
       <RailCard>
-        <div className="space-y-4 divide-y divide-divider [&>*:not(:first-child)]:pt-4">
+        <div className="space-y-4 divide-y divide-border [&>*:not(:first-child)]:pt-4">
           {players.map((p) => (
             <PlayerToWatchRow key={p.playerId} player={p} />
           ))}
@@ -765,7 +851,7 @@ function LeagueMovesCard({ moves }: { moves: LeagueMove[] }) {
     <section className="space-y-3">
       <p className="text-kicker">League Moves</p>
       <RailCard>
-        <div className="divide-y divide-divider [&>*:not(:first-child)]:pt-3 space-y-3">
+        <div className="divide-y divide-border [&>*:not(:first-child)]:pt-3 space-y-3">
           {moves.map((move) => (
             <div key={move.transactionId} className="flex items-center gap-3">
               <div className="flex shrink-0 -space-x-2">
@@ -788,7 +874,7 @@ function LeagueMovesCard({ moves }: { moves: LeagueMove[] }) {
                   {" · "}
                   {move.franchises.map((f) => f.name).join(" / ")}
                 </p>
-                <p className="text-body-sm text-text-secondary truncate">
+                <p className="text-body-sm text-text-secondary line-clamp-2">
                   {move.detail}
                 </p>
               </div>
@@ -822,25 +908,20 @@ function WeekInHistoryCard({
     <section className="space-y-3">
       <p className="text-kicker">This Week in HMLML History</p>
       <RailCard>
-        <div className="divide-y divide-divider">
+        <div className="divide-y divide-border">
           {receipts.map((r) => (
-            <div
-              key={`${r.kind}-${r.seasonYear}`}
-              className="flex items-center justify-between gap-3 py-2"
-            >
-              <div className="min-w-0">
+            <div key={`${r.kind}-${r.seasonYear}`} className="py-3">
+              <div className="flex items-baseline justify-between gap-3">
                 <p className="text-kicker text-accent-gold">
                   {r.label} &middot;{" "}
                   <span className="text-stat tabular-nums">{r.seasonYear}</span>{" "}
                   Week <span className="text-stat tabular-nums">{week}</span>
                 </p>
-                <p className="text-body-sm text-text-secondary truncate">
-                  {r.claim}
-                </p>
+                <span className="text-stat tabular-nums text-body text-text-primary shrink-0">
+                  {r.value}
+                </span>
               </div>
-              <span className="text-stat tabular-nums text-body text-text-primary shrink-0">
-                {r.value}
-              </span>
+              <p className="mt-1 text-body-sm text-text-secondary">{r.claim}</p>
             </div>
           ))}
         </div>

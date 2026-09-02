@@ -34,7 +34,10 @@ export function SlateCard({ teamA, teamB, h2hRecord, angle, bookFooter }: SlateC
           {h2hRecord}
         </span>
       </div>
-      <p className="mt-1.5 font-serif italic text-body-sm text-text-tertiary">
+      <p
+        data-testid="slate-angle"
+        className="mt-1.5 font-serif italic text-body-sm text-text-tertiary"
+      >
         {angle}
       </p>
 

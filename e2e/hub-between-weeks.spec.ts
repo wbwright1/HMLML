@@ -75,6 +75,34 @@ test.describe("Between-Weeks Hub (1d)", () => {
     ).toBeVisible();
   });
 
+  test("T11: every slate card carries its own angle, never the 0-0 placeholder", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    await expect(
+      page.getByText("The Rest of the Slate", { exact: true })
+    ).toBeVisible();
+
+    const angles = (
+      await page.getByTestId("slate-angle").allInnerTexts()
+    ).map((a) => a.trim());
+
+    // The slate is the whole week minus the Game of the Week, so a real week
+    // always has several cards.
+    expect(angles.length).toBeGreaterThanOrEqual(2);
+
+    // AC 2: no two cards say the same thing.
+    expect(new Set(angles).size).toBe(angles.length);
+
+    for (const angle of angles) {
+      // AC 1: never the records placeholder, and never a 0-0 claim at all.
+      expect(angle).not.toMatch(/\d+-\d+ against \d+-\d+/);
+      expect(angle).not.toContain("0-0");
+      // Substantive copy, not a bare fragment.
+      expect(angle.length).toBeGreaterThan(20);
+    }
+  });
+
   test("T04: no em-dashes anywhere in the hub copy", async ({ page }) => {
     await page.goto("/");
     const text = await page.locator("main").innerText();
@@ -151,6 +179,68 @@ test.describe("Between-Weeks Hub (1d)", () => {
     if (bothZero) {
       const text = await page.locator("main").innerText();
       expect(text).not.toContain("1st in Division");
+    }
+  });
+
+  test("T10: rail story text wraps instead of clipping, at desktop and mobile widths", async ({
+    page,
+  }) => {
+    for (const viewport of [
+      { width: 1440, height: 900 },
+      { width: 390, height: 844 },
+    ]) {
+      await page.setViewportSize(viewport);
+      await page.goto("/");
+      const main = page.locator("main");
+      const text = await main.innerText();
+
+      // Players to Watch: story-detail and projection paragraphs.
+      if (/Players to Watch/i.test(text)) {
+        const storyParagraphs = page.locator(
+          "p.text-body-sm.text-text-secondary.line-clamp-3, p.text-body-sm.text-text-tertiary.line-clamp-2"
+        );
+        const count = await storyParagraphs.count();
+        for (let i = 0; i < count; i++) {
+          const el = storyParagraphs.nth(i);
+          const { scrollWidth, clientWidth, fontSize, textTransform } =
+            await el.evaluate((node) => {
+              const style = getComputedStyle(node);
+              return {
+                scrollWidth: node.scrollWidth,
+                clientWidth: node.clientWidth,
+                fontSize: parseFloat(style.fontSize),
+                textTransform: style.textTransform,
+              };
+            });
+          expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+          expect(fontSize).toBeGreaterThanOrEqual(14);
+          expect(textTransform).toBe("none");
+        }
+      }
+
+      // This Week in HMLML History: the claim paragraph.
+      if (/This Week in HMLML History/i.test(text)) {
+        const claimParagraphs = page.locator(
+          "p.mt-1.text-body-sm.text-text-secondary"
+        );
+        const count = await claimParagraphs.count();
+        for (let i = 0; i < count; i++) {
+          const el = claimParagraphs.nth(i);
+          const { scrollWidth, clientWidth, fontSize, textTransform } =
+            await el.evaluate((node) => {
+              const style = getComputedStyle(node);
+              return {
+                scrollWidth: node.scrollWidth,
+                clientWidth: node.clientWidth,
+                fontSize: parseFloat(style.fontSize),
+                textTransform: style.textTransform,
+              };
+            });
+          expect(scrollWidth).toBeLessThanOrEqual(clientWidth + 1);
+          expect(fontSize).toBeGreaterThanOrEqual(14);
+          expect(textTransform).toBe("none");
+        }
+      }
     }
   });
 
