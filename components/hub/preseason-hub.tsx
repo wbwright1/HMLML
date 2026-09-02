@@ -88,9 +88,9 @@ export async function PreseasonHub({
   const draftDate = process.env.NEXT_PUBLIC_DRAFT_DATE;
   const draftUpcoming = draftDate ? new Date(draftDate).getTime() > Date.now() : false;
 
-  // Days-to-kickoff powers the hero dek. Floor-based (shared daysUntil) so it
-  // matches the countdown DAYS card and the topbar pill. Static server-rendered
-  // prose; the countdown cards themselves tick client-side.
+  // Days-to-kickoff powers the hero dek. Calendar-day based (shared daysUntil)
+  // so it matches the topbar pill. Static server-rendered prose; the countdown
+  // cards themselves tick client-side on their own duration math.
   const daysToKickoff = kickoffTarget ? daysUntil(kickoffTarget, new Date()) : null;
   // A generated hero dek (from the content cron) wins when present; otherwise we
   // use the computed dek, which carries the live day count the LLM cannot know.

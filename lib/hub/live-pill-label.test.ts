@@ -6,13 +6,27 @@ import {
 } from "./live-pill-label";
 
 describe("daysUntil", () => {
-  it("floors partial days (matches the countdown DAYS card)", () => {
-    const now = new Date("2026-08-01T00:00:00Z");
-    const target = new Date("2026-08-02T01:00:00Z"); // 25h out
+  it("counts calendar days in the league timezone, not 24h blocks", () => {
+    // Wednesday morning in Chicago looking at the NEXT Wednesday's evening
+    // kickoff: fewer than 7x24h remain, but it is 7 calendar days away.
+    const now = new Date("2026-09-02T14:00:00Z"); // Wed Sep 2, 9:00 CDT
+    const target = new Date("2026-09-10T00:20:00Z"); // Wed Sep 9, 19:20 CDT
+    expect(daysUntil(target, now)).toBe(7);
+  });
+
+  it("counts a next-day kickoff as 1 even under 24h out", () => {
+    const now = new Date("2026-09-03T02:00:00Z"); // Wed Sep 2, 21:00 CDT
+    const target = new Date("2026-09-04T00:20:00Z"); // Thu Sep 3, 19:20 CDT
     expect(daysUntil(target, now)).toBe(1);
   });
 
-  it("floors at 0 for a past target", () => {
+  it("returns 0 for a same-league-day target even across UTC midnight", () => {
+    const now = new Date("2026-09-03T16:00:00Z"); // Thu Sep 3, 11:00 CDT
+    const target = new Date("2026-09-04T00:20:00Z"); // Thu Sep 3, 19:20 CDT
+    expect(daysUntil(target, now)).toBe(0);
+  });
+
+  it("clamps at 0 for a past target", () => {
     const now = new Date("2026-08-05T00:00:00Z");
     const target = new Date("2026-08-01T00:00:00Z");
     expect(daysUntil(target, now)).toBe(0);

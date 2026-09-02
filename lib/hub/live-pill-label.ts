@@ -6,12 +6,27 @@
 import { LEAGUE_TIME_ZONE } from "@/lib/time-zone";
 
 /**
- * Whole days remaining until `target`, floored (matches the countdown DAYS card
- * and the between-weeks headline) and clamped at 0 so it is never negative. The
- * single source of the "N days out" count across the hub and the topbar pill.
+ * Calendar days from `now`'s date to `target`'s date in the league's home
+ * timezone, clamped at 0 so it is never negative. The single source of the
+ * "N days out" count across the hub and the topbar pill. Counted by date, not
+ * by elapsed 24-hour blocks: a Thursday kickoff seen the prior Wednesday is
+ * "8 days", even though fewer than 192 hours remain. (The ticking countdown
+ * card keeps its own duration math; this feeds prose and labels.)
  */
 export function daysUntil(target: Date, now: Date): number {
-  return Math.max(0, Math.floor((target.getTime() - now.getTime()) / 86_400_000));
+  return Math.max(0, leagueDayStamp(target) - leagueDayStamp(now));
+}
+
+/** A date's day number in the league timezone (days since the epoch). */
+function leagueDayStamp(d: Date): number {
+  const ymd = new Intl.DateTimeFormat("en-CA", {
+    timeZone: LEAGUE_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(d);
+  const [year, month, day] = ymd.split("-").map(Number);
+  return Date.UTC(year, month - 1, day) / 86_400_000;
 }
 
 /** e.g. "PRESEASON · WK 1 IN 34D" */
