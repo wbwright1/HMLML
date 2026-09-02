@@ -84,11 +84,13 @@ export function SmackFeed({ items, className = "space-y-3" }: SmackFeedProps) {
         const meta = item.authorName ? `${item.authorName} · ${time}` : time;
         return (
           <div key={item.key} className="card-surface p-4">
-            <div className="flex items-start gap-3">
+            <div className="flex items-center justify-between gap-2">
+              {/* ONE link over crest and name, not two to the same place: the
+                  crest stays decorative because the name it names is inside
+                  the same link. */}
               <TeamLink
                 slug={item.franchiseSlug}
-                aria-label={item.franchiseName}
-                className="inline-flex shrink-0"
+                className="flex min-w-0 items-center gap-3 text-text-primary"
               >
                 <FranchiseLogo
                   slug={item.franchiseSlug}
@@ -99,23 +101,17 @@ export function SmackFeed({ items, className = "space-y-3" }: SmackFeedProps) {
                   size="sm"
                   decorative
                 />
+                <span className="min-w-0 truncate text-body-sm font-semibold">
+                  {item.franchiseName}
+                </span>
               </TeamLink>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-2">
-                  <div className="text-body-sm font-semibold text-text-primary truncate">
-                    <TeamLink slug={item.franchiseSlug}>
-                      {item.franchiseName}
-                    </TeamLink>
-                  </div>
-                  <span className="text-caption text-text-tertiary shrink-0 tabular-nums">
-                    {meta}
-                  </span>
-                </div>
-                <p className="mt-1.5 text-body-sm text-text-secondary whitespace-pre-line">
-                  {item.body}
-                </p>
-              </div>
+              <span className="text-caption text-text-tertiary shrink-0 tabular-nums">
+                {meta}
+              </span>
             </div>
+            <p className="mt-2 text-body-sm text-text-secondary whitespace-pre-line">
+              {item.body}
+            </p>
           </div>
         );
       })}

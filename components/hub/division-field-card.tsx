@@ -69,9 +69,11 @@ export function DivisionFieldCard({
       <ul className="mt-4 space-y-3">
         {division.teams.map((team) => (
           <li key={team.franchiseId} className="flex items-center gap-3">
+            {/* Colour on the anchor, not on the name span: a child text-*
+                class beats the anchor's hover: and the gold never shows. */}
             <TeamLink
               slug={team.slug}
-              className="flex min-w-0 flex-1 items-center gap-3"
+              className="flex min-w-0 flex-1 items-center gap-3 text-text-primary"
             >
               <FranchiseLogo
                 slug={team.slug}
@@ -82,7 +84,7 @@ export function DivisionFieldCard({
                 size="sm"
                 decorative
               />
-              <span className="min-w-0 flex-1 truncate text-body-sm font-medium text-text-primary">
+              <span className="min-w-0 flex-1 truncate text-body-sm font-medium">
                 {team.name}
               </span>
             </TeamLink>

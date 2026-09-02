@@ -74,35 +74,31 @@ export function TradeCard({
         {trade.sides.map((side, index) => (
           <div key={side.rosterId} className="flex flex-1 items-stretch gap-4">
             <div className="flex-1 rounded-[10px] border border-border bg-surface p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                {side.franchise ? (
-                  <>
-                    <Link
-                      href={`/teams/${side.franchise.slug}`}
-                      className="flex min-w-0 items-center gap-2 transition-colors hover:text-accent-gold"
-                    >
-                      <FranchiseLogo
-                        slug={side.franchise.slug}
-                        name={side.franchise.name}
-                        abbreviation={side.franchise.abbreviation}
-                        brandingColor={side.franchise.brandingColor}
-                        avatarUrl={side.franchise.avatarUrl}
-                        size="sm"
-                      />
-                      <span className="min-w-0 truncate text-body-sm font-semibold text-text-primary">
-                        {side.franchise.name}
-                      </span>
-                    </Link>
-                    <p className="text-caption text-text-tertiary">Received</p>
-                  </>
-                ) : (
-                  <div className="min-w-0">
-                    <span className="text-body-sm font-semibold text-text-primary">
-                      Unknown Team
-                    </span>
-                    <p className="text-caption text-text-tertiary">Received</p>
-                  </div>
-                )}
+              {/* Crest and name are ONE link, and the "Received" caption stays
+                  stacked under them in both branches, so a known and an
+                  unknown franchise read the same way. The text colour sits on
+                  the anchor, not on the name span: a child text-* class beats
+                  the anchor's hover: and would kill the affordance. */}
+              <div className="min-w-0 space-y-0.5">
+                <TeamLink
+                  slug={side.franchise?.slug}
+                  className="flex min-w-0 items-center gap-2 text-text-primary"
+                >
+                  {side.franchise && (
+                    <FranchiseLogo
+                      slug={side.franchise.slug}
+                      name={side.franchise.name}
+                      abbreviation={side.franchise.abbreviation}
+                      brandingColor={side.franchise.brandingColor}
+                      avatarUrl={side.franchise.avatarUrl}
+                      size="sm"
+                    />
+                  )}
+                  <span className="min-w-0 truncate text-body-sm font-semibold">
+                    {side.franchise?.name ?? "Unknown Team"}
+                  </span>
+                </TeamLink>
+                <p className="text-caption text-text-tertiary">Received</p>
               </div>
 
               {side.players.length === 0 && side.picks.length === 0 ? (

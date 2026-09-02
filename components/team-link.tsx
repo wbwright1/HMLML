@@ -34,7 +34,10 @@ export function TeamLink({
   "aria-label": ariaLabel,
 }: TeamLinkProps) {
   if (!slug) {
-    return <>{children}</>;
+    // A span, not a bare fragment: callers pass layout and truncation classes
+    // on the link, and dropping them on the no-slug path (an unknown franchise,
+    // a legacy column) would silently change the row's shape.
+    return <span className={className}>{children}</span>;
   }
 
   return (

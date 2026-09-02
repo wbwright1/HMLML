@@ -42,28 +42,27 @@ export function PlayerAwardCard({
         </span>
       </p>
 
-      <div className="flex justify-center mb-3">
+      {/* ONE link over headshot and name, not two to the same place. */}
+      <PlayerLink
+        playerId={playerId}
+        className="flex flex-col items-center gap-3 text-text-primary"
+      >
         {playerId ? (
-          <PlayerLink playerId={playerId} className="inline-flex">
-            <PlayerHeadshot
-              playerId={playerId}
-              name={playerName}
-              size={96}
-              nflTeam={nflTeam}
-            />
-          </PlayerLink>
+          <PlayerHeadshot
+            playerId={playerId}
+            name={playerName}
+            size={96}
+            nflTeam={nflTeam}
+          />
         ) : (
-          <div
+          <span
             className="flex items-center justify-center rounded-full w-24 h-24 text-body-lg font-bold"
             style={{ backgroundColor: color.cell.bg, color: color.cell.text }}
           >
             {position ?? "?"}
-          </div>
+          </span>
         )}
-      </div>
-
-      <PlayerLink playerId={playerId} className="block">
-        <p className="text-body font-bold text-text-primary">{playerName}</p>
+        <span className="text-body font-bold">{playerName}</span>
       </PlayerLink>
       <div className="text-body-sm text-text-tertiary">
         <TeamLink slug={franchiseSlug}>{franchiseName}</TeamLink>

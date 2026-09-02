@@ -127,31 +127,27 @@ export default async function SeasonDetailPage({
 
         {season.championName && (
           <div className="mt-6 card-surface card-tint-gold p-6 text-center space-y-3">
-            {championEntry && (
-              <div className="flex justify-center">
-                <TeamLink
+            {/* ONE link over crest, stars and name, not two to the same
+                place: a single tap target and a single stop for keyboard and
+                screen-reader users. */}
+            <TeamLink
+              slug={championEntry?.franchiseSlug}
+              className="flex flex-col items-center gap-3 text-gold"
+            >
+              {championEntry && (
+                <FranchiseLogo
                   slug={championEntry.franchiseSlug}
-                  aria-label={championEntry.franchiseName}
-                  className="inline-flex"
-                >
-                  <FranchiseLogo
-                    slug={championEntry.franchiseSlug}
-                    name={championEntry.franchiseName}
-                    abbreviation={championEntry.franchiseAbbreviation ?? undefined}
-                    brandingColor={championEntry.franchiseBrandingColor ?? undefined}
-                    avatarUrl={championEntry.avatarUrl}
-                    size="lg"
-                    decorative
-                  />
-                </TeamLink>
-              </div>
-            )}
-            <ChampionshipStars count={1} variant="hero" />
-            <div className="text-h3 text-gold">
-              <TeamLink slug={championEntry?.franchiseSlug}>
-                {season.championName}
-              </TeamLink>
-            </div>
+                  name={championEntry.franchiseName}
+                  abbreviation={championEntry.franchiseAbbreviation ?? undefined}
+                  brandingColor={championEntry.franchiseBrandingColor ?? undefined}
+                  avatarUrl={championEntry.avatarUrl}
+                  size="lg"
+                  decorative
+                />
+              )}
+              <ChampionshipStars count={1} variant="hero" />
+              <span className="text-h3">{season.championName}</span>
+            </TeamLink>
             <SuperlativeBadge text="League Champion" variant="gold" />
           </div>
         )}
@@ -162,28 +158,21 @@ export default async function SeasonDetailPage({
             data-testid="season-toilet-bowl-sting"
             className="mt-4 card-surface card-tint-warm p-6 text-center space-y-3"
           >
-            <div className="flex justify-center">
-              <TeamLink
+            <TeamLink
+              slug={toiletBowlChampion.franchiseSlug}
+              className="flex flex-col items-center gap-3 text-accent-warm"
+            >
+              <FranchiseLogo
                 slug={toiletBowlChampion.franchiseSlug}
-                aria-label={toiletBowlChampion.franchiseName}
-                className="inline-flex"
-              >
-                <FranchiseLogo
-                  slug={toiletBowlChampion.franchiseSlug}
-                  name={toiletBowlChampion.franchiseName}
-                  abbreviation={toiletBowlChampion.franchiseAbbreviation ?? undefined}
-                  brandingColor={toiletBowlChampion.franchiseBrandingColor ?? undefined}
-                  avatarUrl={toiletBowlChampion.avatarUrl}
-                  size="lg"
-                  decorative
-                />
-              </TeamLink>
-            </div>
-            <div className="text-h3 text-accent-warm">
-              <TeamLink slug={toiletBowlChampion.franchiseSlug}>
-                {toiletBowlChampion.franchiseName}
-              </TeamLink>
-            </div>
+                name={toiletBowlChampion.franchiseName}
+                abbreviation={toiletBowlChampion.franchiseAbbreviation ?? undefined}
+                brandingColor={toiletBowlChampion.franchiseBrandingColor ?? undefined}
+                avatarUrl={toiletBowlChampion.avatarUrl}
+                size="lg"
+                decorative
+              />
+              <span className="text-h3">{toiletBowlChampion.franchiseName}</span>
+            </TeamLink>
             <p className="text-body-sm text-text-secondary max-w-prose mx-auto">
               {TOILET_BOWL_COPY.explainer}
             </p>
@@ -256,7 +245,7 @@ export default async function SeasonDetailPage({
                       <td className="py-4 pr-4">
                         <TeamLink
                           slug={entry.franchiseSlug}
-                          className="block"
+                          className="group block"
                         >
                           <FranchiseIdentity
                             franchise={{
@@ -346,7 +335,7 @@ export default async function SeasonDetailPage({
                       <div className="flex-1 min-w-0">
                         <TeamLink
                           slug={entry.franchiseSlug}
-                          className="block"
+                          className="group block"
                         >
                           <FranchiseIdentity
                             franchise={{

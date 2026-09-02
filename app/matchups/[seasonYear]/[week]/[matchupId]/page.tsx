@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 import { MatchupLiveScore } from "@/components/matchup-live-score";
 import { MatchupLineups } from "@/components/matchup-lineups";
 import {
@@ -208,34 +209,31 @@ function TeamBlock({
 }) {
   const isEnd = align === "end";
   return (
-    <div
-      className={`flex items-center gap-3 min-w-0 ${
-        isEnd ? "md:flex-row-reverse md:text-right" : ""
-      }`}
+    // The colour lives on the anchor, not on the name span: a child span with
+    // its own text-* class wins over the anchor's hover:, which would leave
+    // the hover affordance dead.
+    <TeamLink
+      slug={team.franchiseSlug}
+      className={`flex min-w-0 items-center gap-3 ${
+        winner ? "text-text-primary" : "text-text-secondary"
+      } ${isEnd ? "md:flex-row-reverse md:text-right" : ""}`}
     >
-      <Link
-        href={`/teams/${team.franchiseSlug}`}
-        className={`flex min-w-0 items-center gap-3 transition-colors hover:text-accent-gold ${
-          isEnd ? "md:flex-row-reverse md:text-right" : ""
+      <FranchiseLogo
+        slug={team.franchiseSlug}
+        name={team.franchiseName}
+        abbreviation={team.franchiseAbbreviation ?? undefined}
+        brandingColor={team.franchiseBrandingColor ?? undefined}
+        avatarUrl={team.avatarUrl}
+        size="md"
+        decorative
+      />
+      <span
+        className={`block min-w-0 truncate text-h3 ${
+          winner ? "font-bold" : "font-medium"
         }`}
       >
-        <FranchiseLogo
-          slug={team.franchiseSlug}
-          name={team.franchiseName}
-          abbreviation={team.franchiseAbbreviation ?? undefined}
-          brandingColor={team.franchiseBrandingColor ?? undefined}
-          avatarUrl={team.avatarUrl}
-          size="md"
-          decorative
-        />
-        <span
-          className={`block min-w-0 truncate text-h3 ${
-            winner ? "font-bold text-text-primary" : "font-medium text-text-secondary"
-          }`}
-        >
-          {team.franchiseName}
-        </span>
-      </Link>
-    </div>
+        {team.franchiseName}
+      </span>
+    </TeamLink>
   );
 }

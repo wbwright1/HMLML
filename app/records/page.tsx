@@ -360,7 +360,7 @@ export default async function RecordsPage() {
             {projection.firstOut && (
               <TeamLink
                 slug={projection.firstOut.slug}
-                className="flex items-center gap-3 rounded-lg px-2 py-2 border-t border-divider mt-2 pt-3"
+                className="flex items-center gap-3 rounded-lg px-2 py-2 border-t border-divider mt-2 pt-3 text-text-secondary"
               >
                 <span className="text-caption text-text-tertiary w-4 shrink-0">
                   &middot;
@@ -376,7 +376,7 @@ export default async function RecordsPage() {
                   size="sm"
                   decorative
                 />
-                <span className="text-body-sm font-medium text-text-secondary truncate flex-1">
+                <span className="text-body-sm font-medium truncate flex-1">
                   {projection.firstOut.name}
                 </span>
                 <span className="text-caption text-accent-warm shrink-0">

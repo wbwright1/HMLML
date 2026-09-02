@@ -93,7 +93,7 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
 
       {selectedFranchise && (
         <ScrollReveal>
-          <TeamLink slug={selectedFranchise.slug} className="block">
+          <TeamLink slug={selectedFranchise.slug} className="group block">
             <FranchiseIdentity
               franchise={{
                 slug: selectedFranchise.slug,

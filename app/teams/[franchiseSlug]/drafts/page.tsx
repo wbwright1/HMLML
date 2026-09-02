@@ -227,22 +227,27 @@ function DraftPicksList({
             <span className="w-10 shrink-0 font-mono text-body-sm tabular-nums text-accent-gold">
               {pick.round}.{pick.pickNumber}
             </span>
-            <PlayerLink
-              playerId={pick.playerId}
-              className="flex min-w-0 flex-1 items-center gap-3"
-            >
-              <PlayerHeadshot
-                size={40}
+            {/* The via note stays stacked under the name, outside the anchor:
+                as a flex sibling it sat beside the name and its truncate
+                could never fire. */}
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <PlayerLink
                 playerId={pick.playerId}
-                name={pick.playerName ?? "Unknown Player"}
-                showTeamBadge={false}
-                franchiseBadge={badgeFor(pick)}
-              />
-              <p className={`truncate text-body font-medium ${nameClass}`}>
-                {pick.playerName ?? "Unknown Player"}
-              </p>
-            </PlayerLink>
-            <ViaNote pick={pick} />
+                className={`flex min-w-0 items-center gap-3 ${nameClass}`}
+              >
+                <PlayerHeadshot
+                  size={40}
+                  playerId={pick.playerId}
+                  name={pick.playerName ?? "Unknown Player"}
+                  showTeamBadge={false}
+                  franchiseBadge={badgeFor(pick)}
+                />
+                <span className="min-w-0 truncate text-body font-medium">
+                  {pick.playerName ?? "Unknown Player"}
+                </span>
+              </PlayerLink>
+              <ViaNote pick={pick} />
+            </div>
             <PositionBadge position={pick.playerPosition} />
           </div>
         ))}
@@ -269,10 +274,10 @@ function DraftPicksList({
                   #{pick.pickNumber}
                 </td>
                 <td className="py-3 pr-4">
-                  <div className="flex items-center gap-3">
+                  <div className="min-w-0 space-y-0.5">
                     <PlayerLink
                       playerId={pick.playerId}
-                      className="flex min-w-0 items-center gap-3"
+                      className={`flex min-w-0 items-center gap-3 ${nameClass}`}
                     >
                       <PlayerHeadshot
                         size={36}
@@ -281,7 +286,7 @@ function DraftPicksList({
                         showTeamBadge={false}
                         franchiseBadge={badgeFor(pick)}
                       />
-                      <span className={`block truncate text-sm font-medium ${nameClass}`}>
+                      <span className="min-w-0 truncate text-sm font-medium">
                         {pick.playerName ?? "Unknown Player"}
                       </span>
                     </PlayerLink>
@@ -306,7 +311,7 @@ function DraftPicksList({
 function ViaNote({ pick }: { pick: DraftPickWithFranchise }) {
   if (!pick.originalFranchiseName) return null;
   return (
-    <span className="mt-0.5 flex items-center gap-1 text-caption text-text-tertiary">
+    <span className="flex min-w-0 items-center gap-1 text-caption text-text-tertiary">
       {pick.originalFranchiseSlug && (
         <TeamLink
           slug={pick.originalFranchiseSlug}

@@ -50,11 +50,12 @@ export function GameOfTheWeekCard({
         {/* Teams */}
         <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-4">
           {/* Team A (left) */}
-          <div className="flex items-center gap-3">
+          <div className="min-w-0">
+            {/* ONE link over crest and name, not two to the same place. The
+                record line below stays outside it. */}
             <TeamLink
               slug={teamA.slug}
-              aria-label={teamA.name}
-              className="inline-flex shrink-0"
+              className="flex min-w-0 items-center gap-3 text-text-primary"
             >
               <FranchiseLogo
                 slug={teamA.slug}
@@ -65,16 +66,14 @@ export function GameOfTheWeekCard({
                 size="lg"
                 decorative
               />
+              <span className="min-w-0 truncate text-h3 font-semibold">
+                {teamA.name}
+              </span>
             </TeamLink>
-            <div className="min-w-0">
-              <p className="text-h3 font-semibold text-text-primary">
-                <TeamLink slug={teamA.slug}>{teamA.name}</TeamLink>
-              </p>
-              <p className="text-body-sm text-text-tertiary">
-                <span className="text-stat tabular-nums">{teamA.record}</span>
-                {teamA.status && <span> &middot; {teamA.status}</span>}
-              </p>
-            </div>
+            <p className="mt-1 text-body-sm text-text-tertiary">
+              <span className="text-stat tabular-nums">{teamA.record}</span>
+              {teamA.status && <span> &middot; {teamA.status}</span>}
+            </p>
           </div>
 
           <p className="text-h3 font-serif italic text-text-tertiary text-center">
@@ -82,11 +81,12 @@ export function GameOfTheWeekCard({
           </p>
 
           {/* Team B (right, mirrored on desktop) */}
-          <div className="flex items-center gap-3 sm:flex-row-reverse sm:text-right">
+          <div className="min-w-0 sm:text-right">
+            {/* ONE link over crest and name, not two to the same place. The
+                record line below stays outside it. */}
             <TeamLink
               slug={teamB.slug}
-              aria-label={teamB.name}
-              className="inline-flex shrink-0"
+              className="flex min-w-0 items-center gap-3 text-text-primary sm:flex-row-reverse"
             >
               <FranchiseLogo
                 slug={teamB.slug}
@@ -97,16 +97,14 @@ export function GameOfTheWeekCard({
                 size="lg"
                 decorative
               />
+              <span className="min-w-0 truncate text-h3 font-semibold">
+                {teamB.name}
+              </span>
             </TeamLink>
-            <div className="min-w-0">
-              <p className="text-h3 font-semibold text-text-primary">
-                <TeamLink slug={teamB.slug}>{teamB.name}</TeamLink>
-              </p>
-              <p className="text-body-sm text-text-tertiary">
-                <span className="text-stat tabular-nums">{teamB.record}</span>
-                {teamB.status && <span> &middot; {teamB.status}</span>}
-              </p>
-            </div>
+            <p className="mt-1 text-body-sm text-text-tertiary">
+              <span className="text-stat tabular-nums">{teamB.record}</span>
+              {teamB.status && <span> &middot; {teamB.status}</span>}
+            </p>
           </div>
         </div>
 

@@ -15,7 +15,7 @@ import { getAwardTypeIcon } from "@/lib/award-icons";
 function HonorCard({ award }: { award: AwardEntry }) {
   const meta = AWARD_METADATA[award.awardType];
   return (
-    <div className="card-surface card-tint-gold p-4 transition-colors duration-150 hover:border-accent-gold/40">
+    <div className="card-surface card-tint-gold p-4">
       <p className="text-kicker text-accent-gold mb-2 flex items-center gap-1.5">
         {getAwardTypeIcon(award.awardType)}
         {meta?.shortLabel ?? award.awardType}

@@ -70,25 +70,29 @@ function TrophyRow({
         {String(seasonYear).slice(-2)}
         <span className="text-[10px] text-text-tertiary">&rsquo;</span>
       </span>
-      <PlayerLink playerId={playerId} className="inline-flex shrink-0">
-        <PlayerHeadshot
-          playerId={playerId}
-          name={playerName}
-          size={40}
-          showTeamBadge={false}
-        />
-      </PlayerLink>
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <p className="truncate text-body-sm font-semibold text-text-primary">
-            <PlayerLink playerId={playerId}>{playerName}</PlayerLink>
-          </p>
-          {repeatCount > 1 && (
-            <span className="inline-flex shrink-0 items-center rounded-full bg-accent-gold-light px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-accent-gold">
-              {repeatCount}x
+        {/* ONE link over headshot and name, not two to the same place. */}
+        <PlayerLink
+          playerId={playerId}
+          className="flex min-w-0 items-center gap-3 text-text-primary"
+        >
+          <PlayerHeadshot
+            playerId={playerId}
+            name={playerName}
+            size={40}
+            showTeamBadge={false}
+          />
+          <span className="flex min-w-0 items-center gap-2">
+            <span className="truncate text-body-sm font-semibold">
+              {playerName}
             </span>
-          )}
-        </div>
+            {repeatCount > 1 && (
+              <span className="inline-flex shrink-0 items-center rounded-full bg-accent-gold-light px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-accent-gold">
+                {repeatCount}x
+              </span>
+            )}
+          </span>
+        </PlayerLink>
         <div className="mt-1 flex min-w-0 items-center gap-2">
           {position && (
             <span className="text-caption text-text-tertiary">{position}</span>

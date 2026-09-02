@@ -87,29 +87,24 @@ export default async function PlayoffBracketPage({
           <ScrollReveal>
             <div className="mt-6 card-surface card-tint-gold p-8 text-center space-y-3">
               <p className="text-kicker text-gold mb-1">Champion</p>
-              <div className="flex justify-center">
-                <TeamLink
+              {/* ONE link over crest, name and stars, not two to the same
+                  place. */}
+              <TeamLink
+                slug={champion.franchiseSlug}
+                className="flex flex-col items-center gap-3 text-gold"
+              >
+                <FranchiseLogo
                   slug={champion.franchiseSlug}
-                  aria-label={champion.franchiseName}
-                  className="inline-flex"
-                >
-                  <FranchiseLogo
-                    slug={champion.franchiseSlug}
-                    name={champion.franchiseName}
-                    abbreviation={champion.franchiseAbbreviation ?? undefined}
-                    brandingColor={champion.franchiseBrandingColor ?? undefined}
-                    avatarUrl={champion.avatarUrl}
-                    size="xl"
-                    decorative
-                  />
-                </TeamLink>
-              </div>
-              <div className="text-h1 text-gold">
-                <TeamLink slug={champion.franchiseSlug}>
-                  {champion.franchiseName}
-                </TeamLink>
-              </div>
-              <ChampionshipStars count={1} variant="hero" />
+                  name={champion.franchiseName}
+                  abbreviation={champion.franchiseAbbreviation ?? undefined}
+                  brandingColor={champion.franchiseBrandingColor ?? undefined}
+                  avatarUrl={champion.avatarUrl}
+                  size="xl"
+                  decorative
+                />
+                <span className="text-h1">{champion.franchiseName}</span>
+                <ChampionshipStars count={1} variant="hero" />
+              </TeamLink>
             </div>
           </ScrollReveal>
         )}
@@ -222,7 +217,7 @@ function ToiletBowlStingCard({ champion }: { champion: ToiletBowlChampion }) {
       <p className="text-kicker text-accent-warm">
         {TOILET_BOWL_COPY.championKicker}
       </p>
-      <TeamLink slug={champion.franchiseSlug} className="block">
+      <TeamLink slug={champion.franchiseSlug} className="group block">
         <FranchiseIdentity
           franchise={{
             slug: champion.franchiseSlug,
