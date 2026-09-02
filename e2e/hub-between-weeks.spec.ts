@@ -145,6 +145,33 @@ test.describe("Between-Weeks Hub (1d)", () => {
     // nothing), so assert their shape only when they are on the page.
     if (/League Moves/i.test(text)) {
       expect(text).toMatch(/\bADD\b|\bDROP\b|\bTRADE\b/);
+      const card = page
+        .locator("section", { has: page.getByText("League Moves", { exact: true }) })
+        .first();
+      // The player is the focal, clickable identity: at least one row links
+      // through to its player page.
+      await expect(
+        card.locator('a[href^="/players/"]').first()
+      ).toBeVisible();
+      // Every row draws either a real headshot from the Sleeper CDN or the
+      // initials monogram fallback, never a bare franchise crest as the lead.
+      const hasHeadshot = await card
+        .locator('img[src*="sleepercdn.com/content/nfl/players"]')
+        .first()
+        .isVisible()
+        .catch(() => false);
+      const hasMonogram = await card
+        .getByText(/^[A-Z]{1,2}$/)
+        .first()
+        .isVisible()
+        .catch(() => false);
+      expect(hasHeadshot || hasMonogram).toBe(true);
+      // The fantasy franchise stays visible as secondary attribution: the
+      // kind label ("ADD"/"DROP"/"TRADE") sits on a row with the franchise
+      // name trailing it, so that row's text is more than the kind alone.
+      const kindSpan = card.getByText(/^(ADD|DROP|TRADE)$/).first();
+      const kindRowText = await kindSpan.locator("xpath=..").innerText();
+      expect(kindRowText.trim().length).toBeGreaterThan(4);
     }
     if (/This Week in HMLML History/i.test(text)) {
       // Case-insensitive for the same CSS `uppercase` reason as T06.
