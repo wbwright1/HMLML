@@ -35,7 +35,6 @@ export default async function ClaimPage({ searchParams }: ClaimPageProps) {
 const CLAIM_ERROR_COPY: Record<string, string> = {
   "1": "That code doesn’t match anything. Check with the commish.",
   slow: "Slow down. Try again in a minute.",
-  expired: "That code has expired. Ask the commish for a fresh one.",
 };
 
 function ClaimForm({ errorKind }: { errorKind?: string }) {

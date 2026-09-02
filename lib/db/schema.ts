@@ -122,9 +122,19 @@ export const franchiseSeasons = pgTable(
 // kept fresh by the daily sync from the current-season owners and co-owners.
 // Members are never deleted: someone who leaves the league keeps their smack
 // posts attributed. franchiseId is the franchise they currently control (null
-// when unattached). claimCodeHash/codeGeneratedAt are set only when the commish
-// generates a claim code; role gates commish tooling. Neither role nor the
-// claim code is ever touched by sync.
+// when unattached). role gates commish tooling; neither role nor the claim code
+// is ever touched by sync.
+//
+// Claim codes live in exactly one of three states, so the console can always
+// tell the commish what to do next:
+//   claimCode null,  claimCodeHash null -> never issued ("No code yet")
+//   claimCode null,  claimCodeHash set  -> legacy hash-only row, unreadable
+//                                          ("Rotate to reveal")
+//   claimCode set,   claimCodeHash null -> current scheme, retrievable
+// claimCode holds the dashed plaintext exactly as generated so the commish can
+// re-read and copy it at any time; rotateClaimCode nulls the hash when it
+// writes one, so no row ever keeps a stale hash of a superseded code. The hash
+// column stays only to keep pre-existing members signed in until they rotate.
 export const members = pgTable(
   "members",
   {
@@ -133,6 +143,7 @@ export const members = pgTable(
     displayName: text("display_name").notNull(),
     franchiseId: text("franchise_id").references(() => franchises.id),
     role: text("role").notNull().default("member"), // 'member' | 'commish'
+    claimCode: text("claim_code"),
     claimCodeHash: text("claim_code_hash"),
     codeGeneratedAt: timestamp("code_generated_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),

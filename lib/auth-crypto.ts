@@ -29,25 +29,6 @@ const CLAIM_GROUP_LEN = 4;
 // scrypt output length in bytes for claim-code hashes.
 const SCRYPT_KEYLEN = 64;
 
-// Claim codes expire this long after they are generated. A code past this age
-// is rejected at redemption (existing sessions are unaffected) and the commish
-// console flags it so it can be rotated.
-export const CLAIM_CODE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
-
-/**
- * True when a claim code generated at `codeGeneratedAt` is older than the
- * expiry window. A null timestamp (legacy code with no recorded generation
- * time) is treated as non-expiring so nobody is locked out by missing data.
- * Pure so the cutoff can be unit-tested; pass `now` in tests for determinism.
- */
-export function isClaimCodeExpired(
-  codeGeneratedAt: Date | null,
-  now: number = Date.now(),
-): boolean {
-  if (!codeGeneratedAt) return false;
-  return now - codeGeneratedAt.getTime() > CLAIM_CODE_MAX_AGE_MS;
-}
-
 /**
  * Normalizes a user-entered claim code for hashing/verification: uppercased,
  * with dashes and whitespace stripped, so "abcd-efgh-jkmn", "ABCDEFGHJKMN",
@@ -58,9 +39,23 @@ export function normalizeClaimCode(code: string): string {
 }
 
 /**
+ * Constant-time comparison of two claim codes, normalized first so
+ * "abcd-efgh-jkmn" and "ABCDEFGHJKMN" match. Length is compared before the
+ * timing-safe compare and so leaks only the code length, which the fixed
+ * format already gives away.
+ */
+export function claimCodesMatch(a: string, b: string): boolean {
+  const left = Buffer.from(normalizeClaimCode(a));
+  const right = Buffer.from(normalizeClaimCode(b));
+  if (left.length !== right.length || left.length === 0) return false;
+  return timingSafeEqual(left, right);
+}
+
+/**
  * Generates a human-friendly claim code like "ABCD-EFGH-JKMN" from the
- * unambiguous alphabet. Returned in plaintext exactly once; only its hash is
- * ever stored.
+ * unambiguous alphabet. The dashed string is stored verbatim on the member row
+ * so the commish console can re-read and copy it; the scrypt helpers below
+ * serve only the legacy hash-only rows that predate that column.
  */
 export function generateClaimCode(): string {
   const groups: string[] = [];

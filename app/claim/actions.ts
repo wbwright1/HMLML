@@ -34,8 +34,8 @@ function isThrottled(ip: string, now: number = Date.now()): boolean {
 /**
  * Redeems a claim code from the /claim form. On success opens a session cookie
  * and sends the member home; otherwise it bounces back to /claim with an error
- * flag (bad code, throttled, or expired) so the page re-renders the matching
- * calm copy. The plaintext code is never echoed into the URL.
+ * flag (bad code or throttled) so the page re-renders the matching calm copy.
+ * The plaintext code is never echoed into the URL.
  */
 export async function claimAction(formData: FormData): Promise<void> {
   // Throttle before any work so repeated hits can't each pay for a scrypt.
@@ -56,7 +56,7 @@ export async function claimAction(formData: FormData): Promise<void> {
 
   const result = await redeemClaimCode(code);
   if (!result.ok) {
-    redirect(result.reason === "expired" ? "/claim?e=expired" : "/claim?e=1");
+    redirect("/claim?e=1");
   }
 
   await createSessionCookie(result.token);

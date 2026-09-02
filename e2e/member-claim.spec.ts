@@ -116,8 +116,83 @@ test.describe("Commish gate", () => {
   });
 });
 
+test.describe("Claim-code reveal + copy", () => {
+  test("revealing and copying a code changes nothing on the server", async ({
+    page,
+    context,
+  }) => {
+    // Chromium prompts for clipboard access; grant it so the real
+    // navigator.clipboard.writeText in the island runs rather than rejecting.
+    await context.grantPermissions(["clipboard-write"]);
+
+    const sql = getSql();
+    const liveSessions = async () =>
+      (
+        (await sql`
+      SELECT count(*)::int AS c FROM "member_sessions" s
+      JOIN "members" m ON m."id" = s."member_id"
+      WHERE m."sleeper_user_id" = ${fx.memberSleeperId}
+        AND s."revoked_at" IS NULL`) as { c: number }[]
+      )[0].c;
+    const storedCode = async () =>
+      (
+        (await sql`
+      SELECT "claim_code" AS code FROM "members"
+      WHERE "sleeper_user_id" = ${fx.memberSleeperId}`) as {
+          code: string | null;
+        }[]
+      )[0].code;
+
+    await signInWith(page, fx.commishClaimCode);
+    await page.waitForURL("/");
+    await page.goto("/commish");
+
+    const sessionsBefore = await liveSessions();
+    const codeBefore = await storedCode();
+    expect(codeBefore).toBe(fx.memberClaimCode);
+
+    const memberRow = page
+      .locator(".card-surface")
+      .filter({ hasText: fx.memberDisplayName });
+
+    // Masked until asked.
+    await expect(memberRow.getByText("••••-••••-••••")).toBeVisible();
+
+    await memberRow.getByRole("button", { name: /^reveal$/i }).click();
+    await expect(memberRow.getByText(fx.memberClaimCode)).toBeVisible();
+
+    await memberRow.getByRole("button", { name: /^copy$/i }).click();
+    await expect(memberRow.getByText(/^copied$/i)).toBeVisible();
+
+    // The whole point: reading a code is inert. If Copy were ever wired to the
+    // rotate action, either of these would move.
+    expect(await storedCode()).toBe(fx.memberClaimCode);
+    expect(await liveSessions()).toBe(sessionsBefore);
+
+    // Hide puts it back behind the mask.
+    await memberRow.getByRole("button", { name: /^hide$/i }).click();
+    await expect(memberRow.getByText("••••-••••-••••")).toBeVisible();
+
+    // Same console view, so assert the legacy row here rather than paying for
+    // another sign-in: /claim throttles at 10 submits a minute per IP, and this
+    // file already runs close to that ceiling.
+    // The commish's own row is seeded hash-only: unreadable by construction.
+    const commishRow = page
+      .locator(".card-surface")
+      .filter({ hasText: fx.commishDisplayName })
+      .first();
+    await expect(commishRow.getByText("Rotate to reveal")).toBeVisible();
+    await expect(
+      commishRow.getByRole("button", { name: /^copy$/i }),
+    ).toHaveCount(0);
+    await expect(
+      commishRow.getByRole("button", { name: /^reveal$/i }),
+    ).toHaveCount(0);
+  });
+});
+
 test.describe("Claim-code issue + redeem chain", () => {
-  test("rotating a member's code reveals it once, and it then redeems", async ({
+  test("rotating a member's code reveals it, and a 60-day-old code still redeems", async ({
     page,
   }) => {
     await signInWith(page, fx.commishClaimCode);
@@ -130,7 +205,7 @@ test.describe("Claim-code issue + redeem chain", () => {
       .filter({ hasText: fx.memberDisplayName });
     await memberRow.getByRole("button", { name: /rotate code/i }).click();
 
-    // Plaintext code is revealed exactly once, in-page.
+    // A freshly rotated code reveals itself without a second click.
     const revealed = memberRow.getByText(/^[A-Z0-9]{4}-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
     await expect(revealed).toBeVisible();
     const newCode = (await revealed.textContent())!.trim();
@@ -141,6 +216,12 @@ test.describe("Claim-code issue + redeem chain", () => {
     await signInWith(page, fx.memberClaimCode);
     await expect(page).toHaveURL(/\/claim/);
     await expect(page.getByText(/doesn.?t match anything/i)).toBeVisible();
+
+    // Back-date the fresh code well past the 30-day window the old expiry gate
+    // enforced. Codes never expire now, so the very next redeem must still
+    // succeed; before the gate came out this exact row was rejected.
+    await getSql()`UPDATE "members" SET "code_generated_at" = now() - interval '60 days'
+      WHERE "sleeper_user_id" = ${fx.memberSleeperId}`;
 
     // The NEW code signs the member in.
     await signInWith(page, newCode);

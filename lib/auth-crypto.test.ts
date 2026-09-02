@@ -6,8 +6,7 @@ import {
   verifyClaimCode,
   generateSessionToken,
   hashSessionToken,
-  isClaimCodeExpired,
-  CLAIM_CODE_MAX_AGE_MS,
+  claimCodesMatch,
 } from "./auth-crypto";
 
 describe("generateClaimCode", () => {
@@ -69,25 +68,37 @@ describe("hashClaimCode / verifyClaimCode", () => {
   });
 });
 
-describe("isClaimCodeExpired", () => {
-  const now = Date.UTC(2026, 6, 22); // 2026-07-22
-
-  it("treats a fresh code as valid", () => {
-    expect(isClaimCodeExpired(new Date(now - 1000), now)).toBe(false);
+describe("claimCodesMatch", () => {
+  it("matches a code against itself", () => {
+    const code = generateClaimCode();
+    expect(claimCodesMatch(code, code)).toBe(true);
   });
 
-  it("treats a code just under the window as valid", () => {
-    const gen = new Date(now - CLAIM_CODE_MAX_AGE_MS + 60_000);
-    expect(isClaimCodeExpired(gen, now)).toBe(false);
+  it("matches across dash, whitespace, and case formatting", () => {
+    expect(claimCodesMatch("abcd-efgh-jkmn", "ABCD-EFGH-JKMN")).toBe(true);
+    expect(claimCodesMatch("ABCDEFGHJKMN", "abcd-efgh-jkmn")).toBe(true);
+    expect(claimCodesMatch(" abcd efgh jkmn ", "ABCD-EFGH-JKMN")).toBe(true);
   });
 
-  it("treats a code just past the window as expired", () => {
-    const gen = new Date(now - CLAIM_CODE_MAX_AGE_MS - 60_000);
-    expect(isClaimCodeExpired(gen, now)).toBe(true);
+  it("rejects a different code of the same length", () => {
+    expect(claimCodesMatch("ABCD-EFGH-JKMN", "ABCD-EFGH-JKMP")).toBe(false);
   });
 
-  it("treats a null generation time as non-expiring", () => {
-    expect(isClaimCodeExpired(null, now)).toBe(false);
+  it("rejects a prefix and a longer code", () => {
+    expect(claimCodesMatch("ABCD-EFGH", "ABCD-EFGH-JKMN")).toBe(false);
+    expect(claimCodesMatch("ABCD-EFGH-JKMNP", "ABCD-EFGH-JKMN")).toBe(false);
+  });
+
+  it("rejects empty input on either side", () => {
+    expect(claimCodesMatch("", "")).toBe(false);
+    expect(claimCodesMatch("", "ABCD-EFGH-JKMN")).toBe(false);
+    expect(claimCodesMatch("ABCD-EFGH-JKMN", "---")).toBe(false);
+  });
+
+  it("rejects two independently generated codes", () => {
+    expect(claimCodesMatch(generateClaimCode(), generateClaimCode())).toBe(
+      false,
+    );
   });
 });
 

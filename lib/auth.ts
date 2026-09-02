@@ -1,15 +1,14 @@
 import { cookies } from "next/headers";
-import { and, eq, gt, isNull, isNotNull } from "drizzle-orm";
+import { and, eq, gt, isNull, isNotNull, or } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { members, memberSessions, franchises } from "@/lib/db/schema";
 import type { Member } from "@/lib/db/schema";
 import {
   generateClaimCode,
-  hashClaimCode,
   verifyClaimCode,
+  claimCodesMatch,
   generateSessionToken,
   hashSessionToken,
-  isClaimCodeExpired,
 } from "@/lib/auth-crypto";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 
@@ -21,7 +20,7 @@ export {
   generateSessionToken,
   hashSessionToken,
   normalizeClaimCode,
-  isClaimCodeExpired,
+  claimCodesMatch,
 } from "@/lib/auth-crypto";
 
 // ---------------------------------------------------------------------------
@@ -44,50 +43,50 @@ export interface SessionMember extends Member {
 }
 
 /**
- * Outcome of redeeming a claim code. `not_found` and `expired` are kept
- * distinct so the /claim page can show a code holder the honest reason (a
- * fresh-code nudge vs. a check-with-the-commish nudge).
+ * Outcome of redeeming a claim code. Codes never expire, so `not_found` is the
+ * only way to fail: a code either matches a member or it does not.
  */
 export type RedeemResult =
   | { ok: true; member: Member; token: string }
-  | { ok: false; reason: "not_found" | "expired" };
+  | { ok: false; reason: "not_found" };
 
 // ---------------------------------------------------------------------------
 // Claim codes
 // ---------------------------------------------------------------------------
 
 /**
- * Redeems a claim code: finds the member whose stored hash matches, opens a
+ * Redeems a claim code: finds the member whose stored code matches, opens a
  * session (random 32-byte token, only the hash persisted, 1-year expiry), and
- * returns the member with the plaintext token. Returns null when no member
- * matches. The plaintext token is the caller's only chance to set the cookie.
+ * returns the member with the plaintext token. The plaintext token is the
+ * caller's only chance to set the cookie. Codes do not expire; a code stays
+ * good until the commish rotates it.
  *
- * Claim-code hashes use a per-code salt, so lookup can't be a single indexed
- * query; it scans the (max ~12) members that currently carry a code. That is
- * trivially cheap at league scale.
+ * Matching scans the (max ~12) members that carry a code rather than doing an
+ * indexed equality lookup: the plaintext path compares in constant time (an
+ * indexed WHERE would be both format-fragile and timing-revealing), and the
+ * legacy hashes carry a per-code salt, so neither can be an equality probe.
+ * That is trivially cheap at league scale.
  */
 export async function redeemClaimCode(code: string): Promise<RedeemResult> {
   const candidates = await db
     .select()
     .from(members)
-    .where(isNotNull(members.claimCodeHash));
+    .where(or(isNotNull(members.claimCode), isNotNull(members.claimCodeHash)));
 
   // verifyClaimCode is async (scrypt), so match with an explicit loop rather
-  // than Array.find with an async predicate (which would never reject).
+  // than Array.find with an async predicate (which would never reject). The
+  // plaintext column wins; the hash branch serves only rows that predate it.
   let member: Member | null = null;
   for (const m of candidates) {
-    if (m.claimCodeHash && (await verifyClaimCode(code, m.claimCodeHash))) {
+    const matched = m.claimCode
+      ? claimCodesMatch(code, m.claimCode)
+      : !!m.claimCodeHash && (await verifyClaimCode(code, m.claimCodeHash));
+    if (matched) {
       member = m;
       break;
     }
   }
   if (!member) return { ok: false, reason: "not_found" };
-
-  // A matched-but-stale code is rejected distinctly so the holder is told to
-  // ask for a fresh one rather than being sent to check a code that is correct.
-  if (isClaimCodeExpired(member.codeGeneratedAt)) {
-    return { ok: false, reason: "expired" };
-  }
 
   const token = generateSessionToken();
   const now = new Date();
@@ -102,16 +101,18 @@ export async function redeemClaimCode(code: string): Promise<RedeemResult> {
 }
 
 /**
- * Generates a fresh claim code for a member, stores its hash (invalidating any
- * previous code), and returns the plaintext to show the commish once.
+ * Generates a fresh claim code for a member, stores it in plaintext
+ * (invalidating any previous code), and returns it. The legacy hash is nulled
+ * in the same write, so a rotated row never keeps a verifiable hash of a
+ * superseded code and the console can tell the three row states apart.
  */
 export async function rotateClaimCode(memberId: number): Promise<string> {
   const code = generateClaimCode();
-  const claimCodeHash = await hashClaimCode(code);
   await db
     .update(members)
     .set({
-      claimCodeHash,
+      claimCode: code,
+      claimCodeHash: null,
       codeGeneratedAt: new Date(),
       updatedAt: new Date(),
     })
