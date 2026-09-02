@@ -20,6 +20,9 @@ import {
   getLosersBracket,
 } from "@/lib/sleeper";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
+import { chunk } from "@/lib/chunk";
+import { ensurePlayersExist } from "@/lib/sync/ensure-players";
+import { describeDbError } from "@/lib/db-error";
 import { derivePlayoffResults } from "@/lib/sync/derive-playoffs";
 import { persistBracketMatches } from "@/lib/sync/playoff-brackets";
 import { resolveAvatarUrl } from "@/lib/sync/daily";
@@ -104,14 +107,6 @@ async function uniqueSlug(
 
   // Collision: append first 6 chars of user_id to disambiguate
   return `${base}-${franchiseId.slice(0, 6)}`;
-}
-
-function chunk<T>(arr: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
-  return chunks;
 }
 
 // ---------------------------------------------------------------------------
@@ -637,7 +632,28 @@ async function importDrafts(
       };
     });
 
-    // Batch upsert — draft_picks has no unique constraint for upsert,
+    // draft_picks.player_id has an FK to players.id, and a legacy import can
+    // easily name a player who is not in the current Sleeper snapshot. Stub the
+    // unknown ids first so the import does not die on the FK (issue #269).
+    // The names go along: a legacy-era id is precisely the kind the daily
+    // snapshot will never heal (long-retired players are dropped from it), and
+    // the pick metadata already carries the name, so a nameless stub here would
+    // be permanent.
+    const pickPlayerNames = new Map<string, string | null>();
+    for (const row of rows) {
+      if (row.playerId) pickPlayerNames.set(row.playerId, row.playerName);
+    }
+    const stubbedPickPlayerIds = await ensurePlayersExist(
+      rows.map((r) => r.playerId).filter((id): id is string => Boolean(id)),
+      pickPlayerNames
+    );
+    if (stubbedPickPlayerIds.length > 0) {
+      console.warn(
+        `[legacy-import] Stubbed ${stubbedPickPlayerIds.length} unknown drafted player ids into players: ${stubbedPickPlayerIds.join(", ")}`
+      );
+    }
+
+    // Batch upsert: draft_picks has no unique constraint for upsert,
     // so we delete existing picks for this draft and re-insert
     // This is still idempotent: running again produces same result
     await db
@@ -870,7 +886,9 @@ async function importSeason(
     try {
       counts.draftPicks = await importDrafts(leagueId, seasonDbId, isLegacy);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : "Unknown error";
+      // describeDbError, not e.message: draft_picks writes can trip the player
+      // FK, and Postgres puts the offending id in DETAIL.
+      const msg = describeDbError(e);
       errors.push(`Drafts: ${msg}`);
       console.error(
         `[legacy-import] Season ${seasonYear} drafts error: ${msg}`

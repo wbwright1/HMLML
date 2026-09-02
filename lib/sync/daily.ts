@@ -42,6 +42,9 @@ import {
   resolveBrandingColor,
 } from "@/lib/franchise-colors";
 import { runAtomic } from "@/lib/db/atomic";
+import { chunk } from "@/lib/chunk";
+import { ensurePlayersExist } from "@/lib/sync/ensure-players";
+import { describeDbError } from "@/lib/db-error";
 import { repriceFutures, gradeFutures } from "@/lib/sync/book-futures";
 import { resolveFuturesSeason } from "@/lib/queries/book-futures";
 import { resolveBookWeek } from "@/lib/queries/book";
@@ -123,15 +126,6 @@ export function resolveAvatarUrl(user: {
   if (teamAvatar) return teamAvatar;
   if (user.avatar) return `https://sleepercdn.com/avatars/thumbs/${user.avatar}`;
   return null;
-}
-
-/** Split an array into chunks of the given size. */
-function chunk<T>(arr: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
-  return chunks;
 }
 
 // ---------------------------------------------------------------------------
@@ -952,6 +946,22 @@ async function syncDrafts(leagueId: string): Promise<SyncStepResult> {
         };
       });
 
+      // draft_picks.player_id carries the same FK to players.id that broke the
+      // hourly rosters step (issue #269), and this is a live hazard rather than
+      // a theoretical one: syncDrafts and syncPlayers run concurrently inside
+      // runDailySync's Promise.allSettled, so a rookie drafted since the last
+      // snapshot can land here before (or without) his players row.
+      const stubbedPickPlayerIds = await ensurePlayersExist(
+        pickRows
+          .map((p) => p.playerId)
+          .filter((id): id is string => Boolean(id))
+      );
+      if (stubbedPickPlayerIds.length > 0) {
+        console.warn(
+          `[sync-daily] Stubbed ${stubbedPickPlayerIds.length} unknown drafted player ids into players: ${stubbedPickPlayerIds.join(", ")}`
+        );
+      }
+
       // Delete existing picks for this draft, then re-insert (draft_picks has
       // no unique constraint on (draft_id, pick_number), so upsert isn't an
       // option). Wrapped in a transaction so a mid-loop insert failure can't
@@ -974,7 +984,9 @@ async function syncDrafts(leagueId: string): Promise<SyncStepResult> {
       durationMs,
     };
   } catch (e) {
-    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    // describeDbError, not e.message: draft_picks writes can trip the player FK,
+    // and Postgres puts the offending id in DETAIL.
+    const errorMessage = describeDbError(e);
     const durationMs = Date.now() - startTime;
     await logSyncComplete(logId, "failure", 0, errorMessage);
     return {

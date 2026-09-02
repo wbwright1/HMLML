@@ -19,8 +19,10 @@ type BatchArg = Parameters<Executor["batch"]>[0];
  *     in production use in lib/queries/hub-content.ts (replaceHubContent).
  *
  * Hardening intent: a delete+reinsert must never wipe rows and then fail to
- * replace them. Callers lead the returned tuple with the delete, so the delete
- * only commits alongside the inserts. `build` receives the executor so the pg
+ * replace them. Callers put the delete ahead of the inserts, so the delete only
+ * commits alongside them (the hourly rosters step also leads with its standings
+ * update, so a roster's standings and its lineup land together or not at all).
+ * `build` receives the executor so the pg
  * branch binds statements to the transaction handle `tx` (building against the
  * outer `db` would escape the transaction).
  *
