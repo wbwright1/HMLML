@@ -331,3 +331,54 @@ describe("validateRow", () => {
     expect(validateRow(row, ctx()).valid).toBe(true);
   });
 });
+
+describe("validateRow: matchup angles never cite a 0-0 record", () => {
+  const angle = (body: string) => ({
+    kind: "matchup_angle" as const,
+    refKey: "foopus__olave-garden",
+    body,
+    extras: null,
+  });
+  const regular = () => ctx({ seasonType: "regular", week: 1 });
+
+  it("rejects the records placeholder the builder was written to eliminate", () => {
+    const result = validateRow(
+      angle("0-0 against 0-0. Somebody's number moves Wednesday."),
+      regular(),
+    );
+    expect(result.valid).toBe(false);
+    expect(result.reason).toContain("0-0");
+  });
+
+  it("rejects a 0-0 buried mid-sentence", () => {
+    expect(
+      validateRow(
+        angle("Foopus sits at 0-0 and so does Olave Garden, which settles nothing."),
+        regular(),
+      ).valid,
+    ).toBe(false);
+  });
+
+  it("accepts a head-to-head record that merely looks similar", () => {
+    expect(
+      validateRow(
+        angle("Foopus leads this series 10-0 all time over Olave Garden, somehow."),
+        regular(),
+      ).valid,
+    ).toBe(true);
+  });
+
+  it("leaves other kinds alone", () => {
+    expect(
+      validateRow(
+        {
+          kind: "smack_post" as const,
+          refKey: null,
+          body: "Everyone is 0-0 right now, which is the last honest day of the year.",
+          extras: null,
+        },
+        regular(),
+      ).valid,
+    ).toBe(true);
+  });
+});

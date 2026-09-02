@@ -10,7 +10,12 @@ import {
   getHeadToHeadHistory,
   type HeadToHeadGame,
 } from "@/lib/queries/records";
-import { getWeekStarterPool } from "@/lib/queries/players-to-watch";
+import {
+  getWeekStarterPool,
+  topProjectedStarterByMatchup,
+  type PoolRow,
+} from "@/lib/queries/players-to-watch";
+import { summarizeMeetingHistory } from "@/lib/hub/slate-angle";
 import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
 import { getWeekBenchLeader } from "@/lib/queries/lineup-efficiency";
 import { getWeekStandouts } from "@/lib/queries/week-standouts";
@@ -334,44 +339,23 @@ export async function buildStatsContext(
   // week's projected starters. Both extras are best-effort (an empty result
   // just drops a rung off the angle ladder), which is why they are settled
   // separately from the counts rather than allowed to fail the whole context.
-  const [h2hResults, historySettled, poolSettled] = await Promise.all([
+  const [h2hResults, historyResults, starterPool] = await Promise.all([
     Promise.all(
       currentMatchupRows.map((m) =>
         getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId),
       ),
     ),
-    Promise.allSettled([
-      Promise.all(
-        currentMatchupRows.map((m) =>
-          getHeadToHeadHistory(m.homeTeam.franchiseId, m.awayTeam.franchiseId),
-        ),
+    Promise.all(
+      currentMatchupRows.map((m) =>
+        getHeadToHeadHistory(m.homeTeam.franchiseId, m.awayTeam.franchiseId),
       ),
-    ]).then(([r]) => (r.status === "fulfilled" ? r.value : [])),
-    Promise.allSettled([getWeekStarterPool(seasonId, week)]).then(([r]) =>
-      r.status === "fulfilled" ? r.value : [],
-    ),
+    ).catch((): HeadToHeadGame[][] => []),
+    getWeekStarterPool(seasonId, week).catch((): PoolRow[] => []),
   ]);
-  const historyResults: HeadToHeadGame[][] = historySettled;
 
   // Highest projected starter per Sleeper matchupId, from the same pool the
   // hub's Players to Watch rail scores over.
-  const topProjectedByMatchup = new Map<
-    number,
-    { playerName: string; position: string | null; franchiseId: string; projectedPoints: number }
-  >();
-  for (const row of poolSettled) {
-    if (row.matchupId == null || row.name == null) continue;
-    const projected = row.projectedPoints ?? 0;
-    if (projected <= 0) continue;
-    const current = topProjectedByMatchup.get(row.matchupId);
-    if (current && current.projectedPoints >= projected) continue;
-    topProjectedByMatchup.set(row.matchupId, {
-      playerName: row.name,
-      position: row.position,
-      franchiseId: row.franchiseId,
-      projectedPoints: Math.round(projected * 10) / 10,
-    });
-  }
+  const topProjectedByMatchup = topProjectedStarterByMatchup(starterPool);
   // Records + division identity come from the division standings map so the
   // matchup preview shows season records (not the single-game points from the
   // matchup row) and the Game of the Week selection can weigh divisions.
@@ -442,33 +426,31 @@ export async function buildStatsContext(
         ties: h2hResults[i].ties,
         streak: h2hResults[i].streak,
       },
-      // Only COMPLETED meetings are history. This week's own scheduled row
-      // comes back with no winner and 0 points; reporting that as "last time
-      // out" would cite a game nobody has played.
+      // Same reduction the hub uses, in the same (home, away) orientation;
+      // only the A/B side labels are renamed to home/away for the STATS JSON.
       ...(() => {
-        const played = (historyResults[i] ?? []).filter(
-          (g) => g.winnerFranchiseId != null || g.pointsA > 0 || g.pointsB > 0,
+        const summary = summarizeMeetingHistory(
+          historyResults[i] ?? [],
+          m.homeTeam.franchiseId,
         );
-        const latest = played[0] ?? null; // newest first
+        const last = summary.lastMeeting;
         return {
-          lastMeeting: latest
+          lastMeeting: last
             ? {
-                seasonYear: latest.seasonYear,
-                week: latest.week,
+                seasonYear: last.seasonYear,
+                week: last.week,
                 winner:
-                  latest.winnerFranchiseId == null
+                  last.winner == null
                     ? null
-                    : latest.winnerFranchiseId === m.homeTeam.franchiseId
+                    : last.winner === "A"
                       ? ("home" as const)
                       : ("away" as const),
-                homePoints: latest.pointsA,
-                awayPoints: latest.pointsB,
-                isPlayoff: latest.isPlayoff,
+                homePoints: last.pointsA,
+                awayPoints: last.pointsB,
+                isPlayoff: last.isPlayoff,
               }
             : null,
-          playoffMeetingYears: played
-            .filter((g) => g.isPlayoff)
-            .map((g) => g.seasonYear),
+          playoffMeetingYears: summary.playoffMeetingYears,
         };
       })(),
       isTitleRematch: Boolean(
@@ -490,7 +472,6 @@ export async function buildStatsContext(
       })(),
     };
   });
-
 
   // Last completed season superlatives (champion / doormat / point machine).
   let lastSeason: StatsContext["lastSeason"] = null;

@@ -4,6 +4,7 @@ import {
   buildSlateAngleResult,
   buildSlateAngles,
   parseStreak,
+  summarizeMeetingHistory,
   SLATE_ANGLE_MAX_CHARS,
   type SlateAngleInput,
 } from "./slate-angle";
@@ -11,8 +12,8 @@ import {
 /** A pair with nothing on file: the bottom of the ladder. */
 function base(overrides: Partial<SlateAngleInput> = {}): SlateAngleInput {
   return {
-    teamA: { name: "Team Alpha", abbreviation: "ALP" },
-    teamB: { name: "Team Bravo", abbreviation: "BRV" },
+    teamA: { name: "Team Alpha" },
+    teamB: { name: "Team Bravo" },
     h2h: { wins: 0, losses: 0, ties: 0, streak: null },
     lastMeeting: null,
     playoffMeetingYears: [],
@@ -164,25 +165,13 @@ describe("buildSlateAngle ladder", () => {
     expect(result.text).not.toMatch(/all time|series|last \d+ meetings|Last time out/);
   });
 
-  it("rung 8: the projected star fires when there is no history", () => {
-    const result = buildSlateAngleResult(
-      base({
-        // Force past the first-meeting rung by giving the pair a played game
-        // whose details are unknown: only the star clause is left.
-        h2h: null,
-        lastMeeting: null,
-        topProjected: {
-          playerName: "Bijan Robinson",
-          position: "RB",
-          side: "B",
-          projectedPoints: 22.4,
-        },
-      })
-    );
-    // With no h2h and no meeting the first-meeting rung still wins, which is
-    // the honest answer; the star clause is the distinctness widener.
-    expect(result.rung).toBe("firstMeeting");
-    const star = buildSlateAngles([
+  it("always terminates inside RUNGS: the single-best path never reaches a collision rung", () => {
+    // Rungs 6 and 7 between them cover every pair, so buildSlateAngleResult
+    // can never return projectedStar or seasonRecords no matter what is on the
+    // input. This is the structural claim the doc comments make.
+    const inputs: SlateAngleInput[] = [
+      base(),
+      base({ anyGamesPlayed: true, recordA: "2-1", recordB: "1-2" }),
       base({
         topProjected: {
           playerName: "Bijan Robinson",
@@ -191,39 +180,39 @@ describe("buildSlateAngle ladder", () => {
           projectedPoints: 22.4,
         },
       }),
-      base({
-        topProjected: {
-          playerName: "Bijan Robinson",
-          position: "RB",
-          side: "B",
-          projectedPoints: 22.4,
-        },
-      }),
-    ]);
-    expect(star[1]).toContain("Bijan Robinson");
+      base({ h2h: null, lastMeeting: null, anyGamesPlayed: true }),
+      base({ h2h: { wins: 1, losses: 1, ties: 0, streak: null } }),
+    ];
+    for (const input of inputs) {
+      const { rung } = buildSlateAngleResult(input);
+      expect(["projectedStar", "seasonRecords"]).not.toContain(rung);
+    }
   });
 
-  it("rung 9: season records only once a game has been played", () => {
-    const result = buildSlateAngleResult(
-      base({ anyGamesPlayed: true, recordA: "2-1", recordB: "1-2", h2h: null })
+  it("collision rung: the projected star is reachable only through the batch", () => {
+    const star = {
+      playerName: "Bijan Robinson",
+      position: "RB",
+      side: "B" as const,
+      projectedPoints: 22.4,
+    };
+    // Alone, the pair gets its honest first-meeting line.
+    expect(buildSlateAngleResult(base({ topProjected: star })).rung).toBe(
+      "firstMeeting"
     );
-    // With no series data at all the first-meeting rung is still truthful and
-    // outranks the records line.
-    expect(result.rung).toBe("firstMeeting");
-    // But when the pair HAS met and nothing else fires, records are reachable.
-    const noHooks = buildSlateAngleResult({
-      ...base({ anyGamesPlayed: true, recordA: "2-1", recordB: "1-2" }),
-      h2h: null,
-      lastMeeting: {
-        seasonYear: 2024,
-        week: 3,
-        winner: "A",
-        pointsA: 130.0,
-        pointsB: 110.0,
-        isPlayoff: false,
-      },
-    });
-    expect(noHooks.rung).toBe("lastMeeting");
+    // Behind an identical card, it advances to the star clause.
+    const angles = buildSlateAngles([
+      base({ topProjected: star }),
+      base({ topProjected: star }),
+    ]);
+    expect(angles[1]).toContain("Bijan Robinson");
+    expect(angles[0]).not.toBe(angles[1]);
+  });
+
+  it("collision rung: season records stay unreachable while every record is 0-0", () => {
+    const zeroRecords = base({ anyGamesPlayed: true });
+    const angles = buildSlateAngles([zeroRecords, { ...zeroRecords }, { ...zeroRecords }]);
+    for (const a of angles) expect(a).not.toContain("0-0");
   });
 
   it("never emits a 0-0 record line, even with anyGamesPlayed true and zero records", () => {
@@ -392,5 +381,129 @@ describe("buildSlateAngles hook variety", () => {
       /has taken the last \d+ meetings/.test(a),
     ).length;
     expect(streakCount).toBe(1);
+  });
+});
+
+describe("summarizeMeetingHistory", () => {
+  const HOME = "home-id";
+  const AWAY = "away-id";
+  const game = (
+    overrides: Partial<{
+      seasonYear: number;
+      week: number;
+      pointsA: number;
+      pointsB: number;
+      winnerFranchiseId: string | null;
+      isPlayoff: boolean;
+    }> = {},
+  ) => ({
+    seasonYear: 2025,
+    week: 5,
+    pointsA: 120.5,
+    pointsB: 99.1,
+    winnerFranchiseId: HOME as string | null,
+    isPlayoff: false,
+    ...overrides,
+  });
+
+  it("takes the newest played meeting and labels the winner by side", () => {
+    const summary = summarizeMeetingHistory(
+      [
+        game({ seasonYear: 2025, week: 12, winnerFranchiseId: AWAY }),
+        game({ seasonYear: 2023, week: 4 }),
+      ],
+      HOME,
+    );
+    expect(summary.lastMeeting).toMatchObject({ seasonYear: 2025, winner: "B" });
+  });
+
+  it("skips a scheduled row with no winner and no points", () => {
+    const summary = summarizeMeetingHistory(
+      [
+        game({
+          seasonYear: 2026,
+          week: 1,
+          pointsA: 0,
+          pointsB: 0,
+          winnerFranchiseId: null,
+        }),
+        game({ seasonYear: 2025, week: 5 }),
+      ],
+      HOME,
+    );
+    expect(summary.lastMeeting?.seasonYear).toBe(2025);
+  });
+
+  it("keeps a real tie, which has points but no winner", () => {
+    const summary = summarizeMeetingHistory(
+      [game({ pointsA: 110.0, pointsB: 110.0, winnerFranchiseId: null })],
+      HOME,
+    );
+    expect(summary.lastMeeting?.winner).toBeNull();
+    expect(summary.lastMeeting?.pointsA).toBe(110.0);
+  });
+
+  it("collects only the playoff meetings' years", () => {
+    const summary = summarizeMeetingHistory(
+      [
+        game({ seasonYear: 2025, week: 16, isPlayoff: true }),
+        game({ seasonYear: 2024, week: 3 }),
+        game({ seasonYear: 2023, week: 15, isPlayoff: true }),
+      ],
+      HOME,
+    );
+    expect(summary.playoffMeetingYears).toEqual([2025, 2023]);
+  });
+
+  it("reports nothing for a pair with no played rows", () => {
+    expect(summarizeMeetingHistory([], HOME)).toEqual({
+      lastMeeting: null,
+      playoffMeetingYears: [],
+    });
+  });
+});
+
+describe("length budget with the league's longest real names", () => {
+  // The two longest franchise names on file, so the budget is exercised
+  // against production data rather than short fixtures.
+  const LONG_A = "Latter Day Lamb Special";
+  const LONG_B = "The Tokyo Thunderbirds";
+
+  it("keeps every rung inside the budget for long names", () => {
+    const longBase = (overrides: Partial<SlateAngleInput> = {}) =>
+      base({ teamA: { name: LONG_A }, teamB: { name: LONG_B }, ...overrides });
+    const fixtures: SlateAngleInput[] = [
+      longBase(),
+      longBase({ h2h: { wins: 6, losses: 1, ties: 0, streak: "3-game win streak" } }),
+      longBase({ h2h: { wins: 6, losses: 1, ties: 0, streak: null } }),
+      longBase({ h2h: { wins: 2, losses: 3, ties: 0, streak: null } }),
+      longBase({ h2h: { wins: 2, losses: 2, ties: 0, streak: null }, playoffMeetingYears: [2023] }),
+      longBase({
+        h2h: { wins: 1, losses: 1, ties: 0, streak: null },
+        lastMeeting: {
+          seasonYear: 2024,
+          week: 11,
+          winner: "A",
+          pointsA: 155.5,
+          pointsB: 120.0,
+          isPlayoff: false,
+        },
+      }),
+      longBase({
+        isTitleRematch: true,
+        bowlName: "HMLML Bowl VI",
+        lastMeeting: {
+          seasonYear: 2025,
+          week: 17,
+          winner: "B",
+          pointsA: 98.1,
+          pointsB: 142.6,
+          isPlayoff: true,
+        },
+      }),
+    ];
+    for (const f of fixtures) {
+      expect(buildSlateAngle(f).length).toBeLessThanOrEqual(SLATE_ANGLE_MAX_CHARS);
+    }
   });
 });

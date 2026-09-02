@@ -351,3 +351,49 @@ describe("selectDiverseSubset", () => {
     expect(first.dropped.map((d) => d.row.body)).toEqual(second.dropped.map((d) => d.row.body));
   });
 });
+
+describe("keep-all kinds still reject an identical body", () => {
+  const angle = (body: string, refKey: string): CandidateRow => ({
+    kind: "matchup_angle",
+    refKey,
+    body,
+    extras: null,
+  });
+
+  it("keeps two differently-worded angles even though keep-all skips the similarity gate", () => {
+    const a = angle("Foopus has taken the last three from Olave Garden.", "a__b");
+    const b = angle("Team C and Olave Garden have never played before.", "c__b");
+    const result = selectDiverseSubset({ matchup_angle: [a, b] }, ctx(), {
+      maxPerFranchise: 2,
+      similarityThreshold: 0.5,
+    });
+    expect(result.kept).toHaveLength(2);
+  });
+
+  it("drops a second angle whose body is character-identical to the first", () => {
+    const body = "Somebody's number moves this week.";
+    const a = angle(body, "a__b");
+    const b = angle(body, "c__b");
+    const result = selectDiverseSubset({ matchup_angle: [a, b] }, ctx(), {
+      maxPerFranchise: 2,
+      similarityThreshold: 0.5,
+    });
+    // One angle printed twice is not two angles. The dropped row leaves the
+    // kind short so topUpShortKinds refills that pair from the builder.
+    expect(result.kept).toHaveLength(1);
+    expect(result.kept).toContain(a);
+    expect(
+      result.dropped.some((d) => d.row === b && d.reason === "duplicate"),
+    ).toBe(true);
+  });
+
+  it("treats casing and whitespace differences as the same body", () => {
+    const a = angle("Somebody's number moves this week.", "a__b");
+    const b = angle("  SOMEBODY'S   NUMBER MOVES THIS WEEK.  ", "c__b");
+    const result = selectDiverseSubset({ matchup_angle: [a, b] }, ctx(), {
+      maxPerFranchise: 2,
+      similarityThreshold: 0.5,
+    });
+    expect(result.kept).toHaveLength(1);
+  });
+});

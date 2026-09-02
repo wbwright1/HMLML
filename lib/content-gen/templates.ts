@@ -594,7 +594,14 @@ function matchupAngles(ctx: StatsContext): HubContentInsert[] {
   // Built as a batch so the template fallback inherits the same distinctness
   // guarantee the hub gets: identical copy on two cards is impossible, not
   // merely unlikely.
-  const bodies = buildSlateAngles(ctx.currentMatchups.map(slateAngleInput));
+  // One slate-wide flag, computed once: a season record is only a fact after
+  // a game has been played, and it is the same answer for every matchup.
+  const anyGamesPlayed = ctx.leagueStandings.some(
+    (t) => !ZERO_TEAM_RECORD.test(t.record),
+  );
+  const bodies = buildSlateAngles(
+    ctx.currentMatchups.map((m) => slateAngleInput(m, anyGamesPlayed)),
+  );
   return ctx.currentMatchups.map((m, i) => ({
     week: ctx.week,
     kind: "matchup_angle" as const,
@@ -611,10 +618,10 @@ const ZERO_TEAM_RECORD = /^0-0(-0)?$/;
  * always the HOME team, which is the perspective getHeadToHead's counts and
  * streak are written from, so the streak never names the wrong franchise.
  */
-function slateAngleInput(m: StatsMatchup, _i: number, all: StatsMatchup[]): SlateAngleInput {
-  const played = all.some(
-    (x) => !ZERO_TEAM_RECORD.test(x.home.record) || !ZERO_TEAM_RECORD.test(x.away.record),
-  );
+function slateAngleInput(
+  m: StatsMatchup,
+  anyGamesPlayed: boolean,
+): SlateAngleInput {
   return {
     teamA: { name: m.home.name },
     teamB: { name: m.away.name },
@@ -649,12 +656,10 @@ function slateAngleInput(m: StatsMatchup, _i: number, all: StatsMatchup[]): Slat
     bowlName: null,
     recordA: m.home.record,
     recordB: m.away.record,
-    anyGamesPlayed: played,
+    anyGamesPlayed,
     kickoffWeekday: "this week",
   };
 }
-
-
 
 function gameOfWeek(ctx: StatsContext): HubContentInsert | null {
   if (ctx.currentMatchups.length === 0) return null;

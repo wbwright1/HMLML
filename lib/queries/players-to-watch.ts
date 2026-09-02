@@ -120,6 +120,42 @@ export function sumProjectedByFranchise(pool: PoolRow[]): Map<string, number> {
   return totals;
 }
 
+/** The single highest projected starter in one matchup. */
+export interface TopProjectedStarter {
+  playerName: string;
+  position: string | null;
+  franchiseId: string;
+  /** Rounded to one decimal, the precision the copy quotes it at. */
+  projectedPoints: number;
+}
+
+/**
+ * The highest projected starter in each Sleeper matchup, from the same pool
+ * Players to Watch scores over (so no caller needs its own query). Rows with
+ * no matchup, no name, or no projection are skipped: a zero projection is
+ * missing data, not a prediction. Ties keep the first row seen, which makes
+ * the result deterministic for a given pool order.
+ */
+export function topProjectedStarterByMatchup(
+  pool: PoolRow[]
+): Map<number, TopProjectedStarter> {
+  const best = new Map<number, TopProjectedStarter>();
+  for (const r of pool) {
+    if (r.matchupId == null || r.name == null) continue;
+    const projected = r.projectedPoints ?? 0;
+    if (projected <= 0) continue;
+    const current = best.get(r.matchupId);
+    if (current && current.projectedPoints >= projected) continue;
+    best.set(r.matchupId, {
+      playerName: r.name,
+      position: r.position,
+      franchiseId: r.franchiseId,
+      projectedPoints: Math.round(projected * 10) / 10,
+    });
+  }
+  return best;
+}
+
 /**
  * A player has no baseline (rookie, no prior started rows) when baselineGames
  * is 0; that gets an honest "First real look" rather than an invented number.

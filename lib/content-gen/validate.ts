@@ -348,6 +348,14 @@ export function validateRow(row: ValidatableRow, ctx: StatsContext): ValidationR
     return { valid: false, reason: "em/en dash present in body" };
   }
 
+  // A "0-0" in a matchup angle is always the absence of a fact dressed up as
+  // one: at week 1 nobody has played, and from week 2 on nobody is 0-0 (they
+  // are 0-1, 0-2, ...). The deterministic builder cannot emit it; this stops
+  // the LLM path from reintroducing it behind the builder's back.
+  if (row.kind === "matchup_angle" && /\b0-0\b/.test(row.body)) {
+    return { valid: false, reason: "matchup angle cites a 0-0 record" };
+  }
+
   const hallucinated = findHallucinatedNames(row.body, ctx);
   if (hallucinated.length > 0) {
     return { valid: false, reason: `possible hallucinated name(s): ${hallucinated.join(", ")}` };

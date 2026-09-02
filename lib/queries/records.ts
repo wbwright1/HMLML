@@ -1,5 +1,6 @@
 import { cache } from "react";
 import { cachedQuery } from "@/lib/cache";
+import { sortGamesChronologically } from "@/lib/queries/game-chronology";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { db } from "@/lib/db";
 import {
@@ -494,10 +495,7 @@ async function getHeadToHeadUncached(
 
     // Chronological order (oldest first) so the streak is the run at the END
     // of the list, i.e. the most recent games.
-    const sorted = [...games].sort((a, b) => {
-      if (a.seasonYear !== b.seasonYear) return a.seasonYear - b.seasonYear;
-      return a.week - b.week;
-    });
+    const sorted = sortGamesChronologically(games);
 
     for (const game of sorted) {
       // A tie only exists on a COMPLETED matchup with equal, non-null
@@ -627,12 +625,16 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
         pointsA: sql<number | null>`a.points`,
         pointsB: sql<number | null>`b.points`,
         status: sql<string | null>`a.status`,
-        seasonId: sql<number>`a.season_id`,
+        // seasonYear, NOT season_id: see lib/queries/game-chronology.ts. The
+        // ids are insertion order and the legacy seasons sort last under them,
+        // which reported every rivalry streak backwards.
+        seasonYear: seasons.seasonYear,
         week: sql<number>`a.week`,
       })
       .from(
         sql`${matchups} a INNER JOIN ${matchups} b ON a.season_id = b.season_id AND a.week = b.week AND a.matchup_id = b.matchup_id AND a.franchise_id < b.franchise_id`
-      );
+      )
+      .innerJoin(seasons, eq(seasons.id, sql`a.season_id`));
 
     // Aggregate pairwise records
     const pairMap = new Map<
@@ -641,7 +643,7 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
         wins: number;
         losses: number;
         ties: number;
-        games: { winnerId: string | null; seasonId: number; week: number }[];
+        games: { winnerId: string | null; seasonYear: number; week: number }[];
       }
     >();
 
@@ -667,21 +669,21 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
         entry.wins++;
         entry.games.push({
           winnerId: p.franchiseIdA,
-          seasonId: p.seasonId,
+          seasonYear: p.seasonYear,
           week: p.week,
         });
       } else if (p.isWinnerB) {
         entry.losses++;
         entry.games.push({
           winnerId: p.franchiseIdB,
-          seasonId: p.seasonId,
+          seasonYear: p.seasonYear,
           week: p.week,
         });
       } else if (tied) {
         entry.ties++;
         entry.games.push({
           winnerId: null,
-          seasonId: p.seasonId,
+          seasonYear: p.seasonYear,
           week: p.week,
         });
       }
@@ -702,11 +704,9 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
       const totalGames = data.wins + data.losses + data.ties;
       if (totalGames === 0) continue;
 
-      // Calculate streak
-      const sorted = [...data.games].sort((a, b) => {
-        if (a.seasonId !== b.seasonId) return a.seasonId - b.seasonId;
-        return a.week - b.week;
-      });
+      // Calculate streak from the END of a CHRONOLOGICAL list (see
+      // lib/queries/game-chronology.ts for why the season id will not do).
+      const sorted = sortGamesChronologically(data.games);
 
       let currentStreakTeam: string | null = null;
       let currentStreakCount = 0;

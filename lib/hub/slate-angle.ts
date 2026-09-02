@@ -19,9 +19,13 @@ import { genericSlateAngle } from "@/lib/hub/between-weeks";
 export type SlateSide = "A" | "B";
 
 export interface SlateAngleTeam {
+  /**
+   * The franchise's full name, which is what every rung prints. There is no
+   * abbreviation field on purpose: the copy never falls back to a letter code,
+   * and the length budget below is enforced by dropping a sentence rather than
+   * by shortening an identity.
+   */
   name: string;
-  /** Compact secondary label; only used when the full name would overflow. */
-  abbreviation?: string | null;
 }
 
 /** All-time series, from team A's perspective (the same orientation getHeadToHead uses). */
@@ -74,6 +78,62 @@ export interface SlateAngleInput {
 }
 
 /**
+ * One completed-or-scheduled meeting row, structurally the shape
+ * getHeadToHeadHistory returns. Declared locally so this module stays pure and
+ * free of any query import.
+ */
+export interface MeetingHistoryGame {
+  seasonYear: number;
+  week: number;
+  pointsA: number;
+  pointsB: number;
+  winnerFranchiseId: string | null;
+  isPlayoff: boolean;
+}
+
+export interface MeetingHistorySummary {
+  lastMeeting: SlateAngleLastMeeting | null;
+  playoffMeetingYears: number[];
+}
+
+/**
+ * Reduces a pair's meeting history (newest first, as getHeadToHeadHistory
+ * returns it, from `teamAFranchiseId`'s perspective) to the two fields the
+ * ladder reads.
+ *
+ * Only COMPLETED meetings count. A scheduled or in-progress row (this very
+ * week's game, before kickoff) carries no winner and 0 points; calling that
+ * "last time out" would report a game nobody has played.
+ */
+export function summarizeMeetingHistory(
+  games: MeetingHistoryGame[],
+  teamAFranchiseId: string
+): MeetingHistorySummary {
+  const played = games.filter(
+    (g) => g.winnerFranchiseId != null || g.pointsA > 0 || g.pointsB > 0
+  );
+  const latest = played[0] ?? null;
+  return {
+    lastMeeting: latest
+      ? {
+          seasonYear: latest.seasonYear,
+          week: latest.week,
+          winner:
+            latest.winnerFranchiseId == null
+              ? null
+              : latest.winnerFranchiseId === teamAFranchiseId
+                ? "A"
+                : "B",
+          pointsA: latest.pointsA,
+          pointsB: latest.pointsB,
+          isPlayoff: latest.isPlayoff,
+        }
+      : null,
+    playoffMeetingYears: played.filter((g) => g.isPlayoff).map((g) => g.seasonYear),
+  };
+}
+
+/**
  * Target length for a rendered angle. SlateCard gives the line two lines of
  * text-body-sm inside a half-width grid cell, so anything much past this wraps
  * to a third line and unbalances the grid. Rungs that would blow the budget
@@ -97,6 +157,9 @@ export interface SlateAngleResult {
   rung: SlateAngleRung;
   text: string;
 }
+
+/** A season record that says nothing: "0-0", or "0-0-0" with ties spelled out. */
+const ZERO_RECORD = /^0-0(-0)?$/;
 
 /** One decimal, trailing ".0" kept so two scores line up as written numbers. */
 function pts(n: number): string {
@@ -151,13 +214,21 @@ function starClause(input: SlateAngleInput): string | null {
 // The ladder
 // ---------------------------------------------------------------------------
 // Each builder returns null when the matchup cannot honestly support the hook.
-// Order matters: the first non-null wins, and buildSlateAngles walks further
-// down the list only to break an exact-string collision between two cards.
+// Order matters: the first non-null wins.
+//
+// RUNGS is exhaustive on its own: rungs 6 and 7 between them cover every pair
+// (any prior meeting lands on 6, no prior meeting lands on 7), so one of these
+// always fires and buildSlateAngle never falls past this list. COLLISION_RUNGS
+// below is therefore NOT a continuation of the ladder; it is extra material
+// buildSlateAngles can reach for when an earlier card already used a card's
+// best hooks.
 
-const RUNGS: {
+type RungEntry = {
   rung: SlateAngleRung;
   build: (input: SlateAngleInput) => string | null;
-}[] = [
+};
+
+const RUNGS: RungEntry[] = [
   {
     rung: "titleRematch",
     build: (input) => {
@@ -270,29 +341,42 @@ const RUNGS: {
       );
     },
   },
+];
+
+// Alternates, reached ONLY by buildSlateAngles when every hook a card supports
+// in RUNGS is already spoken for by an earlier card on the same slate. They
+// are true claims, just weaker ones: a projection is not a receipt, and a
+// season record is only a fact at all once a game has been played.
+const COLLISION_RUNGS: RungEntry[] = [
   {
     rung: "projectedStar",
-    build: (input) => {
-      const clause = starClause(input);
-      if (!clause) return null;
-      return clause;
-    },
+    build: (input) => starClause(input),
   },
   {
     rung: "seasonRecords",
     build: (input) => {
-      // The 0-0 form is structurally unreachable: without a played game the
-      // records are not a fact about anything, so this rung is gated off.
+      // Two independent gates, because the league-wide flag is not enough on
+      // its own: a caller can pass anyGamesPlayed while a specific pair still
+      // reads 0-0 (bye weeks, a mid-season expansion, or simply a caller that
+      // derives the flag from a different source than the records). The zero
+      // check is on the actual strings this line would print, so "0-0 against
+      // 0-0" cannot be emitted regardless of what the flag says.
       if (!input.anyGamesPlayed) return null;
+      if (ZERO_RECORD.test(input.recordA) || ZERO_RECORD.test(input.recordB)) {
+        return null;
+      }
       return genericSlateAngle(input.recordA, input.recordB, input.kickoffWeekday);
     },
   },
 ];
 
 /** Every rung this matchup can honestly support, best hook first. */
-function supportedRungs(input: SlateAngleInput): SlateAngleResult[] {
+function supportedRungs(
+  input: SlateAngleInput,
+  entries: RungEntry[] = RUNGS
+): SlateAngleResult[] {
   const results: SlateAngleResult[] = [];
-  for (const { rung, build } of RUNGS) {
+  for (const { rung, build } of entries) {
     const text = build(input);
     if (text) results.push({ rung, text });
   }
@@ -300,9 +384,11 @@ function supportedRungs(input: SlateAngleInput): SlateAngleResult[] {
 }
 
 /**
- * The single best angle this matchup can support. Falls all the way through to
- * a truthful first-meeting line, and only reaches the season-records rung once
- * a game has actually been played, so "0-0 against 0-0" can never render.
+ * The single best angle this matchup can support, always one of RUNGS: a pair
+ * with any prior meeting lands on the series rung at worst, and a pair with
+ * none lands on the first-meeting rung, so the ladder always terminates in a
+ * truthful line. The season-records rung is NOT on this path at all (see
+ * COLLISION_RUNGS), which is what makes "0-0 against 0-0" unreachable here.
  */
 export function buildSlateAngle(input: SlateAngleInput): string {
   return buildSlateAngleResult(input).text;
@@ -323,18 +409,20 @@ export function buildSlateAngleResult(input: SlateAngleInput): SlateAngleResult 
 /**
  * Angles for a whole slate, guaranteed pairwise distinct. Every rung names at
  * least one franchise, so a collision is already near-impossible; the pass
- * below makes it structural rather than lucky. On an exact-string collision
- * the LATER card advances to its next supported rung (deterministic: input
- * order decides, no randomness). If it exhausts the ladder, it appends its
- * projected-star clause, which is a fact about that matchup alone.
+ * below makes it structural rather than lucky. A later card whose best hook is
+ * already in play advances to its next supported hook, then to COLLISION_RUNGS
+ * (the projected star, or the season records once they mean something).
+ * Deterministic: input order decides, no randomness.
  */
 export function buildSlateAngles(inputs: SlateAngleInput[]): string[] {
   const used = new Set<string>();
   const usedRungs = new Set<SlateAngleRung>();
   return inputs.map((input) => {
     const supported = supportedRungs(input);
-    const candidates =
-      supported.length > 0 ? supported : [buildSlateAngleResult(input)];
+    const candidates = [
+      ...(supported.length > 0 ? supported : [buildSlateAngleResult(input)]),
+      ...supportedRungs(input, COLLISION_RUNGS),
+    ];
 
     // Prefer a hook no earlier card has used. Five cards all saying "X has
     // taken the last 2 meetings from Y" are technically distinct strings and
