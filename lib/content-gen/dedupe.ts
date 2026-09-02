@@ -1,5 +1,6 @@
 import type { HubContentKind } from "@/lib/queries/hub-content";
 import type { StatsContext } from "@/lib/content-gen/stats-context";
+import { phraseSetsOverlap, signaturePhrasesIn } from "@/lib/content-gen/phrases";
 
 // ---------------------------------------------------------------------------
 // Content diversity layer
@@ -25,6 +26,8 @@ export interface Anchors {
   franchiseKey: string | null;
   numbers: number[];
   playerNames: string[];
+  /** Stock idioms this body leans on; see lib/content-gen/phrases.ts. */
+  phrases: Set<string>;
   trigrams: Set<string>;
 }
 
@@ -132,14 +135,21 @@ export function extractAnchors(row: CandidateRow, ctx: StatsContext): Anchors {
     franchiseKey: deriveFranchiseKey(row, ctx),
     numbers: extractNumbers(row.body),
     playerNames: derivePlayerNames(row, ctx),
+    phrases: signaturePhrasesIn(row.body),
     trigrams: trigramSet(row.body),
   };
 }
 
 /**
  * The PRIMARY duplicate signal, on its own: two rows share a hook when they
- * are about the same franchise AND cite an overlapping central number, or
- * when they name the same central player. Exported so callers outside
+ * are about the same franchise AND cite an overlapping central number, when
+ * they name the same central player, or when they lean on the same signature
+ * phrase (a stock idiom two independent generators can both reach for; see
+ * lib/content-gen/phrases.ts). The phrase signal is deliberately PRIMARY
+ * rather than part of the fuzzy trigram tier: it is global and cross-kind,
+ * which is exactly the scope "no two visible lines share a phrase" needs, and
+ * it costs nothing on the far more common case of a body with no stock idiom
+ * in it at all. Exported so callers outside
  * selectDiverseSubset (e.g. the template top-up in generate.ts) can apply the
  * exact same rule when merging rows into an already-selected set.
  */
@@ -152,6 +162,9 @@ export function sharesPrimaryHook(a: Anchors, b: Anchors): boolean {
     return true;
   }
   if (a.playerNames.length > 0 && a.playerNames.some((p) => b.playerNames.includes(p))) {
+    return true;
+  }
+  if (phraseSetsOverlap(a.phrases, b.phrases)) {
     return true;
   }
   return false;
@@ -174,6 +187,16 @@ export interface SelectOptions {
   kindPriority?: HubContentKind[];
   /** Kinds where at most ONE row per franchise may ever be kept, overriding maxPerFranchise. */
   franchiseUniqueKinds?: Set<HubContentKind>;
+  /**
+   * Kinds that bypass the caps and the duplicate gate entirely (see the
+   * keepAllKinds comment inside selectDiverseSubset for why matchup_angle and
+   * trade_verdict need this). Pass it EXPLICITLY: when omitted, the legacy
+   * derived behavior applies ("target >= candidate count"), which silently
+   * sweeps in any single-candidate kind and lets it skip the gate. That
+   * fallback exists so no caller has to change, not because it is correct.
+   * franchiseUniqueKinds always wins over this set.
+   */
+  keepAllKinds?: Set<HubContentKind>;
 }
 
 /** Kinds where every row must come from a distinct franchise (e.g. offseason receipts). */
@@ -301,10 +324,21 @@ export function selectDiverseSubset(
   // recorded so OTHER kinds' candidates dedupe against these rows. Excludes
   // franchiseUniqueKinds: those kinds must ALWAYS enforce the one-per-franchise
   // cap, even when candidate count happens to equal the target.
+  //
+  // Callers SHOULD pass this explicitly. Derived from candidate counts, the
+  // set also swallowed every kind that ships exactly one candidate for a
+  // target of one (hero_dek, game_of_week_blurb), which is how the hub dek
+  // and the Game of the Week blurb both shipped "receipts to settle" on the
+  // same page: neither row ever reached the duplicate gate. Kind order does
+  // the tie-breaking when a real collision is found: "regular" runs
+  // matchup_angle, game_of_week_blurb, hero_dek, smack_post, so the GotW
+  // blurb is admitted first and the dek is the row that must yield. That
+  // ordering is now load-bearing, not incidental.
   const keepAllKinds = new Set(
-    kinds.filter(
-      (k) => targetFor(k) >= (candidatesByKind[k] ?? []).length && !franchiseUniqueKinds.has(k),
-    ),
+    (opts.keepAllKinds
+      ? [...opts.keepAllKinds]
+      : kinds.filter((k) => targetFor(k) >= (candidatesByKind[k] ?? []).length)
+    ).filter((k) => !franchiseUniqueKinds.has(k)),
   );
 
   const addedPerKind = new Map<HubContentKind, number>();

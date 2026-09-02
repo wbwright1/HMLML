@@ -505,6 +505,18 @@ const MATCHUP_ANGLES_OPENER: MatchupTrashAngles = Object.freeze({
   gameOfWeekBlurb: GAME_OF_WEEK_BLURB_OPENER,
 });
 
+/**
+ * The hero dek the between-weeks hub renders when nothing generated one (no
+ * hub_content row, or a generation run that has not landed yet). It lives
+ * here rather than inline in the component because copy belongs in the
+ * centralized content constants, and because it has to be checked against the
+ * seeded gameOfWeekBlurb above: the two render on the same page, and both
+ * used to say "receipts to settle" (issue #274). Keep them sharing no
+ * signature phrase (see lib/content-gen/phrases.ts).
+ */
+export const HERO_DEK_FALLBACK =
+  'One slate, no byes, and nowhere left to hide. Lineups lock, then the league finds out who was bluffing.';
+
 // The smack feed is authored by the site's own "Site Desk", NOT by member
 // franchises: we do not put fabricated quotes in a real team's mouth. Every
 // post shares the Site Desk identity (a neutral gold crest) and speaks as the

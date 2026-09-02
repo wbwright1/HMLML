@@ -3,6 +3,7 @@ import type { HubContentInsert, HubContentKind } from "@/lib/queries/hub-content
 import type { StatsContext, StatsTeam } from "@/lib/content-gen/stats-context";
 import {
   generateFromTemplates,
+  KEEP_ALL_KINDS,
   kindsForSeason,
   type GeneratedContent,
 } from "@/lib/content-gen/templates";
@@ -362,7 +363,7 @@ function regularSpec(ctx: StatsContext): string {
       : ""
   }
   "game_of_week_blurb": "blurb for ${gotwClause}, under ${BODY_MAX} characters",
-  "hero_dek": "one-sentence hero subhead for the week, under ${BODY_MAX} characters. Do NOT mention a specific number of days until kickoff; the live day count is added at render time.",
+  "hero_dek": "one-sentence hero subhead for the week, under ${BODY_MAX} characters. Do NOT mention a specific number of days until kickoff; the live day count is added at render time. It renders directly above the game_of_week_blurb, so it must not reuse ANY phrase from that blurb (no shared 'receipts to settle', 'on the line', 'headline the slate' style idioms): two different sentences, two different angles.",
   "smack_posts": [ { "text": "site desk post, under ${BODY_MAX} characters", "claims": [] }, ... ]  // 5 to 6, MORE than the ~5 that will ship: over-generate so a diverse subset can be picked
 }
 
@@ -587,6 +588,7 @@ export function applyDiversityLayer(
     targetCountsByKind: targetCountsForSeason(ctx),
     kindPriority: Object.keys(byKind) as HubContentKind[],
     franchiseUniqueKinds: FRANCHISE_UNIQUE_KINDS,
+    keepAllKinds: KEEP_ALL_KINDS,
   });
   return {
     rows: kept as HubContentInsert[],

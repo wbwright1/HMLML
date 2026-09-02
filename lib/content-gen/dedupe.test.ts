@@ -397,3 +397,145 @@ describe("keep-all kinds still reject an identical body", () => {
     expect(result.kept).toHaveLength(1);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Signature-phrase signal + explicit keepAllKinds (issue #274)
+// ---------------------------------------------------------------------------
+
+describe("signature-phrase duplicate signal", () => {
+  it("treats two rows sharing only a stock idiom as duplicates", () => {
+    // No shared franchise, no shared number, no shared player, and trigram
+    // similarity far below the 0.5 threshold: the ONLY thing these have in
+    // common is the idiom, which is exactly the case that used to slip
+    // through.
+    const dek = row(
+      "Week 1 is set. 6 matchups and a week of receipts to settle by Sunday.",
+      { kind: "hero_dek" },
+    );
+    const gotw = row(
+      "Foopus and Olave Garden headline it. There are receipts to settle by Thursday night.",
+      { kind: "game_of_week_blurb" },
+    );
+    const result = selectDiverseSubset(
+      { game_of_week_blurb: [gotw], hero_dek: [dek] },
+      ctx({ seasonType: "regular", week: 1 }),
+      {
+        targetCountsByKind: { game_of_week_blurb: 1, hero_dek: 1 },
+        kindPriority: ["game_of_week_blurb", "hero_dek"],
+        keepAllKinds: new Set(["matchup_angle", "trade_verdict"]),
+      },
+    );
+    expect(result.kept).toContain(gotw);
+    // The strict pass rejected the dek (the only reason hero_dek can end up
+    // in relaxedKinds here); the coverage pass then re-admitted it, which
+    // also un-lists it from `dropped`. With a real pool behind it, a
+    // phrase-free sibling takes the slot instead: see the next test.
+    expect(result.relaxedKinds).toContain("hero_dek");
+  });
+
+  it("lets a phrase-free alternative take the slot instead", () => {
+    const gotw = row(
+      "Foopus and Olave Garden headline it. There are receipts to settle by Thursday night.",
+      { kind: "game_of_week_blurb" },
+    );
+    const echo = row("A week of receipts to settle by Sunday.", { kind: "hero_dek" });
+    const clean = row(
+      "Six games, twelve rosters, and nobody hiding behind a projection.",
+      { kind: "hero_dek" },
+    );
+    const result = selectDiverseSubset(
+      { game_of_week_blurb: [gotw], hero_dek: [echo, clean] },
+      ctx({ seasonType: "regular", week: 1 }),
+      {
+        targetCountsByKind: { game_of_week_blurb: 1, hero_dek: 1 },
+        kindPriority: ["game_of_week_blurb", "hero_dek"],
+        keepAllKinds: new Set(["matchup_angle", "trade_verdict"]),
+      },
+    );
+    expect(result.kept.filter((r) => r.kind === "hero_dek")).toEqual([clean]);
+    expect(result.relaxedKinds).not.toContain("hero_dek");
+    expect(
+      result.dropped.some((d) => d.row === echo && d.reason === "duplicate"),
+    ).toBe(true);
+  });
+});
+
+describe("explicit keepAllKinds", () => {
+  const gotw = row(
+    "Foopus and Olave Garden headline it. There are receipts to settle by Thursday night.",
+    { kind: "game_of_week_blurb" },
+  );
+  const dek = row("A week of receipts to settle by Sunday.", { kind: "hero_dek" });
+
+  it("no longer lets a single-candidate kind bypass the gate", () => {
+    const result = selectDiverseSubset(
+      { game_of_week_blurb: [gotw], hero_dek: [dek] },
+      ctx({ seasonType: "regular", week: 1 }),
+      {
+        targetCountsByKind: { game_of_week_blurb: 1, hero_dek: 1 },
+        kindPriority: ["game_of_week_blurb", "hero_dek"],
+        keepAllKinds: new Set(["matchup_angle", "trade_verdict"]),
+      },
+    );
+    // Coverage first: with no alternative, the relaxation pass still ships it
+    // rather than leaving the hero with no dek at all. Best effort, not a
+    // guarantee, which is why the template pools exist.
+    expect(result.kept).toContain(dek);
+    expect(result.relaxedKinds).toContain("hero_dek");
+  });
+
+  it("keeps the legacy derived behavior when the option is omitted", () => {
+    const result = selectDiverseSubset(
+      { game_of_week_blurb: [gotw], hero_dek: [dek] },
+      ctx({ seasonType: "regular", week: 1 }),
+      {
+        targetCountsByKind: { game_of_week_blurb: 1, hero_dek: 1 },
+        kindPriority: ["game_of_week_blurb", "hero_dek"],
+      },
+    );
+    expect(result.dropped).toEqual([]);
+    expect(result.relaxedKinds).toEqual([]);
+  });
+
+  it("still keeps every matchup_angle row and reports no relaxation", () => {
+    // The regression this option most risks: matchup_angle boilerplate must
+    // keep going through untouched, with no spurious drop-then-relax cycle,
+    // even when every angle shares a signature phrase.
+    const angles: CandidateRow[] = [
+      row(
+        "Foopus (0-0) hosts Olave Garden (0-0). First meeting, and first place is on the line.",
+        { kind: "matchup_angle", refKey: "foopus__olave-garden" },
+      ),
+      row(
+        "Team C (0-0) hosts Foopus (0-0). First meeting, and first place is on the line too.",
+        { kind: "matchup_angle", refKey: "foopus__team-c" },
+      ),
+    ];
+    const result = selectDiverseSubset({ matchup_angle: angles }, ctx(), {
+      targetCountsByKind: { matchup_angle: 2 },
+      keepAllKinds: new Set(["matchup_angle", "trade_verdict"]),
+    });
+    expect(result.kept).toHaveLength(2);
+    expect(result.dropped).toEqual([]);
+    expect(result.relaxedKinds).toEqual([]);
+  });
+
+  it("never lets keepAllKinds override franchiseUniqueKinds", () => {
+    const a = row("Foopus torched its FAAB budget in March.", {
+      kind: "offseason_receipt",
+      refKey: "foopus",
+      extras: { category: "WAIVERS" },
+    });
+    const b = row("Foopus also shipped out two veterans for picks.", {
+      kind: "offseason_receipt",
+      refKey: "foopus",
+      extras: { category: "FIRE_SALE" },
+    });
+    const result = selectDiverseSubset({ offseason_receipt: [a, b] }, ctx(), {
+      targetCountsByKind: { offseason_receipt: 2 },
+      franchiseUniqueKinds: FRANCHISE_UNIQUE_KINDS,
+      keepAllKinds: new Set(["matchup_angle", "trade_verdict", "offseason_receipt"]),
+    });
+    expect(result.kept).toHaveLength(1);
+  });
+});

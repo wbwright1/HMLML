@@ -419,17 +419,25 @@ function offseasonReceipts(ctx: StatsContext): HubContentInsert[] {
   }));
 }
 
-function preseasonHeroDek(ctx: StatsContext): HubContentInsert {
-  const body = ctx.lastSeason?.champion
-    ? `Rosters are locked and every one of you is undefeated. ${ctx.lastSeason.champion.name} defends a title; everyone else is coming to take it. Screenshot the 0-0 while you've got it.`
-    : "Rosters are locked and every one of you is undefeated. Screenshot the 0-0 while you've got it.";
-  return {
+function preseasonHeroDeks(ctx: StatsContext): HubContentInsert[] {
+  const champ = ctx.lastSeason?.champion;
+  const pool = champ
+    ? [
+        `Rosters are locked and every one of you is undefeated. ${champ.name} defends a title; everyone else is coming to take it. Screenshot the 0-0 while you've got it.`,
+        `${champ.name} starts the year holding the hardware and wearing the target. Everybody else starts it with a clean record and a theory.`,
+        "Draft grades are in and they are worth precisely nothing. The only board that counts starts filling in on kickoff weekend.",
+      ]
+    : [
+        "Rosters are locked and every one of you is undefeated. Screenshot the 0-0 while you've got it.",
+        "Draft grades are in and they are worth precisely nothing. The only board that counts starts filling in on kickoff weekend.",
+      ];
+  return rotate(pool, ctx.seasonYear).map((body) => ({
     week: null,
-    kind: "hero_dek",
+    kind: "hero_dek" as const,
     refKey: null,
     body,
     extras: null,
-  };
+  }));
 }
 
 function preseasonSmack(ctx: StatsContext): HubContentInsert[] {
@@ -489,12 +497,26 @@ function preseasonSmack(ctx: StatsContext): HubContentInsert[] {
 // changed the whole run is skipped by the activity gate in the route; when it
 // does run, it produces a small recap/lookahead set plus per-trade verdicts.
 
-function offseasonHeroDek(ctx: StatsContext): HubContentInsert {
+function offseasonHeroDeks(ctx: StatsContext): HubContentInsert[] {
   const champ = ctx.lastSeason?.champion;
-  const body = champ
-    ? `The ${ctx.lastSeason?.year} season is in the books, ${champ.name} has the ring, and everyone else is already rewriting their roster in the group chat. The offseason is where next year's receipts get printed.`
-    : `The season is in the books and the offseason is where next year's receipts get printed. Every roster move now is a promise somebody will be held to in the fall.`;
-  return { week: null, kind: "hero_dek", refKey: null, body, extras: null };
+  const noChampBody = `The season is in the books and the offseason is where next year's receipts get printed. Every roster move now is a promise somebody will be held to in the fall.`;
+  const pool = champ
+    ? [
+        `The ${ctx.lastSeason?.year} season is in the books, ${champ.name} has the ring, and everyone else is already rewriting a roster on paper. The offseason is where next year's receipts get printed.`,
+        `${champ.name} was the last team standing in ${ctx.lastSeason?.year}, which means every move anybody else makes from here is aimed squarely at them.`,
+        noChampBody,
+      ]
+    : [
+        noChampBody,
+        "No games, no scores, and nothing left to hide behind. Just a league full of front offices quietly deciding how next autumn goes.",
+      ];
+  return rotate(pool, ctx.seasonYear).map((body) => ({
+    week: null,
+    kind: "hero_dek" as const,
+    refKey: null,
+    body,
+    extras: null,
+  }));
 }
 
 function offseasonSmack(ctx: StatsContext): HubContentInsert[] {
@@ -686,9 +708,53 @@ function gameOfWeek(ctx: StatsContext): HubContentInsert | null {
   };
 }
 
-function regularHeroDek(ctx: StatsContext): HubContentInsert {
-  const body = `Week ${ctx.week} is set. ${ctx.currentMatchups.length} matchups, one grudge match at the top, and a week of receipts to settle by Sunday.`;
-  return { week: ctx.week, kind: "hero_dek", refKey: null, body, extras: null };
+/**
+ * Rotates a variant pool by a data key so the choice is DETERMINISTIC. Hub
+ * pages are ISR-cached and generation persists to hub_content per cron run,
+ * so `Math.random()`/`Date.now()` here would mean the same week renders
+ * different copy on two servers. Rotation (not indexing) is deliberate: the
+ * whole pool is still handed to the diversity layer in preference order, so
+ * if the first choice echoes another row on the page the next one is tried.
+ */
+function rotate<T>(pool: readonly T[], key: number): T[] {
+  if (pool.length === 0) return [];
+  const i = ((Math.trunc(key) % pool.length) + pool.length) % pool.length;
+  return [...pool.slice(i), ...pool.slice(0, i)];
+}
+
+/**
+ * The hero dek pool for a regular-season week. Deliberately a pool, not one
+ * line: with a single candidate the diversity layer has nothing to fall back
+ * to, so a dek that echoes the Game of the Week blurb gets dropped and then
+ * re-admitted by the coverage-first relaxation pass, and the echo ships
+ * anyway. None of these reuse the GotW blurb's idioms ("headline the slate",
+ * "on the line", "receipts to settle"); see lib/content-gen/phrases.ts.
+ */
+function regularHeroDekPool(ctx: StatsContext): string[] {
+  const w = ctx.week;
+  const n = ctx.currentMatchups.length;
+  const teams = n * 2;
+  return rotate(
+    [
+      `Week ${w} is set. ${n} matchups, ${teams} rosters, and nobody gets to hide behind a projection once the ball is kicked off.`,
+      `${n} matchups on the Week ${w} slate. Half this league finishes the week bragging and the other half finishes it explaining.`,
+      `Week ${w}. ${n} games, no byes, no excuses: everybody plays and everybody answers for the lineup they set.`,
+      `The Week ${w} slate is locked. ${n} matchups, and the standings could not care less which one you circled back in August.`,
+      `Week ${w} is here. ${n} matchups worth of start-sit calls you will defend all week and regret by Monday morning.`,
+      `${n} matchups, one Week ${w}, and ${teams} GMs all quietly convinced their bench is the real problem.`,
+    ],
+    w,
+  );
+}
+
+function regularHeroDeks(ctx: StatsContext): HubContentInsert[] {
+  return regularHeroDekPool(ctx).map((body) => ({
+    week: ctx.week,
+    kind: "hero_dek" as const,
+    refKey: null,
+    body,
+    extras: null,
+  }));
 }
 
 function regularSmack(ctx: StatsContext): HubContentInsert[] {
@@ -776,6 +842,20 @@ export function kindsForSeason(seasonType: StatsContext["seasonType"]): HubConte
  * than the display target) so this has real room to pick the most distinct
  * hooks instead of just truncating in generation order.
  */
+/**
+ * The only kinds that skip the caps and the duplicate gate: every current
+ * matchup MUST get an angle and every recent trade MUST get a verdict, and
+ * both share a boilerplate skeleton that trips the trigram threshold. Passed
+ * explicitly so a single-candidate kind (hero_dek, game_of_week_blurb) is
+ * never swept in by selectDiverseSubset's count-derived fallback, which is
+ * how the hub dek and the Game of the Week blurb both shipped "receipts to
+ * settle" on the same page.
+ */
+export const KEEP_ALL_KINDS: Set<HubContentKind> = new Set([
+  "matchup_angle",
+  "trade_verdict",
+]);
+
 function applyDiversityLayer(
   ctx: StatsContext,
   candidatesByKind: Partial<Record<HubContentKind, HubContentInsert[]>>,
@@ -793,6 +873,7 @@ function applyDiversityLayer(
     targetCountsByKind,
     kindPriority: Object.keys(validatedByKind) as HubContentKind[],
     franchiseUniqueKinds: FRANCHISE_UNIQUE_KINDS,
+    keepAllKinds: KEEP_ALL_KINDS,
   });
   return {
     rows: kept as HubContentInsert[],
@@ -823,7 +904,7 @@ export function generateFromTemplates(ctx: StatsContext): GeneratedContent {
     const candidatesByKind: Partial<Record<HubContentKind, HubContentInsert[]>> = {
       matchup_angle: matchupCandidates,
       game_of_week_blurb: gotw ? [gotw] : [],
-      hero_dek: [regularHeroDek(ctx)],
+      hero_dek: regularHeroDeks(ctx),
       smack_post: smackCandidates,
     };
     const targetCountsByKind: Partial<Record<HubContentKind, number>> = {
@@ -842,7 +923,7 @@ export function generateFromTemplates(ctx: StatsContext): GeneratedContent {
       burning_question: burningQuestions(ctx),
       bold_prediction: boldPredictions(ctx),
       offseason_receipt: offseasonReceipts(ctx),
-      hero_dek: [preseasonHeroDek(ctx)],
+      hero_dek: preseasonHeroDeks(ctx),
       smack_post: preseasonSmack(ctx),
     };
     const targetCountsByKind: Partial<Record<HubContentKind, number>> = {
@@ -862,7 +943,7 @@ export function generateFromTemplates(ctx: StatsContext): GeneratedContent {
     const verdicts = tradeVerdicts(ctx);
     const candidatesByKind: Partial<Record<HubContentKind, HubContentInsert[]>> = {
       offseason_receipt: receipts,
-      hero_dek: [offseasonHeroDek(ctx)],
+      hero_dek: offseasonHeroDeks(ctx),
       smack_post: offseasonSmack(ctx),
       trade_verdict: verdicts,
     };

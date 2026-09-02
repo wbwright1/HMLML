@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import type { Page, Locator } from "@playwright/test";
+import { signaturePhrasesIn } from "../lib/content-gen/phrases";
 
 // ============================================================================
 // Between-Weeks Hub (state 1d)
@@ -101,6 +102,40 @@ test.describe("Between-Weeks Hub (1d)", () => {
       // Substantive copy, not a bare fragment.
       expect(angle.length).toBeGreaterThan(20);
     }
+  });
+
+  // Issue #274: the hero dek, the Game of the Week kicker and the Game of the
+  // Week blurb are three generated lines stacked on one screen. They used to
+  // share stock idioms ("receipts to settle", "first place on the line"),
+  // which made them read as one fill-in-the-blank template.
+  test("T12: hero dek, GotW kicker and GotW blurb share no signature phrase", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const dek = (await page.getByTestId("hero-dek").innerText()).trim();
+    const kicker = (await page.getByTestId("gotw-kicker").innerText()).trim();
+    const blurb = (await page.getByTestId("gotw-blurb").innerText()).trim();
+
+    for (const line of [dek, kicker, blurb]) {
+      expect(line.length).toBeGreaterThan(0);
+    }
+
+    const pairs: [string, string, string][] = [
+      ["dek/kicker", dek, kicker],
+      ["dek/blurb", dek, blurb],
+      ["kicker/blurb", kicker, blurb],
+    ];
+    for (const [label, a, b] of pairs) {
+      const shared = [...signaturePhrasesIn(a)].filter((p) =>
+        signaturePhrasesIn(b).has(p)
+      );
+      expect(shared, `${label} share: ${shared.join(", ")}`).toEqual([]);
+    }
+
+    // The Game of the Week line keeps its own phrasing (owner's call); it is
+    // the surrounding copy that varies around it.
+    expect(blurb.toLowerCase()).toContain("first place");
   });
 
   test("T04: no em-dashes anywhere in the hub copy", async ({ page }) => {

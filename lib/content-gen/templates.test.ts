@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateFromTemplates, kindsForSeason } from "./templates";
+import { sharesSignaturePhrase } from "./phrases";
 import type { StatsContext } from "./stats-context";
 
 function baseContext(overrides: Partial<StatsContext> = {}): StatsContext {
@@ -607,5 +608,101 @@ describe("generateFromTemplates (week 1 matchup angles)", () => {
 
   it("never emits an em-dash", () => {
     for (const a of angles) expect(hasEmDash(a.body)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Copy de-duplication across surfaces (issue #274)
+// ---------------------------------------------------------------------------
+
+describe("hero dek vs game of the week blurb", () => {
+  const regularCtx = (week: number) =>
+    baseContext({ seasonType: "regular", week, gameOfWeekPairKey: "foopus__olave-garden" });
+
+  const bodies = (ctx: StatsContext, kind: string) =>
+    generateFromTemplates(ctx)
+      .rows.filter((r) => r.kind === kind)
+      .map((r) => r.body);
+
+  it("ships a dek and a GotW blurb that share no signature phrase", () => {
+    // Every week of a season, not just the one that happens to be live.
+    for (let week = 1; week <= 14; week++) {
+      const ctx = regularCtx(week);
+      const dek = bodies(ctx, "hero_dek")[0];
+      const gotw = bodies(ctx, "game_of_week_blurb")[0];
+      expect(dek, `week ${week}`).toBeTruthy();
+      expect(gotw, `week ${week}`).toBeTruthy();
+      expect(sharesSignaturePhrase(dek, gotw), `week ${week}: "${dek}"`).toBe(false);
+    }
+  });
+
+  it("leaves the Game of the Week blurb's phrasing untouched", () => {
+    // Owner's call: the GotW line is the better of the two and does not move.
+    const gotw = bodies(regularCtx(1), "game_of_week_blurb")[0];
+    expect(gotw).toContain("headline the slate");
+    expect(gotw).toContain("First place is on the line");
+    expect(gotw).toContain("receipts to settle by Thursday night");
+  });
+
+  it("offers a real pool of dek variants, not a single line", () => {
+    // With one candidate the diversity layer has nothing to swap in and the
+    // echo ships anyway via the coverage-first relaxation pass.
+    const seen = new Set<string>();
+    for (let week = 1; week <= 14; week++) {
+      seen.add(bodies(regularCtx(week), "hero_dek")[0]);
+    }
+    expect(seen.size).toBeGreaterThanOrEqual(4);
+  });
+
+  it("is deterministic: the same context always yields the same dek", () => {
+    // ISR caches the rendered hub and generation persists per cron run, so a
+    // random pick here would mean two servers disagreeing about the copy.
+    const first = bodies(regularCtx(7), "hero_dek")[0];
+    const second = bodies(regularCtx(7), "hero_dek")[0];
+    expect(second).toBe(first);
+  });
+
+  it("varies the dek from week to week", () => {
+    expect(bodies(regularCtx(3), "hero_dek")[0]).not.toBe(
+      bodies(regularCtx(4), "hero_dek")[0],
+    );
+  });
+
+  it("keeps every matchup angle despite the new phrase gate", () => {
+    const ctx = regularCtx(5);
+    const angles = generateFromTemplates(ctx).rows.filter(
+      (r) => r.kind === "matchup_angle",
+    );
+    expect(angles).toHaveLength(ctx.currentMatchups.length);
+    expect(generateFromTemplates(ctx).diversityStats?.relaxedKinds ?? []).not.toContain(
+      "matchup_angle",
+    );
+  });
+
+  it("emits no em-dash in any season state's hero dek", () => {
+    const contexts: StatsContext[] = [
+      regularCtx(1),
+      regularCtx(9),
+      baseContext({ seasonType: "pre" }),
+      baseContext({ seasonType: "off" }),
+    ];
+    for (const ctx of contexts) {
+      for (const body of bodies(ctx, "hero_dek")) {
+        expect(hasEmDash(body)).toBe(false);
+      }
+    }
+  });
+
+  it("gives the preseason and offseason deks pools too", () => {
+    for (const seasonType of ["pre", "off"] as const) {
+      const years = new Set<string>();
+      for (const seasonYear of [2024, 2025, 2026]) {
+        const rows = generateFromTemplates(baseContext({ seasonType, seasonYear }))
+          .rows.filter((r) => r.kind === "hero_dek");
+        expect(rows.length, seasonType).toBe(1);
+        years.add(rows[0].body);
+      }
+      expect(years.size, seasonType).toBeGreaterThan(1);
+    }
   });
 });

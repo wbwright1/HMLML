@@ -39,7 +39,13 @@ import {
 import { getRecentLeagueMoves, type LeagueMove } from "@/lib/queries/league-moves";
 import { getWeekInHistory, type WeekReceipt } from "@/lib/queries/week-history";
 import { FranchiseLogo } from "@/components/franchise-logo";
-import { getHubEditorial, matchupPairKey, type HubEditorial } from "@/lib/content";
+import {
+  getHubEditorial,
+  HERO_DEK_FALLBACK,
+  matchupPairKey,
+  type HubEditorial,
+} from "@/lib/content";
+import { sharesSignaturePhrase } from "@/lib/content-gen/phrases";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { buildHubLineFooter } from "@/lib/book/shared";
 import {
@@ -346,6 +352,18 @@ export async function BetweenWeeksHub({
     }
   }
 
+  // Last line of defense on the copy-echo fix (issue #274). The generator's
+  // diversity layer stops a dek that echoes the Game of the Week blurb from
+  // ever being WRITTEN, but hub_content rows persist: a dek generated before
+  // that gate existed keeps rendering until the next generate-content run
+  // replaces it. Rather than ship the echo for hours, fall back to the seeded
+  // dek, which is guaranteed phrase-distinct from both seeded GotW blurbs.
+  const heroDek =
+    editorial.heroDek &&
+    !sharesSignaturePhrase(editorial.heroDek, editorial.matchupAngles.gameOfWeekBlurb)
+      ? editorial.heroDek
+      : HERO_DEK_FALLBACK;
+
   return (
     <>
       {/* Hero + countdown */}
@@ -355,13 +373,8 @@ export async function BetweenWeeksHub({
             Harambe Memorial League &middot; Week {week} &middot; The Slate Is Set
           </p>
           <h1 className="text-display">{headline}</h1>
-          <p className="mt-3 text-body-lg text-text-secondary">
-            <EditorialBody
-              body={
-                editorial.heroDek ??
-                "One grudge match at the top, one annual sacrifice at the bottom, and a week of receipts to settle by Thursday night."
-              }
-            />
+          <p className="mt-3 text-body-lg text-text-secondary" data-testid="hero-dek">
+            <EditorialBody body={heroDek} />
           </p>
         </div>
 
