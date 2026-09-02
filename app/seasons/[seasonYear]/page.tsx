@@ -4,6 +4,7 @@ import Link from "next/link";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
+import { TeamLink } from "@/components/team-link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { ChampionshipStars } from "@/components/championship-stars";
 import { SuperlativeBadge } from "@/components/superlative-badge";
@@ -128,19 +129,29 @@ export default async function SeasonDetailPage({
           <div className="mt-6 card-surface card-tint-gold p-6 text-center space-y-3">
             {championEntry && (
               <div className="flex justify-center">
-                <FranchiseLogo
+                <TeamLink
                   slug={championEntry.franchiseSlug}
-                  name={championEntry.franchiseName}
-                  abbreviation={championEntry.franchiseAbbreviation ?? undefined}
-                  brandingColor={championEntry.franchiseBrandingColor ?? undefined}
-                  avatarUrl={championEntry.avatarUrl}
-                  size="lg"
-                  decorative
-                />
+                  aria-label={championEntry.franchiseName}
+                  className="inline-flex"
+                >
+                  <FranchiseLogo
+                    slug={championEntry.franchiseSlug}
+                    name={championEntry.franchiseName}
+                    abbreviation={championEntry.franchiseAbbreviation ?? undefined}
+                    brandingColor={championEntry.franchiseBrandingColor ?? undefined}
+                    avatarUrl={championEntry.avatarUrl}
+                    size="lg"
+                    decorative
+                  />
+                </TeamLink>
               </div>
             )}
             <ChampionshipStars count={1} variant="hero" />
-            <p className="text-h3 text-gold">{season.championName}</p>
+            <div className="text-h3 text-gold">
+              <TeamLink slug={championEntry?.franchiseSlug}>
+                {season.championName}
+              </TeamLink>
+            </div>
             <SuperlativeBadge text="League Champion" variant="gold" />
           </div>
         )}
@@ -152,19 +163,27 @@ export default async function SeasonDetailPage({
             className="mt-4 card-surface card-tint-warm p-6 text-center space-y-3"
           >
             <div className="flex justify-center">
-              <FranchiseLogo
+              <TeamLink
                 slug={toiletBowlChampion.franchiseSlug}
-                name={toiletBowlChampion.franchiseName}
-                abbreviation={toiletBowlChampion.franchiseAbbreviation ?? undefined}
-                brandingColor={toiletBowlChampion.franchiseBrandingColor ?? undefined}
-                avatarUrl={toiletBowlChampion.avatarUrl}
-                size="lg"
-                decorative
-              />
+                aria-label={toiletBowlChampion.franchiseName}
+                className="inline-flex"
+              >
+                <FranchiseLogo
+                  slug={toiletBowlChampion.franchiseSlug}
+                  name={toiletBowlChampion.franchiseName}
+                  abbreviation={toiletBowlChampion.franchiseAbbreviation ?? undefined}
+                  brandingColor={toiletBowlChampion.franchiseBrandingColor ?? undefined}
+                  avatarUrl={toiletBowlChampion.avatarUrl}
+                  size="lg"
+                  decorative
+                />
+              </TeamLink>
             </div>
-            <p className="text-h3 text-accent-warm">
-              {toiletBowlChampion.franchiseName}
-            </p>
+            <div className="text-h3 text-accent-warm">
+              <TeamLink slug={toiletBowlChampion.franchiseSlug}>
+                {toiletBowlChampion.franchiseName}
+              </TeamLink>
+            </div>
             <p className="text-body-sm text-text-secondary max-w-prose mx-auto">
               {TOILET_BOWL_COPY.explainer}
             </p>
@@ -235,18 +254,23 @@ export default async function SeasonDetailPage({
                         </span>
                       </td>
                       <td className="py-4 pr-4">
-                        <FranchiseIdentity
-                          franchise={{
-                            slug: entry.franchiseSlug,
-                            name: entry.franchiseName,
-                            abbreviation:
-                              entry.franchiseAbbreviation ?? undefined,
-                            brandingColor:
-                              entry.franchiseBrandingColor ?? undefined,
-                            avatarUrl: entry.avatarUrl,
-                          }}
-                          variant="compact"
-                        />
+                        <TeamLink
+                          slug={entry.franchiseSlug}
+                          className="block"
+                        >
+                          <FranchiseIdentity
+                            franchise={{
+                              slug: entry.franchiseSlug,
+                              name: entry.franchiseName,
+                              abbreviation:
+                                entry.franchiseAbbreviation ?? undefined,
+                              brandingColor:
+                                entry.franchiseBrandingColor ?? undefined,
+                              avatarUrl: entry.avatarUrl,
+                            }}
+                            variant="compact"
+                          />
+                        </TeamLink>
                         {entry.ownerDisplayName && (
                           <p className="text-xs text-text-tertiary mt-0.5 ml-10">
                             {entry.ownerDisplayName}{entry.coOwnerDisplayName ? ` & ${entry.coOwnerDisplayName}` : ""}
@@ -320,18 +344,23 @@ export default async function SeasonDetailPage({
                         {entry.standingsFinish ?? "-"}
                       </span>
                       <div className="flex-1 min-w-0">
-                        <FranchiseIdentity
-                          franchise={{
-                            slug: entry.franchiseSlug,
-                            name: entry.franchiseName,
-                            abbreviation:
-                              entry.franchiseAbbreviation ?? undefined,
-                            brandingColor:
-                              entry.franchiseBrandingColor ?? undefined,
-                            avatarUrl: entry.avatarUrl,
-                          }}
-                          variant="compact"
-                        />
+                        <TeamLink
+                          slug={entry.franchiseSlug}
+                          className="block"
+                        >
+                          <FranchiseIdentity
+                            franchise={{
+                              slug: entry.franchiseSlug,
+                              name: entry.franchiseName,
+                              abbreviation:
+                                entry.franchiseAbbreviation ?? undefined,
+                              brandingColor:
+                                entry.franchiseBrandingColor ?? undefined,
+                              avatarUrl: entry.avatarUrl,
+                            }}
+                            variant="compact"
+                          />
+                        </TeamLink>
                         {entry.ownerDisplayName && (
                           <p className="text-xs text-text-tertiary mt-0.5">
                             {entry.ownerDisplayName}{entry.coOwnerDisplayName ? ` & ${entry.coOwnerDisplayName}` : ""}

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
+import { PlayerLink } from "@/components/player-link";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { useSessionMember } from "@/components/use-session-member";
 import { pickFuture } from "@/app/actions/book";
@@ -368,6 +370,35 @@ function EntryRow({
  *
  * `size` defaults to the 28px board row; the slip rail passes 20.
  */
+/**
+ * Sends a slip row's identity to its own page: the team page for a franchise
+ * market, the player page for a player market. The "field" subject has no
+ * single identity behind it, so its children render plain.
+ */
+function SlipEntryLink({
+  entry,
+  children,
+}: {
+  entry: FuturesEntry | null;
+  children: React.ReactNode;
+}) {
+  if (entry?.subjectType === "franchise") {
+    return (
+      <TeamLink slug={entry.slug} aria-label={entry.name} className="inline-flex">
+        {children}
+      </TeamLink>
+    );
+  }
+  if (entry?.subjectType === "player") {
+    return (
+      <PlayerLink playerId={entry.subjectId} className="inline-flex">
+        {children}
+      </PlayerLink>
+    );
+  }
+  return <>{children}</>;
+}
+
 function EntryMark({ entry, size = 28 }: { entry: FuturesEntry; size?: number }) {
   if (entry.subjectType === "franchise") {
     return (
@@ -496,10 +527,14 @@ function SlipRow({
       {/* Reuses the board's own mark (crest, headshot or "ALL") at rail size,
           so the slip identifies an entry the same way the board did. Absent
           when the pick fell off the board and there is no entry to mark. */}
-      {entry && <EntryMark entry={entry} size={20} />}
+      {entry && (
+        <SlipEntryLink entry={entry}>
+          <EntryMark entry={entry} size={20} />
+        </SlipEntryLink>
+      )}
       <span className="min-w-0 flex-1">
         <span className="block truncate text-body-sm font-semibold text-text-primary">
-          {name}{" "}
+          <SlipEntryLink entry={entry ?? null}>{name}</SlipEntryLink>{" "}
           <span className="font-mono tabular-nums text-text-secondary">
             {formatMoneyline(pick.oddsAtPick)}
           </span>

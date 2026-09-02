@@ -213,25 +213,29 @@ function TeamBlock({
         isEnd ? "md:flex-row-reverse md:text-right" : ""
       }`}
     >
-      <FranchiseLogo
-        slug={team.franchiseSlug}
-        name={team.franchiseName}
-        abbreviation={team.franchiseAbbreviation ?? undefined}
-        brandingColor={team.franchiseBrandingColor ?? undefined}
-        avatarUrl={team.avatarUrl}
-        size="md"
-        decorative
-      />
-      <div className="min-w-0">
-        <Link
-          href={`/teams/${team.franchiseSlug}`}
-          className={`block text-h3 truncate hover:text-accent-gold transition-colors ${
+      <Link
+        href={`/teams/${team.franchiseSlug}`}
+        className={`flex min-w-0 items-center gap-3 transition-colors hover:text-accent-gold ${
+          isEnd ? "md:flex-row-reverse md:text-right" : ""
+        }`}
+      >
+        <FranchiseLogo
+          slug={team.franchiseSlug}
+          name={team.franchiseName}
+          abbreviation={team.franchiseAbbreviation ?? undefined}
+          brandingColor={team.franchiseBrandingColor ?? undefined}
+          avatarUrl={team.avatarUrl}
+          size="md"
+          decorative
+        />
+        <span
+          className={`block min-w-0 truncate text-h3 ${
             winner ? "font-bold text-text-primary" : "font-medium text-text-secondary"
           }`}
         >
           {team.franchiseName}
-        </Link>
-      </div>
+        </span>
+      </Link>
     </div>
   );
 }

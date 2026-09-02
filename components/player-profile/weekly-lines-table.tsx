@@ -1,4 +1,5 @@
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 import type {
   PlayerWeeklyPointRow,
   PlayerWeeklyStatRow,
@@ -209,32 +210,42 @@ export function WeeklyLinesTable({
                   </td>
                   <td className={TD_CLASS}>
                     {line.owner ? (
-                      <span className="inline-flex" title={line.owner.name}>
-                        <FranchiseLogo
-                          slug={line.owner.slug ?? ""}
-                          name={line.owner.name}
-                          avatarUrl={line.owner.avatarUrl}
-                          size={24}
-                          decorative
-                        />
-                        <span className="sr-only">{line.owner.name}</span>
-                      </span>
+                      <TeamLink
+                        slug={line.owner.slug}
+                        className="inline-flex"
+                      >
+                        <span className="inline-flex" title={line.owner.name}>
+                          <FranchiseLogo
+                            slug={line.owner.slug ?? ""}
+                            name={line.owner.name}
+                            avatarUrl={line.owner.avatarUrl}
+                            size={24}
+                            decorative
+                          />
+                          <span className="sr-only">{line.owner.name}</span>
+                        </span>
+                      </TeamLink>
                     ) : (
                       <span className="text-text-tertiary">&ndash;</span>
                     )}
                   </td>
                   <td className={TD_CLASS}>
                     {line.opponent ? (
-                      <span className="inline-flex" title={line.opponent.name}>
-                        <FranchiseLogo
-                          slug={line.opponent.slug ?? ""}
-                          name={line.opponent.name}
-                          avatarUrl={line.opponent.avatarUrl}
-                          size={24}
-                          decorative
-                        />
-                        <span className="sr-only">{line.opponent.name}</span>
-                      </span>
+                      <TeamLink
+                        slug={line.opponent.slug}
+                        className="inline-flex"
+                      >
+                        <span className="inline-flex" title={line.opponent.name}>
+                          <FranchiseLogo
+                            slug={line.opponent.slug ?? ""}
+                            name={line.opponent.name}
+                            avatarUrl={line.opponent.avatarUrl}
+                            size={24}
+                            decorative
+                          />
+                          <span className="sr-only">{line.opponent.name}</span>
+                        </span>
+                      </TeamLink>
                     ) : (
                       <span className="text-text-tertiary">&ndash;</span>
                     )}

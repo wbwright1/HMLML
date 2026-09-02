@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 import { useBookSlip } from "@/components/book/use-book-slip";
 import {
   gradePick,
@@ -491,19 +492,24 @@ function SlipRow({
     <li className="flex items-center justify-between gap-3 border-t border-divider py-2.5">
       {/* Decorative: the code sits immediately beside it and the opponent's
           full name is on the line below. 20px is the rail size. */}
-      <FranchiseLogo
-        slug={team.slug}
-        name={team.name}
-        abbreviation={team.abbreviation ?? undefined}
-        brandingColor={team.brandingColor ?? undefined}
-        avatarUrl={team.avatarUrl ?? undefined}
-        size={20}
-        decorative
-      />
+      <TeamLink slug={team.slug} aria-label={team.name} className="inline-flex">
+        <FranchiseLogo
+          slug={team.slug}
+          name={team.name}
+          abbreviation={team.abbreviation ?? undefined}
+          brandingColor={team.brandingColor ?? undefined}
+          avatarUrl={team.avatarUrl ?? undefined}
+          size={20}
+          decorative
+        />
+      </TeamLink>
       <span className="min-w-0 flex-1">
-        <span className="block truncate font-mono text-body-sm font-bold tabular-nums text-text-primary">
+        <TeamLink
+          slug={team.slug}
+          className="block truncate font-mono text-body-sm font-bold tabular-nums text-text-primary"
+        >
           {team.abbreviation ?? team.name} {formatSpread(spread)}
-        </span>
+        </TeamLink>
         <span className="block truncate text-[11px] text-text-tertiary">
           vs {other.name}
         </span>

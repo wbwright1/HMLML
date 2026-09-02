@@ -1,4 +1,5 @@
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 
 export interface GameOfTheWeekTeam {
   name: string;
@@ -50,17 +51,25 @@ export function GameOfTheWeekCard({
         <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-4">
           {/* Team A (left) */}
           <div className="flex items-center gap-3">
-            <FranchiseLogo
+            <TeamLink
               slug={teamA.slug}
-              name={teamA.name}
-              abbreviation={teamA.abbreviation ?? undefined}
-              brandingColor={teamA.brandingColor ?? undefined}
-              avatarUrl={teamA.avatarUrl}
-              size="lg"
-              decorative
-            />
+              aria-label={teamA.name}
+              className="inline-flex shrink-0"
+            >
+              <FranchiseLogo
+                slug={teamA.slug}
+                name={teamA.name}
+                abbreviation={teamA.abbreviation ?? undefined}
+                brandingColor={teamA.brandingColor ?? undefined}
+                avatarUrl={teamA.avatarUrl}
+                size="lg"
+                decorative
+              />
+            </TeamLink>
             <div className="min-w-0">
-              <p className="text-h3 font-semibold text-text-primary">{teamA.name}</p>
+              <p className="text-h3 font-semibold text-text-primary">
+                <TeamLink slug={teamA.slug}>{teamA.name}</TeamLink>
+              </p>
               <p className="text-body-sm text-text-tertiary">
                 <span className="text-stat tabular-nums">{teamA.record}</span>
                 {teamA.status && <span> &middot; {teamA.status}</span>}
@@ -74,17 +83,25 @@ export function GameOfTheWeekCard({
 
           {/* Team B (right, mirrored on desktop) */}
           <div className="flex items-center gap-3 sm:flex-row-reverse sm:text-right">
-            <FranchiseLogo
+            <TeamLink
               slug={teamB.slug}
-              name={teamB.name}
-              abbreviation={teamB.abbreviation ?? undefined}
-              brandingColor={teamB.brandingColor ?? undefined}
-              avatarUrl={teamB.avatarUrl}
-              size="lg"
-              decorative
-            />
+              aria-label={teamB.name}
+              className="inline-flex shrink-0"
+            >
+              <FranchiseLogo
+                slug={teamB.slug}
+                name={teamB.name}
+                abbreviation={teamB.abbreviation ?? undefined}
+                brandingColor={teamB.brandingColor ?? undefined}
+                avatarUrl={teamB.avatarUrl}
+                size="lg"
+                decorative
+              />
+            </TeamLink>
             <div className="min-w-0">
-              <p className="text-h3 font-semibold text-text-primary">{teamB.name}</p>
+              <p className="text-h3 font-semibold text-text-primary">
+                <TeamLink slug={teamB.slug}>{teamB.name}</TeamLink>
+              </p>
               <p className="text-body-sm text-text-tertiary">
                 <span className="text-stat tabular-nums">{teamB.record}</span>
                 {teamB.status && <span> &middot; {teamB.status}</span>}

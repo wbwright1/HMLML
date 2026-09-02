@@ -190,6 +190,7 @@ export async function GET() {
         points: matchups.points,
         status: matchups.status,
         franchiseName: franchises.name,
+        franchiseSlug: franchises.slug,
       })
       .from(matchups)
       .innerJoin(franchises, eq(matchups.franchiseId, franchises.id))
@@ -228,9 +229,11 @@ export async function GET() {
         status: pairStatus,
         homeTeamId: home.franchiseId,
         homeTeamName: home.franchiseName,
+        homeTeamSlug: home.franchiseSlug,
         homeScore: home.points ?? 0,
         awayTeamId: away.franchiseId,
         awayTeamName: away.franchiseName,
+        awayTeamSlug: away.franchiseSlug,
         awayScore: away.points ?? 0,
       });
     }

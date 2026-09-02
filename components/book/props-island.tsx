@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useSessionMember } from "@/components/use-session-member";
 import { togglePropPick } from "@/app/actions/book";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
+import { PlayerLink } from "@/components/player-link";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { PROP_GROUP_ORDER } from "@/lib/book/props";
 import {
@@ -367,7 +369,7 @@ function SubjectIdentity({ prop }: { prop: BookPropView }) {
 function EntityChip({ entity }: { entity: BookPropEntity }) {
   if (entity.kind === "player") {
     return (
-      <span className="flex min-w-0 items-center gap-2">
+      <PlayerLink playerId={entity.playerId} className="flex min-w-0 items-center gap-2">
         <PlayerHeadshot
           playerId={entity.playerId}
           name={entity.name}
@@ -382,12 +384,12 @@ function EntityChip({ entity }: { entity: BookPropEntity }) {
             {[entity.position, entity.nflTeam].filter(Boolean).join(" · ")}
           </span>
         </span>
-      </span>
+      </PlayerLink>
     );
   }
 
   return (
-    <span className="flex min-w-0 items-center gap-2">
+    <TeamLink slug={entity.slug} className="flex min-w-0 items-center gap-2">
       <FranchiseLogo
         slug={entity.slug}
         name={entity.name}
@@ -405,7 +407,7 @@ function EntityChip({ entity }: { entity: BookPropEntity }) {
           {entity.name}
         </span>
       </span>
-    </span>
+    </TeamLink>
   );
 }
 

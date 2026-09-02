@@ -1,4 +1,5 @@
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 import { formatRelativeTime } from "@/lib/relative-time";
 import type { SmackPost } from "@/lib/content";
 import type { RecentSmackPost } from "@/lib/queries/smack";
@@ -84,20 +85,28 @@ export function SmackFeed({ items, className = "space-y-3" }: SmackFeedProps) {
         return (
           <div key={item.key} className="card-surface p-4">
             <div className="flex items-start gap-3">
-              <FranchiseLogo
+              <TeamLink
                 slug={item.franchiseSlug}
-                name={item.franchiseName}
-                abbreviation={item.abbreviation ?? undefined}
-                brandingColor={item.brandingColor ?? undefined}
-                avatarUrl={item.avatarUrl}
-                size="sm"
-                decorative
-              />
+                aria-label={item.franchiseName}
+                className="inline-flex shrink-0"
+              >
+                <FranchiseLogo
+                  slug={item.franchiseSlug}
+                  name={item.franchiseName}
+                  abbreviation={item.abbreviation ?? undefined}
+                  brandingColor={item.brandingColor ?? undefined}
+                  avatarUrl={item.avatarUrl}
+                  size="sm"
+                  decorative
+                />
+              </TeamLink>
               <div className="min-w-0 flex-1">
                 <div className="flex items-baseline justify-between gap-2">
-                  <p className="text-body-sm font-semibold text-text-primary truncate">
-                    {item.franchiseName}
-                  </p>
+                  <div className="text-body-sm font-semibold text-text-primary truncate">
+                    <TeamLink slug={item.franchiseSlug}>
+                      {item.franchiseName}
+                    </TeamLink>
+                  </div>
                   <span className="text-caption text-text-tertiary shrink-0 tabular-nums">
                     {meta}
                   </span>

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { PositionBadge } from "@/components/position-badge";
 import { PlayerHeadshot } from "@/components/player-headshot";
@@ -76,23 +77,23 @@ export function TradeCard({
               <div className="flex items-center gap-2">
                 {side.franchise ? (
                   <>
-                    <FranchiseLogo
-                      slug={side.franchise.slug}
-                      name={side.franchise.name}
-                      abbreviation={side.franchise.abbreviation}
-                      brandingColor={side.franchise.brandingColor}
-                      avatarUrl={side.franchise.avatarUrl}
-                      size="sm"
-                    />
-                    <div className="min-w-0">
-                      <Link
-                        href={`/teams/${side.franchise.slug}`}
-                        className="text-body-sm font-semibold text-text-primary hover:text-accent-gold transition-colors truncate block"
-                      >
+                    <Link
+                      href={`/teams/${side.franchise.slug}`}
+                      className="flex min-w-0 items-center gap-2 transition-colors hover:text-accent-gold"
+                    >
+                      <FranchiseLogo
+                        slug={side.franchise.slug}
+                        name={side.franchise.name}
+                        abbreviation={side.franchise.abbreviation}
+                        brandingColor={side.franchise.brandingColor}
+                        avatarUrl={side.franchise.avatarUrl}
+                        size="sm"
+                      />
+                      <span className="min-w-0 truncate text-body-sm font-semibold text-text-primary">
                         {side.franchise.name}
-                      </Link>
-                      <p className="text-caption text-text-tertiary">Received</p>
-                    </div>
+                      </span>
+                    </Link>
+                    <p className="text-caption text-text-tertiary">Received</p>
                   </>
                 ) : (
                   <div className="min-w-0">
@@ -138,15 +139,21 @@ export function TradeCard({
                     >
                       <div className="flex items-center gap-2">
                         {pick.originalFranchise && (
-                          <FranchiseLogo
+                          <TeamLink
                             slug={pick.originalFranchise.slug}
-                            name={pick.originalFranchise.name}
-                            abbreviation={pick.originalFranchise.abbreviation}
-                            brandingColor={pick.originalFranchise.brandingColor}
-                            avatarUrl={pick.originalFranchise.avatarUrl}
-                            size={20}
-                            decorative
-                          />
+                            aria-label={pick.originalFranchise.name}
+                            className="inline-flex shrink-0"
+                          >
+                            <FranchiseLogo
+                              slug={pick.originalFranchise.slug}
+                              name={pick.originalFranchise.name}
+                              abbreviation={pick.originalFranchise.abbreviation}
+                              brandingColor={pick.originalFranchise.brandingColor}
+                              avatarUrl={pick.originalFranchise.avatarUrl}
+                              size={20}
+                              decorative
+                            />
+                          </TeamLink>
                         )}
                         <span
                           className={`font-mono tabular-nums ${pick.voided ? "text-text-muted line-through" : "text-accent-gold"}`}
@@ -237,9 +244,12 @@ export function TradeCard({
                     >
                       {s.grade}
                     </span>
-                    <span className="text-text-secondary font-semibold truncate">
+                    <TeamLink
+                      slug={side?.franchise?.slug}
+                      className="text-text-secondary font-semibold truncate"
+                    >
                       {side?.franchise?.name ?? "Unknown Team"}
-                    </span>
+                    </TeamLink>
                     <span className="text-caption font-mono tabular-nums text-text-tertiary">
                       {s.realizedPoints.toFixed(1)} pts realized &middot;{" "}
                       {s.startedPoints.toFixed(1)} started
@@ -273,9 +283,12 @@ export function TradeCard({
                   key={s.rosterId}
                   className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body-sm"
                 >
-                  <span className="text-text-secondary font-semibold truncate">
+                  <TeamLink
+                    slug={side?.franchise?.slug}
+                    className="text-text-secondary font-semibold truncate"
+                  >
                     {name}
-                  </span>
+                  </TeamLink>
                   {s.coverage === "none" && (
                     <span className="text-caption text-text-muted">no market data</span>
                   )}

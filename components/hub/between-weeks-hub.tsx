@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { TeamLink } from "@/components/team-link";
+import { PlayerLink } from "@/components/player-link";
 import { EditorialBody } from "@/components/editorial-emphasis";
 import { KickoffCountdown } from "@/components/kickoff-countdown";
 import {
@@ -623,7 +625,9 @@ function RecapRow({
   tone,
 }: {
   label: string;
-  desc: string;
+  /** ReactNode so a single-franchise recap row can link its identity; the
+   * two-name rows ("X def. Y") stay plain strings. */
+  desc: React.ReactNode;
   value: string;
   tone: "ink" | "gold" | "warm";
 }) {
@@ -638,7 +642,7 @@ function RecapRow({
     <div className="flex items-center justify-between gap-3 py-2">
       <div className="min-w-0">
         <p className={`text-kicker ${labelClass}`}>{label}</p>
-        <p className="text-body-sm text-text-secondary truncate">{desc}</p>
+        <div className="text-body-sm text-text-secondary truncate">{desc}</div>
       </div>
       <span className={`text-stat tabular-nums text-body ${valueClass} shrink-0`}>
         {value}
@@ -674,7 +678,11 @@ function WeekInBooksCard({
           {highestScorer && (
             <RecapRow
               label="High"
-              desc={highestScorer.franchiseName}
+              desc={
+                <TeamLink slug={highestScorer.franchiseSlug}>
+                  {highestScorer.franchiseName}
+                </TeamLink>
+              }
               value={highestScorer.points.toFixed(1)}
               tone="gold"
             />
@@ -698,7 +706,11 @@ function WeekInBooksCard({
           {lowestScorer && (
             <RecapRow
               label="Stinker"
-              desc={lowestScorer.franchiseName}
+              desc={
+                <TeamLink slug={lowestScorer.franchiseSlug}>
+                  {lowestScorer.franchiseName}
+                </TeamLink>
+              }
               value={lowestScorer.points.toFixed(1)}
               tone="warm"
             />
@@ -749,23 +761,26 @@ function BenchCallout({
 function PlayerToWatchRow({ player }: { player: PlayerToWatch }) {
   return (
     <div>
-      <div className="flex items-center gap-3">
+      <PlayerLink
+        playerId={player.playerId}
+        className="flex items-center gap-3"
+      >
         <PlayerHeadshot
           playerId={player.playerId}
           name={player.name}
           size={56}
           nflTeam={player.team}
         />
-        <div className="min-w-0 flex-1">
-          <p className="text-kicker text-accent-gold">{player.storyLabel}</p>
-          <p className="text-body-sm font-semibold text-text-primary line-clamp-2">
+        <span className="min-w-0 flex-1">
+          <span className="text-kicker text-accent-gold block">{player.storyLabel}</span>
+          <span className="text-body-sm font-semibold text-text-primary line-clamp-2 block">
             {player.name}
-          </p>
-          <p className="text-caption text-text-tertiary truncate">
+          </span>
+          <span className="text-caption text-text-tertiary truncate block">
             {player.team ?? "FA"} &middot; {player.position ?? "?"}
-          </p>
-        </div>
-      </div>
+          </span>
+        </span>
+      </PlayerLink>
       <div className="mt-2 space-y-1">
         {player.storyDetail && (
           <p className="text-body-sm text-text-secondary line-clamp-3">

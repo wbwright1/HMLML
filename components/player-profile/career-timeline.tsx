@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { TeamLink } from "@/components/team-link";
 import {
   ClipboardList,
   ArrowLeftRight,
@@ -170,13 +171,19 @@ export function CareerTimeline({ timeline }: CareerTimelineProps) {
                     {eventDate(event)}
                   </span>
                   {event.franchise && (
-                    <FranchiseLogo
+                    <TeamLink
                       slug={event.franchise.slug}
-                      name={event.franchise.name}
-                      avatarUrl={event.franchise.avatarUrl}
-                      size={18}
-                      decorative
-                    />
+                      aria-label={event.franchise.name}
+                      className="inline-flex"
+                    >
+                      <FranchiseLogo
+                        slug={event.franchise.slug}
+                        name={event.franchise.name}
+                        avatarUrl={event.franchise.avatarUrl}
+                        size={18}
+                        decorative
+                      />
+                    </TeamLink>
                   )}
                 </div>
                 <p className="font-serif italic text-body-sm text-text-secondary">

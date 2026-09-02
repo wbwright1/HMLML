@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 import { useBookSlip } from "@/components/book/use-book-slip";
 import { formatSpread } from "@/lib/book/pricing";
 import {
@@ -388,19 +389,25 @@ function LeaderboardDesktopRow({
       </span>
       {/* Decorative: the franchise name is the very next cell, so alt text here
           would only double-announce it. */}
-      <FranchiseLogo
+      <TeamLink
         slug={row.franchiseSlug}
-        name={row.franchiseName}
-        abbreviation={row.franchiseAbbreviation ?? undefined}
-        brandingColor={row.franchiseColor ?? undefined}
-        avatarUrl={row.franchiseAvatarUrl ?? undefined}
-        size={28}
-        decorative
-      />
+        aria-label={row.franchiseName}
+        className="inline-flex"
+      >
+        <FranchiseLogo
+          slug={row.franchiseSlug}
+          name={row.franchiseName}
+          abbreviation={row.franchiseAbbreviation ?? undefined}
+          brandingColor={row.franchiseColor ?? undefined}
+          avatarUrl={row.franchiseAvatarUrl ?? undefined}
+          size={28}
+          decorative
+        />
+      </TeamLink>
       <span
         className={`min-w-0 truncate text-body-sm ${nameWeight} ${nameColor}`}
       >
-        {row.franchiseName}
+        <TeamLink slug={row.franchiseSlug}>{row.franchiseName}</TeamLink>
         {isYou && (
           <span className="ml-2 text-[10px] font-semibold uppercase tracking-[.1em] text-accent-gold">
             You
@@ -457,20 +464,29 @@ function LeaderboardMobileCard({
       </span>
       {/* Decorative for the same reason as the desktop row: the name sits
           immediately beside it. */}
-      <FranchiseLogo
+      <TeamLink
         slug={row.franchiseSlug}
-        name={row.franchiseName}
-        abbreviation={row.franchiseAbbreviation ?? undefined}
-        brandingColor={row.franchiseColor ?? undefined}
-        avatarUrl={row.franchiseAvatarUrl ?? undefined}
-        size={28}
-        decorative
-      />
+        aria-label={row.franchiseName}
+        className="inline-flex"
+      >
+        <FranchiseLogo
+          slug={row.franchiseSlug}
+          name={row.franchiseName}
+          abbreviation={row.franchiseAbbreviation ?? undefined}
+          brandingColor={row.franchiseColor ?? undefined}
+          avatarUrl={row.franchiseAvatarUrl ?? undefined}
+          size={28}
+          decorative
+        />
+      </TeamLink>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2">
-          <span className="truncate text-body-sm font-semibold text-text-primary">
+          <TeamLink
+            slug={row.franchiseSlug}
+            className="truncate text-body-sm font-semibold text-text-primary"
+          >
             {row.franchiseName}
-          </span>
+          </TeamLink>
           {isYou && (
             <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[.1em] text-accent-gold">
               You
@@ -731,22 +747,27 @@ function PickerHeader({
         pinned at 9px either way (which is what the old chip used), and the
         compact mobile column is only 40px wide.
       */}
-      <FranchiseLogo
+      <TeamLink
         slug={picker.franchiseSlug}
-        name={picker.franchiseName}
-        abbreviation={picker.abbreviation}
-        brandingColor={picker.color ?? undefined}
-        avatarUrl={picker.avatarUrl ?? undefined}
-        size={24}
-      />
-      <span
-        className={`max-w-full truncate text-[10px] font-semibold ${
-          isYou ? "text-accent-gold" : "text-text-tertiary"
-        }`}
-        title={`${picker.franchiseName} (${picker.displayName})`}
+        className="flex flex-col items-center gap-1"
       >
-        {isYou ? "YOU" : picker.abbreviation}
-      </span>
+        <FranchiseLogo
+          slug={picker.franchiseSlug}
+          name={picker.franchiseName}
+          abbreviation={picker.abbreviation}
+          brandingColor={picker.color ?? undefined}
+          avatarUrl={picker.avatarUrl ?? undefined}
+          size={24}
+        />
+        <span
+          className={`max-w-full truncate text-[10px] font-semibold ${
+            isYou ? "text-accent-gold" : "text-text-tertiary"
+          }`}
+          title={`${picker.franchiseName} (${picker.displayName})`}
+        >
+          {isYou ? "YOU" : picker.abbreviation}
+        </span>
+      </TeamLink>
       <span className="font-mono text-[10px] tabular-nums text-text-tertiary">
         {picker.record || "—"}
       </span>
