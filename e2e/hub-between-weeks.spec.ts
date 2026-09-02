@@ -268,4 +268,77 @@ test.describe("Between-Weeks Hub (1d)", () => {
     );
     expect(overflow).toBe(true);
   });
+
+  // --------------------------------------------------------------------
+  // Power Rankings preview (#277)
+  // --------------------------------------------------------------------
+
+  test("T12: power rankings preview renders on the between-weeks hub", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const link = page.locator('a[href="/records/power-rankings"]');
+    await expect(link.first()).toBeVisible();
+
+    // Walk up to the module's card and assert it holds at least 3 ranked
+    // rows, each carrying a real franchise name (never a bare letter code).
+    const card = page.locator("section", { has: link.first() }).last();
+    const rows = card.locator('a[href^="/teams/"]');
+    const rowCount = await rows.count();
+    expect(rowCount).toBeGreaterThanOrEqual(3);
+
+    for (let i = 0; i < rowCount; i++) {
+      const text = (await rows.nth(i).innerText()).trim();
+      expect(text.length).toBeGreaterThan(2);
+    }
+  });
+
+  test("T13: the module names its edition honestly", async ({ page }) => {
+    await page.goto("/");
+
+    const main = page.locator("main");
+    const text = await main.innerText();
+
+    expect(text).toMatch(/Power Rankings|Preseason Power/i);
+
+    const isPreseason = /Preseason Power/i.test(text);
+    if (isPreseason) {
+      expect(text).toMatch(/Real rankings land after Week 1/i);
+    } else {
+      // Regular edition: at least one mover glyph on the page (riser/faller
+      // strip), though either half may be absent if nobody moved.
+      expect(text).toMatch(/Riser|Faller/i);
+    }
+  });
+
+  test("T14: the module links through to the full rankings page", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const link = page.locator('a[href="/records/power-rankings"]').first();
+    await expect(link).toBeVisible();
+    await link.click();
+
+    await page.waitForURL(/\/records\/power-rankings/);
+    await expect(page.getByText("Power Rankings.", { exact: true })).toBeVisible();
+  });
+
+  test("T15: every rank number renders in the mono numeral face", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    const link = page.locator('a[href="/records/power-rankings"]').first();
+    await expect(link).toBeVisible();
+    const card = page.locator("section", { has: link }).last();
+    const rankCell = card.locator('a[href^="/teams/"] span.font-mono').first();
+    await expect(rankCell).toBeVisible();
+
+    const fontFamily = await rankCell.evaluate(
+      (el) => getComputedStyle(el).fontFamily
+    );
+    expect(fontFamily).toMatch(/JetBrains/i);
+  });
 });

@@ -31,6 +31,9 @@ import { StatChip, GameCard, toLadderEntries } from "@/components/hub/shared";
 import { BetweenWeeksHub } from "@/components/hub/between-weeks-hub";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { BookRailCard } from "@/components/hub/book-rail-card";
+import { getHubPowerPreview, type HubPowerPreview } from "@/lib/queries/power-preview";
+import { PowerPulseCard } from "@/components/hub/power-pulse-card";
+import { rethrowUnlessTolerable } from "@/lib/db-guard";
 
 export async function RegularSeasonHub({
   matchupData,
@@ -82,6 +85,9 @@ export async function RegularSeasonHub({
   // Playoff projection drives the ladder's seed badges and playoff-line cutoff;
   // undefined when unavailable (RISK-A/RISK-B degrade to the current default).
   let projection: Awaited<ReturnType<typeof getPlayoffProjection>> | undefined;
+  // Power Rankings preview for the post-week branch (#277). Renders below
+  // "This Week's Damage", per CLAUDE.md's Regular Season hub table.
+  let powerPreview: HubPowerPreview | null = null;
 
   if (latestSeason) {
     try {
@@ -105,6 +111,13 @@ export async function RegularSeasonHub({
       projection = await getPlayoffProjection(latestSeason.id);
     } catch {
       // Projection may not be available; ladder falls back to plain standings.
+    }
+
+    try {
+      powerPreview = await getHubPowerPreview();
+    } catch (e) {
+      rethrowUnlessTolerable(e);
+      powerPreview = null;
     }
   }
 
@@ -473,6 +486,13 @@ export async function RegularSeasonHub({
                 </PageSection>
               </ScrollReveal>
             )}
+
+          {/* Power Rankings preview */}
+          {powerPreview && (
+            <ScrollReveal>
+              <PowerPulseCard preview={powerPreview} week={completedWeek} />
+            </ScrollReveal>
+          )}
 
           {/* Season Superlatives */}
           {superlatives && (
