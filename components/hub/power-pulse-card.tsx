@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { TeamLink } from "@/components/team-link";
+import { HubSection, RailCard, RailRows } from "@/components/hub/rail-card";
 import type { HubPowerPreview, PowerPreviewMover } from "@/lib/queries/power-preview";
 
 /** Trend vs. season standings: sage ▲ for climbers, rust ▼ for sliders. Never
@@ -89,17 +90,16 @@ export function PowerPulseCard({
     preview.mode === "preseason" ? "Preseason Power" : `Power Rankings · Week ${week}`;
 
   return (
-    <section className="space-y-3">
-      <p className="text-kicker">{kicker}</p>
-      <div className="card-surface relative overflow-hidden p-5">
-        <div className="divide-y divide-divider">
+    <HubSection kicker={kicker}>
+      <RailCard>
+        <RailRows>
           {preview.top.map((row) => {
             const rankColor = row.rank <= 3 ? "text-accent-gold" : "text-text-tertiary";
             return (
               <TeamLink
                 key={row.id}
                 slug={row.slug}
-                className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 hover:opacity-80"
+                className="flex items-center gap-3 hover:opacity-80"
               >
                 <span className={`font-mono text-sm font-black tabular-nums w-5 text-center shrink-0 ${rankColor}`}>
                   {row.rank}
@@ -131,12 +131,12 @@ export function PowerPulseCard({
               </TeamLink>
             );
           })}
-        </div>
+        </RailRows>
 
         <div className="mt-4 pt-4 border-t border-divider">
           {preview.mode === "regular" ? (
             preview.riser || preview.faller ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {preview.riser && <MoverRow mover={preview.riser} direction="riser" />}
                 {preview.faller && <MoverRow mover={preview.faller} direction="faller" />}
               </div>
@@ -158,7 +158,7 @@ export function PowerPulseCard({
             Full power rankings &rarr;
           </Link>
         </div>
-      </div>
-    </section>
+      </RailCard>
+    </HubSection>
   );
 }

@@ -33,7 +33,7 @@ interface OffseasonReceiptCardProps {
 export function OffseasonReceiptCard({ receipt, franchise }: OffseasonReceiptCardProps) {
   const isSting = receipt.category === "FIRE_SALE" || receipt.category === "AGING_CORE";
   return (
-    <div className="card-surface flex h-full flex-col p-5">
+    <div className="card-surface flex h-full flex-col p-6">
       <div className="flex items-start justify-between gap-3">
         <p className={`text-kicker ${isSting ? "text-accent-warm" : "text-accent-gold"}`}>
           {CATEGORY_LABELS[receipt.category]}

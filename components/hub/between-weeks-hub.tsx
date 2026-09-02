@@ -50,6 +50,7 @@ import {
 import { sharesPhraseWithAny } from "@/lib/content-gen/phrases";
 import { getHubPowerPreview, type HubPowerPreview } from "@/lib/queries/power-preview";
 import { PowerPulseCard } from "@/components/hub/power-pulse-card";
+import { HubSection, RailCard, RailRows } from "@/components/hub/rail-card";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { buildHubLineFooter } from "@/lib/book/shared";
@@ -442,9 +443,8 @@ export async function BetweenWeeksHub({
 
           {/* The Rest of the Slate */}
           {restOfSlate.length > 0 && (
-            <section className="space-y-4">
-              <p className="text-kicker">The Rest of the Slate</p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <HubSection kicker="The Rest of the Slate">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {restOfSlate.map((m) => {
                   const h2h = h2hByMatchup.get(m.matchupId);
                   const angle =
@@ -476,16 +476,16 @@ export async function BetweenWeeksHub({
                   );
                 })}
               </div>
-            </section>
+            </HubSection>
           )}
 
           {/* Power Rankings preview */}
           {powerPreview && <PowerPulseCard preview={powerPreview} week={week} />}
 
           {/* The Smack Feed */}
-          <section className="space-y-4">
-            <div className="flex items-baseline justify-between">
-              <p className="text-kicker">The Smack Feed &middot; Week {week}</p>
+          <HubSection
+            kicker={<>The Smack Feed &middot; Week {week}</>}
+            action={
               <p className="text-caption text-text-tertiary">
                 {smackFromDesk
                   ? `site desk · ${smackItems.length} new`
@@ -493,19 +493,20 @@ export async function BetweenWeeksHub({
                     ? `the league · ${smackItems.length} new`
                     : "the league"}
               </p>
-            </div>
+            }
+          >
             <SmackComposerSlot />
             {smackItems.length > 0 ? (
               <SmackFeed
                 items={smackItems}
-                className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
               />
             ) : (
               <p className="card-surface block p-4 text-body-sm text-text-tertiary">
                 Nothing on the board right now.
               </p>
             )}
-          </section>
+          </HubSection>
         </div>
 
         {/* Right rail: last week's receipts */}
@@ -609,8 +610,7 @@ function GameOfWeekSection({
     "";
 
   return (
-    <section className="space-y-4">
-      <p className="text-kicker">Game of the Week</p>
+    <HubSection kicker="Game of the Week">
       <GameOfTheWeekCard
         kicker={kicker.toUpperCase()}
         h2hLine={h2hLine}
@@ -634,37 +634,13 @@ function GameOfWeekSection({
         }}
         blurb={blurb}
       />
-    </section>
+    </HubSection>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Right-rail cards
+// Right-rail cards (shell + row rhythm live in components/hub/rail-card.tsx)
 // ---------------------------------------------------------------------------
-
-function RailCard({
-  children,
-  tinted = false,
-}: {
-  children: React.ReactNode;
-  tinted?: boolean;
-}) {
-  return (
-    <div className="card-surface relative overflow-hidden p-5">
-      {tinted && (
-        <div
-          aria-hidden
-          className="pointer-events-none absolute inset-0"
-          style={{
-            background:
-              "linear-gradient(180deg, rgba(226,184,88,0.10), rgba(226,184,88,0.02))",
-          }}
-        />
-      )}
-      <div className="relative">{children}</div>
-    </div>
-  );
-}
 
 function RecapRow({
   label,
@@ -687,7 +663,7 @@ function RecapRow({
         : "text-text-tertiary";
   const valueClass = tone === "warm" ? "text-accent-warm" : "text-text-primary";
   return (
-    <div className="flex items-center justify-between gap-3 py-2">
+    <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
         <p className={`text-kicker ${labelClass}`}>{label}</p>
         <div className="text-body-sm text-text-secondary truncate">{desc}</div>
@@ -711,18 +687,19 @@ function WeekInBooksCard({
     return null;
   }
   return (
-    <section className="space-y-3">
-      <div className="flex items-baseline justify-between">
-        <p className="text-kicker">Week {week}, In The Books</p>
+    <HubSection
+      kicker={<>Week {week}, In The Books</>}
+      action={
         <Link
           href="/matchups"
           className="text-caption text-accent-gold hover:brightness-110 normal-case tracking-normal"
         >
           Full recap &rarr;
         </Link>
-      </div>
+      }
+    >
       <RailCard>
-        <div className="divide-y divide-divider">
+        <RailRows>
           {highestScorer && (
             <RecapRow
               label="High"
@@ -763,9 +740,9 @@ function WeekInBooksCard({
               tone="warm"
             />
           )}
-        </div>
+        </RailRows>
       </RailCard>
-    </section>
+    </HubSection>
   );
 }
 
@@ -781,14 +758,13 @@ function BenchCallout({
         ? " And still lost."
         : "";
   return (
-    <section className="space-y-3">
-      <p className="text-kicker">Left On The Bench</p>
+    <HubSection kicker="Left On The Bench">
       <RailCard tinted>
         <p className="text-kicker text-accent-gold">Highest Possible &middot; Optimal Lineup</p>
-        <p className="mt-3 text-stat tabular-nums text-5xl text-text-primary leading-none">
+        <p className="mt-2 text-stat tabular-nums text-5xl text-text-primary leading-none">
           {leader.pointsLeft.toFixed(1)}
         </p>
-        <p className="mt-3 text-body-sm text-text-secondary">
+        <p className="mt-4 text-body-sm text-text-secondary">
           points{" "}
           <span className="font-semibold text-text-primary">
             {leader.franchiseName}
@@ -802,11 +778,23 @@ function BenchCallout({
           {winTail}
         </p>
       </RailCard>
-    </section>
+    </HubSection>
   );
 }
 
-function PlayerToWatchRow({ player }: { player: PlayerToWatch }) {
+function PlayerToWatchRow({
+  player,
+  showStory,
+  showProjected,
+}: {
+  player: PlayerToWatch;
+  /** True when any player in the card carries a story detail, so the rows
+   * without one reserve the same two lines instead of shrinking. */
+  showStory: boolean;
+  /** True when any player in the card renders a projected line, so the rows
+   * that suppress it reserve the same one line instead of shrinking. */
+  showProjected: boolean;
+}) {
   return (
     <div>
       <PlayerLink
@@ -821,7 +809,7 @@ function PlayerToWatchRow({ player }: { player: PlayerToWatch }) {
         />
         <span className="min-w-0 flex-1">
           <span className="text-kicker text-accent-gold block">{player.storyLabel}</span>
-          <span className="text-body-sm font-semibold text-text-primary line-clamp-2 block">
+          <span className="text-body-sm font-semibold text-text-primary truncate block">
             {player.name}
           </span>
           <span className="text-caption text-text-tertiary truncate block">
@@ -830,21 +818,44 @@ function PlayerToWatchRow({ player }: { player: PlayerToWatch }) {
         </span>
       </PlayerLink>
       <div className="mt-2 space-y-1">
-        {player.storyDetail && (
-          <p className="text-body-sm text-text-secondary line-clamp-3">
-            <MonoNumerals text={player.storyDetail} />
+        {/* min-h reserves the region so every row is the same height; the
+            clamp is the ceiling prod already shipped (3 lines), NOT a tighter
+            one. Tightening it to 2 would newly clip a long story detail, and
+            silently dropping the end of a real claim is worse than a row that
+            runs one line taller than its neighbour. */}
+        {showStory && (
+          <p
+            data-testid="ptw-story"
+            className="text-body-sm text-text-secondary line-clamp-3 min-h-[2lh]"
+          >
+            {player.storyDetail && <MonoNumerals text={player.storyDetail} />}
           </p>
         )}
         {/* The Leap's storyDetail already states the projection and the
             baseline ppg ("Projected 20.8 off 15.3 ppg in 2025"), so a second
-            line repeating the same two numbers is redundant, not a new fact. */}
-        {player.storyKey !== "leap" && (
-          <p className="text-body-sm text-text-tertiary line-clamp-2">
-            Projected{" "}
-            <span className="text-stat tabular-nums text-text-secondary">
-              {player.projectedPoints.toFixed(1)}
-            </span>{" "}
-            &middot; {player.baselineLabel}
+            line repeating the same two numbers is redundant, not a new fact.
+            The row still reserves that line (empty) when a sibling renders one,
+            so the rows stay the same height instead of jittering. */}
+        {/* Not clamped. The rail narrowed to 24px padding, and a mid-season
+            baseline label ("Projected 20.8 · 15.3 ppg through Week 12") sits
+            right at the wrap boundary at this width, so a one-line clamp would
+            silently drop "Week 12" off a real number. min-h reserves the line
+            for the rows that suppress it; a rare wrap costs one line rather
+            than a fact. */}
+        {showProjected && (
+          <p
+            data-testid="ptw-projected"
+            className="text-body-sm text-text-tertiary min-h-[1lh]"
+          >
+            {player.storyKey !== "leap" && (
+              <>
+                Projected{" "}
+                <span className="text-stat tabular-nums text-text-secondary">
+                  {player.projectedPoints.toFixed(1)}
+                </span>{" "}
+                &middot; {player.baselineLabel}
+              </>
+            )}
           </p>
         )}
       </div>
@@ -866,17 +877,27 @@ function PlayersToWatchCard({
   players: PlayerToWatch[];
 }) {
   if (players.length === 0) return null;
+  // Fixed structural regions: when any row carries a story detail (two lines)
+  // or a projected line (one), EVERY row reserves the same space. It reserves
+  // space, it never invents copy, so the rows stop jittering between three and
+  // six lines depending on which stories the week happened to produce.
+  const showStory = players.some((p) => Boolean(p.storyDetail));
+  const showProjected = players.some((p) => p.storyKey !== "leap");
   return (
-    <section className="space-y-3">
-      <p className="text-kicker">Players to Watch &middot; Week {week}</p>
+    <HubSection kicker={<>Players to Watch &middot; Week {week}</>}>
       <RailCard>
-        <div className="space-y-4 divide-y divide-border [&>*:not(:first-child)]:pt-4">
+        <RailRows>
           {players.map((p) => (
-            <PlayerToWatchRow key={p.playerId} player={p} />
+            <PlayerToWatchRow
+              key={p.playerId}
+              player={p}
+              showStory={showStory}
+              showProjected={showProjected}
+            />
           ))}
-        </div>
+        </RailRows>
       </RailCard>
-    </section>
+    </HubSection>
   );
 }
 
@@ -910,18 +931,21 @@ function MonoNumerals({ text }: { text: string }) {
  */
 function LeagueMovesCard({ moves }: { moves: LeagueMove[] }) {
   if (moves.length === 0) return null;
+  // Fixed structural region for the optional support line: when any move has
+  // one, every row reserves exactly one line for it, so all four rows are the
+  // same height. When no move has support, no row renders it at all.
+  const showSupport = moves.some((m) => m.support);
   return (
-    <section className="space-y-3">
-      <p className="text-kicker">League Moves</p>
+    <HubSection kicker="League Moves">
       <RailCard>
-        <div className="divide-y divide-border [&>*:not(:first-child)]:pt-3 space-y-3">
+        <RailRows>
           {moves.map((move) => (
             <div key={move.transactionId} className="flex items-start gap-3">
               <PlayerLink playerId={move.headline.id} className="shrink-0">
                 <PlayerHeadshot
                   playerId={move.headline.id}
                   name={move.headline.name}
-                  size={44}
+                  size={40}
                   nflTeam={move.headline.nflTeam}
                   decorative
                 />
@@ -942,7 +966,7 @@ function LeagueMovesCard({ moves }: { moves: LeagueMove[] }) {
                 <p className="text-caption text-text-tertiary truncate">
                   {move.headline.position ?? "?"} &middot; {move.headline.nflTeam ?? "FA"}
                 </p>
-                <div className="mt-1 flex items-center gap-1.5">
+                <div className="mt-2 flex items-center gap-2">
                   <span className="text-caption text-accent-gold shrink-0">
                     {move.kind}
                   </span>
@@ -974,17 +998,17 @@ function LeagueMovesCard({ moves }: { moves: LeagueMove[] }) {
                     ))}
                   </span>
                 </div>
-                {move.support && (
-                  <p className="mt-1 text-body-sm text-text-secondary truncate">
+                {showSupport && (
+                  <p className="mt-2 min-h-[1lh] text-body-sm text-text-secondary truncate">
                     {move.support}
                   </p>
                 )}
               </div>
             </div>
           ))}
-        </div>
+        </RailRows>
       </RailCard>
-    </section>
+    </HubSection>
   );
 }
 
@@ -1002,12 +1026,11 @@ function WeekInHistoryCard({
 }) {
   if (receipts.length === 0) return null;
   return (
-    <section className="space-y-3">
-      <p className="text-kicker">This Week in HMLML History</p>
+    <HubSection kicker="This Week in HMLML History">
       <RailCard>
-        <div className="divide-y divide-border">
+        <RailRows>
           {receipts.map((r) => (
-            <div key={`${r.kind}-${r.seasonYear}`} className="py-3">
+            <div key={`${r.kind}-${r.seasonYear}`}>
               <div className="flex items-baseline justify-between gap-3">
                 <p className="text-kicker text-accent-gold">
                   {r.label} &middot;{" "}
@@ -1018,11 +1041,16 @@ function WeekInHistoryCard({
                   {r.value}
                 </span>
               </div>
-              <p className="mt-1 text-body-sm text-text-secondary">{r.claim}</p>
+              <p
+                data-testid="week-history-claim"
+                className="mt-2 text-body-sm text-text-secondary"
+              >
+                {r.claim}
+              </p>
             </div>
           ))}
-        </div>
+        </RailRows>
       </RailCard>
-    </section>
+    </HubSection>
   );
 }

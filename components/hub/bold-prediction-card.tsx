@@ -34,7 +34,7 @@ export function BoldPredictionCard({ prediction }: { prediction: BoldPrediction 
   const kickerTone = prediction.verdict === "DOWN" ? "text-accent-warm" : "text-accent-gold";
 
   return (
-    <div className="card-surface flex h-full flex-col p-5">
+    <div className="card-surface flex h-full flex-col p-6">
       <div className="flex items-start justify-between gap-3">
         <p className={`text-kicker ${kickerTone}`}>{prediction.kicker}</p>
         <VerdictChip verdict={prediction.verdict} />

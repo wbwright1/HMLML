@@ -92,6 +92,7 @@ export function TradeCard({
                       brandingColor={side.franchise.brandingColor}
                       avatarUrl={side.franchise.avatarUrl}
                       size="sm"
+                      decorative
                     />
                   )}
                   <span className="min-w-0 truncate text-body-sm font-semibold">

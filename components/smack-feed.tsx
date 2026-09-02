@@ -61,9 +61,10 @@ export function smackItemsFromSeeds(
 interface SmackFeedProps {
   items: readonly SmackFeedItem[];
   /**
-   * Classes for the card container. Defaults to a vertical stack (1a right
-   * rail); pass a grid (e.g. "grid grid-cols-1 sm:grid-cols-2 gap-3") for the
-   * 1d two-up layout.
+   * Classes for the card container. Defaults to a 16px vertical stack (1a
+   * right rail); pass a grid (e.g. "grid grid-cols-1 sm:grid-cols-2 gap-4")
+   * for the 1d two-up layout. Both are the hub's 16px card-grid rhythm, so a
+   * bare caller (preseason-hub) matches the explicit ones.
    */
   className?: string;
 }
@@ -74,7 +75,7 @@ interface SmackFeedProps {
  * (author +) relative timestamp + quote. Renders nothing when there are no
  * items.
  */
-export function SmackFeed({ items, className = "space-y-3" }: SmackFeedProps) {
+export function SmackFeed({ items, className = "space-y-4" }: SmackFeedProps) {
   if (items.length === 0) return null;
 
   return (
@@ -83,7 +84,7 @@ export function SmackFeed({ items, className = "space-y-3" }: SmackFeedProps) {
         const time = formatRelativeTime(item.postedAt);
         const meta = item.authorName ? `${item.authorName} · ${time}` : time;
         return (
-          <div key={item.key} className="card-surface p-4">
+          <div key={item.key} className="card-surface flex h-full flex-col p-4">
             <div className="flex items-center justify-between gap-2">
               {/* ONE link over crest and name, not two to the same place: the
                   crest stays decorative because the name it names is inside
