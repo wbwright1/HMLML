@@ -41,6 +41,10 @@ import {
 import { getRosterToFranchiseMap } from "@/lib/queries/franchise-mapping";
 import { resolveDivisionName } from "@/lib/divisions";
 import { runAtomic } from "@/lib/db/atomic";
+import { chunk } from "@/lib/chunk";
+import { ensurePlayersExist } from "@/lib/sync/ensure-players";
+import { buildRosterSlotRows } from "@/lib/sync/roster-slots";
+import { describeDbError } from "@/lib/db-error";
 import { repriceBookLines } from "@/lib/sync/book-lines";
 import { generateOrRepriceBookProps } from "@/lib/sync/book-props";
 import { bookWeekFor } from "@/lib/queries/book";
@@ -211,106 +215,176 @@ async function syncRostersAndPicks(
 
     const rosterToFranchise = await getRosterToFranchiseMap(seasonId);
 
+    // Pre-flight the whole league once: every id that will be written to
+    // roster_players must already exist in players, or the FK kills the insert.
+    // One existence query for all twelve rosters beats twelve, and stubbing here
+    // (rather than inside the loop) means a mid-week waiver add never costs a
+    // roster its write. See lib/sync/ensure-players.ts for why a stub beats
+    // skipping the player.
+    const stubbedPlayerIds = await ensurePlayersExist(
+      rosters.flatMap((roster) => [
+        ...(roster.starters ?? []),
+        ...(roster.players ?? []),
+        ...(roster.reserve ?? []),
+        ...(roster.taxi ?? []),
+      ])
+    );
+    if (stubbedPlayerIds.length > 0) {
+      console.warn(
+        `[sync-hourly] Stubbed ${stubbedPlayerIds.length} unknown player ids into players: ${stubbedPlayerIds.join(", ")}`
+      );
+    }
+
+    const failures: { rosterId: string; error: string }[] = [];
+
     // Update standings from roster settings
     for (const roster of rosters) {
       const rosterIdStr = String(roster.roster_id);
       const franchiseId = rosterToFranchise.get(rosterIdStr);
       if (!franchiseId) continue;
 
-      const fpts = roster.settings.fpts ?? 0;
-      const fptsDecimal = roster.settings.fpts_decimal ?? 0;
-      const pointsScored = fpts + fptsDecimal / 100;
+      try {
+        const fpts = roster.settings.fpts ?? 0;
+        const fptsDecimal = roster.settings.fpts_decimal ?? 0;
+        const pointsScored = fpts + fptsDecimal / 100;
 
-      const fptsAgainst = roster.settings.fpts_against ?? 0;
-      const fptsAgainstDecimal = roster.settings.fpts_against_decimal ?? 0;
-      const pointsAgainst = fptsAgainst + fptsAgainstDecimal / 100;
+        const fptsAgainst = roster.settings.fpts_against ?? 0;
+        const fptsAgainstDecimal = roster.settings.fpts_against_decimal ?? 0;
+        const pointsAgainst = fptsAgainst + fptsAgainstDecimal / 100;
 
-      const divisionNumber = roster.settings.division ?? null;
-      const divisionName =
-        divisionNumber != null
-          ? resolveDivisionName(leagueMetadata, divisionNumber)
-          : null;
+        const divisionNumber = roster.settings.division ?? null;
+        const divisionName =
+          divisionNumber != null
+            ? resolveDivisionName(leagueMetadata, divisionNumber)
+            : null;
 
-      await db
-        .update(franchiseSeasons)
-        .set({
-          division: divisionNumber,
-          divisionName,
-          wins: roster.settings.wins ?? 0,
-          losses: roster.settings.losses ?? 0,
-          ties: roster.settings.ties ?? 0,
-          pointsScored,
-          pointsAgainst,
-          updatedAt: new Date(),
-        })
-        .where(
-          and(
-            eq(franchiseSeasons.franchiseId, franchiseId),
-            eq(franchiseSeasons.seasonId, seasonId)
-          )
-        );
-
-      // Sync roster players
-      const allPlayers = [
-        ...(roster.starters ?? []).map((pid) => ({ playerId: pid, slot: "starter" })),
-        ...(roster.players ?? [])
-          .filter((pid) => !(roster.starters ?? []).includes(pid))
-          .filter((pid) => !(roster.reserve ?? []).includes(pid))
-          .filter((pid) => !(roster.taxi ?? []).includes(pid))
-          .map((pid) => ({ playerId: pid, slot: "bench" })),
-        ...(roster.reserve ?? []).map((pid) => ({ playerId: pid, slot: "ir" })),
-        ...(roster.taxi ?? []).map((pid) => ({ playerId: pid, slot: "taxi" })),
-      ];
-
-      // Delete existing roster_players for this franchise+season so dropped
-      // players are cleaned up, then re-insert the current roster. Wrapped in a
-      // transaction so a mid-loop failure can't leave a partial wipe (the
-      // delete rolls back with the failed insert). Insert errors are NOT
-      // swallowed: an id missing from the players table (FK violation) rolls
-      // back this roster and propagates to the sync error handler / sync_log.
-      await runAtomic((tx) => [
-        tx
-          .delete(rosterPlayers)
+        await db
+          .update(franchiseSeasons)
+          .set({
+            division: divisionNumber,
+            divisionName,
+            wins: roster.settings.wins ?? 0,
+            losses: roster.settings.losses ?? 0,
+            ties: roster.settings.ties ?? 0,
+            pointsScored,
+            pointsAgainst,
+            updatedAt: new Date(),
+          })
           .where(
             and(
-              eq(rosterPlayers.seasonId, seasonId),
-              eq(rosterPlayers.rosterId, rosterIdStr)
+              eq(franchiseSeasons.franchiseId, franchiseId),
+              eq(franchiseSeasons.seasonId, seasonId)
             )
-          ),
-        ...allPlayers.map((p) =>
-          tx
-            .insert(rosterPlayers)
-            .values({
-              seasonId,
-              franchiseId,
-              rosterId: rosterIdStr,
-              playerId: p.playerId,
-              slot: p.slot,
-              updatedAt: new Date(),
-            })
-            .onConflictDoUpdate({
-              target: [
-                rosterPlayers.seasonId,
-                rosterPlayers.rosterId,
-                rosterPlayers.playerId,
-              ],
-              set: {
-                slot: p.slot,
-                franchiseId,
-                updatedAt: new Date(),
-              },
-            })
-        ),
-      ]);
+          );
 
-      rowCount++;
+        // Sync roster players
+        const allPlayers = buildRosterSlotRows(roster);
+
+        // Delete existing roster_players for this franchise+season so dropped
+        // players are cleaned up, then re-insert the current roster. Wrapped in
+        // a transaction so a mid-loop failure can't leave a partial wipe (the
+        // delete rolls back with the failed insert).
+        //
+        // Every id here is guaranteed to exist in players by the pre-flight
+        // ensurePlayersExist above, which stubs anything Sleeper added since the
+        // last daily snapshot rather than skipping it: a skipped id would render
+        // the roster one player short everywhere until the next daily run, while
+        // a stub keeps the roster complete and the daily step fills it in.
+        // Anything that still throws is isolated to this roster: the catch below
+        // records it and the loop moves on, so one bad roster can no longer cost
+        // the other eleven their standings and lineups.
+        await runAtomic((tx) => [
+          tx
+            .delete(rosterPlayers)
+            .where(
+              and(
+                eq(rosterPlayers.seasonId, seasonId),
+                eq(rosterPlayers.rosterId, rosterIdStr)
+              )
+            ),
+          ...allPlayers.map((p) =>
+            tx
+              .insert(rosterPlayers)
+              .values({
+                seasonId,
+                franchiseId,
+                rosterId: rosterIdStr,
+                playerId: p.playerId,
+                slot: p.slot,
+                updatedAt: new Date(),
+              })
+              .onConflictDoUpdate({
+                target: [
+                  rosterPlayers.seasonId,
+                  rosterPlayers.rosterId,
+                  rosterPlayers.playerId,
+                ],
+                set: {
+                  slot: p.slot,
+                  franchiseId,
+                  updatedAt: new Date(),
+                },
+              })
+          ),
+        ]);
+
+        rowCount++;
+      } catch (e) {
+        const message = describeDbError(e);
+        console.error(
+          `[sync-hourly] Roster ${rosterIdStr} failed: ${message}`
+        );
+        failures.push({ rosterId: rosterIdStr, error: message });
+      }
     }
 
     const durationMs = Date.now() - startTime;
-    await logSyncComplete(logId, "success", rowCount);
-    return { dataType: "rosters", status: "success", rowCount, durationMs };
+
+    if (failures.length > 0) {
+      // Some rosters committed, some did not. rowCount is the honest count of
+      // rosters that actually landed, on this path as much as on the happy one.
+      const failedRosterIds = failures.map((f) => f.rosterId);
+      const errorMessage = `${failures.length} of ${rosters.length} rosters failed: ${failures
+        .map((f) => `roster ${f.rosterId}: ${f.error}`)
+        .join(" | ")}`;
+      await logSyncComplete(logId, "partial", rowCount, errorMessage, {
+        failedRosterIds,
+        stubbedPlayerIds,
+      });
+      // SyncStepResult has no "partial" member, so the step reports failure and
+      // the cron goes red. That is correct: with stubbing in place, a surviving
+      // roster failure is a genuinely unknown problem and should page.
+      return {
+        dataType: "rosters",
+        status: "failure",
+        rowCount,
+        durationMs,
+        error: errorMessage,
+      };
+    }
+
+    // Stubbing an unknown id is a routine outcome (a waiver add between daily
+    // snapshots), not a partial failure: the run stays green.
+    const note =
+      stubbedPlayerIds.length > 0
+        ? `Stubbed ${stubbedPlayerIds.length} unknown player ids: ${stubbedPlayerIds.join(", ")}`
+        : undefined;
+    await logSyncComplete(
+      logId,
+      "success",
+      rowCount,
+      undefined,
+      stubbedPlayerIds.length > 0 ? { stubbedPlayerIds } : undefined
+    );
+    return {
+      dataType: "rosters",
+      status: "success",
+      rowCount,
+      durationMs,
+      ...(note ? { note } : {}),
+    };
   } catch (e) {
-    const errorMessage = e instanceof Error ? e.message : "Unknown error";
+    const errorMessage = describeDbError(e);
     const durationMs = Date.now() - startTime;
     await logSyncComplete(logId, "failure", 0, errorMessage);
     return {
@@ -590,15 +664,6 @@ async function syncMatchupScores(
 // ---------------------------------------------------------------------------
 // Step D: Sync Per-Player Weekly Points
 // ---------------------------------------------------------------------------
-
-/** Split an array into chunks of the given size. */
-function chunk<T>(arr: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
-  return chunks;
-}
 
 export interface PlayerPointsWriteInput {
   seasonId: number;

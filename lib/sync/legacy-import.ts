@@ -20,6 +20,8 @@ import {
   getLosersBracket,
 } from "@/lib/sleeper";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
+import { chunk } from "@/lib/chunk";
+import { ensurePlayersExist } from "@/lib/sync/ensure-players";
 import { derivePlayoffResults } from "@/lib/sync/derive-playoffs";
 import { persistBracketMatches } from "@/lib/sync/playoff-brackets";
 import { resolveAvatarUrl } from "@/lib/sync/daily";
@@ -104,14 +106,6 @@ async function uniqueSlug(
 
   // Collision: append first 6 chars of user_id to disambiguate
   return `${base}-${franchiseId.slice(0, 6)}`;
-}
-
-function chunk<T>(arr: T[], size: number): T[][] {
-  const chunks: T[][] = [];
-  for (let i = 0; i < arr.length; i += size) {
-    chunks.push(arr.slice(i, i + size));
-  }
-  return chunks;
 }
 
 // ---------------------------------------------------------------------------
@@ -637,7 +631,19 @@ async function importDrafts(
       };
     });
 
-    // Batch upsert — draft_picks has no unique constraint for upsert,
+    // draft_picks.player_id has an FK to players.id, and a legacy import can
+    // easily name a player who is not in the current Sleeper snapshot. Stub the
+    // unknown ids first so the import does not die on the FK (issue #269).
+    const stubbedPickPlayerIds = await ensurePlayersExist(
+      rows.map((r) => r.playerId).filter((id): id is string => Boolean(id))
+    );
+    if (stubbedPickPlayerIds.length > 0) {
+      console.warn(
+        `[legacy-import] Stubbed ${stubbedPickPlayerIds.length} unknown drafted player ids into players: ${stubbedPickPlayerIds.join(", ")}`
+      );
+    }
+
+    // Batch upsert: draft_picks has no unique constraint for upsert,
     // so we delete existing picks for this draft and re-insert
     // This is still idempotent: running again produces same result
     await db
