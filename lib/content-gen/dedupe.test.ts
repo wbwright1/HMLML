@@ -426,11 +426,42 @@ describe("signature-phrase duplicate signal", () => {
       },
     );
     expect(result.kept).toContain(gotw);
-    // The strict pass rejected the dek (the only reason hero_dek can end up
-    // in relaxedKinds here); the coverage pass then re-admitted it, which
-    // also un-lists it from `dropped`. With a real pool behind it, a
-    // phrase-free sibling takes the slot instead: see the next test.
-    expect(result.relaxedKinds).toContain("hero_dek");
+    // hero_dek is phrase-strict: the echo is dropped for good rather than
+    // handed back by the relaxation pass, which is what makes the gate real
+    // for a kind shipping one candidate.
+    expect(result.kept).not.toContain(dek);
+    expect(
+      result.dropped.some((d) => d.row === dek && d.reason === "phrase-echo"),
+    ).toBe(true);
+  });
+
+  it("re-admits an echo for a non-strict kind, but only after every clean candidate", () => {
+    // Coverage still wins for kinds with no downstream fallback: the echo
+    // comes back, just last.
+    const gotw = row("There are receipts to settle by Thursday night.", {
+      kind: "game_of_week_blurb",
+    });
+    const echo = row("Somebody has receipts to settle after that one.", {
+      kind: "smack_post",
+    });
+    const clean = row("Somebody left 33.5 on the bench and lost anyway.", {
+      kind: "smack_post",
+    });
+    const result = selectDiverseSubset(
+      { game_of_week_blurb: [gotw], smack_post: [echo, clean] },
+      ctx({ seasonType: "regular", week: 1 }),
+      {
+        targetCountsByKind: { game_of_week_blurb: 1, smack_post: 2 },
+        kindPriority: ["game_of_week_blurb", "smack_post"],
+        keepAllKinds: new Set(["matchup_angle", "trade_verdict"]),
+      },
+    );
+    const smack = result.kept.filter((r) => r.kind === "smack_post");
+    expect(smack).toHaveLength(2);
+    // The clean row was admitted by the strict pass, the echo only by
+    // relaxation, so the clean one comes first.
+    expect(smack[0]).toBe(clean);
+    expect(smack[1]).toBe(echo);
   });
 
   it("lets a phrase-free alternative take the slot instead", () => {
@@ -455,7 +486,7 @@ describe("signature-phrase duplicate signal", () => {
     expect(result.kept.filter((r) => r.kind === "hero_dek")).toEqual([clean]);
     expect(result.relaxedKinds).not.toContain("hero_dek");
     expect(
-      result.dropped.some((d) => d.row === echo && d.reason === "duplicate"),
+      result.dropped.some((d) => d.row === echo && d.reason === "phrase-echo"),
     ).toBe(true);
   });
 });
@@ -477,11 +508,11 @@ describe("explicit keepAllKinds", () => {
         keepAllKinds: new Set(["matchup_angle", "trade_verdict"]),
       },
     );
-    // Coverage first: with no alternative, the relaxation pass still ships it
-    // rather than leaving the hero with no dek at all. Best effort, not a
-    // guarantee, which is why the template pools exist.
-    expect(result.kept).toContain(dek);
-    expect(result.relaxedKinds).toContain("hero_dek");
+    // And with no alternative it ships NOTHING for that kind rather than the
+    // echo: fillMissingKinds backfills hero_dek from the template pool, and
+    // the hub falls back to HERO_DEK_FALLBACK if even that collides.
+    expect(result.kept.filter((r) => r.kind === "hero_dek")).toEqual([]);
+    expect(result.relaxedKinds).not.toContain("hero_dek");
   });
 
   it("keeps the legacy derived behavior when the option is omitted", () => {

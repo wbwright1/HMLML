@@ -507,15 +507,20 @@ const MATCHUP_ANGLES_OPENER: MatchupTrashAngles = Object.freeze({
 
 /**
  * The hero dek the between-weeks hub renders when nothing generated one (no
- * hub_content row, or a generation run that has not landed yet). It lives
- * here rather than inline in the component because copy belongs in the
- * centralized content constants, and because it has to be checked against the
- * seeded gameOfWeekBlurb above: the two render on the same page, and both
- * used to say "receipts to settle" (issue #274). Keep them sharing no
- * signature phrase (see lib/content-gen/phrases.ts).
+ * hub_content row, a generation run that has not landed yet, or a stored dek
+ * the render guard rejected). It lives here rather than inline in the
+ * component because copy belongs in the centralized content constants.
+ *
+ * It is also the copy that has to be MOST careful, because it is the one line
+ * guaranteed to render beside the seeded Game of the Week blurb and kicker.
+ * It must share no signature phrase with BOTH seeded blurbs above (which say
+ * "Two teams, one slate ... receipts to settle" and "the first receipts of
+ * the year") or with stakesClause's kickers ("Division lead at stake",
+ * "Pride at stake", "Season openers"). See lib/content-gen/phrases.ts;
+ * lib/content.test.ts asserts all of it.
  */
 export const HERO_DEK_FALLBACK =
-  'One slate, no byes, and nowhere left to hide. Lineups lock, then the league finds out who was bluffing.';
+  'Lineups lock, excuses start Monday. Nobody in this league gets to sit this week out.';
 
 // The smack feed is authored by the site's own "Site Desk", NOT by member
 // franchises: we do not put fabricated quotes in a real team's mouth. Every

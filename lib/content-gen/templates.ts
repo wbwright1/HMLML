@@ -724,11 +724,13 @@ function rotate<T>(pool: readonly T[], key: number): T[] {
 
 /**
  * The hero dek pool for a regular-season week. Deliberately a pool, not one
- * line: with a single candidate the diversity layer has nothing to fall back
- * to, so a dek that echoes the Game of the Week blurb gets dropped and then
- * re-admitted by the coverage-first relaxation pass, and the echo ships
- * anyway. None of these reuse the GotW blurb's idioms ("headline the slate",
- * "on the line", "receipts to settle"); see lib/content-gen/phrases.ts.
+ * line: hero_dek is a phraseStrictKinds kind (lib/content-gen/dedupe.ts), so
+ * a dek echoing the Game of the Week card is dropped for good rather than
+ * relaxed back in. With a single candidate that would mean shipping no dek at
+ * all and leaning on HERO_DEK_FALLBACK every week; with a pool, a
+ * phrase-clean sibling simply takes the slot. None of these reuse the GotW
+ * blurb's idioms ("headline the slate", "on the line", "receipts to settle")
+ * or the kicker's ("at stake"); see lib/content-gen/phrases.ts.
  */
 function regularHeroDekPool(ctx: StatsContext): string[] {
   const w = ctx.week;
@@ -745,6 +747,20 @@ function regularHeroDekPool(ctx: StatsContext): string[] {
     ],
     w,
   );
+}
+
+/**
+ * The FULL hero dek pool for a context, in preference order, before the
+ * diversity layer trims it to the single row that ships. Exported for
+ * fillMissingKinds in generate.ts: when the LLM produced no dek (or lost it
+ * to the phrase gate), the backfill needs real alternatives to choose from,
+ * not just the one row generateFromTemplates already picked.
+ */
+export function heroDekCandidates(ctx: StatsContext): HubContentInsert[] {
+  if (ctx.seasonType === "regular") return regularHeroDeks(ctx);
+  if (ctx.seasonType === "pre") return preseasonHeroDeks(ctx);
+  if (ctx.seasonType === "off") return offseasonHeroDeks(ctx);
+  return [];
 }
 
 function regularHeroDeks(ctx: StatsContext): HubContentInsert[] {

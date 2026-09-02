@@ -45,7 +45,7 @@ import {
   matchupPairKey,
   type HubEditorial,
 } from "@/lib/content";
-import { sharesSignaturePhrase } from "@/lib/content-gen/phrases";
+import { sharesPhraseWithAny } from "@/lib/content-gen/phrases";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { buildHubLineFooter } from "@/lib/book/shared";
 import {
@@ -353,14 +353,29 @@ export async function BetweenWeeksHub({
   }
 
   // Last line of defense on the copy-echo fix (issue #274). The generator's
-  // diversity layer stops a dek that echoes the Game of the Week blurb from
+  // diversity layer stops a dek that echoes the Game of the Week card from
   // ever being WRITTEN, but hub_content rows persist: a dek generated before
   // that gate existed keeps rendering until the next generate-content run
   // replaces it. Rather than ship the echo for hours, fall back to the seeded
-  // dek, which is guaranteed phrase-distinct from both seeded GotW blurbs.
+  // dek, which is phrase-distinct from every line below it by construction.
+  //
+  // BOTH generated lines on the Game of the Week card are compared, not just
+  // the blurb: the kicker's stakes clause is generated copy too, and "at
+  // stake" is itself a signature phrase. Computed here with the same inputs
+  // GameOfWeekSection uses below, so the two can never disagree.
+  const gotwStakes = gameOfWeek
+    ? stakesClause(
+        leadsDivision.has(gameOfWeek.homeTeam.franchiseId),
+        leadsDivision.has(gameOfWeek.awayTeam.franchiseId),
+        anyGamesPlayed
+      )
+    : null;
+  const linesBelowHero = [
+    editorial.matchupAngles.gameOfWeekBlurb,
+    gotwStakes ?? "",
+  ].filter(Boolean);
   const heroDek =
-    editorial.heroDek &&
-    !sharesSignaturePhrase(editorial.heroDek, editorial.matchupAngles.gameOfWeekBlurb)
+    editorial.heroDek && !sharesPhraseWithAny(editorial.heroDek, linesBelowHero)
       ? editorial.heroDek
       : HERO_DEK_FALLBACK;
 

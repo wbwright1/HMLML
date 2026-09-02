@@ -37,9 +37,11 @@
 //   * lib/content.ts MATCHUP_ANGLES.gameOfWeekBlurb + the hub dek fallback
 //       The seed path (no hub_content rows in the DB) reproduced the same
 //       collision: the seeded GotW blurb and the hardcoded dek fallback in
-//       components/hub/between-weeks-hub.tsx both said "receipts to settle".
-//       The dek fallback was rewritten and hoisted into HERO_DEK_FALLBACK in
-//       lib/content.ts (copy belongs in centralized constants, not in JSX).
+//       components/hub/between-weeks-hub.tsx both said "receipts to settle",
+//       and both seeded blurbs also say "Two teams, one slate" (hence the
+//       "one slate" entry below). The dek fallback was rewritten and hoisted
+//       into HERO_DEK_FALLBACK in lib/content.ts (copy belongs in centralized
+//       constants, not in JSX).
 //   * lib/goat-content.ts GOAT_BLURBS.lucky_ring + GOAT_GENERIC_OVERFLOW
 //       Both said "group chat", and both are reachable in one ladder render
 //       on /records/hall-of-fame. The overflow line was rewritten, and
@@ -48,6 +50,17 @@
 //   * lib/content-gen/templates.ts offseasonReceipts
 //       Three candidates in one pool all ended "The rebuild timeline remains
 //       a closely guarded secret." Only one can now ship per run.
+//
+// ENFORCEMENT POINTS (all three go through phraseSetsOverlap below):
+//   * WRITE TIME: sharesPrimaryHook in dedupe.ts, so no colliding row is
+//     generated; hero_dek is in PHRASE_STRICT_KINDS, so its echoes are never
+//     relaxed back in. fillMissingKinds in generate.ts screens the template
+//     backfill against surviving LLM rows (it runs after the diversity
+//     layer), and topUpShortKinds already screened with sharesPrimaryHook.
+//   * RENDER TIME: components/hub/between-weeks-hub.tsx compares the STORED
+//     dek against the Game of the Week blurb AND its kicker, because
+//     hub_content rows outlive a generator fix.
+//   * PER-PAGE POOLS: assignGoatBlurbs in lib/goat-content.ts.
 //
 // REVIEWED, NO SAME-PAGE COLLISION (left alone):
 //   * lib/content-gen/templates.ts preseasonHeroDek / offseasonHeroDek /
@@ -91,15 +104,16 @@ export const SIGNATURE_PHRASES: readonly string[] = Object.freeze([
   "closely guarded secret",
   "headline the slate",
   "grudge match",
+  "one slate",
 ]);
 
 /**
- * Case-folded, punctuation-stripped, whitespace-collapsed. Intentionally the
- * same transform as `normalize()` in dedupe.ts, re-declared here so this
- * module stays dependency-free: dedupe.ts imports IT, and a cycle back the
- * other way would be gratuitous for four lines of string work.
+ * Case-folded, punctuation-stripped, whitespace-collapsed. THE canonical copy
+ * normalizer for the whole content layer: it lives in this module (the leaf of
+ * the dependency graph) rather than in dedupe.ts, which imports it and
+ * re-exports it under its historical name. One normalizer, no drift.
  */
-function normalizeForPhrases(s: string): string {
+export function normalize(s: string): string {
   return s
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, " ")
@@ -109,7 +123,7 @@ function normalizeForPhrases(s: string): string {
 
 /** The signature phrases present in a body, normalized. Empty when there are none. */
 export function signaturePhrasesIn(body: string): Set<string> {
-  const norm = normalizeForPhrases(body);
+  const norm = normalize(body);
   const found = new Set<string>();
   for (const phrase of SIGNATURE_PHRASES) {
     if (norm.includes(phrase)) found.add(phrase);
@@ -117,18 +131,36 @@ export function signaturePhrasesIn(body: string): Set<string> {
   return found;
 }
 
-/** True when two bodies lean on the same stock idiom. */
-export function sharesSignaturePhrase(a: string, b: string): boolean {
-  const phrasesA = signaturePhrasesIn(a);
-  if (phrasesA.size === 0) return false;
-  const phrasesB = signaturePhrasesIn(b);
-  for (const p of phrasesA) if (phrasesB.has(p)) return true;
-  return false;
-}
-
-/** Set-level form of sharesSignaturePhrase, for callers holding extracted anchors. */
-export function phraseSetsOverlap(a: Set<string>, b: Set<string>): boolean {
+/**
+ * THE overlap primitive. Every consumer (the write-time gate in dedupe.ts,
+ * the render-time guard on the hub, the GOAT ladder's pick guard) goes
+ * through this one function, so "do these two lean on the same idiom" has
+ * exactly one implementation.
+ */
+export function phraseSetsOverlap(
+  a: ReadonlySet<string>,
+  b: ReadonlySet<string>,
+): boolean {
   if (a.size === 0 || b.size === 0) return false;
   for (const p of a) if (b.has(p)) return true;
   return false;
+}
+
+/** True when two bodies lean on the same stock idiom. */
+export function sharesSignaturePhrase(a: string, b: string): boolean {
+  return phraseSetsOverlap(signaturePhrasesIn(a), signaturePhrasesIn(b));
+}
+
+/**
+ * True when `body` leans on any idiom already spent on this page/run.
+ * The multi-line form of sharesSignaturePhrase, for a guard comparing one
+ * candidate against several already-visible lines.
+ */
+export function sharesPhraseWithAny(
+  body: string,
+  others: readonly string[],
+): boolean {
+  const phrases = signaturePhrasesIn(body);
+  if (phrases.size === 0) return false;
+  return others.some((other) => phraseSetsOverlap(phrases, signaturePhrasesIn(other)));
 }

@@ -10,7 +10,7 @@
 // the same ladder ever read the same sentence. Nothing here fabricates a
 // stat: the numbers on the card come from the query layer; this is pure voice.
 
-import { signaturePhrasesIn } from "@/lib/content-gen/phrases";
+import { phraseSetsOverlap, signaturePhrasesIn } from "@/lib/content-gen/phrases";
 
 export type GoatArchetype =
   | "goat"
@@ -155,12 +155,8 @@ export function assignGoatBlurbs<T extends GoatArchetypeInput>(
   const overflowUsed = new Set<string>();
   const spentPhrases = new Set<string>();
 
-  const phraseFree = (candidate: string): boolean => {
-    for (const p of signaturePhrasesIn(candidate)) {
-      if (spentPhrases.has(p)) return false;
-    }
-    return true;
-  };
+  const phraseFree = (candidate: string): boolean =>
+    !phraseSetsOverlap(signaturePhrasesIn(candidate), spentPhrases);
   const spend = (candidate: string): void => {
     for (const p of signaturePhrasesIn(candidate)) spentPhrases.add(p);
   };

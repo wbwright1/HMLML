@@ -13,6 +13,7 @@ import {
   topUpShortKinds,
 } from "./generate";
 import { kindsForSeason } from "./templates";
+import { sharesSignaturePhrase } from "./phrases";
 import type { HubContentInsert } from "@/lib/queries/hub-content";
 import type { StatsContext } from "./stats-context";
 
@@ -164,6 +165,26 @@ describe("fillMissingKinds", () => {
     for (const k of kinds) {
       expect(rows.some((r) => r.kind === k)).toBe(true);
     }
+  });
+
+  // Issue #274: this append happens AFTER applyDiversityLayer, so without a
+  // check here a template row can restate a surviving LLM row's idiom.
+  it("does not backfill a hero dek that echoes a kept LLM row", () => {
+    const regularCtx = { ...ctx, seasonType: "regular" as const, week: 3 };
+    const regularKinds = kindsForSeason("regular");
+    // A surviving LLM blurb that owns "receipts to settle".
+    const llmBlurb: HubContentInsert = {
+      week: 3,
+      kind: "game_of_week_blurb",
+      refKey: null,
+      body: "Two of the league's best meet with receipts to settle by Sunday.",
+      extras: null,
+    };
+    const { rows } = fillMissingKinds(regularKinds, [llmBlurb], regularCtx);
+    const deks = rows.filter((r) => r.kind === "hero_dek");
+    expect(deks).toHaveLength(1);
+    expect(deks[0].body.toLowerCase()).not.toContain("receipts to settle");
+    expect(sharesSignaturePhrase(deks[0].body, llmBlurb.body)).toBe(false);
   });
 });
 
