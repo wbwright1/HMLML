@@ -13,7 +13,7 @@ export function BurningQuestionsCard({ questions }: BurningQuestionsCardProps) {
   if (questions.length === 0) return null;
 
   return (
-    <div className="card-surface divide-y divide-divider p-5">
+    <div className="card-surface divide-y divide-divider p-6">
       {questions.map((question, i) => (
         <div key={i} className="flex gap-4 py-4 first:pt-0 last:pb-0">
           <span

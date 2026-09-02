@@ -263,10 +263,16 @@ test.describe("Between-Weeks Hub (1d)", () => {
 
       // Players to Watch: story-detail and projection paragraphs.
       if (/Players to Watch/i.test(text)) {
+        // data-testid, not literal Tailwind class strings: the class-based
+        // selector this used to carry went stale the moment the spacing pass
+        // changed a clamp, and the `for i < count` loop below passes silently
+        // at count 0, so the assertion vanished without failing. The explicit
+        // count check is the guard against that recurring.
         const storyParagraphs = page.locator(
-          "p.text-body-sm.text-text-secondary.line-clamp-3, p.text-body-sm.text-text-tertiary.line-clamp-2"
+          '[data-testid="ptw-story"], [data-testid="ptw-projected"]'
         );
         const count = await storyParagraphs.count();
+        expect(count).toBeGreaterThan(0);
         for (let i = 0; i < count; i++) {
           const el = storyParagraphs.nth(i);
           const { scrollWidth, clientWidth, fontSize, textTransform } =
@@ -287,10 +293,9 @@ test.describe("Between-Weeks Hub (1d)", () => {
 
       // This Week in HMLML History: the claim paragraph.
       if (/This Week in HMLML History/i.test(text)) {
-        const claimParagraphs = page.locator(
-          "p.mt-1.text-body-sm.text-text-secondary"
-        );
+        const claimParagraphs = page.locator('[data-testid="week-history-claim"]');
         const count = await claimParagraphs.count();
+        expect(count).toBeGreaterThan(0);
         for (let i = 0; i < count; i++) {
           const el = claimParagraphs.nth(i);
           const { scrollWidth, clientWidth, fontSize, textTransform } =
@@ -407,5 +412,87 @@ test.describe("Between-Weeks Hub (1d)", () => {
       (el) => getComputedStyle(el).fontFamily
     );
     expect(fontFamily).toMatch(/JetBrains/i);
+  });
+
+  test("T20: sibling slate cards in a row share a height and a footer baseline", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+
+    const cards = page.locator('[data-testid="slate-card"]');
+    const count = await cards.count();
+    expect(count).toBeGreaterThan(1);
+
+    // Group by rounded y: the slate is a 2-up grid, so each y is one row.
+    const rows = new Map<number, { height: number; footerY: number | null }[]>();
+    for (let i = 0; i < count; i++) {
+      const card = cards.nth(i);
+      const box = await card.boundingBox();
+      expect(box).not.toBeNull();
+      const footer = card.locator('[data-testid="slate-footer"]');
+      const footerBox = (await footer.count()) ? await footer.boundingBox() : null;
+      const key = Math.round(box!.y);
+      const bucket = rows.get(key) ?? [];
+      bucket.push({ height: box!.height, footerY: footerBox?.y ?? null });
+      rows.set(key, bucket);
+    }
+
+    let comparedRows = 0;
+    let comparedFooters = 0;
+    for (const bucket of rows.values()) {
+      if (bucket.length < 2) continue;
+      comparedRows++;
+      const first = bucket[0];
+      for (const card of bucket) {
+        // Content-driven jitter (a two-line angle beside a one-line one) is
+        // exactly what this must catch, so the tolerance is 1px, not "close".
+        expect(Math.abs(card.height - first.height)).toBeLessThanOrEqual(1);
+      }
+
+      // ... and the Book footers sit on one baseline, which is the part
+      // grid stretch alone does not give you (the footer used to float off
+      // the angle, so a shorter card left ragged dead space beneath it).
+      const footerYs = bucket
+        .map((c) => c.footerY)
+        .filter((y): y is number => y !== null);
+      if (footerYs.length > 1) {
+        comparedFooters++;
+        for (const y of footerYs) {
+          expect(Math.abs(y - footerYs[0])).toBeLessThanOrEqual(1);
+        }
+      }
+    }
+    expect(comparedRows).toBeGreaterThan(0);
+    // Same guard as the count check in T10: without it, a slate that stopped
+    // rendering Book footers would take the `length > 1` branch zero times and
+    // this test would report green having compared nothing.
+    expect(comparedFooters).toBeGreaterThan(0);
+  });
+
+  test("T21: every rail card uses the one row rhythm", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto("/");
+
+    const stacks = page.locator('[data-testid="rail-rows"]');
+    const stackCount = await stacks.count();
+    expect(stackCount).toBeGreaterThan(0);
+
+    for (let s = 0; s < stackCount; s++) {
+      const rows = stacks.nth(s).locator("> *");
+      const rowCount = await rows.count();
+      expect(rowCount).toBeGreaterThan(0);
+      for (let i = 0; i < rowCount; i++) {
+        const { paddingTop, paddingBottom } = await rows.nth(i).evaluate((node) => {
+          const style = getComputedStyle(node);
+          return {
+            paddingTop: style.paddingTop,
+            paddingBottom: style.paddingBottom,
+          };
+        });
+        expect(paddingTop).toBe(i === 0 ? "0px" : "16px");
+        expect(paddingBottom).toBe(i === rowCount - 1 ? "0px" : "16px");
+      }
+    }
   });
 });

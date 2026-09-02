@@ -296,7 +296,7 @@ export async function PreseasonHub({
             <ModuleLabel meta={smackFromDesk ? "site desk" : "the league"}>
               The Smack Feed
             </ModuleLabel>
-            <div className="space-y-3">
+            <div className="space-y-4">
               <SmackComposerSlot />
               {smackItems.length > 0 ? (
                 <SmackFeed items={smackItems} />
