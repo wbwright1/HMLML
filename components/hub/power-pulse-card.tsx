@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
+import { TeamLink } from "@/components/team-link";
 import type { HubPowerPreview, PowerPreviewMover } from "@/lib/queries/power-preview";
 
 /** Trend vs. season standings: sage ▲ for climbers, rust ▼ for sliders. Never
@@ -57,7 +58,12 @@ function MoverRow({
         <p className="text-caption text-text-tertiary">
           {direction === "riser" ? "Riser" : "Faller"}
         </p>
-        <p className="text-body-sm text-text-primary truncate">{mover.name}</p>
+        <TeamLink
+          slug={mover.slug}
+          className="block text-body-sm text-text-primary truncate"
+        >
+          {mover.name}
+        </TeamLink>
       </div>
       <span className={`flex items-center gap-1 font-mono text-xs font-bold tabular-nums shrink-0 ${tone}`}>
         <span aria-hidden>{glyph}</span>
@@ -90,10 +96,10 @@ export function PowerPulseCard({
           {preview.top.map((row) => {
             const rankColor = row.rank <= 3 ? "text-accent-gold" : "text-text-tertiary";
             return (
-              <Link
+              <TeamLink
                 key={row.id}
-                href={`/teams/${row.slug}`}
-                className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 hover:opacity-80 transition-opacity"
+                slug={row.slug}
+                className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0 hover:opacity-80"
               >
                 <span className={`font-mono text-sm font-black tabular-nums w-5 text-center shrink-0 ${rankColor}`}>
                   {row.rank}
@@ -122,7 +128,7 @@ export function PowerPulseCard({
                     {row.powerIndex}
                   </span>
                 )}
-              </Link>
+              </TeamLink>
             );
           })}
         </div>

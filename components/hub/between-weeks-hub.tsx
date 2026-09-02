@@ -11,7 +11,6 @@ import {
 import { SmackComposerSlot } from "@/components/smack-composer-slot";
 import { getRecentSmackPosts, anySmackPostsExist } from "@/lib/queries/smack";
 import { PlayerHeadshot } from "@/components/player-headshot";
-import { PlayerLink } from "@/components/player-link";
 import { GameOfTheWeekCard } from "@/components/hub/game-of-the-week-card";
 import { SlateCard } from "@/components/hub/slate-card";
 import { teamAcronym } from "@/lib/team-acronym";
@@ -961,8 +960,18 @@ function LeagueMovesCard({ moves }: { moves: LeagueMove[] }) {
                       />
                     ))}
                   </div>
+                  {/* Secondary attribution, clickable like every other
+                      franchise identity on the site. The crests above stay
+                      decorative because these names sit right beside them. */}
                   <span className="text-caption text-text-tertiary truncate">
-                    {move.franchises.map((f) => f.name).join(" / ")}
+                    {move.franchises.map((f, i) => (
+                      <span key={f.id}>
+                        {i > 0 && " / "}
+                        <TeamLink slug={f.slug} className="text-text-tertiary">
+                          {f.name}
+                        </TeamLink>
+                      </span>
+                    ))}
                   </span>
                 </div>
                 {move.support && (
