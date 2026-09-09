@@ -1,37 +1,51 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { TeamLink } from "@/components/team-link";
 import { useBookSlip } from "@/components/book/use-book-slip";
-import { formatSpread } from "@/lib/book/pricing";
+import {
+  SideRow,
+  StatusKicker,
+  YourPickRow,
+} from "@/components/book/side-row";
 import {
   BOOK_COPY,
+  divisionRailLabel,
   type AtsLeaderboardRow,
   type BookGame,
   type BookSideKey,
   type MemberBookPick,
-  type PickemsCell,
   type PickemsDivision,
   type PickemsGridData,
   type PickemsRow,
   type PickerColumn,
+  type PickOutcome,
 } from "@/lib/book/shared";
 
 /**
  * The Book's Tracking tab: the league pick'ems sheet.
  *
- * Three stacked pieces: the viewer's own pick strip (tap a side, straight into
- * the same `togglePick` server action the Board uses), the season ATS
- * leaderboard, and the transposed pick'ems grid (a column per member, clustered
- * by division; a row per game).
+ * The unit of this tab is ONE CARD PER GAME. Both sides of a card are the pick
+ * controls, and the members who took each side hang directly under that side
+ * as a rail of crest chips, so picking, the split and the grading are one
+ * object instead of a pick strip at the top and a transposed 12-column matrix
+ * at the bottom that only agreed with it by coincidence.
  *
- * A client island (enumerated in CLAUDE.md) for two reasons now. /book is
+ * Three stacked pieces: Week Pulse (the week's counts plus the one lock
+ * control for the whole tab), The Slate (the cards), and the season ledger.
+ *
+ * A client island (enumerated in CLAUDE.md) for two reasons. /book is
  * ISR-cached HTML served to the whole league, so the viewer's identity ("YOU")
  * and their own not-yet-kicked-off picks cannot live in the cached server tree;
  * and picking is an interaction. Nothing here is a permission check: the server
  * action re-enforces every rule, kickoff locks included.
+ *
+ * The anti-tailing rule is enforced in the QUERY, not here: an open game ships
+ * no side for anybody (`PickemsCell.side` is null, `hasPicked` is a bare
+ * boolean), so this island cannot leak what it was never given. It must not
+ * widen that: no rail, no chip and no split renders for an open game.
  *
  * Streak Watch is not part of this island: it carries no session-dependent
  * state, so it renders as a plain server component alongside this one.
@@ -54,102 +68,246 @@ export function TrackingIsland({
     signedIn,
     franchiseSlug,
     picks: ownPicks,
+    slipLocked,
     standingLock,
+    canPick,
+    canUnlock,
     error,
     pendingMatchup,
     pick: onPick,
+    lock,
+    unlock,
   } = useBookSlip(week, games);
 
+  const members = useMemo(
+    () => grid.divisions.flatMap((d) => d.pickers),
+    [grid.divisions],
+  );
+  const rowByMatchup = useMemo(() => {
+    const map = new Map<number, PickemsRow>();
+    for (const row of grid.rows) map.set(row.matchupId, row);
+    return map;
+  }, [grid.rows]);
+
+  const openWithoutPick = games.filter(
+    (g) => g.status === "open" && !ownPicks.has(g.matchupId),
+  ).length;
+
+  function onLock() {
+    if (openWithoutPick > 0) return;
+    lock();
+  }
+
   return (
-    <div className="flex flex-col gap-4">
-      <YourPicksStrip
+    <div className="flex flex-col gap-6">
+      <WeekPulse
+        week={week}
         games={games}
-        week={week}
-        picks={ownPicks}
-        signedIn={signedIn}
-        slipClosed={standingLock}
-        pendingMatchup={pendingMatchup}
-        error={error}
-        onPick={onPick}
-      />
-      <AtsLeaderboard rows={leaderboard} viewerSlug={franchiseSlug} />
-      <PickemsGrid
-        grid={grid}
-        week={week}
+        rows={grid.rows}
+        members={members}
         viewerSlug={franchiseSlug}
+        signedIn={signedIn}
         ownPicks={ownPicks}
+        slipLocked={slipLocked}
+        canUnlock={canUnlock}
+        openWithoutPick={openWithoutPick}
+        error={error}
+        onLock={onLock}
+        onUnlock={unlock}
+      />
+
+      <section>
+        <p className="text-kicker mb-3">
+          Week <span className="font-mono tabular-nums">{week}</span> ·{" "}
+          {BOOK_COPY.slateKicker}
+        </p>
+        {games.length === 0 ? (
+          <div className="card-surface p-5">
+            <p className="text-body-sm text-text-secondary">
+              {BOOK_COPY.pickemsNoGames}
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-col gap-3 sm:gap-4">
+              {games.map((game) => (
+                <SlateCard
+                  key={game.matchupId}
+                  game={game}
+                  row={rowByMatchup.get(game.matchupId) ?? null}
+                  divisions={grid.divisions}
+                  memberCount={members.length}
+                  pick={ownPicks.get(game.matchupId) ?? null}
+                  viewerSlug={franchiseSlug}
+                  signedIn={signedIn}
+                  interactive={canPick && game.status === "open"}
+                  pending={pendingMatchup === game.matchupId}
+                  slipClosed={standingLock}
+                  onPick={onPick}
+                />
+              ))}
+            </div>
+            {/* The reveal rule, stated ONCE per screen. Never per card. */}
+            <p className="mt-3 text-body-sm text-text-tertiary">
+              {BOOK_COPY.pickemsFootnote}
+            </p>
+          </>
+        )}
+      </section>
+
+      <SeasonLedger
+        rows={leaderboard}
+        divisions={grid.divisions}
+        viewerSlug={franchiseSlug}
       />
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Your Picks strip
+// Shared: who has picked what
 // ---------------------------------------------------------------------------
 
-function YourPicksStrip({
-  games,
+/**
+ * Whether a member has a pick on a row.
+ *
+ * For everybody else this is the server's `hasPicked` boolean, which is safe
+ * to ship for an open game because it carries no side. For the VIEWER it is
+ * their own slip instead: that slip is optimistic and always current, so the
+ * counts stop lying for the second between a tap and the cached tree catching
+ * up, and it is the viewer's own information either way.
+ */
+function hasPicked(
+  row: PickemsRow,
+  member: PickerColumn,
+  viewerSlug: string | null,
+  signedIn: boolean,
+  ownPicks: Map<number, MemberBookPick>,
+): boolean {
+  if (signedIn && member.franchiseSlug === viewerSlug) {
+    return ownPicks.has(row.matchupId);
+  }
+  return row.cells[String(member.memberId)]?.hasPicked ?? false;
+}
+
+// ---------------------------------------------------------------------------
+// Week Pulse
+// ---------------------------------------------------------------------------
+
+function WeekPulse({
   week,
-  picks,
+  games,
+  rows,
+  members,
+  viewerSlug,
   signedIn,
-  slipClosed,
-  pendingMatchup,
+  ownPicks,
+  slipLocked,
+  canUnlock,
+  openWithoutPick,
   error,
-  onPick,
+  onLock,
+  onUnlock,
 }: {
-  games: BookGame[];
   week: number;
-  picks: Map<number, MemberBookPick>;
+  games: BookGame[];
+  rows: PickemsRow[];
+  members: PickerColumn[];
+  viewerSlug: string | null;
   signedIn: boolean;
-  /** The member's early lock still stands over this week's open games. */
-  slipClosed: boolean;
-  pendingMatchup: number | null;
+  ownPicks: Map<number, MemberBookPick>;
+  slipLocked: boolean;
+  canUnlock: boolean;
+  openWithoutPick: number;
   error: string | null;
-  onPick: (game: BookGame, side: BookSideKey) => void;
+  onLock: () => void;
+  onUnlock: () => void;
 }) {
+  // A complete sheet covers EVERY game of the week, not merely every game
+  // still open. Counting only the open ones would hand a member a full sheet
+  // on Sunday night for a game they never picked, and drop them out of "still
+  // ghosting" for exactly the game they ghosted.
+  const ghosting = members.filter(
+    (member) =>
+      !rows.every((row) =>
+        hasPicked(row, member, viewerSlug, signedIn, ownPicks),
+      ),
+  );
+  const complete = members.length - ghosting.length;
+  const liveNow = games.filter((g) => g.status === "live").length;
+
   return (
     <section>
       <p className="text-kicker mb-3">
         Week <span className="font-mono tabular-nums">{week}</span> ·{" "}
-        {BOOK_COPY.pickemsTitle}
+        {BOOK_COPY.sheetKicker}
       </p>
       <div className="card-surface p-5">
-        <p className="mb-3.5 font-serif text-body-sm italic text-text-tertiary">
-          {BOOK_COPY.pickemsSnark}
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-6 lg:gap-12">
+          <div className="flex flex-wrap gap-6 lg:gap-12">
+            <PulseStat
+              testId="pulse-sheets-in"
+              label={BOOK_COPY.pulseSheets}
+              value={`${complete}/${members.length}`}
+              tone="text-text-primary"
+            />
+            {signedIn && (
+              <PulseStat
+                label="Your picks"
+                value={`${ownPicks.size}/${games.length}`}
+                tone="text-accent-gold"
+              />
+            )}
+            <PulseStat
+              label="Live now"
+              value={String(liveNow)}
+              tone={liveNow > 0 ? "text-accent-green" : "text-text-secondary"}
+            />
+          </div>
+
+          {ghosting.length > 0 && (
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <span className="text-kicker">{BOOK_COPY.pulseGhosting}</span>
+              {/* The ONLY place this tab names who is out, and it names them
+                  without naming a single side: an incomplete sheet is a count,
+                  not a pick. */}
+              <div className="flex flex-wrap gap-1.5">
+                {ghosting.map((member) => (
+                  <PickerChip
+                    key={member.memberId}
+                    testId="ghost-chip"
+                    member={member}
+                    isViewer={member.franchiseSlug === viewerSlug}
+                    outcome={null}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {error && (
-          <p role="status" className="mb-3 text-body-sm text-accent-warm">
+          <p role="status" className="mt-3 text-body-sm text-accent-warm">
             {error}
           </p>
         )}
 
-        {games.length === 0 ? (
-          <p className="text-body-sm text-text-secondary">
-            {BOOK_COPY.pickemsNoGames}
-          </p>
+        {signedIn ? (
+          <LockRow
+            slipLocked={slipLocked}
+            canUnlock={canUnlock}
+            openWithoutPick={openWithoutPick}
+            onLock={onLock}
+            onUnlock={onUnlock}
+          />
         ) : (
-          <ul className="flex list-none flex-col">
-            {games.map((game) => (
-              <PickRow
-                key={game.matchupId}
-                game={game}
-                pick={picks.get(game.matchupId) ?? null}
-                signedIn={signedIn}
-                slipClosed={slipClosed}
-                pending={pendingMatchup === game.matchupId}
-                onPick={onPick}
-              />
-            ))}
-          </ul>
-        )}
-
-        {!signedIn && (
-          <p className="mt-3.5 text-body-sm text-text-secondary">
-            {BOOK_COPY.pickemsSignedOut}{" "}
+          <p className="mt-4 border-t border-divider pt-3.5 text-body-sm text-text-secondary">
             <Link href="/claim" className="font-semibold text-accent-gold">
-              Claim your team.
+              {BOOK_COPY.pickemsSignedOutLink}
             </Link>
+            {BOOK_COPY.pickemsSignedOut.slice(
+              BOOK_COPY.pickemsSignedOutLink.length,
+            )}
           </p>
         )}
       </div>
@@ -157,206 +315,517 @@ function YourPicksStrip({
   );
 }
 
-function PickRow({
-  game,
-  pick,
-  signedIn,
-  slipClosed,
-  pending,
-  onPick,
+function PulseStat({
+  label,
+  value,
+  tone,
+  testId,
 }: {
-  game: BookGame;
-  pick: MemberBookPick | null;
-  signedIn: boolean;
-  slipClosed: boolean;
-  pending: boolean;
-  onPick: (game: BookGame, side: BookSideKey) => void;
+  label: string;
+  value: string;
+  tone: string;
+  testId?: string;
 }) {
-  const locked = game.status !== "open" || slipClosed || pick?.lockedAt != null;
-  const interactive = signedIn && !locked;
-
-  let statusLabel: string;
-  if (game.status === "live") statusLabel = "Live";
-  else if (game.status === "final") statusLabel = "Final";
-  else if (locked) statusLabel = BOOK_COPY.pickemsLocked;
-  else statusLabel = game.kickoffLabel ? `Locks ${game.kickoffLabel}` : "Open";
-
-  const statusTone =
-    game.status === "live"
-      ? "text-accent-green"
-      : locked
-        ? "text-text-tertiary"
-        : "text-accent-gold";
-
   return (
-    <li className="flex flex-wrap items-center gap-2 border-t border-divider py-2.5 first:border-t-0">
-      <span className="flex min-w-0 flex-1 basis-full items-center gap-2 sm:basis-auto">
-        <span className="min-w-0 truncate text-body-sm text-text-secondary">
-          {game.away.name} at {game.home.name}
-        </span>
-        <span className={`shrink-0 text-caption font-semibold ${statusTone}`}>
-          {locked && game.status === "open" ? "🔒 " : ""}
-          {statusLabel}
-        </span>
-        {/* The gold tint on the picked button is a color signal, so the pick
-            carries a written label too (CLAUDE.md: never color alone). */}
-        {pick && (
-          <span className="shrink-0 text-caption font-semibold text-accent-gold">
-            ✓ Your pick
-          </span>
-        )}
+    <div className="flex min-w-0 flex-col gap-1" data-testid={testId}>
+      <span className="text-kicker">{label}</span>
+      <span className={`text-stat text-[26px] leading-none ${tone}`}>
+        {value}
       </span>
-      <span className="flex shrink-0 gap-2">
-        <SideButton
-          game={game}
-          side="away"
-          picked={pick?.side === "away"}
-          interactive={interactive}
-          pending={pending}
-          onPick={onPick}
-        />
-        <SideButton
-          game={game}
-          side="home"
-          picked={pick?.side === "home"}
-          interactive={interactive}
-          pending={pending}
-          onPick={onPick}
-        />
-      </span>
-    </li>
+    </div>
   );
 }
 
-function SideButton({
-  game,
-  side,
-  picked,
-  interactive,
-  pending,
-  onPick,
+/**
+ * The whole tab's lock control, on one row, once.
+ *
+ * The Board's PickSlip owns the same three states; this is that control
+ * re-laid-out for a tab that has no slip rail to hang it off. One per card
+ * would be wrong twice over: locking is a slip-level commitment, and a member
+ * who locked early would otherwise have six cards they cannot change with no
+ * explanation and nothing to press.
+ */
+function LockRow({
+  slipLocked,
+  canUnlock,
+  openWithoutPick,
+  onLock,
+  onUnlock,
 }: {
-  game: BookGame;
-  side: BookSideKey;
-  picked: boolean;
-  interactive: boolean;
-  pending: boolean;
-  onPick: (game: BookGame, side: BookSideKey) => void;
+  slipLocked: boolean;
+  canUnlock: boolean;
+  openWithoutPick: number;
+  onLock: () => void;
+  onUnlock: () => void;
 }) {
-  const team = side === "home" ? game.home : game.away;
-  const label = `${team.abbreviation ?? team.name} ${formatSpread(team.spread)}`;
-  const base =
-    "min-w-[92px] rounded-[10px] border px-2.5 py-1.5 text-center font-mono text-body-sm font-bold tabular-nums transition-colors duration-150";
-  const skin = picked
-    ? "border-accent-gold/45 bg-accent-gold-light text-text-primary"
-    : "border-border bg-white/[.03] text-text-secondary";
+  const pill = "rounded-full px-4 py-2 text-body-sm font-semibold";
 
-  if (!interactive) {
-    return (
-      <span
-        className={`${base} ${skin} ${picked ? "" : "opacity-55"}`}
-        aria-label={`${team.name} ${formatSpread(team.spread)}${picked ? ", your pick" : ""}`}
-      >
-        {label}
-        {picked && <span className="ml-1 font-sans">✓</span>}
+  let left: React.ReactNode;
+  let note: string;
+
+  if (slipLocked) {
+    left = (
+      <>
+        <span className={`${pill} bg-accent-green-light text-accent-green`}>
+          {BOOK_COPY.lockedIn}
+        </span>
+        {/* An early lock is a commitment, not a trap: a game nobody has played
+            yet is still the member's to change, so it can be handed back until
+            kickoff. Once every locked game is underway there is nothing left
+            to give back and the button goes away on its own. */}
+        {canUnlock && (
+          <button
+            type="button"
+            onClick={onUnlock}
+            className={`${pill} cursor-pointer border border-border-strong bg-surface text-text-secondary transition-colors duration-150 hover:text-text-primary`}
+          >
+            {BOOK_COPY.unlockCta}
+          </button>
+        )}
+      </>
+    );
+    note = canUnlock ? BOOK_COPY.unlockNote : BOOK_COPY.lockNoteLocked;
+  } else if (openWithoutPick > 0) {
+    left = (
+      <span className={`${pill} bg-surface-muted text-text-tertiary`}>
+        <span className="font-mono tabular-nums">{openWithoutPick}</span>{" "}
+        {openWithoutPick === 1 ? "pick" : "picks"} still open
       </span>
     );
+    note = BOOK_COPY.lockNoteIncomplete;
+  } else {
+    left = (
+      <button
+        type="button"
+        onClick={onLock}
+        className={`${pill} cursor-pointer bg-accent-gold text-canvas transition-[filter] duration-150 hover:brightness-110`}
+      >
+        {BOOK_COPY.lockCta}
+      </button>
+    );
+    note = BOOK_COPY.lockNoteReady;
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => onPick(game, side)}
-      disabled={pending}
-      aria-pressed={picked}
-      aria-label={`Pick ${team.name} ${formatSpread(team.spread)}`}
-      className={`${base} ${skin} cursor-pointer hover:border-border-strong disabled:cursor-wait`}
-    >
-      {label}
-      {picked && <span className="ml-1 font-sans">✓</span>}
-    </button>
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-divider pt-3.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-2.5">{left}</div>
+      <span className="min-w-0 text-[11px] text-text-tertiary">{note}</span>
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Season ATS leaderboard
+// The Slate
 // ---------------------------------------------------------------------------
 
-function AtsLeaderboard({
+function SlateCard({
+  game,
+  row,
+  divisions,
+  memberCount,
+  pick,
+  viewerSlug,
+  signedIn,
+  interactive,
+  pending,
+  slipClosed,
+  onPick,
+}: {
+  game: BookGame;
+  row: PickemsRow | null;
+  divisions: PickemsDivision[];
+  memberCount: number;
+  pick: MemberBookPick | null;
+  viewerSlug: string | null;
+  signedIn: boolean;
+  interactive: boolean;
+  pending: boolean;
+  slipClosed: boolean;
+  onPick: (game: BookGame, side: BookSideKey) => void;
+}) {
+  const open = game.status === "open";
+  const inCount = row
+    ? Object.values(row.cells).filter((cell) => cell.hasPicked).length
+    : 0;
+  const note = open
+    ? BOOK_COPY.revealsAtKickoff
+    : game.status === "live"
+      ? BOOK_COPY.gradesAtFinal
+      : BOOK_COPY.graded;
+
+  return (
+    <div
+      data-testid="slate-card"
+      data-matchup-id={game.matchupId}
+      className={`card-surface ${open ? "p-4" : "p-5"}`}
+    >
+      <div
+        className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 ${
+          open ? "mb-2.5" : "mb-3.5"
+        }`}
+      >
+        <StatusKicker game={game} showPush />
+        <span className="text-[12px] text-text-tertiary">
+          <span className="font-mono font-bold tabular-nums text-text-secondary">
+            {inCount}
+          </span>{" "}
+          of{" "}
+          <span className="font-mono font-bold tabular-nums text-text-secondary">
+            {memberCount}
+          </span>{" "}
+          in · {note}
+        </span>
+      </div>
+
+      {/* Home side first, then away, matching the Board and PickemsRow.label.
+          The same game must not read in two orders on two tabs of one page. */}
+      <div className={`flex flex-col ${open ? "gap-2" : "gap-2.5"}`}>
+        {(["home", "away"] as const).map((side) => (
+          <div key={side}>
+            <SideRow
+              game={game}
+              side={side}
+              team={side === "home" ? game.home : game.away}
+              picked={pick?.side === side}
+              interactive={interactive}
+              pending={pending}
+              onPick={onPick}
+              variant="slate"
+            />
+            {row && !open && (
+              <PickerRail
+                row={row}
+                side={side}
+                divisions={divisions}
+                viewerSlug={viewerSlug}
+                signedIn={signedIn}
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      {pick && (
+        <YourPickRow game={game} pick={pick} slipClosed={slipClosed} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Who took this side, under the side they took.
+ *
+ * Rendered only once the game is off the board. Buckets on `cell.side`, never
+ * on the abbreviation: two franchises can carry the same three-letter code
+ * (#243), and when both teams of one game collide, bucketing on the code puts
+ * every picker on the wrong side.
+ */
+function PickerRail({
+  row,
+  side,
+  divisions,
+  viewerSlug,
+  signedIn,
+}: {
+  row: PickemsRow;
+  side: BookSideKey;
+  divisions: PickemsDivision[];
+  viewerSlug: string | null;
+  signedIn: boolean;
+}) {
+  const byDivision = divisions.map((division) => ({
+    name: division.name,
+    takers: division.pickers.filter(
+      (picker) => row.cells[String(picker.memberId)]?.side === side,
+    ),
+  }));
+  const total = byDivision.reduce((n, d) => n + d.takers.length, 0);
+  const labelled = divisions.length > 1;
+
+  return (
+    <div className="flex flex-col gap-[7px] pt-2">
+      <div className="flex items-baseline gap-1.5">
+        <span className="text-stat text-[15px] leading-none">{total}</span>
+        <span className="text-[11px] text-text-tertiary">
+          {BOOK_COPY.railTookSide}
+        </span>
+      </div>
+
+      {byDivision.map((division) => {
+        const chips = division.takers.map((picker) => (
+          <PickerChip
+            key={picker.memberId}
+            testId="rail-chip"
+            member={picker}
+            side={side}
+            isViewer={signedIn && picker.franchiseSlug === viewerSlug}
+            outcome={row.cells[String(picker.memberId)]?.outcome ?? null}
+          />
+        ));
+
+        if (!labelled) {
+          return (
+            <div key={division.name} className="flex min-w-0 flex-wrap gap-1.5">
+              {chips.length > 0 ? chips : <Nobody />}
+            </div>
+          );
+        }
+
+        // A two-column grid, not a flex row with the label as its first item:
+        // wrapped chips must stay inside their own column instead of sliding
+        // under the label and reading as a third, unlabelled division.
+        return (
+          <div
+            key={division.name}
+            className="grid grid-cols-[38px_minmax(0,1fr)] items-start gap-2"
+          >
+            <span className="pt-1.5 text-[10px] font-semibold uppercase tracking-[.14em] text-text-tertiary">
+              {divisionRailLabel(division.name)}
+            </span>
+            <span className="flex min-w-0 flex-wrap gap-1.5">
+              {chips.length > 0 ? chips : <Nobody />}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Nobody() {
+  return (
+    <span className="text-[11px] text-text-tertiary">{BOOK_COPY.railNobody}</span>
+  );
+}
+
+const CHIP_STATES: Record<
+  "ungraded" | PickOutcome,
+  { skin: string; code: string; glyph: string | null }
+> = {
+  ungraded: {
+    skin: "border-border bg-white/[.03]",
+    code: "text-text-tertiary",
+    glyph: null,
+  },
+  win: {
+    skin: "border-accent-green/30 bg-accent-green-light",
+    code: "text-accent-green",
+    glyph: "✓",
+  },
+  loss: {
+    skin: "border-accent-warm/30 bg-accent-warm-light",
+    code: "text-accent-warm",
+    glyph: "✗",
+  },
+  push: {
+    skin: "border-border bg-surface-muted",
+    code: "text-text-secondary",
+    glyph: "PUSH",
+  },
+};
+
+/**
+ * One member on a rail (or in the Week Pulse's ghosting row).
+ *
+ * Deliberately NOT a link: a 26px tap target would break the phone's 44px
+ * floor, and the franchise identities on this tab are clickable in the ledger
+ * rows below. The crest is non-decorative for the same reason the old picker
+ * column's was: the only visible label here is a three-letter code, so the
+ * crest is what makes the chip announce a franchise at all, and it tells two
+ * colliding codes apart.
+ */
+function PickerChip({
+  member,
+  isViewer,
+  outcome,
+  side,
+  testId,
+}: {
+  member: PickerColumn;
+  isViewer: boolean;
+  outcome: PickOutcome | null;
+  side?: BookSideKey;
+  testId: string;
+}) {
+  const state = CHIP_STATES[outcome ?? "ungraded"];
+  const border = isViewer ? "border-accent-gold/45" : "";
+  const code = isViewer ? "text-accent-gold" : state.code;
+
+  return (
+    <span
+      data-testid={testId}
+      data-member-id={member.memberId}
+      data-side={side}
+      data-outcome={outcome ?? undefined}
+      className={`inline-flex items-center gap-[5px] rounded-full border py-[3px] pl-[3px] pr-2 ${state.skin} ${border}`}
+    >
+      <FranchiseLogo
+        slug={member.franchiseSlug}
+        name={member.franchiseName}
+        abbreviation={member.abbreviation}
+        brandingColor={member.color ?? undefined}
+        avatarUrl={member.avatarUrl ?? undefined}
+        size={20}
+      />
+      <span
+        className={`font-mono text-[10px] font-bold tracking-[.04em] ${code}`}
+      >
+        {isViewer ? "YOU" : member.abbreviation}
+      </span>
+      {state.glyph && (
+        <span
+          className={`text-[10px] font-semibold ${
+            outcome === "push" ? "tracking-[.08em] text-text-tertiary" : state.code
+          }`}
+        >
+          {state.glyph}
+        </span>
+      )}
+    </span>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Season ledger
+// ---------------------------------------------------------------------------
+
+// One row shape at both widths. Under `sm` streak and ATS fold onto a second
+// line inside the picker cell rather than into two more columns; there is no
+// second component and no horizontal scroll.
+const LEDGER_GRID =
+  "grid grid-cols-[24px_32px_minmax(0,1fr)_72px] items-center gap-3 sm:grid-cols-[28px_36px_minmax(0,1fr)_64px_72px_78px]";
+
+function SeasonLedger({
   rows,
+  divisions,
   viewerSlug,
 }: {
   rows: AtsLeaderboardRow[];
+  divisions: PickemsDivision[];
   viewerSlug: string | null;
 }) {
-  if (rows.length === 0) {
-    return (
-      <section>
-        <p className="text-kicker mb-3">Season · Against the Spread</p>
-        <div className="card-surface p-6">
-          <p className="text-body-sm text-text-secondary">
-            No graded picks yet. The ledger opens once a week finishes.
-          </p>
-        </div>
-      </section>
-    );
-  }
+  const anyGraded = rows.some((row) => row.rank !== null);
 
   return (
     <section>
       <p className="text-kicker mb-3">Season · Against the Spread</p>
-      <div className="card-surface overflow-hidden p-0">
-        {/* Desktop: fixed-column grid rows, matching the design's 28/36/1fr/64/72/72 layout. */}
-        <div className="hidden md:block">
-          <div className="grid grid-cols-[28px_36px_1fr_64px_72px_72px] items-center gap-3 border-b border-divider px-4 py-2.5">
+
+      {!anyGraded ? (
+        <div className="card-surface p-6">
+          <p className="text-body-sm text-text-secondary">
+            {BOOK_COPY.ledgerEmpty}
+          </p>
+        </div>
+      ) : (
+        <div className="card-surface overflow-hidden p-0">
+          {divisions.length > 1 && <DivisionRace divisions={divisions} />}
+
+          <div
+            className={`${LEDGER_GRID} border-b border-divider px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[.18em] text-text-muted`}
+          >
+            <span className="text-center">#</span>
             <span />
-            <span />
-            <span className="text-[11px] font-semibold uppercase tracking-[.18em] text-text-muted">
-              Picker
-            </span>
-            <span className="text-[11px] font-semibold uppercase tracking-[.18em] text-text-muted">
-              Streak
-            </span>
-            <span className="text-right text-[11px] font-semibold uppercase tracking-[.18em] text-text-muted">
-              Units
-            </span>
-            <span className="text-right text-[11px] font-semibold uppercase tracking-[.18em] text-text-muted">
-              ATS
-            </span>
+            <span>Picker</span>
+            <span className="hidden sm:block">Streak</span>
+            <span className="text-right">Units</span>
+            <span className="hidden text-right sm:block">ATS</span>
           </div>
+
           <ul className="list-none">
             {rows.map((row) => (
-              <LeaderboardDesktopRow
+              <LedgerRow
                 key={row.memberId}
                 row={row}
                 isYou={row.franchiseSlug === viewerSlug}
               />
             ))}
           </ul>
-        </div>
 
-        {/* Mobile: cards, per CLAUDE.md's "cards over tables" rule at >3-4 columns. */}
-        <ul className="flex list-none flex-col md:hidden">
-          {rows.map((row) => (
-            <LeaderboardMobileCard
-              key={row.memberId}
-              row={row}
-              isYou={row.franchiseSlug === viewerSlug}
-            />
-          ))}
-        </ul>
-      </div>
+          <p className="border-t border-divider px-4 py-2.5 text-[11px] text-text-tertiary">
+            {BOOK_COPY.unitsNote}
+          </p>
+        </div>
+      )}
     </section>
   );
 }
 
-function LeaderboardDesktopRow({
-  row,
-  isYou,
-}: {
-  row: AtsLeaderboardRow;
-  isYou: boolean;
-}) {
+/**
+ * The division bragging-rights strip: each division's leader and its combined
+ * figures. The figures cover ranked members only, so the strip states its own
+ * denominator whenever somebody in the division has nothing graded rather than
+ * implying the whole division is in the number.
+ */
+function DivisionRace({ divisions }: { divisions: PickemsDivision[] }) {
+  return (
+    <div className="border-b border-divider bg-white/[.03] p-4">
+      <p className="text-kicker mb-3 text-accent-gold">
+        {BOOK_COPY.divisionRace}
+      </p>
+      <div className="grid grid-cols-2 gap-4 lg:gap-8">
+        {divisions.map((division) => (
+          <div key={division.name} className="flex min-w-0 flex-col gap-2">
+            <span className="text-kicker">{division.name}</span>
+            {division.leader ? (
+              <div className="flex min-w-0 items-center gap-2">
+                <FranchiseLogo
+                  slug={division.leader.franchiseSlug}
+                  name={division.leader.franchiseName}
+                  abbreviation={division.leader.abbreviation}
+                  brandingColor={division.leader.color ?? undefined}
+                  avatarUrl={division.leader.avatarUrl ?? undefined}
+                  size={20}
+                  decorative
+                />
+                <span className="min-w-0 truncate text-[13px] font-semibold text-text-primary">
+                  {division.leader.franchiseName}
+                </span>
+              </div>
+            ) : (
+              <span className="text-[13px] text-text-tertiary">
+                {BOOK_COPY.noPicksGraded}
+              </span>
+            )}
+            {division.record !== null && division.units !== null && (
+              <span className="text-[11px] text-text-tertiary">
+                Combined{" "}
+                <span className="font-mono font-bold tabular-nums text-text-secondary">
+                  {division.record}
+                </span>{" "}
+                ·{" "}
+                <span
+                  className={`font-mono font-bold tabular-nums ${
+                    division.units >= 0 ? "text-accent-green" : "text-accent-warm"
+                  }`}
+                >
+                  {division.units >= 0 ? "+" : ""}
+                  {division.units.toFixed(2)}
+                </span>{" "}
+                units
+                {division.rankedCount < division.memberCount && (
+                  <>
+                    {" · "}
+                    <span className="font-mono tabular-nums">
+                      {division.rankedCount}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-mono tabular-nums">
+                      {division.memberCount}
+                    </span>{" "}
+                    picking
+                  </>
+                )}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function LedgerRow({ row, isYou }: { row: AtsLeaderboardRow; isYou: boolean }) {
+  const ranked = row.rank !== null;
   const rowBg = row.isLeader
     ? "bg-accent-gold-light"
     : isYou
@@ -368,32 +837,43 @@ function LeaderboardDesktopRow({
       ? "text-accent-warm"
       : "text-text-tertiary";
   const nameWeight = row.isLeader || isYou ? "font-bold" : "font-medium";
-  const nameColor = row.isLeader
-    ? "text-text-primary"
-    : row.isLast
-      ? "text-accent-warm"
-      : "text-text-secondary";
+  const nameColor = !ranked
+    ? "text-text-tertiary"
+    : row.isLeader
+      ? "text-text-primary"
+      : row.isLast
+        ? "text-accent-warm"
+        : "text-text-secondary";
   const streakColor =
     row.streakType === "W" ? "text-accent-green" : "text-accent-warm";
-  const positiveUnits = row.units >= 0;
+  const positiveUnits = (row.units ?? 0) >= 0;
   const unitsColor = positiveUnits ? "text-accent-green" : "text-accent-warm";
-  const recordColor = row.isLeader ? "text-text-primary" : "text-text-tertiary";
 
   return (
     <li
-      className={`grid grid-cols-[28px_36px_1fr_64px_72px_72px] items-center gap-3 border-t border-divider px-4 py-2.5 ${rowBg}`}
+      data-testid="ledger-row"
+      data-franchise-slug={row.franchiseSlug}
+      className={`${LEDGER_GRID} border-t border-divider px-4 py-2.5 ${rowBg}`}
     >
       <span
-        className={`text-center font-mono text-body-sm font-bold tabular-nums ${rankColor}`}
+        className={`text-center font-mono text-body-sm font-bold tabular-nums ${
+          ranked ? rankColor : "text-text-muted"
+        }`}
       >
-        {row.rank}
+        {/* Decorative en dash: the row's own "no picks graded" says the rest. */}
+        {ranked ? row.rank : "–"}
       </span>
       {/* ONE link over crest and name, not two to the same place: keyboard and
           screen-reader users get a single stop instead of a duplicate. The
-          crest stays decorative because the name is inside the same link.
-          `contents` lets the anchor hand its two children straight to the
-          grid, the way the draft board's PlayerLink already does. */}
-      <TeamLink slug={row.franchiseSlug} className="group contents">
+          crest stays decorative and the link carries an explicit name, so the
+          record folded under the name at phone width is read as content and
+          not as part of the link's label. `contents` lets the anchor hand its
+          two children straight to the grid. */}
+      <TeamLink
+        slug={row.franchiseSlug}
+        aria-label={row.franchiseName}
+        className="group contents"
+      >
         <FranchiseLogo
           slug={row.franchiseSlug}
           name={row.franchiseName}
@@ -403,84 +883,11 @@ function LeaderboardDesktopRow({
           size={28}
           decorative
         />
-        <span
-          className={`min-w-0 truncate text-body-sm transition-colors group-hover:text-accent-gold hover:text-accent-gold ${nameWeight} ${nameColor}`}
-        >
-          {row.franchiseName}
-          {isYou && (
-            <span className="ml-2 text-[10px] font-semibold uppercase tracking-[.1em] text-accent-gold">
-              You
-            </span>
-          )}
-        </span>
-      </TeamLink>
-      <span
-        className={`font-mono text-body-sm font-semibold tabular-nums ${streakColor}`}
-      >
-        {row.streakLabel ?? "—"}
-      </span>
-      <span
-        className={`text-right font-mono text-body-sm font-semibold tabular-nums ${unitsColor}`}
-      >
-        {positiveUnits ? "+" : ""}
-        {row.units.toFixed(2)}
-      </span>
-      <span
-        className={`text-right font-mono text-body-sm font-bold tabular-nums ${recordColor}`}
-      >
-        {row.record}
-      </span>
-    </li>
-  );
-}
-
-function LeaderboardMobileCard({
-  row,
-  isYou,
-}: {
-  row: AtsLeaderboardRow;
-  isYou: boolean;
-}) {
-  const cardBg = row.isLeader
-    ? "bg-accent-gold-light"
-    : isYou
-      ? "bg-white/[.03]"
-      : "";
-  const streakColor =
-    row.streakType === "W" ? "text-accent-green" : "text-accent-warm";
-  const positiveUnits = row.units >= 0;
-  const unitsColor = positiveUnits ? "text-accent-green" : "text-accent-warm";
-
-  return (
-    <li
-      className={`flex items-center gap-3 border-t border-divider px-4 py-3 first:border-t-0 ${cardBg}`}
-    >
-      <span
-        className={`w-5 shrink-0 text-center font-mono text-body-sm font-bold tabular-nums ${
-          row.isLeader ? "text-accent-gold" : row.isLast ? "text-accent-warm" : "text-text-tertiary"
-        }`}
-      >
-        {row.rank}
-      </span>
-      <span className="min-w-0 flex-1">
-        {/* Decorative for the same reason as the desktop row: the name is
-            inside the same link. The record line stays outside it, so the
-            link announces an identity and not a stat line. */}
-        <TeamLink
-          slug={row.franchiseSlug}
-          className="flex min-w-0 items-center gap-3 text-text-primary"
-        >
-          <FranchiseLogo
-            slug={row.franchiseSlug}
-            name={row.franchiseName}
-            abbreviation={row.franchiseAbbreviation ?? undefined}
-            brandingColor={row.franchiseColor ?? undefined}
-            avatarUrl={row.franchiseAvatarUrl ?? undefined}
-            size={28}
-            decorative
-          />
-          <span className="flex min-w-0 items-center gap-2">
-            <span className="truncate text-body-sm font-semibold">
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="flex min-w-0 items-baseline gap-2">
+            <span
+              className={`min-w-0 truncate text-body-sm transition-colors group-hover:text-accent-gold ${nameWeight} ${nameColor}`}
+            >
               {row.franchiseName}
             </span>
             {isYou && (
@@ -488,353 +895,70 @@ function LeaderboardMobileCard({
                 You
               </span>
             )}
-          </span>
-        </TeamLink>
-        <span className="mt-0.5 flex items-center gap-2 text-[11px]">
-          <span className="font-mono font-bold tabular-nums text-text-tertiary">
-            {row.record}
-          </span>
-          <span className={`font-mono font-semibold tabular-nums ${streakColor}`}>
-            {row.streakLabel ?? "—"}
-          </span>
-        </span>
-      </span>
-      <span
-        className={`shrink-0 font-mono text-body-sm font-semibold tabular-nums ${unitsColor}`}
-      >
-        {positiveUnits ? "+" : ""}
-        {row.units.toFixed(2)}
-      </span>
-    </li>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Pick'ems grid
-// ---------------------------------------------------------------------------
-
-// Desktop shows all twelve columns in a scrollable matrix; the compact variant
-// is the one-division mobile view, sized so a six-team division fits a phone
-// without asking for a horizontal drag.
-const COLUMN_WIDTH = 64;
-const LABEL_WIDTH = 150;
-const COMPACT_COLUMN_WIDTH = 40;
-const COMPACT_LABEL_WIDTH = 92;
-
-function PickemsGrid({
-  grid,
-  week,
-  viewerSlug,
-  ownPicks,
-}: {
-  grid: PickemsGridData;
-  week: number;
-  viewerSlug: string | null;
-  ownPicks: Map<number, MemberBookPick>;
-}) {
-  const viewerDivision = useMemo(
-    () =>
-      grid.divisions.find((d) =>
-        d.pickers.some((p) => p.franchiseSlug === viewerSlug),
-      )?.name ?? null,
-    [grid.divisions, viewerSlug],
-  );
-
-  // Null until the viewer picks one: that way the default follows the session
-  // as soon as it resolves, without an effect writing state on every render.
-  const [chosenDivision, setChosenDivision] = useState<string | null>(null);
-  const activeDivisionName =
-    chosenDivision ?? viewerDivision ?? grid.divisions[0]?.name ?? null;
-  const activeDivision =
-    grid.divisions.find((d) => d.name === activeDivisionName) ?? null;
-
-  if (grid.rows.length === 0 || grid.divisions.length === 0) return null;
-
-  return (
-    <section>
-      <p className="text-kicker mb-3">
-        Week <span className="font-mono tabular-nums">{week}</span> ·{" "}
-        {BOOK_COPY.pickemsGridKicker}
-      </p>
-
-      {/* Deep-dive exception to the mobile cards-over-tables rule: this is a
-          wide matrix, not a list. Desktop scrolls it in its own container;
-          narrow viewports show one division at a time instead. */}
-      <div className="card-surface p-0">
-        <div className="hidden overflow-x-auto md:block">
-          <PickemsTable
-            divisions={grid.divisions}
-            rows={grid.rows}
-            viewerSlug={viewerSlug}
-            ownPicks={ownPicks}
-            showDivisionHeader
-          />
-        </div>
-
-        <div className="md:hidden">
-          <div className="border-b border-divider px-4 py-3">
-            <label
-              className="text-[11px] font-semibold uppercase tracking-[.18em] text-text-tertiary"
-              htmlFor="pickems-division"
-            >
-              Division
-            </label>
-            <select
-              id="pickems-division"
-              value={activeDivisionName ?? ""}
-              onChange={(e) => setChosenDivision(e.target.value)}
-              className="mt-1.5 w-full rounded-[10px] border border-border-strong bg-surface px-2.5 py-2 text-body-sm text-text-primary focus:border-accent-gold focus:outline-none"
-            >
-              {grid.divisions.map((d) => (
-                <option key={d.name} value={d.name} className="bg-canvas">
-                  {d.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {activeDivision && (
-            <div className="overflow-x-auto">
-              <PickemsTable
-                divisions={[activeDivision]}
-                rows={grid.rows}
-                viewerSlug={viewerSlug}
-                ownPicks={ownPicks}
-                showDivisionHeader={false}
-                compact
-              />
-            </div>
-          )}
-        </div>
-
-        <p className="border-t border-divider px-4 py-2.5 text-[11px] text-text-tertiary">
-          {BOOK_COPY.pickemsLegend}
-        </p>
-        <p className="border-t border-divider px-4 py-2.5 text-[11px] text-text-tertiary">
-          {BOOK_COPY.pickemsFootnote}
-        </p>
-      </div>
-    </section>
-  );
-}
-
-function PickemsTable({
-  divisions,
-  rows,
-  viewerSlug,
-  ownPicks,
-  showDivisionHeader,
-  compact = false,
-}: {
-  divisions: PickemsDivision[];
-  rows: PickemsRow[];
-  viewerSlug: string | null;
-  ownPicks: Map<number, MemberBookPick>;
-  showDivisionHeader: boolean;
-  compact?: boolean;
-}) {
-  const pickers = divisions.flatMap((d) => d.pickers);
-  const labelWidth = compact ? COMPACT_LABEL_WIDTH : LABEL_WIDTH;
-  const columnWidth = compact ? COMPACT_COLUMN_WIDTH : COLUMN_WIDTH;
-  const gap = compact ? 4 : 8;
-  const gapClass = compact ? "gap-1" : "gap-2";
-  const padClass = compact ? "px-2" : "px-4";
-  const template = `minmax(${labelWidth}px,1fr) repeat(${pickers.length}, ${columnWidth}px)`;
-  const minWidth = `${labelWidth + pickers.length * (columnWidth + gap)}px`;
-
-  return (
-    <div style={{ minWidth }}>
-      {showDivisionHeader && (
-        <div
-          className={`grid items-end ${gapClass} ${padClass} pt-3`}
-          style={{ gridTemplateColumns: template }}
-        >
-          <span />
-          {divisions.map((division) => (
-            <span
-              key={division.name}
-              className="truncate text-center text-[10px] font-semibold uppercase tracking-[.14em] text-text-tertiary"
-              style={{ gridColumn: `span ${division.pickers.length}` }}
-            >
-              {division.name}
-            </span>
-          ))}
-        </div>
-      )}
-
-      <div
-        className={`grid items-end ${gapClass} border-b border-divider ${padClass} pb-2.5 pt-2`}
-        style={{ gridTemplateColumns: template }}
-      >
-        <span className="sticky left-0 z-[1] bg-canvas text-[11px] font-semibold uppercase tracking-[.18em] text-text-muted">
-          Game
-        </span>
-        {pickers.map((picker) => (
-          <PickerHeader
-            key={picker.memberId}
-            picker={picker}
-            isYou={picker.franchiseSlug === viewerSlug}
-          />
-        ))}
-      </div>
-
-      <ul className="list-none">
-        {rows.map((row) => (
-          <li
-            key={row.matchupId}
-            className={`grid items-center ${gapClass} border-t border-divider ${padClass} py-2`}
-            style={{ gridTemplateColumns: template }}
-          >
-            {/* Sticky so the game a cell belongs to stays readable while the
-                matrix scrolls sideways. */}
-            <span className="sticky left-0 z-[1] flex min-w-0 items-center gap-2 bg-canvas">
-              <span className="truncate font-mono text-[11px] font-bold tabular-nums text-text-primary">
-                {row.label}
+            {row.divisionTag && (
+              <span className="hidden shrink-0 text-[10px] font-semibold uppercase tracking-[.1em] text-text-tertiary sm:inline">
+                {row.divisionTag}
               </span>
-              <span className="shrink-0 font-mono text-[11px] tabular-nums text-text-tertiary">
-                {row.spreadLabel}
+            )}
+          </span>
+          {/* Below `sm` the division tag, the ATS record and the streak ride
+              one meta line instead of taking three more columns off a 390px
+              row. Above it they are back in their own columns. */}
+          <span className="flex items-baseline gap-2.5 text-[11px] sm:hidden">
+            {row.divisionTag && (
+              <span className="text-[10px] font-semibold uppercase tracking-[.1em] text-text-tertiary">
+                {row.divisionTag}
               </span>
-              {row.status === "live" && (
-                <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[.1em] text-accent-green">
-                  Live
+            )}
+            {ranked && (
+              <>
+                <span className="font-mono font-bold tabular-nums text-text-tertiary">
+                  {row.record}
                 </span>
-              )}
-            </span>
-            {pickers.map((picker) => (
-              <GridCell
-                key={picker.memberId}
-                memberId={picker.memberId}
-                cell={row.cells[String(picker.memberId)] ?? null}
-                row={row}
-                overlay={
-                  picker.franchiseSlug === viewerSlug
-                    ? (ownPicks.get(row.matchupId) ?? null)
-                    : null
-                }
-              />
-            ))}
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function PickerHeader({
-  picker,
-  isYou,
-}: {
-  picker: PickerColumn;
-  isYou: boolean;
-}) {
-  return (
-    <span
-      className="flex flex-col items-center gap-1"
-      data-testid="picker-header"
-      data-picker-slug={picker.franchiseSlug}
-    >
-      {/*
-        Deliberately NOT decorative, unlike every other crest in The Book. The
-        only visible label in this column is a three-letter code or the word
-        "YOU"; the franchise name lives in a `title` that touch users never see.
-        Passing the real name as alt is what makes the column announce a
-        franchise at all, and it distinguishes two franchises whose codes
-        collide (see #243) without waiting on that fix.
-
-        24px is both the floor and the ceiling: below 28px the monogram is
-        pinned at 9px either way (which is what the old chip used), and the
-        compact mobile column is only 40px wide.
-      */}
-      <TeamLink
-        slug={picker.franchiseSlug}
-        className="group flex flex-col items-center gap-1"
-      >
-        <FranchiseLogo
-          slug={picker.franchiseSlug}
-          name={picker.franchiseName}
-          abbreviation={picker.abbreviation}
-          brandingColor={picker.color ?? undefined}
-          avatarUrl={picker.avatarUrl ?? undefined}
-          size={24}
-        />
-        <span
-          className={`max-w-full truncate text-[10px] font-semibold transition-colors group-hover:text-accent-gold ${
-            isYou ? "text-accent-gold" : "text-text-tertiary"
-          }`}
-          title={`${picker.franchiseName} (${picker.displayName})`}
-        >
-          {isYou ? "YOU" : picker.abbreviation}
+                {row.streakLabel && (
+                  <span
+                    className={`font-mono font-semibold tabular-nums ${streakColor}`}
+                  >
+                    {row.streakLabel}
+                  </span>
+                )}
+              </>
+            )}
+          </span>
         </span>
       </TeamLink>
-      <span className="font-mono text-[10px] tabular-nums text-text-tertiary">
-        {picker.record || "—"}
-      </span>
-    </span>
-  );
-}
 
-/**
- * One member's cell. The server never ships another member's open pick, so an
- * unrevealed cell can only ever be filled from the viewer's OWN /api/book/picks
- * overlay. Outcomes are final-only and always carry a glyph or word, never
- * color alone.
- */
-function GridCell({
-  memberId,
-  cell,
-  row,
-  overlay,
-}: {
-  memberId: number;
-  cell: PickemsCell | null;
-  row: PickemsRow;
-  overlay: MemberBookPick | null;
-}) {
-  const revealed = cell?.revealed ?? false;
-  const abbreviation =
-    cell?.abbreviation ??
-    (!revealed && overlay
-      ? overlay.side === "home"
-        ? row.homeAbbreviation
-        : row.awayAbbreviation
-      : null);
-
-  if (!abbreviation) {
-    return (
-      <span
-        data-testid="pickems-cell"
-        data-member-id={memberId}
-        data-matchup-id={row.matchupId}
-        className="text-center font-mono text-[11px] font-semibold text-text-muted"
-      >
-        —
-      </span>
-    );
-  }
-
-  let tone = "bg-transparent text-text-tertiary";
-  let suffix = "";
-  if (cell?.outcome === "win") {
-    tone = "bg-accent-green-light text-accent-green";
-    suffix = " ✓";
-  } else if (cell?.outcome === "loss") {
-    tone = "bg-accent-warm-light text-accent-warm";
-    suffix = " ✗";
-  }
-
-  return (
-    <span
-      data-testid="pickems-cell"
-      data-member-id={memberId}
-      data-matchup-id={row.matchupId}
-      className={`rounded-[6px] py-0.5 text-center font-mono text-[11px] font-semibold ${tone}`}
-    >
-      {abbreviation}
-      {suffix}
-      {cell?.outcome === "push" && (
-        <span className="block text-[9px] font-semibold uppercase tracking-[.1em] text-text-tertiary">
-          Push
+      {ranked ? (
+        <>
+          <span
+            className={`hidden font-mono text-body-sm font-semibold tabular-nums sm:block ${streakColor}`}
+          >
+            {row.streakLabel ?? "—"}
+          </span>
+          <span
+            className={`text-right font-mono text-body-sm font-semibold tabular-nums ${unitsColor}`}
+          >
+            {positiveUnits ? "+" : ""}
+            {(row.units ?? 0).toFixed(2)}
+          </span>
+          <span
+            className={`hidden text-right font-mono text-body-sm font-bold tabular-nums sm:block ${
+              row.isLeader ? "text-text-primary" : "text-text-tertiary"
+            }`}
+          >
+            {row.record}
+          </span>
+        </>
+      ) : (
+        // No record, no units, no streak: a member with nothing graded has
+        // nothing to show, and inventing a 0-0 would be a fabricated claim.
+        <span
+          style={{ gridColumn: "4 / -1" }}
+          className="text-right text-[11px] text-text-tertiary"
+        >
+          {BOOK_COPY.noPicksGraded}
         </span>
       )}
-    </span>
+    </li>
   );
 }

@@ -286,6 +286,8 @@ export const BOOK_COPY = {
   trackingSoon:
     "Nothing to pick yet. The pick'ems sheet opens the moment the week's lines post.",
   pickemsSignedOut: "Claim your team to get on the sheet.",
+  /** The leading phrase of the line above, rendered as the link inside it. */
+  pickemsSignedOutLink: "Claim your team",
   pickemsFootnote:
     "Picks reveal at kickoff and grade when the game goes final. You always see your own slip; nobody sees an open pick but its owner.",
   pickemsNoGames:
