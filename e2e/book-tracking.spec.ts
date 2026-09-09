@@ -13,10 +13,16 @@ import { membersTableExists, memberFixtureScope } from "./helpers/seed-members";
 // run. Each assertion that matters is checked in the DATABASE as well as on
 // screen.
 //
+// The tab is game-first: one slate card per game, both sides as the pick
+// buttons, and the members who took each side as a rail of crest chips under
+// that side once the game is off the board. The rail is the anti-tailing rule's
+// sharpest edge, so the privacy test below asserts on the shipped HTML and not
+// only on what the DOM happens to be showing.
+//
 // The league's live season has not kicked off as of this test (every matchup is
-// still "scheduled"), so nothing is graded and the ATS leaderboard's honest
-// empty state is what real data produces. That empty state is asserted rather
-// than mocked around.
+// still "scheduled"), so nothing is graded and the ledger's honest empty state
+// is what real data produces. That empty state is asserted rather than mocked
+// around, and it is also why no test here expects a revealed picker rail.
 // ============================================================================
 
 // Scope name deliberately NOT nested under "book": the fixture scopes filter
@@ -122,17 +128,15 @@ async function openTrackingTab(page: Page) {
   await expect(trackingPanel(page)).toBeVisible();
 }
 
-/**
- * The fixture member's cell on one game. The desktop grid and the mobile
- * (one-division) grid both live in the DOM, so this takes the first match: on
- * the default desktop viewport that is the visible desktop grid.
- */
-function fixtureCell(page: Page, matchupId: number) {
-  return page
-    .locator(
-      `[data-testid="pickems-cell"][data-member-id="${seededMemberId}"][data-matchup-id="${matchupId}"]`,
-    )
-    .first();
+function slateCards(page: Page) {
+  return trackingPanel(page).locator('[data-testid="slate-card"]');
+}
+
+/** The card for one game, which is the unit of this tab. */
+function slateCard(page: Page, matchupId: number) {
+  return trackingPanel(page).locator(
+    `[data-testid="slate-card"][data-matchup-id="${matchupId}"]`,
+  );
 }
 
 let pickedLabel: string | null = null;
@@ -142,14 +146,15 @@ test.describe("Tracking tab pick'ems", () => {
     await page.goto("/book");
     await openTrackingTab(page);
 
-    // The real season has no completed week yet, so the ATS leaderboard has
-    // nothing to rank; this asserts the real (non-fabricated) empty state.
+    // The real season has no completed week yet, so the ledger has nothing to
+    // rank; this asserts the real (non-fabricated) empty state.
     await expect(
       page.getByText("No graded picks yet. The ledger opens once a week finishes."),
     ).toBeVisible();
 
-    // The tab still renders, because picking is what it is for now.
-    await expect(trackingPanel(page).getByText("Your Picks")).toBeVisible();
+    // The slate still renders, because picking is what the tab is for now.
+    await expect(trackingPanel(page).getByText("The Slate")).toBeVisible();
+    expect(await slateCards(page).count()).toBeGreaterThan(0);
   });
 
   test("tells a signed-out visitor to claim a team instead of showing controls", async ({
@@ -158,15 +163,26 @@ test.describe("Tracking tab pick'ems", () => {
     await page.goto("/book");
     await openTrackingTab(page);
 
+    // The words themselves are the link now, not a repeated sentence after it.
+    const claim = trackingPanel(page).getByRole("link", {
+      name: "Claim your team",
+    });
+    await expect(claim).toBeVisible();
+    await expect(claim).toHaveAttribute("href", "/claim");
     await expect(
       trackingPanel(page).getByText("Claim your team to get on the sheet."),
     ).toBeVisible();
+
     await expect(
       trackingPanel(page).locator('button[aria-label^="Pick "]'),
     ).toHaveCount(0);
+    // No lock control either: there is no slip to lock.
+    await expect(
+      trackingPanel(page).getByRole("button", { name: /lock in picks/i }),
+    ).toHaveCount(0);
   });
 
-  test("books a pick from the Tracking tab and writes it to book_picks", async ({
+  test("books a pick from a slate card and writes it to book_picks", async ({
     page,
   }) => {
     await signIn(page, fx.memberClaimCode);
@@ -175,13 +191,12 @@ test.describe("Tracking tab pick'ems", () => {
 
     const button = trackingPanel(page).locator('button[aria-label^="Pick "]').first();
     await expect(button).toBeVisible();
-    // The aria-label, not the text: the picked state appends a "✓" glyph, so
-    // the label is the stable identity of the side that was picked.
+    // The aria-label, not the text: it is the stable identity of the side.
     pickedLabel = (await button.getAttribute("aria-label"))!;
     await button.click();
     await expect(button).toHaveAttribute("aria-pressed", "true");
-    // The written label beside the row, not just the gold tint.
-    await expect(trackingPanel(page).getByText("✓ Your pick").first()).toBeVisible();
+    // The written label on the card, not just the gold tint on the row.
+    await expect(trackingPanel(page).getByText("Your pick ·").first()).toBeVisible();
 
     // The database is the proof, not the optimistic button state.
     await expect
@@ -225,7 +240,7 @@ test.describe("Tracking tab pick'ems", () => {
       .toBe(0);
   });
 
-  test("groups picker columns by division and keeps open picks private", async ({
+  test("counts an open pick without revealing a single side of it", async ({
     page,
   }) => {
     await signIn(page, fx.memberClaimCode);
@@ -233,84 +248,89 @@ test.describe("Tracking tab pick'ems", () => {
     await openTrackingTab(page);
 
     const button = trackingPanel(page).locator('button[aria-label^="Pick "]').first();
-    const pickedAbbreviation = (await button.innerText()).trim().split(/\s+/)[0];
+    const pickedTeam = (await button.getAttribute("aria-label"))!.replace(
+      /^Pick /,
+      "",
+    );
     await button.click();
     await expect
       .poll(async () => (await scopedPickRows()).length, { timeout: 10000 })
       .toBe(1);
     const [row] = await scopedPickRows();
+    const card = slateCard(page, row.matchup_id);
 
-    // The viewer's own column shows the pick (overlaid client-side), which is
-    // exactly the half of the privacy rule that must still work.
-    await expect(fixtureCell(page, row.matchup_id)).not.toHaveText("—", {
-      timeout: 10000,
-    });
+    // The viewer's own pick is visible to the viewer: that is the half of the
+    // privacy rule that must still work.
+    await expect(card.getByText("Your pick ·")).toBeVisible({ timeout: 10000 });
 
-    // A column header per member, clustered under a division label.
-    await expect(trackingPanel(page).getByText("YOU").first()).toBeVisible();
+    // Nobody's side is on an open card, not even the viewer's own, in the rail:
+    // the rail does not exist before kickoff.
+    await expect(card.locator('[data-testid="rail-chip"]')).toHaveCount(0);
+    // The card counts the picks that ARE in, which is all an open game may say.
+    await expect(card.getByText(/of \d+ in · reveals at kickoff/)).toBeVisible();
 
-    // Signed out, the very same cell is empty: the payload never carried it.
+    // Signed out, the same card carries no trace of the pick at all.
     await page.context().clearCookies();
     await page.goto("/book");
     await openTrackingTab(page);
-    await expect(fixtureCell(page, row.matchup_id)).toHaveText("—", {
-      timeout: 10000,
-    });
+    await expect(slateCard(page, row.matchup_id)).toBeVisible();
+    await expect(
+      slateCard(page, row.matchup_id).getByText("Your pick ·"),
+    ).toHaveCount(0);
 
-    // The DOM assertion above could in principle pass while the pick still rode
-    // along in the payload (hidden by client code). Assert on the RAW RESPONSE
-    // BODY instead: every one of this member's cells in the shipped HTML reads
-    // as empty, and the picked side's abbreviation is nowhere among them.
+    // The DOM assertions above could in principle pass while the pick still
+    // rode along in the payload (hidden by client code). Assert on the RAW
+    // RESPONSE BODY instead: the shipped card for this game carries no rail
+    // chip, no side attribute, and no mention of the team that was picked.
     const res = await page.request.get("/book");
     expect(res.ok()).toBeTruthy();
     const body = await res.text();
-    const cellPattern = new RegExp(
-      `data-member-id="${seededMemberId}"[^>]*data-matchup-id="\\d+"[^>]*>([^<]*)<`,
-      "g",
-    );
-    const shipped = [...body.matchAll(cellPattern)].map((m) => m[1].trim());
-    expect(shipped.length).toBeGreaterThan(0);
-    for (const cell of shipped) {
-      expect(cell).toBe("—");
-      expect(cell).not.toContain(pickedAbbreviation);
-    }
+    const cardHtml = openSlateCardHtml(body, row.matchup_id);
+    expect(cardHtml).not.toBeNull();
+    expect(cardHtml!).not.toContain("rail-chip");
+    expect(cardHtml!).not.toContain("data-side");
+    expect(cardHtml!).not.toContain(`data-member-id="${seededMemberId}"`);
+    // The whole shipped page, not just this card: an open pick's side must not
+    // appear anywhere in it.
+    expect(body).not.toContain(`Your pick · ${pickedTeam}`);
   });
 
-  // Issue #255: the picker column identifies a franchise by crest, not by a
-  // bare letter code. The code is demoted to a compact secondary label, so it
-  // must still be on screen: nothing here may be image-only.
-  test("identifies each picker column by a crest, without dropping its text", async ({
+  // Issue #255: a picker is identified by a crest, not by a bare letter code.
+  // The code is demoted to a compact secondary label, so it must still be on
+  // screen: nothing here may be image-only.
+  test("identifies each picker chip by a crest, without dropping its text", async ({
     page,
   }) => {
     await page.goto("/book");
     await openTrackingTab(page);
 
-    const headers = trackingPanel(page).locator('[data-testid="picker-header"]');
-    expect(await headers.count()).toBeGreaterThan(0);
+    // The fixture member has no picks on most of the week, so they are in the
+    // Week Pulse's "still ghosting" row, which is the tab's other chip surface
+    // and the only one that renders before any game has kicked off.
+    const chips = trackingPanel(page).locator('[data-testid="ghost-chip"]');
+    expect(await chips.count()).toBeGreaterThan(0);
+
+    const fixtureChip = trackingPanel(page)
+      .locator(`[data-testid="ghost-chip"][data-member-id="${seededMemberId}"]`)
+      .first();
+    await expect(fixtureChip).toBeVisible();
 
     // The fixture franchise has no franchise_seasons row, so avatar_url IS
     // NULL for it: this is the monogram fallback path, and it must render a
     // styled monogram with NO <img> at all (a broken-image glyph would be the
     // regression this pins).
-    const fixtureHeader = trackingPanel(page)
-      .locator(`[data-picker-slug="${fx.franchiseSlug}"]`)
-      .first();
-    await expect(fixtureHeader).toBeAttached();
-    expect(await fixtureHeader.locator("img").count()).toBe(0);
+    expect(await fixtureChip.locator("img").count()).toBe(0);
     // FranchiseLogo's monogram is the first two characters of the abbreviation,
     // which the fixture seeds as "E2".
-    await expect(fixtureHeader).toContainText("E2");
-    // The visible compact label and the season record survive the swap.
-    const label = fixtureHeader.locator("span[title]");
-    await expect(label).toHaveAttribute("title", new RegExp(fx.franchiseName));
-    await expect(label).toHaveText(/\S/);
-    // #259: the monogram path must announce the franchise, not just paint initials.
+    await expect(fixtureChip).toContainText("E2");
+    // #259: the monogram path must announce the franchise, not just paint
+    // initials. The chip is not a link, so this crest IS the accessible name.
     await expect(
-      fixtureHeader.getByRole("img", { name: fx.franchiseName }),
+      fixtureChip.getByRole("img", { name: fx.franchiseName }),
     ).toBeVisible();
 
     // At least one real franchise carries a synced crest for this season; that
-    // header must render a real <img> with a NON-EMPTY alt, which is what fails
+    // chip must render a real <img> with a NON-EMPTY alt, which is what fails
     // if the deliberate non-decorative decision here is ever reverted.
     const sql = getSql();
     const withAvatar = (await sql`
@@ -319,45 +339,60 @@ test.describe("Tracking tab pick'ems", () => {
       JOIN "franchise_seasons" fs ON fs."franchise_id" = m."franchise_id"
       WHERE fs."avatar_url" IS NOT NULL`) as { n: number }[];
     if ((withAvatar[0]?.n ?? 0) > 0) {
-      const crest = headers.locator("img").first();
+      const crest = chips.locator("img").first();
       await expect(crest).toHaveAttribute("src", /\S/);
       await expect(crest).toHaveAttribute("alt", /\S/);
     }
   });
 
-  test("keeps the compact phone grid inside the viewport with crested columns", async ({
+  test("renders the same slate on a phone, with no sideways scroll anywhere", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/book");
     await openTrackingTab(page);
 
-    // The grid scrolls sideways inside its own container by design; what must
-    // not happen is the PAGE growing wider than the phone because a 24px crest
-    // landed in a 40px column.
+    // Same component tree as the desktop, not a different one: the cards are
+    // there, and so is the ledger.
+    expect(await slateCards(page).count()).toBeGreaterThan(0);
+    await expect(trackingPanel(page).getByText("The Slate")).toBeVisible();
+
+    // The retired grid's phone affordances must be gone with it.
+    await expect(page.locator("#pickems-division")).toHaveCount(0);
+
+    // Nothing on this tab scrolls sideways any more: not the page, and not a
+    // container inside it either.
     const docWidth = await page.evaluate(
       () => document.documentElement.scrollWidth,
     );
     expect(docWidth).toBeLessThanOrEqual(390);
-  });
 
-  test("swaps the wide grid for a division dropdown on a phone", async ({ page }) => {
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto("/book");
-    await openTrackingTab(page);
+    const overflowing = await page.evaluate(() => {
+      const panel = document.getElementById("book-pane-tracking");
+      if (!panel) return -1;
+      // Only scrollable containers count: a `truncate` span legitimately has
+      // a scrollWidth wider than its box, and that is an ellipsis, not a drag.
+      return [...panel.querySelectorAll("*")].filter((el) => {
+        const overflowX = getComputedStyle(el).overflowX;
+        if (overflowX !== "auto" && overflowX !== "scroll") return false;
+        return el.scrollWidth - el.clientWidth > 1;
+      }).length;
+    });
+    expect(overflowing).toBe(0);
 
-    const select = page.locator("#pickems-division");
-    await expect(select).toBeVisible();
-
-    // Only the selected division's columns render on this viewport, so the
-    // visible cell count is a fraction of the twelve-column desktop grid.
-    const options = await select.locator("option").count();
-    expect(options).toBeGreaterThan(0);
+    // The franchise name on a side row is the payload, so it must survive the
+    // width rather than truncating to an initial.
+    const name = trackingPanel(page)
+      .locator('[data-testid="slate-card"] .truncate')
+      .first();
+    await expect(name).toBeVisible();
+    const box = (await name.boundingBox())!;
+    expect(box.width).toBeGreaterThan(80);
   });
 
   // Last on purpose: this test locks the fixture member's slip for the week,
   // which closes every pick control for the rest of the run.
-  test("closes the control on a locked slip, and the server refuses the pick anyway", async ({
+  test("locks the slip from the Tracking tab, and the server refuses the pick anyway", async ({
     page,
   }) => {
     // Start from an empty slip: an earlier test in this serial file leaves a
@@ -373,11 +408,18 @@ test.describe("Tracking tab pick'ems", () => {
       trackingPanel(page).locator('button[aria-label^="Pick "]').first(),
     ).toBeVisible({ timeout: 10000 });
 
-    const pickRows = trackingPanel(page).locator(
-      'li:has(button[aria-label^="Pick "])',
+    const openCards = trackingPanel(page).locator(
+      '[data-testid="slate-card"]:has(button[aria-label^="Pick "])',
     );
-    const openGames = await pickRows.count();
+    const openGames = await openCards.count();
     expect(openGames).toBeGreaterThan(0);
+
+    // Until every open game has a pick, the lock row says so instead of
+    // offering a button. That is the third state of the one lock control this
+    // tab has, and the tab now has one at all, which it did not before.
+    await expect(
+      trackingPanel(page).getByText(/picks? still open/),
+    ).toBeVisible();
 
     // Capture the REAL server-action request behind the first pick. Once the
     // slip locks the button is gone (which is the point), so replaying this
@@ -387,10 +429,8 @@ test.describe("Tracking tab pick'ems", () => {
       (r) => r.method() === "POST" && r.headers()["next-action"] !== undefined,
     );
 
-    // The slip can only be locked once every open game has a pick, so pick
-    // them all through the Tracking strip itself.
     for (let i = 0; i < openGames; i++) {
-      const row = pickRows.nth(i);
+      const card = openCards.nth(i);
       // Each pick is: click, wait for the action's own follow-up slip refetch
       // (fired through pick-events), then confirm the row in Postgres before
       // touching the next game. Clicking at browser speed instead would race
@@ -400,9 +440,9 @@ test.describe("Tracking tab pick'ems", () => {
         (r) => r.url().includes("/api/book/picks"),
         { timeout: 15000 },
       );
-      await row.locator('button[aria-label^="Pick "]').first().click();
+      await card.locator('button[aria-label^="Pick "]').first().click();
       await refetch;
-      await expect(row.locator('[aria-pressed="true"]')).toHaveCount(1, {
+      await expect(card.locator('[aria-pressed="true"]')).toHaveCount(1, {
         timeout: 10000,
       });
       await expect
@@ -412,20 +452,35 @@ test.describe("Tracking tab pick'ems", () => {
     const captured = await capturedPromise;
     const before = await scopedPickRows();
 
-    // Lock the slip from the Board (the one control that can), then come back.
-    await page.getByRole("tab", { name: "The Board" }).click();
-    await page.getByRole("button", { name: /lock in picks/i }).click();
-    await expect(page.getByText("Picks are in. No takebacks.")).toBeVisible({
-      timeout: 10000,
+    // Lock from THIS tab: the redesign gives the Tracking tab its own lock
+    // control, so a member who never opens the Board can still commit.
+    const lockButton = trackingPanel(page).getByRole("button", {
+      name: /lock in picks/i,
     });
+    await expect(lockButton).toBeVisible({ timeout: 10000 });
+    await lockButton.click();
+    await expect(
+      trackingPanel(page).getByText("Picks are in. No takebacks."),
+    ).toBeVisible({ timeout: 10000 });
 
-    await openTrackingTab(page);
-    // No reload: the pick-events signal closes this tab's controls too.
+    // The pick controls close on this tab...
     await expect(
       trackingPanel(page).locator('button[aria-label^="Pick "]'),
     ).toHaveCount(0, { timeout: 10000 });
-    // The sides still render, just as inert labels carrying the lock state.
-    await expect(trackingPanel(page).getByText("Locked").first()).toBeVisible();
+    // ...the sides still render as inert rows carrying the state...
+    await expect(
+      trackingPanel(page).getByText("Locked in").first(),
+    ).toBeVisible();
+    // ...and the lock can be handed back while the games are still to kick off.
+    await expect(
+      trackingPanel(page).getByRole("button", { name: /unlock open games/i }),
+    ).toBeVisible();
+
+    // ...and the Board agrees, with no reload, through the pick-events signal.
+    await page.getByRole("tab", { name: "The Board" }).click();
+    await expect(page.getByText("Picks are in. No takebacks.").first()).toBeVisible({
+      timeout: 10000,
+    });
 
     // Now the server itself, asked directly with a request it already accepted
     // once: it must refuse and leave the row exactly as booked.
@@ -442,3 +497,20 @@ test.describe("Tracking tab pick'ems", () => {
     expect(after).toEqual(before);
   });
 });
+
+/**
+ * The shipped HTML of one slate card, cut from the response body by hand.
+ *
+ * Deliberately a raw string slice rather than a DOM query: the point of the
+ * privacy assertion is what the SERVER put on the wire, before any client code
+ * has had a chance to hide something.
+ */
+function openSlateCardHtml(body: string, matchupId: number): string | null {
+  const marker = `data-matchup-id="${matchupId}"`;
+  const start = body.indexOf(marker);
+  if (start === -1) return null;
+  // Cards are siblings, so the next card's marker (or the end of the document)
+  // bounds this one.
+  const next = body.indexOf('data-testid="slate-card"', start + marker.length);
+  return body.slice(start, next === -1 ? body.length : next);
+}

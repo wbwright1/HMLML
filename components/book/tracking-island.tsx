@@ -762,7 +762,13 @@ function DivisionRace({ divisions }: { divisions: PickemsDivision[] }) {
       <p className="text-kicker mb-3 text-accent-gold">
         {BOOK_COPY.divisionRace}
       </p>
-      <div className="grid grid-cols-2 gap-4 lg:gap-8">
+      {/* Two up reads best, but this league runs three divisions of four and a
+          legacy season can run one, so the column count follows the data. */}
+      <div
+        className={`grid gap-4 lg:gap-8 ${
+          divisions.length >= 3 ? "grid-cols-2 lg:grid-cols-3" : "grid-cols-2"
+        }`}
+      >
         {divisions.map((division) => (
           <div key={division.name} className="flex min-w-0 flex-col gap-2">
             <span className="text-kicker">{division.name}</span>

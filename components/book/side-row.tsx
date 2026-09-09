@@ -105,14 +105,14 @@ export function SideRow({
         )}
         {game.status !== "open" && (
           <span
-            className={`hidden min-w-[52px] shrink-0 text-right font-mono text-[15px] font-bold tabular-nums min-[360px]:inline ${
+            className={`hidden min-w-[46px] shrink-0 text-right font-mono text-[15px] font-bold tabular-nums min-[360px]:inline sm:min-w-[52px] ${
               covering ? "text-text-primary" : "text-text-secondary"
             }`}
           >
             {team.points.toFixed(1)}
           </span>
         )}
-        <span className="shrink-0 rounded-lg bg-surface-muted px-2.5 py-1.5 font-mono text-body-sm font-bold tabular-nums text-text-primary">
+        <span className="shrink-0 rounded-lg bg-surface-muted px-2 py-1.5 font-mono text-body-sm font-bold tabular-nums text-text-primary sm:px-2.5">
           {formatSpread(team.spread)}
         </span>
       </>
@@ -159,8 +159,12 @@ export function SideRow({
       </>
     );
 
-  const base =
-    "flex w-full items-center gap-3 rounded-[11px] border p-2.5 text-left transition-colors duration-150";
+  // Every phone pixel the row does not spend on gaps is a pixel the franchise
+  // name keeps: at 390 the name is the payload, and a 12px gutter between five
+  // items was truncating it to an initial.
+  const base = `flex w-full items-center rounded-[11px] border p-2.5 text-left transition-colors duration-150 ${
+    variant === "slate" ? "gap-2 sm:gap-3" : "gap-3"
+  }`;
   const skin = picked
     ? "border-accent-gold/45 bg-accent-gold-light"
     : "border-border bg-white/[.03]";
