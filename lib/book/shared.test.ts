@@ -3,7 +3,11 @@ import { deriveAbbreviation } from "@/lib/franchise-abbreviations";
 import {
   BOOK_ERRORS,
   bookConsensusText,
+  buildDivisionRace,
   buildPickemsCell,
+  divisionNumber,
+  divisionRailLabel,
+  divisionTagLabel,
   groupPickersByDivision,
   UNDIVIDED_DIVISION_LABEL,
   bookCtaLabel,
@@ -21,6 +25,8 @@ import {
   type HubFooterGame,
   type MemberBookPick,
   type MemberFuturePick,
+  type PickemsDivisionGroup,
+  type PickOutcome,
   type PickerSeed,
   type PickGuardFacts,
   type PropPickGuardFacts,
@@ -392,7 +398,6 @@ function seed(
     abbreviation: deriveAbbreviation(overrides.franchiseName),
     color: null,
     avatarUrl: null,
-    record: "",
     divisionName: null,
     ...overrides,
   };
@@ -463,7 +468,13 @@ describe("buildPickemsCell", () => {
         homePoints: 0,
         awayPoints: 0,
       }),
-    ).toEqual({ revealed: false, abbreviation: null, outcome: null });
+    ).toEqual({
+      revealed: false,
+      side: null,
+      abbreviation: null,
+      hasPicked: true,
+      outcome: null,
+    });
   });
 
   it("reveals the side at kickoff but never grades a live game", () => {
@@ -476,7 +487,13 @@ describe("buildPickemsCell", () => {
         homePoints: 100,
         awayPoints: 80,
       }),
-    ).toEqual({ revealed: true, abbreviation: "HOM", outcome: null });
+    ).toEqual({
+      revealed: true,
+      side: "home",
+      abbreviation: "HOM",
+      hasPicked: true,
+      outcome: null,
+    });
   });
 
   it("grades a final game against the pick's own snapshotted spread", () => {
@@ -520,7 +537,13 @@ describe("buildPickemsCell", () => {
         homePoints: 100,
         awayPoints: 98,
       }),
-    ).toEqual({ revealed: true, abbreviation: "AWY", outcome: "win" });
+    ).toEqual({
+      revealed: true,
+      side: "away",
+      abbreviation: "AWY",
+      hasPicked: true,
+      outcome: "win",
+    });
   });
 
   it("marks a revealed no-pick as revealed-but-empty, not hidden", () => {
@@ -532,6 +555,119 @@ describe("buildPickemsCell", () => {
         homePoints: 100,
         awayPoints: 98,
       }),
-    ).toEqual({ revealed: true, abbreviation: null, outcome: null });
+    ).toEqual({
+      revealed: true,
+      side: null,
+      abbreviation: null,
+      hasPicked: false,
+      outcome: null,
+    });
+  });
+
+  it("reports that an open pick EXISTS without reporting which side it took", () => {
+    const cell = buildPickemsCell({
+      status: "open",
+      pick: { side: "away", spreadAtPick: -3 },
+      ...abbreviations,
+      homePoints: 0,
+      awayPoints: 0,
+    });
+
+    // The whole anti-tailing rule in three assertions: a count is shippable,
+    // a side is not.
+    expect(cell.hasPicked).toBe(true);
+    expect(cell.side).toBeNull();
+    expect(cell.abbreviation).toBeNull();
+  });
+
+  it("says a member with no pick has not picked, on every status", () => {
+    for (const status of ["open", "live", "final"] as const) {
+      expect(
+        buildPickemsCell({
+          status,
+          pick: null,
+          ...abbreviations,
+          homePoints: 100,
+          awayPoints: 98,
+        }).hasPicked,
+      ).toBe(false);
+    }
+  });
+
+  it("carries the side the rail buckets on even when both codes collide", () => {
+    // Two franchises resolving to the same three-letter code (#243) is exactly
+    // the case that makes `abbreviation` useless for bucketing.
+    const cell = buildPickemsCell({
+      status: "live",
+      pick: { side: "away", spreadAtPick: 3 },
+      homeAbbreviation: "BGS",
+      awayAbbreviation: "BGS",
+      homePoints: 0,
+      awayPoints: 0,
+    });
+
+    expect(cell.side).toBe("away");
+    expect(cell.abbreviation).toBe("BGS");
+  });
+});
+
+describe("division labels", () => {
+  it("pulls the number out of a numbered division", () => {
+    expect(divisionNumber("Division 2")).toBe(2);
+    expect(divisionRailLabel("Division 2")).toBe("Div 2");
+    expect(divisionTagLabel("Division 2")).toBe("D2");
+  });
+
+  it("leaves a named division alone rather than inventing an abbreviation", () => {
+    expect(divisionNumber("League")).toBeNull();
+    expect(divisionRailLabel("League")).toBe("League");
+    expect(divisionTagLabel("The Meat Grinder")).toBe("The Meat Grinder");
+  });
+});
+
+describe("buildDivisionRace", () => {
+  const group: PickemsDivisionGroup = {
+    name: "Division 1",
+    pickers: [
+      seed({ memberId: 1, franchiseName: "Aces" }),
+      seed({ memberId: 2, franchiseName: "Bears" }),
+      seed({ memberId: 3, franchiseName: "Cubs" }),
+    ],
+  };
+  const wins: PickOutcome[] = ["win", "win"];
+  const losses: PickOutcome[] = ["loss"];
+
+  it("combines only ranked members and states its own denominator", () => {
+    const race = buildDivisionRace(group, {
+      outcomesByMember: new Map([
+        [1, wins],
+        [2, losses],
+      ]),
+      // Member 3 has nothing graded, so the leaderboard gave them no rank.
+      rankByMemberId: new Map([
+        [1, 4],
+        [2, 2],
+      ]),
+    });
+
+    expect(race.record).toBe("2-1");
+    expect(race.rankedCount).toBe(2);
+    expect(race.memberCount).toBe(3);
+    // The leader is the best RANK, not the most wins in the bucket.
+    expect(race.leader?.memberId).toBe(2);
+    expect(race.units).toBeCloseTo(2 * 9.09 - 10, 2);
+  });
+
+  it("refuses to fabricate a figure for a division nobody has graded in", () => {
+    const race = buildDivisionRace(group, {
+      outcomesByMember: new Map(),
+      rankByMemberId: new Map(),
+    });
+
+    expect(race.record).toBeNull();
+    expect(race.units).toBeNull();
+    expect(race.leader).toBeNull();
+    expect(race.rankedCount).toBe(0);
+    expect(race.memberCount).toBe(3);
   });
 });

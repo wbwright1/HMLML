@@ -11,7 +11,7 @@ export type { CoverResult };
 
 /** Grading is pure math with no I/O, so the pick'ems cell builder below can
  * live here (and be unit-tested) without dragging a database into the bundle. */
-import { pickOutcome } from "@/lib/book/grading";
+import { formatAtsRecord, pickOutcome, tallyOutcomes } from "@/lib/book/grading";
 
 /** Re-exported so the props island types picks and results from one place. */
 import type {
@@ -285,17 +285,26 @@ export const BOOK_COPY = {
   lockNoteIncomplete: "Pick every open game to lock the slip early.",
   trackingSoon:
     "Nothing to pick yet. The pick'ems sheet opens the moment the week's lines post.",
-  pickemsTitle: "Your Picks",
-  pickemsSnark:
-    "Tap a side. Each game locks at its own kickoff, and the sheet grades itself.",
   pickemsSignedOut: "Claim your team to get on the sheet.",
-  pickemsGridKicker: "Who Picked Whom",
   pickemsFootnote:
     "Picks reveal at kickoff and grade when the game goes final. You always see your own slip; nobody sees an open pick but its owner.",
-  pickemsLegend: "✓ hit · ✗ missed · PUSH refunded · — no pick yet",
-  pickemsLocked: "Locked",
   pickemsNoGames:
     "No games on the board this week, so there is nothing to pick.",
+  /** Section kickers on the Tracking tab: "Week 6 · The Sheet" / "· The Slate". */
+  sheetKicker: "The Sheet",
+  slateKicker: "The Slate",
+  pulseSheets: "Sheets complete",
+  pulseGhosting: "Still ghosting",
+  railTookSide: "took this side",
+  railNobody: "nobody",
+  revealsAtKickoff: "reveals at kickoff",
+  gradesAtFinal: "grades at final",
+  graded: "graded",
+  divisionRace: "Division race",
+  noPicksGraded: "no picks graded",
+  ledgerEmpty: "No graded picks yet. The ledger opens once a week finishes.",
+  unitsNote:
+    "Units are the friendly ledger: a hit pays +0.91, a miss costs 1.00, a push refunds.",
   /** A server action that never landed (offline, 500). Calm, never panicked. */
   actionFailed: "That did not reach the book. Nothing was booked. Try again.",
   propsSoon: "Props post the week they can be graded honestly. Not yet.",
@@ -363,26 +372,39 @@ export interface AtsLeaderboardRow {
   franchiseColor: string | null;
   /** Team crest, null when the franchise has none synced (monogram fallback). */
   franchiseAvatarUrl: string | null;
-  rank: number;
+  /**
+   * Compact division label ("D1"), or null for a season with one bucket. The
+   * ledger is ranked 1..N straight through, so this is what keeps division
+   * bragging rights legible without making division the row order.
+   */
+  divisionTag: string | null;
+  /**
+   * Null for a member with nothing graded yet. Those members still ship (all
+   * twelve are always present) and render below the ranked ones with no
+   * fabricated record: absence is fine, invention is not.
+   */
+  rank: number | null;
   isLeader: boolean;
+  /** The last RANKED member, never an unranked one. */
   isLast: boolean;
-  record: string;
+  record: string | null;
   streakLabel: string | null;
   streakType: "W" | "L" | null;
-  units: number;
+  units: number | null;
 }
 
 export type PickOutcome = "win" | "loss" | "push";
 
 // ---------------------------------------------------------------------------
-// Pick'ems grid shapes
+// Pick'ems slate shapes
 // ---------------------------------------------------------------------------
-// The grid is TRANSPOSED relative to the old Who Picked Whom table: one column
-// per member (clustered under their division), one row per game. That is the
-// shape a pick'ems sheet has always had, and it is the shape that lets a
-// narrow viewport show one division's columns instead of scrolling a matrix.
+// The slate is GAME-first: one card per game, both sides as the pick controls,
+// and the members who took each side hanging under that side as a rail of
+// crest chips. The old transposed matrix (a column per member) is gone; what
+// survives of it is the per-member identity below, which the rail chips, the
+// Week Pulse "still ghosting" chips and the division race strip all read.
 
-/** One member's column: who they are, and how their season is going. */
+/** One member's identity on this tab: who they are, and how their season is going. */
 export interface PickerColumn {
   memberId: number;
   displayName: string;
@@ -395,19 +417,49 @@ export interface PickerColumn {
    * `string | null` because this shape crosses into the tracking client island.
    */
   avatarUrl: string | null;
-  /** Season ATS record, or "" for a member with nothing graded yet (never a fabricated 0-0). */
-  record: string;
 }
 
-export interface PickemsDivision {
+/** A division before its combined race figures are computed. */
+export interface PickemsDivisionGroup {
   name: string;
   pickers: PickerColumn[];
+}
+
+export interface PickemsDivision extends PickemsDivisionGroup {
+  /**
+   * Combined ATS record and units over RANKED members only (a member with
+   * nothing graded contributes nothing, rather than a fabricated 0-0), and
+   * null outright when the division has no ranked member at all.
+   */
+  record: string | null;
+  units: number | null;
+  /** So the strip can state its own denominator instead of implying twelve. */
+  rankedCount: number;
+  memberCount: number;
+  /** The division's highest-ranked member, for the strip's crest. */
+  leader: PickerColumn | null;
 }
 
 export interface PickemsCell {
   /** Whether this member's pick on this game may be shown at all right now. */
   revealed: boolean;
+  /**
+   * Which side the member took, or null when nothing is revealed (or they did
+   * not pick). The picker rail buckets on THIS, never on `abbreviation`: two
+   * franchises in one league can resolve to the same three-letter code (#243),
+   * and when both teams of one game collide every picker lands on the wrong
+   * side. `abbreviation` is the chip's visible label and nothing more.
+   */
+  side: BookSideKey | null;
   abbreviation: string | null;
+  /**
+   * Whether this member has a pick on this game at all. A boolean, and only
+   * ever a boolean: on an `open` game it says THAT somebody picked and never
+   * WHAT, which is the anti-tailing rule stated as a type. Every count on the
+   * Tracking tab (sheets complete, the per-card "N of 12 in", still ghosting)
+   * derives from this and from nothing else; nothing may infer a side from it.
+   */
+  hasPicked: boolean;
   /** Only ever set on a FINAL game: there is no live cover tracking. */
   outcome: PickOutcome | null;
 }
@@ -448,7 +500,7 @@ export interface PickerSeed extends PickerColumn {
  */
 export function groupPickersByDivision(
   pickers: PickerSeed[],
-): PickemsDivision[] {
+): PickemsDivisionGroup[] {
   const byDivision = new Map<string, PickerColumn[]>();
   for (const { divisionName, ...column } of pickers) {
     const name = divisionName ?? UNDIVIDED_DIVISION_LABEL;
@@ -490,24 +542,125 @@ export function buildPickemsCell(input: {
   homePoints: number;
   awayPoints: number;
 }): PickemsCell {
+  const hasPicked = input.pick !== null;
+
   if (input.status === "open") {
-    return { revealed: false, abbreviation: null, outcome: null };
+    // The one place the payload is deliberately lossy: a count, never a side.
+    return {
+      revealed: false,
+      side: null,
+      abbreviation: null,
+      hasPicked,
+      outcome: null,
+    };
   }
   if (!input.pick) {
-    return { revealed: true, abbreviation: null, outcome: null };
+    return {
+      revealed: true,
+      side: null,
+      abbreviation: null,
+      hasPicked: false,
+      outcome: null,
+    };
   }
 
+  const side = input.pick.side;
   const abbreviation =
-    input.pick.side === "home" ? input.homeAbbreviation : input.awayAbbreviation;
+    side === "home" ? input.homeAbbreviation : input.awayAbbreviation;
 
   if (input.status === "live") {
-    return { revealed: true, abbreviation, outcome: null };
+    return { revealed: true, side, abbreviation, hasPicked, outcome: null };
   }
 
   return {
     revealed: true,
+    side,
     abbreviation,
+    hasPicked,
     outcome: pickOutcome(input.homePoints, input.awayPoints, input.pick),
+  };
+}
+
+/**
+ * The number in a "Division 3" style name, or null for anything else.
+ *
+ * Sleeper's division names are almost always numbered, and the slate's picker
+ * rail has a 38px label column: "Division 1" does not fit there, "Div 1" does.
+ * A season whose divisions carry real names (or none at all) falls back to the
+ * name itself rather than inventing an abbreviation scheme.
+ */
+export function divisionNumber(name: string): number | null {
+  const match = /^Division\s+(\d+)$/i.exec(name.trim());
+  if (!match) return null;
+  const n = Number(match[1]);
+  return Number.isFinite(n) ? n : null;
+}
+
+/** "Div 1" for the rail's label column, or the division's own name. */
+export function divisionRailLabel(name: string): string {
+  const n = divisionNumber(name);
+  return n === null ? name : `Div ${n}`;
+}
+
+/** "D1" for the ledger row's inline tag, or the division's own name. */
+export function divisionTagLabel(name: string): string {
+  const n = divisionNumber(name);
+  return n === null ? name : `D${n}`;
+}
+
+/**
+ * The Division race strip's figures for one division.
+ *
+ * Computed over RANKED members only, which is the whole point: the leaderboard
+ * gives nobody with zero graded picks a rank, so folding them in would either
+ * fabricate a 0-0 or quietly change what "combined" means. `rankedCount` and
+ * `memberCount` ship alongside so the strip can state its denominator.
+ *
+ * `rankByMemberId` is the season leaderboard's own ranking, so the leader shown
+ * here and the row sitting highest in the ledger can never disagree.
+ */
+export function buildDivisionRace(
+  group: PickemsDivisionGroup,
+  context: {
+    outcomesByMember: Map<number, PickOutcome[]>;
+    rankByMemberId: Map<number, number>;
+  },
+): PickemsDivision {
+  const outcomes: PickOutcome[] = [];
+  let rankedCount = 0;
+  let leader: PickerColumn | null = null;
+  let leaderRank = Number.POSITIVE_INFINITY;
+
+  for (const picker of group.pickers) {
+    const rank = context.rankByMemberId.get(picker.memberId);
+    if (rank === undefined) continue;
+    rankedCount += 1;
+    outcomes.push(...(context.outcomesByMember.get(picker.memberId) ?? []));
+    if (rank < leaderRank) {
+      leaderRank = rank;
+      leader = picker;
+    }
+  }
+
+  if (rankedCount === 0) {
+    return {
+      ...group,
+      record: null,
+      units: null,
+      rankedCount: 0,
+      memberCount: group.pickers.length,
+      leader: null,
+    };
+  }
+
+  const tally = tallyOutcomes(outcomes);
+  return {
+    ...group,
+    record: formatAtsRecord(tally),
+    units: tally.units,
+    rankedCount,
+    memberCount: group.pickers.length,
+    leader,
   };
 }
 
