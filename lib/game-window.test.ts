@@ -30,9 +30,21 @@ describe("isPlausibleGameWindow", () => {
     expect(isPlausibleGameWindow(utc("2026-09-15T01:00:00Z"))).toBe(true);
   });
 
-  it("is false Tuesday and Wednesday", () => {
+  it("is true Wednesday night ET (season openers kick off Wednesday)", () => {
+    // 2026-09-09 Wednesday; 2026-09-10T00:30Z = 20:30 EDT Wednesday.
+    expect(isPlausibleGameWindow(utc("2026-09-10T00:30:00Z"))).toBe(true);
+  });
+
+  it("is false Wednesday afternoon ET", () => {
+    // 2026-09-09T20:00Z = 16:00 EDT Wednesday, before 7pm.
+    expect(isPlausibleGameWindow(utc("2026-09-09T20:00:00Z"))).toBe(false);
+  });
+
+  it("is false Tuesday", () => {
+    // 2026-09-15T20:00Z = 16:00 EDT Tuesday, and 2026-09-16T00:30Z = 20:30
+    // EDT Tuesday: no evening window on Tuesday at all.
     expect(isPlausibleGameWindow(utc("2026-09-15T20:00:00Z"))).toBe(false);
-    expect(isPlausibleGameWindow(utc("2026-09-16T20:00:00Z"))).toBe(false);
+    expect(isPlausibleGameWindow(utc("2026-09-16T00:30:00Z"))).toBe(false);
   });
 
   it("handles standard time (EST, UTC-5) correctly", () => {

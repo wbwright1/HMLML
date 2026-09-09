@@ -7,13 +7,18 @@
  * windows hold under DST from any server or client timezone.
  *
  * Deliberately NOT LEAGUE_TIME_ZONE (lib/time-zone.ts). This encodes NFL
- * national kickoff clock times (Thu 7pm, Sun 11am, Mon 7pm), which are
+ * national kickoff clock times (Wed/Thu 7pm, Sun 11am, Mon 7pm), which are
  * defined in America/New_York as a fact about the league schedule, not about
  * where our members live. Unifying it with the league timezone would silently
  * shift every game window by an hour; do not "finish the job" here.
  *
- * Windows: Thursday from 7pm, Saturday from 1pm, Sunday from 11am, Monday
- * from 7pm.
+ * Windows: Wednesday from 7pm, Thursday from 7pm, Saturday from 1pm, Sunday
+ * from 11am, Monday from 7pm.
+ *
+ * Wednesday is here because the NFL now opens some seasons on a Wednesday
+ * night (2026 week 1 kicks off Wed Sep 9). Without it, the live-score poller,
+ * the nav live pill and the API's Sleeper refresh all sit out opening night,
+ * and the hub only advances scores when the hourly sync happens to run.
  */
 export function isPlausibleGameWindow(now: Date = new Date()): boolean {
   // Reading the wall clock through en-US/New_York keeps DST correct without
@@ -33,6 +38,7 @@ export function isPlausibleGameWindow(now: Date = new Date()): boolean {
   const hour = parseInt(hourRaw, 10) % 24;
 
   switch (weekday) {
+    case "Wed":
     case "Thu":
       return hour >= 19;
     case "Sat":
