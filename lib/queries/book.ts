@@ -11,8 +11,13 @@ import {
   rosterPlayers,
   seasons,
 } from "@/lib/db/schema";
-import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
+import {
+  bestPossibleLineup,
+  loadSeasonRosterPositions,
+  type RosterPlayerPoints,
+} from "@/lib/queries/lineup-efficiency";
 import { getNflState } from "@/lib/queries/nfl-state";
 import { formatRecord } from "@/lib/format-record";
 import { coverSide } from "@/lib/book/pricing";
@@ -126,108 +131,214 @@ export async function resolveBookWeek(): Promise<BookWeek | null> {
 // Projections: what the pricing engine is fed
 // ---------------------------------------------------------------------------
 
-export interface WeeklyStarterTotal {
+export interface WeekProjectionRow {
   rosterId: string;
-  starters: number;
-  projected: number;
+  playerId: string;
+  position: string | null;
+  /** The player's NFL team, used to tell whether his own game has kicked off. */
+  nflTeam: string | null;
+  projectedPoints: number | null;
+  /** Whether the manager currently has this player in the lineup. */
+  started: boolean;
 }
 
-/**
- * Chooses each roster's projected weekly total from the two available sources.
- *
- * The weekly source (Sleeper's per-week projections for the lineup as it stands)
- * is the better number, but only for a roster whose lineup is actually SET. A
- * manager who has not touched their lineup sits on Sleeper's default, which is
- * routinely short a starter or two and projects like a practice squad; pricing
- * that would post a 100-point favorite against somebody who is about to fix
- * their lineup an hour before kickoff. So a roster carrying fewer starters than
- * the fullest lineup in the league falls back to its season-long projection
- * spread across the regular season, which does not care what the lineup looks
- * like today.
- *
- * Both sources estimate the same quantity (this roster's expected weekly
- * starter total), so a game can legitimately price one side from each.
- *
- * Pure, so the source-selection rule is directly testable.
- */
-export function chooseProjectedTotals(
-  weekly: WeeklyStarterTotal[],
-  seasonLongPerWeek: Map<string, number>,
-): Map<string, number> {
-  const fullLineup = weekly.reduce((max, row) => Math.max(max, row.starters), 0);
-  const chosen = new Map<string, number>();
+export interface RosterSlotRow {
+  rosterId: string;
+  playerId: string;
+  position: string | null;
+  /** roster_players.slot: 'starter' | 'bench' | 'ir' | 'taxi'. */
+  slot: string | null;
+  projPointsPpr: number | null;
+  projSeason: number | null;
+}
 
-  for (const row of weekly) {
-    if (row.projected > 0 && row.starters >= fullLineup && fullLineup > 0) {
-      chosen.set(row.rosterId, row.projected);
+export interface OptimalProjectionInput {
+  rosterPositions: string[] | null | undefined;
+  /** Every player_week_points row for the week, starters AND bench. */
+  weekly: WeekProjectionRow[];
+  /** Every roster_players row for the season, joined to its player. */
+  rosterSlots: RosterSlotRow[];
+  seasonYear: number;
+  /** NFL teams whose game this week is no longer 'pre_game'. */
+  kickedOffTeams: ReadonlySet<string>;
+}
+
+/** Slots a player cannot be started from without a roster move. */
+const RESERVE_SLOTS = new Set(["ir", "taxi"]);
+
+/**
+ * Each roster's BEST POSSIBLE projected weekly total, from whichever source
+ * is available.
+ *
+ * The number that prices a game must not move when a manager moves a player,
+ * so it is deliberately computed from what the roster COULD start, not from
+ * the lineup as it stands. Benching a star until minutes before kickoff used
+ * to drag that roster's projection down, which repriced their game on the
+ * next hourly sync and handed the manager (or a friend) a line they had just
+ * manufactured. The optimal lineup does not care whether the lineup is set,
+ * which also retires the old "fullest lineup in the league" heuristic: there
+ * is nothing left to detect, because an untouched default lineup and a
+ * carefully set one produce the same price.
+ *
+ * Two exclusions keep "could start" honest:
+ *  - IR and taxi players cannot legally be started, so they never enter the
+ *    pool from either source.
+ *  - A benched player whose own NFL game has already kicked off can no longer
+ *    be inserted into the lineup, so he leaves the weekly pool. An already
+ *    started player stays, because his points are on the field either way.
+ *    (A line locks once ANY starter has kicked off, so in practice this only
+ *    bites a benched Thursday-night player being priced on Friday.)
+ *
+ * The weekly source wins whenever it produces a positive total. The
+ * season-long source (roster projections spread across the regular season) is
+ * not merely a safety net: player_week_points is empty before a week has been
+ * synced and entirely empty before a season's first sync, so it is what
+ * prices the opening board before anybody has played a snap.
+ *
+ * A roster with no usable number from either source is simply absent from the
+ * map; callers treat absence as unpriceable.
+ *
+ * Pure, so both the exclusion rules and the source choice are directly
+ * testable.
+ */
+export function optimalProjectedTotals({
+  rosterPositions,
+  weekly,
+  rosterSlots,
+  seasonYear,
+  kickedOffTeams,
+}: OptimalProjectionInput): Map<string, number> {
+  const reserved = new Set<string>();
+  for (const row of rosterSlots) {
+    if (row.slot && RESERVE_SLOTS.has(row.slot)) {
+      reserved.add(`${row.rosterId}:${row.playerId}`);
     }
   }
 
-  for (const [rosterId, perWeek] of seasonLongPerWeek) {
-    if (!chosen.has(rosterId) && perWeek > 0) chosen.set(rosterId, perWeek);
+  const weeklyPools = new Map<string, RosterPlayerPoints[]>();
+  for (const row of weekly) {
+    if (reserved.has(`${row.rosterId}:${row.playerId}`)) continue;
+    if (!row.started && row.nflTeam && kickedOffTeams.has(row.nflTeam)) continue;
+    const pool = weeklyPools.get(row.rosterId) ?? [];
+    pool.push({
+      playerId: row.playerId,
+      position: row.position,
+      points: row.projectedPoints ?? 0,
+    });
+    weeklyPools.set(row.rosterId, pool);
   }
 
-  return chosen;
+  const seasonPools = new Map<string, RosterPlayerPoints[]>();
+  for (const row of rosterSlots) {
+    if (row.slot && RESERVE_SLOTS.has(row.slot)) continue;
+    const pool = seasonPools.get(row.rosterId) ?? [];
+    // A projection stored for a prior season is a stale leftover, not this
+    // year's number, so it contributes nothing.
+    const current = row.projSeason === seasonYear;
+    pool.push({
+      playerId: row.playerId,
+      position: row.position,
+      points: current ? (row.projPointsPpr ?? 0) : 0,
+    });
+    seasonPools.set(row.rosterId, pool);
+  }
+
+  const totals = new Map<string, number>();
+  const rosterIds = new Set([...weeklyPools.keys(), ...seasonPools.keys()]);
+
+  for (const rosterId of rosterIds) {
+    const weeklyPool = weeklyPools.get(rosterId);
+    const weeklyTotal = weeklyPool
+      ? bestPossibleLineup(rosterPositions, weeklyPool)
+      : 0;
+    if (weeklyTotal > 0) {
+      totals.set(rosterId, weeklyTotal);
+      continue;
+    }
+
+    const seasonPool = seasonPools.get(rosterId);
+    const seasonTotal = seasonPool
+      ? bestPossibleLineup(rosterPositions, seasonPool) / REGULAR_SEASON_GAMES
+      : 0;
+    if (seasonTotal > 0) totals.set(rosterId, seasonTotal);
+  }
+
+  return totals;
 }
 
 /**
- * Projected starting-lineup total per roster for one week, from whichever
- * source is trustworthy for each roster (see chooseProjectedTotals).
+ * Best-possible projected starting-lineup total per roster for one week.
  *
- * player_week_points is empty before a week has been synced, and entirely empty
- * before a season's first sync, so the season-long path is not just a safety
- * net: it is what prices the opening board before anybody has played a snap.
+ * Fetches the rows and hands them to optimalProjectedTotals, which owns every
+ * rule (see its doc comment for why the number is manipulation resistant).
+ * Set-based throughout: four queries for the whole league, never one per
+ * roster.
  */
 export async function getWeekProjectedTotals(
   seasonId: number,
   seasonYear: number,
   week: number,
 ): Promise<Map<string, number>> {
-  const weeklyRows = await db
-    .select({
-      rosterId: playerWeekPoints.rosterId,
-      starters: sql<number>`count(*)`,
-      projected: sql<number>`coalesce(sum(${playerWeekPoints.projectedPoints}), 0)`,
-    })
-    .from(playerWeekPoints)
-    .where(
-      and(
-        eq(playerWeekPoints.seasonId, seasonId),
-        eq(playerWeekPoints.week, week),
-        eq(playerWeekPoints.started, true),
+  const [rosterPositions, weeklyRows, rosterSlotRows, gameRows] = await Promise.all([
+    loadSeasonRosterPositions(seasonId),
+    // Starters AND bench: the pool the optimal lineup is chosen from.
+    db
+      .select({
+        rosterId: playerWeekPoints.rosterId,
+        playerId: playerWeekPoints.playerId,
+        position: players.position,
+        nflTeam: players.nflTeam,
+        projectedPoints: playerWeekPoints.projectedPoints,
+        started: playerWeekPoints.started,
+      })
+      .from(playerWeekPoints)
+      // Left join: a historical player missing from the players snapshot has
+      // no position and simply fills no slot.
+      .leftJoin(players, eq(playerWeekPoints.playerId, players.id))
+      .where(
+        and(
+          eq(playerWeekPoints.seasonId, seasonId),
+          eq(playerWeekPoints.week, week),
+        ),
       ),
-    )
-    .groupBy(playerWeekPoints.rosterId);
-
-  const seasonLongRows = await db
-    .select({
-      rosterId: rosterPlayers.rosterId,
-      total: sql<number>`coalesce(sum(${players.projPointsPpr}), 0)`,
-    })
-    .from(rosterPlayers)
-    .innerJoin(players, eq(rosterPlayers.playerId, players.id))
-    .where(
-      and(
-        eq(rosterPlayers.seasonId, seasonId),
-        eq(rosterPlayers.slot, "starter"),
-        eq(players.projSeason, seasonYear),
+    // Doubles as the IR/taxi exclusion list and the season-long pool.
+    db
+      .select({
+        rosterId: rosterPlayers.rosterId,
+        playerId: rosterPlayers.playerId,
+        position: players.position,
+        slot: rosterPlayers.slot,
+        projPointsPpr: players.projPointsPpr,
+        projSeason: players.projSeason,
+      })
+      .from(rosterPlayers)
+      .innerJoin(players, eq(rosterPlayers.playerId, players.id))
+      .where(eq(rosterPlayers.seasonId, seasonId)),
+    db
+      .select({ homeTeam: nflGames.homeTeam, awayTeam: nflGames.awayTeam })
+      .from(nflGames)
+      .where(
+        and(
+          eq(nflGames.seasonYear, seasonYear),
+          eq(nflGames.week, week),
+          ne(nflGames.status, "pre_game"),
+        ),
       ),
-    )
-    .groupBy(rosterPlayers.rosterId);
+  ]);
 
-  const seasonLongPerWeek = new Map<string, number>();
-  for (const row of seasonLongRows) {
-    seasonLongPerWeek.set(row.rosterId, Number(row.total) / REGULAR_SEASON_GAMES);
+  const kickedOffTeams = new Set<string>();
+  for (const g of gameRows) {
+    kickedOffTeams.add(g.homeTeam);
+    kickedOffTeams.add(g.awayTeam);
   }
 
-  return chooseProjectedTotals(
-    weeklyRows.map((r) => ({
-      rosterId: r.rosterId,
-      starters: Number(r.starters),
-      projected: Number(r.projected),
-    })),
-    seasonLongPerWeek,
-  );
+  return optimalProjectedTotals({
+    rosterPositions,
+    weekly: weeklyRows,
+    rosterSlots: rosterSlotRows,
+    seasonYear,
+    kickedOffTeams,
+  });
 }
 
 // ---------------------------------------------------------------------------
