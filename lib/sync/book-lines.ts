@@ -29,6 +29,10 @@ export interface RepriceResult {
  * "home" is the lower roster id of the pairing (see lib/book/pricing.ts), so a
  * pairing prices the same way every run and the stored spread's sign is stable.
  *
+ * Projections are the BEST POSSIBLE lineup each roster could start, not the
+ * lineup the manager has set (see getWeekProjectedTotals), so benching a star
+ * an hour before kickoff cannot move the price of your own game.
+ *
  * A game whose projections are missing on either side is skipped rather than
  * priced off a zero, which would post a fictional 100-point favorite.
  */

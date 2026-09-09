@@ -185,7 +185,7 @@ export interface PlayerCandidateRow {
   projectedPerWeek: number;
   /** The roster this player is on, so team-impact terms can be computed. */
   rosterId: string;
-  /** This roster's projected starting-lineup total, per week. */
+  /** This roster's best possible projected starting-lineup total, per week. */
   lineupProjectedPerWeek: number;
   /** Best other same-position teammate's projected total, per week. */
   bestAlternativePerWeek: number;

@@ -43,6 +43,7 @@ export interface BookSide {
   spread: number;
   moneyline: number;
   points: number;
+  /** Best possible projected lineup total, the number the line was priced off. */
   projected: number | null;
 }
 

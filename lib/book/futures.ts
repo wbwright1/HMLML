@@ -238,7 +238,7 @@ export interface FuturesTeam {
   ties: number;
   /** Points scored so far. The league's standing tiebreak. */
   pointsFor: number;
-  /** Expected starting-lineup total per remaining week. */
+  /** Best possible starting-lineup total per remaining week. */
   projectedPerWeek: number;
   /** Division number, or null for a season with no divisions. */
   division: number | null;
