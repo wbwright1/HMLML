@@ -53,12 +53,15 @@ export function BoardIsland({
     signedIn,
     picks,
     slipLocked,
+    standingLock,
     error,
     pendingMatchup,
     canPick,
+    canUnlock,
     pick: onPick,
     lock,
-  } = useBookSlip(week);
+    unlock,
+  } = useBookSlip(week, games);
 
   const openGames = games.filter((g) => g.status === "open");
   const openWithoutPick = openGames.filter((g) => !picks.has(g.matchupId));
@@ -94,7 +97,7 @@ export function BoardIsland({
             pick={picks.get(game.matchupId) ?? null}
             canPick={canPick}
             pending={pendingMatchup === game.matchupId}
-            slipLocked={slipLocked}
+            slipClosed={standingLock}
             onPick={onPick}
           />
         ))}
@@ -107,8 +110,11 @@ export function BoardIsland({
           week={week}
           signedIn={signedIn}
           slipLocked={slipLocked}
+          standingLock={standingLock}
+          canUnlock={canUnlock}
           openWithoutPick={openWithoutPick.length}
           onLock={onLock}
+          onUnlock={unlock}
         />
         <WagerTranslator games={games} />
       </aside>
@@ -130,14 +136,15 @@ function GameCard({
   pick,
   canPick,
   pending,
-  slipLocked,
+  slipClosed,
   onPick,
 }: {
   game: BookGame;
   pick: MemberBookPick | null;
   canPick: boolean;
   pending: boolean;
-  slipLocked: boolean;
+  /** The member's early lock still stands over this week's open games. */
+  slipClosed: boolean;
   onPick: (game: BookGame, side: BookSideKey) => void;
 }) {
   const totalPicks = game.homePicks + game.awayPicks;
@@ -186,7 +193,7 @@ function GameCard({
       </div>
 
       {pick && (
-        <YourPickRow game={game} pick={pick} slipLocked={slipLocked} />
+        <YourPickRow game={game} pick={pick} slipClosed={slipClosed} />
       )}
 
       {showConsensus && (
@@ -330,11 +337,11 @@ function SideRow({
 function YourPickRow({
   game,
   pick,
-  slipLocked,
+  slipClosed,
 }: {
   game: BookGame;
   pick: MemberBookPick;
-  slipLocked: boolean;
+  slipClosed: boolean;
 }) {
   const team = pick.side === "home" ? game.home : game.away;
   const spread = pick.side === "home" ? pick.spreadAtPick : -pick.spreadAtPick;
@@ -342,7 +349,7 @@ function YourPickRow({
   let tag: string;
   let tone: string;
   if (game.status === "open") {
-    const locked = slipLocked || pick.lockedAt !== null;
+    const locked = slipClosed || pick.lockedAt !== null;
     tag = locked ? "Locked in" : "Locks at kickoff";
     tone = locked ? "text-accent-green" : "text-text-tertiary";
   } else {
@@ -385,16 +392,22 @@ function PickSlip({
   week,
   signedIn,
   slipLocked,
+  standingLock,
+  canUnlock,
   openWithoutPick,
   onLock,
+  onUnlock,
 }: {
   games: BookGame[];
   picks: Map<number, MemberBookPick>;
   week: number;
   signedIn: boolean;
   slipLocked: boolean;
+  standingLock: boolean;
+  canUnlock: boolean;
   openWithoutPick: number;
   onLock: () => void;
+  onUnlock: () => void;
 }) {
   return (
     <div className="card-surface p-5">
@@ -417,14 +430,16 @@ function PickSlip({
                 key={game.matchupId}
                 game={game}
                 pick={picks.get(game.matchupId) ?? null}
-                slipLocked={slipLocked}
+                slipClosed={standingLock}
               />
             ))}
           </ul>
           <LockButton
             slipLocked={slipLocked}
+            canUnlock={canUnlock}
             openWithoutPick={openWithoutPick}
             onLock={onLock}
+            onUnlock={onUnlock}
           />
         </>
       )}
@@ -435,11 +450,11 @@ function PickSlip({
 function SlipRow({
   game,
   pick,
-  slipLocked,
+  slipClosed,
 }: {
   game: BookGame;
   pick: MemberBookPick | null;
-  slipLocked: boolean;
+  slipClosed: boolean;
 }) {
   if (!pick) {
     const openLabel = game.status === "open" ? "Open" : "No pick";
@@ -471,7 +486,7 @@ function SlipRow({
   let tag: string;
   let tone: string;
   if (game.status === "open") {
-    const locked = slipLocked || pick.lockedAt !== null;
+    const locked = slipClosed || pick.lockedAt !== null;
     tag = locked ? "Locked" : "Pending";
     tone = locked ? "text-accent-green" : "text-text-tertiary";
   } else {
@@ -524,12 +539,16 @@ function SlipRow({
 
 function LockButton({
   slipLocked,
+  canUnlock,
   openWithoutPick,
   onLock,
+  onUnlock,
 }: {
   slipLocked: boolean;
+  canUnlock: boolean;
   openWithoutPick: number;
   onLock: () => void;
+  onUnlock: () => void;
 }) {
   const base = "w-full rounded-full px-4 py-2.5 text-body-sm font-semibold";
 
@@ -539,8 +558,21 @@ function LockButton({
         <p className={`${base} bg-accent-green-light text-center text-accent-green`}>
           {BOOK_COPY.lockedIn}
         </p>
+        {/* An early lock is a commitment, not a trap: a game nobody has played
+            yet is still the member's to change, so it can be handed back until
+            kickoff. Once every locked game is underway there is nothing to
+            give back and the button goes away on its own. */}
+        {canUnlock && (
+          <button
+            type="button"
+            onClick={onUnlock}
+            className={`${base} mt-2.5 cursor-pointer border border-border-strong bg-surface text-center text-text-secondary transition-colors duration-150 hover:text-text-primary`}
+          >
+            {BOOK_COPY.unlockCta}
+          </button>
+        )}
         <p className="mt-2.5 text-[11px] text-text-tertiary">
-          {BOOK_COPY.lockNoteLocked}
+          {canUnlock ? BOOK_COPY.unlockNote : BOOK_COPY.lockNoteLocked}
         </p>
       </>
     );

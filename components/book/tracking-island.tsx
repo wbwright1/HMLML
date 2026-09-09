@@ -54,11 +54,11 @@ export function TrackingIsland({
     signedIn,
     franchiseSlug,
     picks: ownPicks,
-    slipLocked,
+    standingLock,
     error,
     pendingMatchup,
     pick: onPick,
-  } = useBookSlip(week);
+  } = useBookSlip(week, games);
 
   return (
     <div className="flex flex-col gap-4">
@@ -67,7 +67,7 @@ export function TrackingIsland({
         week={week}
         picks={ownPicks}
         signedIn={signedIn}
-        slipLocked={slipLocked}
+        slipClosed={standingLock}
         pendingMatchup={pendingMatchup}
         error={error}
         onPick={onPick}
@@ -92,7 +92,7 @@ function YourPicksStrip({
   week,
   picks,
   signedIn,
-  slipLocked,
+  slipClosed,
   pendingMatchup,
   error,
   onPick,
@@ -101,7 +101,8 @@ function YourPicksStrip({
   week: number;
   picks: Map<number, MemberBookPick>;
   signedIn: boolean;
-  slipLocked: boolean;
+  /** The member's early lock still stands over this week's open games. */
+  slipClosed: boolean;
   pendingMatchup: number | null;
   error: string | null;
   onPick: (game: BookGame, side: BookSideKey) => void;
@@ -135,7 +136,7 @@ function YourPicksStrip({
                 game={game}
                 pick={picks.get(game.matchupId) ?? null}
                 signedIn={signedIn}
-                slipLocked={slipLocked}
+                slipClosed={slipClosed}
                 pending={pendingMatchup === game.matchupId}
                 onPick={onPick}
               />
@@ -160,18 +161,18 @@ function PickRow({
   game,
   pick,
   signedIn,
-  slipLocked,
+  slipClosed,
   pending,
   onPick,
 }: {
   game: BookGame;
   pick: MemberBookPick | null;
   signedIn: boolean;
-  slipLocked: boolean;
+  slipClosed: boolean;
   pending: boolean;
   onPick: (game: BookGame, side: BookSideKey) => void;
 }) {
-  const locked = game.status !== "open" || slipLocked || pick?.lockedAt != null;
+  const locked = game.status !== "open" || slipClosed || pick?.lockedAt != null;
   const interactive = signedIn && !locked;
 
   let statusLabel: string;

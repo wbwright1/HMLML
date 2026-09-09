@@ -616,6 +616,44 @@ export async function getMemberPicksForWeek(
   }));
 }
 
+/**
+ * The priced matchups this week that have NOT kicked off yet: every game where
+ * neither roster has a starter whose NFL game is off `pre_game`.
+ *
+ * The same "started" test the board's status uses (getRosterKickoffStates), in
+ * the shape the pick actions want: they ask "is this game still open?" and
+ * "does the member still hold a lock over anything in the future?", and both
+ * are set membership. A game with no priced line is absent, which is correct:
+ * there is nothing to bet on and nothing to unlock.
+ */
+export async function getUnstartedMatchupIds(
+  seasonId: number,
+  seasonYear: number,
+  week: number,
+): Promise<Set<number>> {
+  const lines = await db
+    .select({
+      matchupId: bookLines.matchupId,
+      homeRosterId: bookLines.homeRosterId,
+      awayRosterId: bookLines.awayRosterId,
+    })
+    .from(bookLines)
+    .where(and(eq(bookLines.seasonId, seasonId), eq(bookLines.week, week)));
+
+  if (lines.length === 0) return new Set();
+
+  const kickoffs = await getRosterKickoffStates(seasonId, seasonYear, week);
+
+  const open = new Set<number>();
+  for (const line of lines) {
+    const started =
+      kickoffs.get(line.homeRosterId)?.started ||
+      kickoffs.get(line.awayRosterId)?.started;
+    if (!started) open.add(line.matchupId);
+  }
+  return open;
+}
+
 /** The stored line for one game, as the server action needs it to book a pick. */
 export async function getBookLine(
   seasonId: number,

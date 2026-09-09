@@ -277,6 +277,9 @@ export const BOOK_COPY = {
   signedOut: "Claim your team to get a slip.",
   lockedIn: "Picks are in. No takebacks.",
   lockCta: "Lock in picks",
+  unlockCta: "Unlock open games",
+  unlockNote:
+    "Reopens every game that has not kicked off yet. News breaks; slips should too.",
   lockNoteLocked: "Graded live as games play out.",
   lockNoteReady: "Open picks auto-lock at each kickoff.",
   lockNoteIncomplete: "Pick every open game to lock the slip early.",
@@ -526,8 +529,13 @@ export interface PickGuardFacts {
   lineExists: boolean;
   /** Either roster already has a starter on the field. */
   gameStarted: boolean;
-  /** The member has ANY locked pick this week, so the slip is closed. */
-  slipHasLockedPick: boolean;
+  /**
+   * The member has a locked pick on a game that has NOT kicked off yet, so the
+   * slip is closed. Locked picks on games already underway do not count: those
+   * are history either way, and counting them would keep a slip shut after the
+   * member unlocked the part of it that is still in the future.
+   */
+  slipHasStandingLock: boolean;
   /** This particular pick row is already locked. */
   existingPickLocked: boolean;
 }
@@ -539,16 +547,42 @@ export interface PickGuardFacts {
  * the bug it was written for: lock was enforced per ROW, so a member could lock
  * their slip, wait for the sync to price a game that had no row yet, and still
  * add a pick to it, because there was no `lockedAt` on a row that did not
- * exist. Locking is a slip-level commitment; `slipHasLockedPick` is what
+ * exist. Locking is a slip-level commitment; `slipHasStandingLock` is what
  * enforces that.
+ *
+ * "Standing" is the qualifier `unlockSlip` earns: a lock only closes the games
+ * that have not kicked off, because those are the only ones the member could
+ * still change. Once every locked game is underway the lock has nothing left
+ * to hold shut.
  */
 export function pickRejectionReason(facts: PickGuardFacts): string | null {
   if (!facts.weekMatchesBoard) return BOOK_ERRORS.locked;
   if (!facts.lineExists) return BOOK_ERRORS.noLine;
   if (facts.gameStarted) return BOOK_ERRORS.locked;
-  if (facts.slipHasLockedPick || facts.existingPickLocked) {
+  if (facts.slipHasStandingLock || facts.existingPickLocked) {
     return BOOK_ERRORS.slipLocked;
   }
+  return null;
+}
+
+export interface UnlockGuardFacts {
+  /** The board the click came from is the week the server is trading. */
+  weekMatchesBoard: boolean;
+  /** The member has a locked pick on a game that has not kicked off yet. */
+  hasStandingLock: boolean;
+}
+
+/**
+ * Why an unlock must be refused, or null when it may go through.
+ *
+ * Unlocking is the undo for an early lock, and it only ever reaches games that
+ * have not kicked off: a slip whose games are all underway has nothing to give
+ * back, which is a refusal rather than a silent no-op so the member is told
+ * why the button did nothing.
+ */
+export function unlockRejectionReason(facts: UnlockGuardFacts): string | null {
+  if (!facts.weekMatchesBoard) return BOOK_ERRORS.locked;
+  if (!facts.hasStandingLock) return BOOK_ERRORS.nothingToUnlock;
   return null;
 }
 
@@ -846,6 +880,8 @@ export const BOOK_ERRORS = {
   noProp: "There is no such prop.",
   noFuture: "That one is not on the futures board.",
   futureLocked: "That market is closed. You had all season.",
+  nothingToUnlock:
+    "Every game on your slip has kicked off. Those are history now.",
 } as const;
 
 // ---------------------------------------------------------------------------
