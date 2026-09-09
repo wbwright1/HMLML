@@ -8,12 +8,12 @@ import type {
 } from "@/lib/book/shared";
 
 /**
- * The Tracking tab: the pick strip, season ATS leaderboard and pick'ems grid
- * (left) with Streak Watch (right), matching the design's minmax(0,1fr) 340px
+ * The Tracking tab: Week Pulse, the game-first slate and the season ledger
+ * (left) with Streak Watch (right), on the design's minmax(0,1fr) 340px
  * layout. Server component: all the data is fetched by app/book/page.tsx up
- * front, so this only lays it out. Session-dependent bits (the "YOU" column,
- * the viewer's own open picks) and the pick controls themselves live inside
- * TrackingIsland, the one client boundary.
+ * front, so this only lays it out. Session-dependent bits (the viewer's "YOU"
+ * chip, their own not-yet-revealed picks) and the pick controls themselves
+ * live inside TrackingIsland, the one client boundary on this tab.
  */
 export function TrackingPane({
   leaderboard,

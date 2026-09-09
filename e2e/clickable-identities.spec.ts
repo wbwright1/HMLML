@@ -180,9 +180,27 @@ test("The Book's ATS leaderboard rows link to their franchise", async ({
   // The Book's tabs are client state, not a search param: all four panes ship
   // in the cached HTML and the pill flips which one is visible.
   await page.getByRole("tab", { name: "Tracking" }).click();
-  const row = page
-    .locator('[id="book-pane-tracking"] a[href^="/teams/"]:visible')
-    .first();
+  // Scoped to a ledger row on purpose. The Tracking tab's other franchise
+  // surfaces (the slate's side rows, the picker rail chips) are deliberately
+  // NOT links: a 26px chip would break the phone's 44px touch floor, so the
+  // ledger is where a franchise identity is clickable and this pins that.
+  const rows = page.locator(
+    '[id="book-pane-tracking"] [data-testid="ledger-row"]',
+  );
+
+  // The ledger holds no rows at all until something is graded league-wide, and
+  // it says so in a sentence rather than fabricating twelve 0-0 records. Which
+  // branch runs is decided by the real database, and both are asserted: a
+  // deleted link cannot pass the first, and a silently empty card cannot pass
+  // the second.
+  if ((await rows.count()) === 0) {
+    await expect(
+      page.getByText("No graded picks yet. The ledger opens once a week finishes."),
+    ).toBeVisible();
+    return;
+  }
+
+  const row = rows.locator('a[href^="/teams/"]:visible').first();
   await expect(row).toBeVisible();
   const href = await row.getAttribute("href");
   expect(href).toMatch(/^\/teams\/[a-z0-9-]+$/);

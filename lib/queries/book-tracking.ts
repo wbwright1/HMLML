@@ -33,9 +33,14 @@ import { resolveAbbreviation } from "@/lib/franchise-abbreviations";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 import type { BookGame } from "@/lib/book/shared";
 import {
+  buildDivisionRace,
   buildPickemsCell,
+  divisionTagLabel,
   groupPickersByDivision,
+  orderAtsLeaderboard,
+  UNDIVIDED_DIVISION_LABEL,
   type AtsLeaderboardRow,
+  type PickemsDivision,
   type PickemsGridData,
   type PickemsRow,
   type PickerSeed,
@@ -236,75 +241,93 @@ function gradedOutcomesByMember(
 // ---------------------------------------------------------------------------
 
 /**
- * The season ATS leaderboard: every member with at least one graded pick,
- * ranked by win pct then units. Nobody with zero graded picks gets a
- * fabricated 0-0 row (superlatives rule: absence is fine, fabrication is not).
+ * How many distinct divisions this season's franchises sit in. One (or none)
+ * means the ledger's D1/D2 tags and the Division race strip are noise, so both
+ * are dropped rather than restating the card.
  */
-export async function getSeasonAtsLeaderboard(
-  seasonId: number,
-): Promise<AtsLeaderboardRow[]> {
-  const [pickers, graded] = await Promise.all([
-    getPickers(seasonId),
-    getFinalGradedPicks(seasonId),
-  ]);
-
-  const byMember = gradedOutcomesByMember(pickers, graded);
-
-  const unranked: Omit<AtsLeaderboardRow, "rank" | "isLeader" | "isLast">[] = [];
-
-  for (const [memberId, sortedDesc] of byMember) {
-    // gradedOutcomesByMember already dropped anyone without a franchise (no
-    // crest to show), so this lookup cannot miss.
-    const picker = pickers.get(memberId)!;
-
-    const tally = tallyOutcomes(sortedDesc.map((p) => p.outcome));
-    const streak = deriveStreak(sortedDesc.map((p) => p.outcome));
-
-    unranked.push({
-      memberId,
-      displayName: picker.displayName,
-      franchiseSlug: picker.franchiseSlug,
-      franchiseName: picker.franchiseName,
-      franchiseAbbreviation: picker.franchiseAbbreviation,
-      franchiseColor: picker.franchiseColor,
-      franchiseAvatarUrl: picker.franchiseAvatarUrl,
-      record: formatAtsRecord(tally),
-      streakLabel: streak ? `${streak.type}${streak.length}` : null,
-      streakType: streak?.type ?? null,
-      units: tally.units,
-    });
-  }
-
-  // Win pct was folded away by tallyOutcomes above (only the formatted record
-  // survives on the row), so it is re-derived from that record here to sort
-  // on the same basis the acceptance criteria asks for: win pct, then units.
-  const withPct = unranked.map((row) => {
-    const [wins, losses] = row.record.split("-").map(Number);
-    const decisions = (wins ?? 0) + (losses ?? 0);
-    const winPct = decisions > 0 ? (wins ?? 0) / decisions : 0;
-    return { row, winPct };
-  });
-
-  withPct.sort((a, b) => {
-    if (b.winPct !== a.winPct) return b.winPct - a.winPct;
-    return b.row.units - a.row.units;
-  });
-
-  return withPct.map(({ row }, index) => ({
-    ...row,
-    rank: index + 1,
-    isLeader: index === 0,
-    isLast: index === withPct.length - 1 && withPct.length > 1,
-  }));
+function divisionCount(pickers: Map<number, Picker>): number {
+  return new Set(
+    [...pickers.values()].map((p) => p.divisionName ?? UNDIVIDED_DIVISION_LABEL),
+  ).size;
 }
+
+/**
+ * The season ATS leaderboard: ALL twelve members, ranked 1..N by win pct then
+ * units, with everyone who has nothing graded yet trailing behind on a null
+ * rank. Nobody with zero graded picks gets a fabricated 0-0 record (the
+ * superlatives rule: absence is fine, fabrication is not), and nobody is
+ * dropped from the list either, because the ledger is also the tab's roll call.
+ *
+ * React-cached: getPickemsGrid reads the ranking back out of it to name each
+ * division's leader, so the two surfaces cannot disagree about who is ahead.
+ */
+export const getSeasonAtsLeaderboard = cache(
+  async function getSeasonAtsLeaderboard(
+    seasonId: number,
+  ): Promise<AtsLeaderboardRow[]> {
+    const [pickers, graded] = await Promise.all([
+      getPickers(seasonId),
+      getFinalGradedPicks(seasonId),
+    ]);
+
+    const byMember = gradedOutcomesByMember(pickers, graded);
+    const divisions = divisionCount(pickers);
+
+    function identity(picker: Picker) {
+      return {
+        memberId: picker.memberId,
+        displayName: picker.displayName,
+        franchiseSlug: picker.franchiseSlug,
+        franchiseName: picker.franchiseName,
+        franchiseAbbreviation: picker.franchiseAbbreviation,
+        franchiseColor: picker.franchiseColor,
+        franchiseAvatarUrl: picker.franchiseAvatarUrl,
+        divisionTag:
+          divisions > 1 && picker.divisionName !== null
+            ? divisionTagLabel(picker.divisionName)
+            : null,
+      };
+    }
+
+    // Every member, graded or not. orderAtsLeaderboard (pure, unit-tested)
+    // decides what "ranked" means and what order the list comes back in;
+    // this only builds the rows.
+    const rows = [...pickers.values()].map((picker) => {
+      const history = byMember.get(picker.memberId);
+      if (!history) {
+        return {
+          ...identity(picker),
+          record: null,
+          streakLabel: null,
+          streakType: null,
+          units: null,
+        };
+      }
+
+      const outcomes = history.map((p) => p.outcome);
+      const tally = tallyOutcomes(outcomes);
+      const streak = deriveStreak(outcomes);
+
+      return {
+        ...identity(picker),
+        record: formatAtsRecord(tally),
+        streakLabel: streak ? `${streak.type}${streak.length}` : null,
+        streakType: streak?.type ?? null,
+        units: tally.units,
+      };
+    });
+
+    return orderAtsLeaderboard(rows);
+  },
+);
 
 // ---------------------------------------------------------------------------
 // Pick'ems grid
 // ---------------------------------------------------------------------------
 
 /**
- * The current week's pick'ems grid: one column per member (clustered under
- * their division), one row per game.
+ * The current week's pick'ems slate: one row per game, carrying every member's
+ * cell on that game plus the divisions the picker rail buckets into.
  *
  * Takes the board it should describe rather than fetching its own: /book has
  * already built that exact week for the Board tab, and re-running the whole
@@ -337,7 +360,6 @@ export async function getPickemsGrid(
   const gradedByMember = gradedOutcomesByMember(pickers, graded);
 
   const seeds: PickerSeed[] = [...pickers.values()].map((picker) => {
-    const outcomes = gradedByMember.get(picker.memberId);
     return {
       memberId: picker.memberId,
       displayName: picker.displayName,
@@ -351,11 +373,6 @@ export async function getPickemsGrid(
         resolveAbbreviation(picker.franchiseId, picker.franchiseName),
       color: picker.franchiseColor,
       avatarUrl: picker.franchiseAvatarUrl,
-      // Empty, never "0-0": a member who has not been graded yet has no
-      // record to show, and inventing one is a fabricated claim.
-      record: outcomes
-        ? formatAtsRecord(tallyOutcomes(outcomes.map((o) => o.outcome)))
-        : "",
       divisionName: picker.divisionName,
     };
   });
@@ -410,7 +427,27 @@ export async function getPickemsGrid(
     };
   });
 
-  return { divisions: groupPickersByDivision(seeds), rows };
+  // The race strip's combined figures are computed over ranked members only,
+  // and the leader is read straight out of the leaderboard's own ranking so
+  // "who is ahead in Division 1" cannot disagree with the rows below it.
+  const leaderboard = await getSeasonAtsLeaderboard(seasonId);
+  const rankByMemberId = new Map<number, number>();
+  for (const row of leaderboard) {
+    if (row.rank !== null) rankByMemberId.set(row.memberId, row.rank);
+  }
+  const outcomesByMember = new Map<number, PickOutcome[]>();
+  for (const [memberId, outcomes] of gradedByMember) {
+    outcomesByMember.set(
+      memberId,
+      outcomes.map((o) => o.outcome),
+    );
+  }
+
+  const divisions: PickemsDivision[] = groupPickersByDivision(seeds).map(
+    (group) => buildDivisionRace(group, { outcomesByMember, rankByMemberId }),
+  );
+
+  return { divisions, rows };
 }
 
 // ---------------------------------------------------------------------------

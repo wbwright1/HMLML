@@ -100,9 +100,13 @@ test.describe("The Board, signed out", () => {
     // Read-only: nothing on the board is pressable for a visitor.
     await expect(page.locator('button[aria-label^="Pick "]')).toHaveCount(0);
 
-    // And the slip says why.
+    // And the slip says why. Scoped to the Board's own pane: the Props tab
+    // ships in the same cached HTML and opens with the same sentence, so an
+    // unscoped match is two elements and a strict-mode failure.
     await expect(
-      page.getByText("Claim your team to get a slip."),
+      page
+        .locator('[id="book-pane-board"]')
+        .getByText("Claim your team to get a slip."),
     ).toBeVisible();
 
     // One payout vocabulary sitewide: "returns" (total) plus a labeled
