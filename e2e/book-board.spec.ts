@@ -222,4 +222,81 @@ test.describe("The Board, signed in", () => {
       )
       .toBe(0);
   });
+
+  test("locks the slip early, then hands back the games that have not kicked off", async ({
+    page,
+  }) => {
+    const sql = getSql();
+    const lockedPicks = async () => {
+      const rows = (await sql`
+        SELECT COUNT(*)::int AS n FROM "book_picks"
+        WHERE "member_id" = ${seededMemberId} AND "locked_at" IS NOT NULL`) as {
+        n: number;
+      }[];
+      return rows[0]?.n ?? -1;
+    };
+
+    await signIn(page, fx.memberClaimCode);
+    await page.goto("/book");
+
+    // Only an open game renders pick buttons, two per game (home then away),
+    // so taking every other one puts a side on every game the slip can lock.
+    // They appear only once the island has resolved the session against the
+    // ISR-cached board, so wait for the first one before counting: a bare
+    // count() here races the fetch and reads zero.
+    // Scoped to the Board pane: the tab shell keeps the Tracking pane mounted
+    // (hidden) and its pick'ems strip carries identically labelled buttons.
+    const buttons = page
+      .locator("#book-pane-board")
+      .locator('button[aria-label^="Pick "]');
+    let hasOpenGames = true;
+    try {
+      await expect(buttons.first()).toBeVisible({ timeout: 15000 });
+    } catch {
+      hasOpenGames = false;
+    }
+    test.skip(!hasOpenGames, "every game on the board has already kicked off");
+    const count = await buttons.count();
+    const bookedPicks = async () => {
+      const rows = (await sql`
+        SELECT COUNT(*)::int AS n FROM "book_picks"
+        WHERE "member_id" = ${seededMemberId}`) as { n: number }[];
+      return rows[0]?.n ?? -1;
+    };
+
+    // One game at a time, each confirmed in Postgres before the next click:
+    // the picks all run through the same slip state machine, and firing six of
+    // them into a board that revalidates after every write is a race this test
+    // has no reason to run.
+    for (let i = 0; i < count; i += 2) {
+      await buttons.nth(i).click();
+      await expect(buttons.nth(i)).toHaveAttribute("aria-pressed", "true");
+      await expect.poll(bookedPicks, { timeout: 15000 }).toBe(i / 2 + 1);
+    }
+
+    await page.getByRole("button", { name: "Lock in picks" }).click();
+
+    // Locked in the browser: the CTA becomes the commitment and every pick
+    // control is gone.
+    await expect(page.getByText("Picks are in. No takebacks.")).toBeVisible();
+    await expect(buttons).toHaveCount(0);
+
+    // ...and locked in Postgres.
+    await expect
+      .poll(lockedPicks, { timeout: 15000 })
+      .toBe(Math.ceil(count / 2));
+
+    // The undo: none of these games has kicked off (they were pickable a
+    // moment ago), so the whole slip comes back.
+    await page.getByRole("button", { name: "Unlock open games" }).click();
+
+    await expect.poll(lockedPicks, { timeout: 15000 }).toBe(0);
+
+    // And the board is genuinely pickable again, not just visually reopened:
+    // switching a side writes the new side to the row.
+    const awaySide = page.locator('button[aria-label^="Pick "]').nth(1);
+    await expect(awaySide).toBeVisible();
+    await awaySide.click();
+    await expect(awaySide).toHaveAttribute("aria-pressed", "true");
+  });
 });

@@ -1,9 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { useRouter } from "next/navigation";
 import { useSessionMember } from "@/components/use-session-member";
-import { togglePick, lockSlip } from "@/app/actions/book";
+import { togglePick, lockSlip, unlockSlip } from "@/app/actions/book";
 import {
   notifyBookPicksChanged,
   subscribeToBookPicksChanged,
@@ -39,24 +46,43 @@ import {
  *    consensus bars and pick counts live there) and fires the pick-events
  *    signal so the other island's copy of the slip refetches.
  *
- * Nothing here is a permission check: `togglePick`/`lockSlip` re-enforce
- * kickoff locks and slip locks server-side regardless of what this allows.
+ * Nothing here is a permission check: `togglePick`/`lockSlip`/`unlockSlip`
+ * re-enforce kickoff locks and slip locks server-side regardless of what this
+ * allows.
  */
 export interface BookSlip {
   signedIn: boolean;
   /** Null while the session is still resolving, or when signed out. */
   franchiseSlug: string | null;
   picks: Map<number, MemberBookPick>;
+  /** The member locked their slip early: the commitment, for the slip's CTA. */
   slipLocked: boolean;
+  /**
+   * The lock still holds something shut: a locked pick on a game yet to kick
+   * off. This, not `slipLocked`, is what a per-game control should read, since
+   * an unlocked slip can still carry stamps on games already underway.
+   */
+  standingLock: boolean;
   error: string | null;
   /** The matchup with an action in flight, so its controls can go inert. */
   pendingMatchup: number | null;
   canPick: boolean;
+  /** There is a locked pick on a game that has not kicked off, so it can be given back. */
+  canUnlock: boolean;
   pick: (game: BookGame, side: BookSideKey) => void;
   lock: () => void;
+  unlock: () => void;
 }
 
-export function useBookSlip(week: number): BookSlip {
+/**
+ * `games` is the board this slip is being shown against. It is what separates a
+ * lock that still STANDS (a locked pick on a game yet to kick off, which closes
+ * the slip and can be handed back) from one that has simply aged out, and the
+ * server's own guard draws the same line. The statuses come from ISR-cached
+ * HTML and can lag a kickoff by minutes; that is fine, because every action
+ * re-derives the truth from nfl_games before it writes.
+ */
+export function useBookSlip(week: number, games: BookGame[]): BookSlip {
   const session = useSessionMember();
   const router = useRouter();
   const signedIn = session.status === "ready" && session.member !== null;
@@ -64,7 +90,6 @@ export function useBookSlip(week: number): BookSlip {
     session.status === "ready" ? (session.member?.franchiseSlug ?? null) : null;
 
   const [picks, setPicks] = useState<Map<number, MemberBookPick>>(new Map());
-  const [slipLocked, setSlipLocked] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pendingMatchup, setPendingMatchup] = useState<number | null>(null);
   const [, startTransition] = useTransition();
@@ -92,7 +117,6 @@ export function useBookSlip(week: number): BookSlip {
           const mine = picksForBoardWeek(body?.data, week);
           if (!mine) return;
           setPicks(new Map(mine.map((p) => [p.matchupId, p])));
-          setSlipLocked(mine.some((p) => p.lockedAt !== null));
         },
       )
       .catch(() => {
@@ -109,7 +133,32 @@ export function useBookSlip(week: number): BookSlip {
     return subscribeToBookPicksChanged(fetchPicks);
   }, [fetchPicks]);
 
-  const canPick = signedIn && !slipLocked;
+  const openMatchups = useMemo(
+    () =>
+      new Set(
+        games.filter((g) => g.status === "open").map((g) => g.matchupId),
+      ),
+    [games],
+  );
+
+  const slipLocked = useMemo(
+    () => [...picks.values()].some((p) => p.lockedAt !== null),
+    [picks],
+  );
+
+  // A lock only holds shut what has not happened yet: once every locked game is
+  // underway the slip is closed by kickoff, not by the lock, and there is
+  // nothing left to unlock.
+  const standingLock = useMemo(
+    () =>
+      [...picks.values()].some(
+        (p) => p.lockedAt !== null && openMatchups.has(p.matchupId),
+      ),
+    [picks, openMatchups],
+  );
+
+  const canPick = signedIn && !standingLock;
+  const canUnlock = signedIn && standingLock;
 
   const pick = useCallback(
     (game: BookGame, side: BookSideKey) => {
@@ -182,7 +231,6 @@ export function useBookSlip(week: number): BookSlip {
           setError(result.error);
           return;
         }
-        setSlipLocked(true);
         setPicks((current) => {
           const stamped = new Map(current);
           const now = new Date().toISOString();
@@ -202,15 +250,55 @@ export function useBookSlip(week: number): BookSlip {
     });
   }, [canPick, router, week]);
 
+  const unlock = useCallback(() => {
+    if (!canUnlock) return;
+    setError(null);
+    sequenceRef.current++;
+    const previous = picks;
+
+    // Optimistic, and scoped exactly the way the server scopes its update: only
+    // the games still to kick off come back. A pick on a game already underway
+    // keeps its stamp.
+    setPicks((current) => {
+      const reopened = new Map(current);
+      for (const [key, value] of reopened) {
+        if (openMatchups.has(key)) reopened.set(key, { ...value, lockedAt: null });
+      }
+      return reopened;
+    });
+
+    startTransition(async () => {
+      try {
+        const result = await unlockSlip({ week });
+        if (!result.ok) {
+          setError(result.error);
+          sequenceRef.current++;
+          setPicks(previous);
+          return;
+        }
+        router.refresh();
+        // The other tab is already mounted and still showing a closed slip.
+        notifyBookPicksChanged();
+      } catch {
+        setError(BOOK_COPY.actionFailed);
+        sequenceRef.current++;
+        setPicks(previous);
+      }
+    });
+  }, [canUnlock, openMatchups, picks, router, week]);
+
   return {
     signedIn,
     franchiseSlug,
     picks,
     slipLocked,
+    standingLock,
     error,
     pendingMatchup,
     canPick,
+    canUnlock,
     pick,
     lock,
+    unlock,
   };
 }

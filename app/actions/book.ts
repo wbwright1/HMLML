@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { and, eq, isNotNull, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { bookFuturePicks, bookPicks, bookPropPicks } from "@/lib/db/schema";
 import { getSessionMember } from "@/lib/auth";
@@ -10,7 +10,7 @@ import {
   getBookBoard,
   getBookLine,
   getMemberPicksForWeek,
-  getRosterKickoffStates,
+  getUnstartedMatchupIds,
   resolveBookWeek,
 } from "@/lib/queries/book";
 import { getBookPropById, isWeekLocked } from "@/lib/queries/book-props";
@@ -25,6 +25,7 @@ import {
   futurePickRejectionReason,
   pickRejectionReason,
   propPickRejectionReason,
+  unlockRejectionReason,
   type BookActionResult,
   type FuturePickActionResult,
 } from "@/lib/book/shared";
@@ -87,20 +88,24 @@ export async function togglePick(input: {
 
   const line = await getBookLine(bookWeek.seasonId, week, matchupId);
 
-  const kickoffs = line
-    ? await getRosterKickoffStates(
+  // One read answers both lock questions below: whether THIS game is still
+  // open, and whether the member's early lock still stands over anything.
+  const unstarted = line
+    ? await getUnstartedMatchupIds(
         bookWeek.seasonId,
         bookWeek.seasonYear,
         week,
       )
-    : new Map<string, { started: boolean }>();
+    : new Set<number>();
 
   // Locking is a SLIP-level commitment, not a per-row one. Checking only this
   // game's row let a member lock their slip and then still add a pick to a game
   // the sync priced afterwards, because a row that does not exist carries no
-  // lockedAt. Any locked pick in the week closes the whole slip.
-  const [lockedRow] = await db
-    .select({ id: bookPicks.id })
+  // lockedAt. A locked pick on a game that has not kicked off closes the whole
+  // slip; one on a game already underway does not, since unlockSlip leaves
+  // those stamped and they are history regardless.
+  const lockedRows = await db
+    .select({ matchupId: bookPicks.matchupId })
     .from(bookPicks)
     .where(
       and(
@@ -109,8 +114,7 @@ export async function togglePick(input: {
         eq(bookPicks.week, week),
         isNotNull(bookPicks.lockedAt),
       ),
-    )
-    .limit(1);
+    );
 
   const [existing] = await db
     .select()
@@ -130,12 +134,8 @@ export async function togglePick(input: {
   const rejection = pickRejectionReason({
     weekMatchesBoard: bookWeek.week === week,
     lineExists: line !== null,
-    gameStarted: Boolean(
-      line &&
-        (kickoffs.get(line.homeRosterId)?.started ||
-          kickoffs.get(line.awayRosterId)?.started),
-    ),
-    slipHasLockedPick: Boolean(lockedRow),
+    gameStarted: line !== null && !unstarted.has(matchupId),
+    slipHasStandingLock: lockedRows.some((r) => unstarted.has(r.matchupId)),
     existingPickLocked: existing?.lockedAt != null,
   });
   if (rejection) return fail(rejection);
@@ -342,7 +342,9 @@ async function restoreFuturePick(
  *
  * Locking is sugar: every pick locks by itself at kickoff regardless. What this
  * buys is the commitment, so it is only allowed once every open game has a
- * side, exactly as the button in the design says.
+ * side, exactly as the button in the design says. `unlockSlip` hands the
+ * commitment back for any game that has not kicked off yet: an accidental lock
+ * should not cost a member the injury news that breaks on Sunday morning.
  */
 export async function lockSlip(input: { week: number }): Promise<BookActionResult> {
   const parsed = lockInput.safeParse(input);
@@ -374,6 +376,82 @@ export async function lockSlip(input: { week: number }): Promise<BookActionResul
         eq(bookPicks.seasonId, bookWeek.seasonId),
         eq(bookPicks.week, week),
         isNull(bookPicks.lockedAt),
+      ),
+    );
+
+  revalidatePath("/book");
+  return { ok: true, error: null };
+}
+
+/**
+ * Reopens the games on a locked slip that have not kicked off yet.
+ *
+ * The undo for `lockSlip`, which is otherwise a one-way door: an accidental
+ * lock on Wednesday used to cost a member every roster decision left in the
+ * week, and injury news does not wait for kickoff. What it deliberately cannot
+ * do is reopen a game already underway; those picks keep their `lockedAt` and
+ * stay history, which is also why `pickRejectionReason` only counts a lock as
+ * standing while its game is still in the future.
+ *
+ * The unstarted set is read before the write and the write is scoped to it, so
+ * a kickoff landing in between can at worst clear the stamp on a game that just
+ * started. That is harmless: `togglePick` refuses a started game on its own
+ * (`gameStarted` comes from the same kickoff read, not from `lockedAt`), and
+ * grading never looks at the stamp.
+ */
+export async function unlockSlip(input: {
+  week: number;
+}): Promise<BookActionResult> {
+  const parsed = lockInput.safeParse(input);
+  if (!parsed.success) return fail(BOOK_ERRORS.badInput);
+  const { week } = parsed.data;
+
+  const member = await getSessionMember();
+  if (!member) return fail(BOOK_ERRORS.signedOut);
+
+  const bookWeek = await resolveBookWeek();
+  if (!bookWeek) return fail(BOOK_ERRORS.noSeason);
+
+  const unstarted =
+    bookWeek.week === week
+      ? await getUnstartedMatchupIds(
+          bookWeek.seasonId,
+          bookWeek.seasonYear,
+          week,
+        )
+      : new Set<number>();
+
+  const lockedRows = await db
+    .select({ matchupId: bookPicks.matchupId })
+    .from(bookPicks)
+    .where(
+      and(
+        eq(bookPicks.memberId, member.id),
+        eq(bookPicks.seasonId, bookWeek.seasonId),
+        eq(bookPicks.week, week),
+        isNotNull(bookPicks.lockedAt),
+      ),
+    );
+
+  const reopening = lockedRows
+    .map((r) => r.matchupId)
+    .filter((id) => unstarted.has(id));
+
+  const rejection = unlockRejectionReason({
+    weekMatchesBoard: bookWeek.week === week,
+    hasStandingLock: reopening.length > 0,
+  });
+  if (rejection) return fail(rejection);
+
+  await db
+    .update(bookPicks)
+    .set({ lockedAt: null, updatedAt: new Date() })
+    .where(
+      and(
+        eq(bookPicks.memberId, member.id),
+        eq(bookPicks.seasonId, bookWeek.seasonId),
+        eq(bookPicks.week, week),
+        inArray(bookPicks.matchupId, reopening),
       ),
     );
 

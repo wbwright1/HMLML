@@ -17,6 +17,7 @@ import {
   picksForBoardWeek,
   pickRejectionReason,
   propPickRejectionReason,
+  unlockRejectionReason,
   type HubFooterGame,
   type MemberBookPick,
   type MemberFuturePick,
@@ -29,7 +30,7 @@ const OPEN: PickGuardFacts = {
   weekMatchesBoard: true,
   lineExists: true,
   gameStarted: false,
-  slipHasLockedPick: false,
+  slipHasStandingLock: false,
   existingPickLocked: false,
 };
 
@@ -69,7 +70,7 @@ describe("pickRejectionReason", () => {
     expect(
       pickRejectionReason({
         ...OPEN,
-        slipHasLockedPick: true,
+        slipHasStandingLock: true,
         existingPickLocked: false,
       }),
     ).toBe(BOOK_ERRORS.slipLocked);
@@ -83,10 +84,39 @@ describe("pickRejectionReason", () => {
         weekMatchesBoard: false,
         lineExists: false,
         gameStarted: true,
-        slipHasLockedPick: true,
+        slipHasStandingLock: true,
         existingPickLocked: true,
       }),
     ).toBe(BOOK_ERRORS.locked);
+  });
+
+  it("lets a pick through once every locked game has kicked off", () => {
+    // The lock was a commitment over games that had not happened yet. With all
+    // of those underway it holds nothing shut, so a game the sync priced
+    // afterwards is pickable rather than collateral damage.
+    expect(
+      pickRejectionReason({ ...OPEN, slipHasStandingLock: false }),
+    ).toBeNull();
+  });
+});
+
+describe("unlockRejectionReason", () => {
+  it("lets an unlock through while a locked game is still to kick off", () => {
+    expect(
+      unlockRejectionReason({ weekMatchesBoard: true, hasStandingLock: true }),
+    ).toBeNull();
+  });
+
+  it("refuses an unlock from a board that has moved on", () => {
+    expect(
+      unlockRejectionReason({ weekMatchesBoard: false, hasStandingLock: true }),
+    ).toBe(BOOK_ERRORS.locked);
+  });
+
+  it("refuses an unlock with nothing left in the future to give back", () => {
+    expect(
+      unlockRejectionReason({ weekMatchesBoard: true, hasStandingLock: false }),
+    ).toBe(BOOK_ERRORS.nothingToUnlock);
   });
 });
 
