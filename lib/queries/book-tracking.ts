@@ -37,6 +37,7 @@ import {
   buildPickemsCell,
   divisionTagLabel,
   groupPickersByDivision,
+  orderAtsLeaderboard,
   UNDIVIDED_DIVISION_LABEL,
   type AtsLeaderboardRow,
   type PickemsDivision,
@@ -288,65 +289,35 @@ export const getSeasonAtsLeaderboard = cache(
       };
     }
 
-    const scored: {
-      row: Omit<AtsLeaderboardRow, "rank" | "isLeader" | "isLast">;
-      winPct: number;
-    }[] = [];
-
-    for (const [memberId, sortedDesc] of byMember) {
-      // gradedOutcomesByMember already dropped anyone without a franchise (no
-      // crest to show), so this lookup cannot miss.
-      const picker = pickers.get(memberId)!;
-
-      const tally = tallyOutcomes(sortedDesc.map((p) => p.outcome));
-      const streak = deriveStreak(sortedDesc.map((p) => p.outcome));
-      const record = formatAtsRecord(tally);
-
-      // Win pct was folded away by tallyOutcomes (only the formatted record
-      // survives on the row), so it is re-derived from that record here to sort
-      // on the basis the acceptance criteria asks for: win pct, then units.
-      const [wins, losses] = record.split("-").map(Number);
-      const decisions = (wins ?? 0) + (losses ?? 0);
-
-      scored.push({
-        row: {
+    // Every member, graded or not. orderAtsLeaderboard (pure, unit-tested)
+    // decides what "ranked" means and what order the list comes back in;
+    // this only builds the rows.
+    const rows = [...pickers.values()].map((picker) => {
+      const history = byMember.get(picker.memberId);
+      if (!history) {
+        return {
           ...identity(picker),
-          record,
-          streakLabel: streak ? `${streak.type}${streak.length}` : null,
-          streakType: streak?.type ?? null,
-          units: tally.units,
-        },
-        winPct: decisions > 0 ? (wins ?? 0) / decisions : 0,
-      });
-    }
+          record: null,
+          streakLabel: null,
+          streakType: null,
+          units: null,
+        };
+      }
 
-    scored.sort((a, b) => {
-      if (b.winPct !== a.winPct) return b.winPct - a.winPct;
-      return (b.row.units ?? 0) - (a.row.units ?? 0);
+      const outcomes = history.map((p) => p.outcome);
+      const tally = tallyOutcomes(outcomes);
+      const streak = deriveStreak(outcomes);
+
+      return {
+        ...identity(picker),
+        record: formatAtsRecord(tally),
+        streakLabel: streak ? `${streak.type}${streak.length}` : null,
+        streakType: streak?.type ?? null,
+        units: tally.units,
+      };
     });
 
-    const ranked: AtsLeaderboardRow[] = scored.map(({ row }, index) => ({
-      ...row,
-      rank: index + 1,
-      isLeader: index === 0,
-      isLast: index === scored.length - 1 && scored.length > 1,
-    }));
-
-    const unranked: AtsLeaderboardRow[] = [...pickers.values()]
-      .filter((picker) => !byMember.has(picker.memberId))
-      .sort((a, b) => a.franchiseName.localeCompare(b.franchiseName))
-      .map((picker) => ({
-        ...identity(picker),
-        rank: null,
-        isLeader: false,
-        isLast: false,
-        record: null,
-        streakLabel: null,
-        streakType: null,
-        units: null,
-      }));
-
-    return [...ranked, ...unranked];
+    return orderAtsLeaderboard(rows);
   },
 );
 

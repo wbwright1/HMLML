@@ -417,9 +417,15 @@ test.describe("Tracking tab pick'ems", () => {
     // Until every open game has a pick, the lock row says so instead of
     // offering a button. That is the third state of the one lock control this
     // tab has, and the tab now has one at all, which it did not before.
-    await expect(
-      trackingPanel(page).getByText(/picks? still open/),
-    ).toBeVisible();
+    const stillOpen = trackingPanel(page).getByText(/picks? still open/);
+    await expect(stillOpen).toBeVisible();
+
+    // Phone touch floor. Measured at 390 because that is where it matters, and
+    // on the real rendered box rather than on the class string: 14px text with
+    // py-2 lands at ~36px, well under the 44px CLAUDE.md and the spec require.
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect((await stillOpen.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await page.setViewportSize({ width: 1280, height: 720 });
 
     // Capture the REAL server-action request behind the first pick. Once the
     // slip locks the button is gone (which is the point), so replaying this
@@ -458,6 +464,7 @@ test.describe("Tracking tab pick'ems", () => {
       name: /lock in picks/i,
     });
     await expect(lockButton).toBeVisible({ timeout: 10000 });
+    expect((await lockButton.boundingBox())!.height).toBeGreaterThanOrEqual(44);
     await lockButton.click();
     await expect(
       trackingPanel(page).getByText("Picks are in. No takebacks."),
@@ -472,9 +479,11 @@ test.describe("Tracking tab pick'ems", () => {
       trackingPanel(page).getByText("Locked in").first(),
     ).toBeVisible();
     // ...and the lock can be handed back while the games are still to kick off.
-    await expect(
-      trackingPanel(page).getByRole("button", { name: /unlock open games/i }),
-    ).toBeVisible();
+    const unlockButton = trackingPanel(page).getByRole("button", {
+      name: /unlock open games/i,
+    });
+    await expect(unlockButton).toBeVisible();
+    expect((await unlockButton.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 
     // ...and the Board agrees, with no reload, through the pick-events signal.
     await page.getByRole("tab", { name: "The Board" }).click();

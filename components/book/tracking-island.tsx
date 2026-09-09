@@ -12,6 +12,7 @@ import {
 } from "@/components/book/side-row";
 import {
   BOOK_COPY,
+  bucketRailPickers,
   divisionRailLabel,
   type AtsLeaderboardRow,
   type BookGame,
@@ -22,6 +23,7 @@ import {
   type PickemsRow,
   type PickerColumn,
   type PickOutcome,
+  type RailBucket,
 } from "@/lib/book/shared";
 
 /**
@@ -98,23 +100,30 @@ export function TrackingIsland({
     lock();
   }
 
+  const hasGames = games.length > 0;
+
   return (
     <div className="flex flex-col gap-6">
-      <WeekPulse
-        week={week}
-        games={games}
-        rows={grid.rows}
-        members={members}
-        viewerSlug={franchiseSlug}
-        signedIn={signedIn}
-        ownPicks={ownPicks}
-        slipLocked={slipLocked}
-        canUnlock={canUnlock}
-        openWithoutPick={openWithoutPick}
-        error={error}
-        onLock={onLock}
-        onUnlock={unlock}
-      />
+      {/* No games means no sheet: a "0/0 complete" pulse over an armed lock
+          button that would commit nothing is worse than saying so once, in the
+          slate's own empty sentence below. */}
+      {hasGames && (
+        <WeekPulse
+          week={week}
+          games={games}
+          rows={grid.rows}
+          members={members}
+          viewerSlug={franchiseSlug}
+          signedIn={signedIn}
+          ownPicks={ownPicks}
+          slipLocked={slipLocked}
+          canUnlock={canUnlock}
+          openWithoutPick={openWithoutPick}
+          error={error}
+          onLock={onLock}
+          onUnlock={unlock}
+        />
+      )}
 
       <section>
         <p className="text-kicker mb-3">
@@ -136,7 +145,8 @@ export function TrackingIsland({
                   game={game}
                   row={rowByMatchup.get(game.matchupId) ?? null}
                   divisions={grid.divisions}
-                  memberCount={members.length}
+                  members={members}
+                  ownPicks={ownPicks}
                   pick={ownPicks.get(game.matchupId) ?? null}
                   viewerSlug={franchiseSlug}
                   signedIn={signedIn}
@@ -358,7 +368,10 @@ function LockRow({
   onLock: () => void;
   onUnlock: () => void;
 }) {
-  const pill = "rounded-full px-4 py-2 text-body-sm font-semibold";
+  // inline-flex plus an explicit floor: 14px text with py-2 measures ~36px,
+  // and this is the only tap target on the tab that is not a side row.
+  const pill =
+    "inline-flex min-h-[44px] items-center justify-center rounded-full px-4 py-2 text-body-sm font-semibold";
 
   let left: React.ReactNode;
   let note: string;
@@ -422,7 +435,8 @@ function SlateCard({
   game,
   row,
   divisions,
-  memberCount,
+  members,
+  ownPicks,
   pick,
   viewerSlug,
   signedIn,
@@ -434,7 +448,8 @@ function SlateCard({
   game: BookGame;
   row: PickemsRow | null;
   divisions: PickemsDivision[];
-  memberCount: number;
+  members: PickerColumn[];
+  ownPicks: Map<number, MemberBookPick>;
   pick: MemberBookPick | null;
   viewerSlug: string | null;
   signedIn: boolean;
@@ -444,9 +459,16 @@ function SlateCard({
   onPick: (game: BookGame, side: BookSideKey) => void;
 }) {
   const open = game.status === "open";
+  // Through the same helper Week Pulse counts with, overlay included: two
+  // counts of the same thing on one screen must not disagree for the second
+  // between a tap and the cached tree catching up.
   const inCount = row
-    ? Object.values(row.cells).filter((cell) => cell.hasPicked).length
+    ? members.filter((member) =>
+        hasPicked(row, member, viewerSlug, signedIn, ownPicks),
+      ).length
     : 0;
+  // Bucketed once per card, not once per side row.
+  const rail = row && !open ? bucketRailPickers(row, divisions) : null;
   const note = open
     ? BOOK_COPY.revealsAtKickoff
     : game.status === "live"
@@ -471,7 +493,7 @@ function SlateCard({
           </span>{" "}
           of{" "}
           <span className="font-mono font-bold tabular-nums text-text-secondary">
-            {memberCount}
+            {members.length}
           </span>{" "}
           in · {note}
         </span>
@@ -492,11 +514,13 @@ function SlateCard({
               onPick={onPick}
               variant="slate"
             />
-            {row && !open && (
+            {rail && row && !open && (
               <PickerRail
-                row={row}
+                buckets={rail[side]}
+                total={side === "home" ? rail.homeCount : rail.awayCount}
+                divisionCount={divisions.length}
                 side={side}
-                divisions={divisions}
+                cells={row.cells}
                 viewerSlug={viewerSlug}
                 signedIn={signedIn}
               />
@@ -515,32 +539,31 @@ function SlateCard({
 /**
  * Who took this side, under the side they took.
  *
- * Rendered only once the game is off the board. Buckets on `cell.side`, never
- * on the abbreviation: two franchises can carry the same three-letter code
- * (#243), and when both teams of one game collide, bucketing on the code puts
- * every picker on the wrong side.
+ * Rendered only once the game is off the board. The bucketing itself is
+ * `bucketRailPickers` (pure, unit-tested): it groups on `cell.side` and never
+ * on the abbreviation, because two franchises can carry the same three-letter
+ * code (#243) and when both teams of one game collide, bucketing on the code
+ * puts every picker on the wrong side.
  */
 function PickerRail({
-  row,
-  side,
-  divisions,
+  buckets,
+  total,
+  divisionCount,
   viewerSlug,
   signedIn,
+  side,
+  cells,
 }: {
-  row: PickemsRow;
-  side: BookSideKey;
-  divisions: PickemsDivision[];
+  buckets: RailBucket[];
+  total: number;
+  divisionCount: number;
   viewerSlug: string | null;
   signedIn: boolean;
+  side: BookSideKey;
+  cells: PickemsRow["cells"];
 }) {
-  const byDivision = divisions.map((division) => ({
-    name: division.name,
-    takers: division.pickers.filter(
-      (picker) => row.cells[String(picker.memberId)]?.side === side,
-    ),
-  }));
-  const total = byDivision.reduce((n, d) => n + d.takers.length, 0);
-  const labelled = divisions.length > 1;
+  const byDivision = buckets;
+  const labelled = divisionCount > 1;
 
   return (
     <div className="flex flex-col gap-[7px] pt-2">
@@ -559,7 +582,7 @@ function PickerRail({
             member={picker}
             side={side}
             isViewer={signedIn && picker.franchiseSlug === viewerSlug}
-            outcome={row.cells[String(picker.memberId)]?.outcome ?? null}
+            outcome={cells[String(picker.memberId)]?.outcome ?? null}
           />
         ));
 
@@ -939,7 +962,9 @@ function LedgerRow({ row, isYou }: { row: AtsLeaderboardRow; isYou: boolean }) {
           <span
             className={`hidden font-mono text-body-sm font-semibold tabular-nums sm:block ${streakColor}`}
           >
-            {row.streakLabel ?? "—"}
+            {/* En dash, decorative: a ranked member whose graded picks are all
+                pushes has no streak to name. */}
+            {row.streakLabel ?? "–"}
           </span>
           <span
             className={`text-right font-mono text-body-sm font-semibold tabular-nums ${unitsColor}`}

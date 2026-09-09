@@ -1,16 +1,11 @@
 import { FranchiseLogo } from "@/components/franchise-logo";
-import {
-  formatMoneyline,
-  formatSpread,
-  gradePick,
-  payoutLabel,
-} from "@/lib/book/pricing";
+import { formatMoneyline, formatSpread, payoutLabel } from "@/lib/book/pricing";
 import {
   DEFAULT_STAKE,
+  gradeGamePick,
   type BookGame,
   type BookSide,
   type BookSideKey,
-  type CoverResult,
   type MemberBookPick,
 } from "@/lib/book/shared";
 
@@ -28,14 +23,6 @@ import {
  * islands that already are, and adding a second boundary would say something
  * about the render tree that is not true.
  */
-
-/** Grades a pick against ITS OWN snapshotted line, never the game's current one. */
-export function gradeGamePick(
-  game: BookGame,
-  pick: MemberBookPick,
-): CoverResult {
-  return gradePick(game.home.points, game.away.points, pick);
-}
 
 /**
  * `board` is the sportsbook row: moneyline, payout, a bare cover check.

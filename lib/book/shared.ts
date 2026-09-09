@@ -6,7 +6,7 @@ export type BookSideKey = "home" | "away";
 
 /** Re-exported so the client island types covers from one place. */
 import type { CoverResult } from "@/lib/book/pricing";
-import { formatMoney, formatMoneyline, formatSpread, pay, payoutTotal } from "@/lib/book/pricing";
+import { formatMoney, formatMoneyline, formatSpread, gradePick, pay, payoutTotal } from "@/lib/book/pricing";
 export type { CoverResult };
 
 /** Grading is pure math with no I/O, so the pick'ems cell builder below can
@@ -664,6 +664,122 @@ export function buildDivisionRace(
     memberCount: group.pickers.length,
     leader,
   };
+}
+
+/**
+ * Grades a member's pick against ITS OWN snapshotted line, never the game's
+ * current one.
+ *
+ * Lives here rather than beside the row that renders it because the divergence
+ * is deliberate and worth stating in one place: a side row's cover tag reflects
+ * `BookGame.coveringSide`, which grades against the CURRENT line, while this
+ * grades against the spread stamped on the pick when it was made. When the line
+ * moved after somebody picked, the two disagree, and the pick is the one the
+ * ledger is built from.
+ */
+export function gradeGamePick(
+  game: { home: { points: number }; away: { points: number } },
+  pick: { side: BookSideKey; spreadAtPick: number },
+): CoverResult {
+  return gradePick(game.home.points, game.away.points, pick);
+}
+
+/** One division's takers on one side of a game, in division order. */
+export interface RailBucket {
+  name: string;
+  takers: PickerColumn[];
+}
+
+export interface RailBuckets {
+  home: RailBucket[];
+  away: RailBucket[];
+  homeCount: number;
+  awayCount: number;
+}
+
+/**
+ * Who took each side of one game, grouped by division.
+ *
+ * Buckets on `cell.side` and NEVER on `cell.abbreviation`. Two franchises in
+ * one league can resolve to the same three-letter code (#243), and when both
+ * teams of a single game collide, bucketing on the code puts every picker on
+ * the wrong side (or on both). This is the fix for that, extracted from the
+ * island so it can be pinned by a test rather than by a code comment.
+ *
+ * A member the payload has not revealed lands in neither bucket, whatever else
+ * their cell says: an `open` row ships `hasPicked: true` with `side: null` for
+ * everybody who picked, and that boolean is a count and never a side.
+ */
+export function bucketRailPickers(
+  row: PickemsRow,
+  divisions: PickemsDivisionGroup[],
+): RailBuckets {
+  const home: RailBucket[] = [];
+  const away: RailBucket[] = [];
+  let homeCount = 0;
+  let awayCount = 0;
+
+  for (const division of divisions) {
+    const homeTakers: PickerColumn[] = [];
+    const awayTakers: PickerColumn[] = [];
+    for (const picker of division.pickers) {
+      const side = row.cells[String(picker.memberId)]?.side;
+      if (side === "home") homeTakers.push(picker);
+      else if (side === "away") awayTakers.push(picker);
+    }
+    homeCount += homeTakers.length;
+    awayCount += awayTakers.length;
+    home.push({ name: division.name, takers: homeTakers });
+    away.push({ name: division.name, takers: awayTakers });
+  }
+
+  return { home, away, homeCount, awayCount };
+}
+
+/** Win pct implied by a formatted ATS record ("20-9-1"); pushes do not count. */
+export function atsWinPct(record: string): number {
+  const [wins, losses] = record.split("-").map(Number);
+  const decisions = (wins ?? 0) + (losses ?? 0);
+  return decisions > 0 ? (wins ?? 0) / decisions : 0;
+}
+
+/**
+ * Orders the season ledger and stamps ranks on it.
+ *
+ * Ranked members (the ones with a graded record) sort by win pct then units and
+ * take rank 1..N straight through, because a leaderboard whose rank column
+ * reads 1, 4, 7, 2 cannot answer "who is fifth". Everyone with nothing graded
+ * follows, alphabetically, on a null rank: all twelve members are always
+ * present and no record, streak or unit figure is ever fabricated for somebody
+ * who has none. `isLast` marks the last RANKED member, never an unranked one.
+ */
+export function orderAtsLeaderboard(
+  rows: Omit<AtsLeaderboardRow, "rank" | "isLeader" | "isLast">[],
+): AtsLeaderboardRow[] {
+  const ranked = rows.filter((row) => row.record !== null);
+  const unranked = rows.filter((row) => row.record === null);
+
+  ranked.sort((a, b) => {
+    const pct = atsWinPct(b.record!) - atsWinPct(a.record!);
+    if (pct !== 0) return pct;
+    return (b.units ?? 0) - (a.units ?? 0);
+  });
+  unranked.sort((a, b) => a.franchiseName.localeCompare(b.franchiseName));
+
+  return [
+    ...ranked.map((row, index) => ({
+      ...row,
+      rank: index + 1,
+      isLeader: index === 0,
+      isLast: index === ranked.length - 1 && ranked.length > 1,
+    })),
+    ...unranked.map((row) => ({
+      ...row,
+      rank: null,
+      isLeader: false,
+      isLast: false,
+    })),
+  ];
 }
 
 export interface StreakTile {

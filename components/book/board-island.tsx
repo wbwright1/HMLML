@@ -9,7 +9,6 @@ import {
   SideRow,
   StatusKicker,
   YourPickRow,
-  gradeGamePick,
 } from "@/components/book/side-row";
 import {
   formatMoney,
@@ -20,6 +19,7 @@ import {
 import {
   BOOK_COPY,
   DEFAULT_STAKE,
+  gradeGamePick,
   MAX_STAKE,
   MIN_PICKS_FOR_CONSENSUS,
   MIN_STAKE,
