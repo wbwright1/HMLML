@@ -6,12 +6,16 @@ import { FranchiseLogo } from "@/components/franchise-logo";
 import { TeamLink } from "@/components/team-link";
 import { useBookSlip } from "@/components/book/use-book-slip";
 import {
-  gradePick,
+  SideRow,
+  StatusKicker,
+  YourPickRow,
+  gradeGamePick,
+} from "@/components/book/side-row";
+import {
   formatMoney,
   formatMoneyline,
   formatSpread,
   pay,
-  payoutLabel,
 } from "@/lib/book/pricing";
 import {
   BOOK_COPY,
@@ -20,9 +24,7 @@ import {
   MIN_PICKS_FOR_CONSENSUS,
   MIN_STAKE,
   type BookGame,
-  type BookSide,
   type BookSideKey,
-  type CoverResult,
   type MemberBookPick,
 } from "@/lib/book/shared";
 
@@ -126,11 +128,6 @@ export function BoardIsland({
 // Game card
 // ---------------------------------------------------------------------------
 
-/** Grades a pick against ITS OWN snapshotted line, never the game's current one. */
-function gradeGamePick(game: BookGame, pick: MemberBookPick): CoverResult {
-  return gradePick(game.home.points, game.away.points, pick);
-}
-
 function GameCard({
   game,
   pick,
@@ -216,168 +213,6 @@ function GameCard({
           </p>
         </div>
       )}
-    </div>
-  );
-}
-
-function StatusKicker({ game }: { game: BookGame }) {
-  if (game.status === "live") {
-    return (
-      <span className="inline-flex items-center gap-2">
-        <span className="relative flex size-2" aria-hidden="true">
-          <span className="absolute inline-flex size-full animate-[live-pulse_1.6s_ease-out_infinite] rounded-full bg-accent-green opacity-75" />
-          <span className="relative inline-flex size-2 rounded-full bg-accent-green" />
-        </span>
-        <span className="text-kicker text-accent-green">Locked · Live</span>
-      </span>
-    );
-  }
-
-  if (game.status === "final") {
-    return <span className="text-kicker">Final</span>;
-  }
-
-  return (
-    <span className="text-kicker text-accent-gold">
-      {game.kickoffLabel ? `Locks ${game.kickoffLabel}` : "Locks at kickoff"}
-    </span>
-  );
-}
-
-function SideRow({
-  game,
-  side,
-  team,
-  picked,
-  interactive,
-  pending,
-  onPick,
-}: {
-  game: BookGame;
-  side: BookSideKey;
-  team: BookSide;
-  picked: boolean;
-  interactive: boolean;
-  pending: boolean;
-  onPick: (game: BookGame, side: BookSideKey) => void;
-}) {
-  const covering = game.coveringSide === side && game.status !== "open";
-
-  const content = (
-    <>
-      <FranchiseLogo
-        slug={team.slug}
-        name={team.name}
-        abbreviation={team.abbreviation ?? undefined}
-        brandingColor={team.brandingColor ?? undefined}
-        avatarUrl={team.avatarUrl ?? undefined}
-        size={28}
-        decorative
-      />
-      <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-body-sm font-semibold text-text-primary">
-          {team.name}
-        </span>
-        <span className="block text-[11px] text-text-tertiary">
-          <span className="font-mono tabular-nums">{team.record}</span>
-        </span>
-        <span className="block text-[11px] text-text-tertiary sm:hidden">
-          <span className="font-mono tabular-nums leading-tight">
-            {payoutLabel(team.moneyline, DEFAULT_STAKE)}
-          </span>
-        </span>
-      </span>
-      <span className="shrink-0 rounded-lg bg-surface-muted px-2.5 py-1 font-mono text-body-sm font-bold tabular-nums text-text-primary">
-        {formatSpread(team.spread)}
-      </span>
-      <span className="w-11 shrink-0 text-right font-mono text-caption font-semibold normal-case tracking-normal tabular-nums text-text-tertiary">
-        {formatMoneyline(team.moneyline)}
-      </span>
-      <span className="hidden w-[168px] shrink-0 text-right text-caption normal-case leading-tight tracking-normal text-text-tertiary sm:block">
-        <span className="font-mono tabular-nums">
-          {payoutLabel(team.moneyline, DEFAULT_STAKE)}
-        </span>
-      </span>
-      {covering && (
-        <span className="shrink-0 text-caption font-semibold text-accent-green">
-          ✓
-        </span>
-      )}
-    </>
-  );
-
-  const base =
-    "flex w-full items-center gap-3 rounded-[11px] border p-2.5 text-left transition-colors duration-150";
-  const skin = picked
-    ? "border-accent-gold/45 bg-accent-gold-light"
-    : "border-border bg-white/[.03]";
-  // Dim only a game that is off the board, never one that is merely
-  // unpickable-by-you: a signed-out visitor should read a live sportsbook, not
-  // a greyed-out one.
-  const dim = game.status !== "open" && !picked ? "opacity-55" : "";
-
-  if (!interactive) {
-    return <div className={`${base} ${skin} ${dim}`}>{content}</div>;
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={() => onPick(game, side)}
-      disabled={pending}
-      aria-pressed={picked}
-      aria-label={`Pick ${team.name} ${formatSpread(team.spread)}`}
-      className={`${base} ${skin} cursor-pointer hover:border-border-strong disabled:cursor-wait`}
-    >
-      {content}
-    </button>
-  );
-}
-
-function YourPickRow({
-  game,
-  pick,
-  slipClosed,
-}: {
-  game: BookGame;
-  pick: MemberBookPick;
-  slipClosed: boolean;
-}) {
-  const team = pick.side === "home" ? game.home : game.away;
-  const spread = pick.side === "home" ? pick.spreadAtPick : -pick.spreadAtPick;
-
-  let tag: string;
-  let tone: string;
-  if (game.status === "open") {
-    const locked = slipClosed || pick.lockedAt !== null;
-    tag = locked ? "Locked in" : "Locks at kickoff";
-    tone = locked ? "text-accent-green" : "text-text-tertiary";
-  } else {
-    const result = gradeGamePick(game, pick);
-    const settled = game.status === "final";
-    if (result === "push") {
-      tag = "Push";
-      tone = "text-text-tertiary";
-    } else if (result === pick.side) {
-      tag = settled ? "Covered ✓" : "Covering ✓";
-      tone = "text-accent-green";
-    } else {
-      tag = settled ? "Missed ✗" : "Not covering ✗";
-      tone = "text-accent-warm";
-    }
-  }
-
-  return (
-    <div className="mt-3 flex items-center justify-between gap-3 rounded-[10px] bg-white/[.03] px-3 py-2">
-      <span className="min-w-0 truncate text-caption normal-case tracking-normal text-text-secondary">
-        Your pick ·{" "}
-        <span className="font-mono font-bold tabular-nums text-text-primary">
-          {team.name} {formatSpread(spread)}
-        </span>
-      </span>
-      <span className={`shrink-0 text-caption font-semibold ${tone}`}>
-        {tag}
-      </span>
     </div>
   );
 }
