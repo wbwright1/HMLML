@@ -88,6 +88,13 @@ export function MatchupLiveScore({
         setStatus(mine.status ?? "scheduled");
 
         if (mine.status === "complete") stop();
+
+        // Window closed (the Thursday-daytime gap between a Wednesday night
+        // game and the next kickoff, say): the server will not refresh from
+        // Sleeper again until it reopens, so polling it only costs DB reads.
+        // Keep the values just adopted and stop, matching the hub poller and
+        // the nav live pill. A remount inside the next window resumes.
+        if (data.isGameWindow === false) stop();
       } catch {
         // Freeze at the last known values and retry on the next tick.
       }
