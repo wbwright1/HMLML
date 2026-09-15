@@ -5,6 +5,8 @@ import {
   pickDud,
   recapHeadline,
   teamOfWeekVerdict,
+  recapWindowClosesAt,
+  isRecapWindowOpen,
   type RecapPlayer,
 } from "./week-recap";
 
@@ -170,5 +172,27 @@ describe("teamOfWeekVerdict", () => {
     expect(teamOfWeekVerdict({ ...base, benched: 0 })).toMatch(/actually set/);
     expect(teamOfWeekVerdict({ ...base, benched: 1 })).toMatch(/One of them/);
     expect(teamOfWeekVerdict({ ...base, benched: 3 })).toMatch(/^3 of them/);
+  });
+});
+
+describe("recap window", () => {
+  // Thursday Sep 17 2026, 7:15 PM Central = 00:15 UTC Friday Sep 18.
+  const thursdayNightKickoff = new Date("2026-09-18T00:15:00Z");
+
+  it("closes at the daily cron (06:00 UTC) on the kickoff's league-time day", () => {
+    expect(recapWindowClosesAt(thursdayNightKickoff).toISOString()).toBe(
+      "2026-09-17T06:00:00.000Z"
+    );
+  });
+
+  it("is open Tuesday and Wednesday, closed from Thursday 1 AM Central on", () => {
+    expect(isRecapWindowOpen(new Date("2026-09-15T15:00:00Z"), thursdayNightKickoff)).toBe(true);
+    expect(isRecapWindowOpen(new Date("2026-09-17T05:59:59Z"), thursdayNightKickoff)).toBe(true);
+    expect(isRecapWindowOpen(new Date("2026-09-17T06:00:00Z"), thursdayNightKickoff)).toBe(false);
+    expect(isRecapWindowOpen(new Date("2026-09-17T18:00:00Z"), thursdayNightKickoff)).toBe(false);
+  });
+
+  it("stays open when the kickoff is unknown", () => {
+    expect(isRecapWindowOpen(new Date("2026-09-17T18:00:00Z"), null)).toBe(true);
   });
 });

@@ -1,9 +1,50 @@
 // Pure, DB-free logic for the post-week recap block that leads the
-// between-weeks hub (Tue AM week roll through Thursday kickoff). Everything
+// between-weeks hub (Tue AM week roll through the Thursday morning cron).
+// Everything
 // here is deterministic and unit-tested; the query module
 // (lib/queries/week-recap.ts) gathers rows and hands them to these helpers.
 
 import { deriveStartingSlots } from "@/lib/lineup-slots";
+import { LEAGUE_TIME_ZONE, timeZoneOffsetMs } from "@/lib/time-zone";
+
+// ---------------------------------------------------------------------------
+// Window: the recap holds from the Tuesday week roll until the Thursday
+// MORNING cron, not until Thursday kickoff (Blake, Sep 15 2026). Thursday
+// daytime is the plain slate hub.
+// ---------------------------------------------------------------------------
+
+/** Hour (UTC) of the daily sync in .github/workflows/daily-sync.yml. That run
+ * revalidates the hub, so it is the instant the cached page can actually
+ * flip; gating on the same hour keeps the copy and the cron in agreement. */
+export const DAILY_SYNC_UTC_HOUR = 6;
+
+/**
+ * The instant the recap window closes for a slate whose first game is
+ * `nextKickoff`: the daily cron on the kickoff's calendar day in league time
+ * (a Thursday-night kickoff closes the window at 06:00 UTC that Thursday,
+ * 1 AM Central). Day is resolved in LEAGUE_TIME_ZONE so a late kickoff near
+ * midnight UTC still counts as its local day.
+ */
+export function recapWindowClosesAt(nextKickoff: Date): Date {
+  const local = new Date(
+    nextKickoff.getTime() + timeZoneOffsetMs(nextKickoff, LEAGUE_TIME_ZONE)
+  );
+  return new Date(
+    Date.UTC(
+      local.getUTCFullYear(),
+      local.getUTCMonth(),
+      local.getUTCDate(),
+      DAILY_SYNC_UTC_HOUR
+    )
+  );
+}
+
+/** True while the recap should lead the hub. An unknown kickoff (schedule
+ * not synced) keeps the recap up: a stale wrap beats a missing one. */
+export function isRecapWindowOpen(now: Date, nextKickoff: Date | null): boolean {
+  if (!nextKickoff) return true;
+  return now.getTime() < recapWindowClosesAt(nextKickoff).getTime();
+}
 
 // ---------------------------------------------------------------------------
 // Shapes

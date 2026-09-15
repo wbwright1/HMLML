@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import { isRecapWindowOpen } from "../lib/hub/week-recap";
 
 // ============================================================================
 // Post-week recap on the between-weeks hub
@@ -12,12 +13,34 @@ import { test, expect } from "@playwright/test";
 // Runs under the "hub-post-week" Playwright project (playwright.config.ts),
 // whose dev server is pinned to NFL_STATE_OVERRIDE=regular:2 against the real
 // Postgres, where week 1 of the live season is complete. Every assertion is
-// unconditional: if the recap does not render, the state itself is wrong.
+// unconditional within its branch: the recap window closes at the Thursday
+// MORNING cron (06:00 UTC on kickoff day, lib/hub/week-recap.ts), so the
+// suite reads the hub's own kickoff countdown target and asserts the recap
+// is present before that instant and absent after it. Both branches assert;
+// neither self-skips.
 // ============================================================================
+
+/** The kickoff instant the hub is counting down to (KickoffCountdown's
+ * ISO target), or null when the hub renders no countdown. */
+async function kickoffTarget(page: import("@playwright/test").Page): Promise<Date | null> {
+  const el = page.locator("[data-kickoff-target]").first();
+  if ((await el.count()) === 0) return null;
+  const iso = await el.getAttribute("data-kickoff-target");
+  return iso ? new Date(iso) : null;
+}
 
 test.describe("Post-week recap (between weeks)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
+    const open = isRecapWindowOpen(new Date(), await kickoffTarget(page));
+    if (!open) {
+      // Thursday morning cron has passed: the plain slate hub, with the
+      // rail fallbacks, and NO recap. Assert that state and stop.
+      await expect(page.locator("main")).toContainText(/THE SLATE IS SET/i);
+      await expect(page.getByTestId("week-recap")).toHaveCount(0);
+      await expect(page.locator("main")).toContainText(/IN THE BOOKS/);
+      test.skip(true, "recap window closed (post Thursday cron); slate-only state asserted");
+    }
   });
 
   test("the recap block renders in the main column above the slate", async ({ page }) => {

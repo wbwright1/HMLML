@@ -32,6 +32,7 @@ import { getDivisionStandings } from "@/lib/queries/divisions";
 import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
 import { getWeekBenchLeader } from "@/lib/queries/lineup-efficiency";
 import { getWeekRecap, type WeekRecap } from "@/lib/queries/week-recap";
+import { isRecapWindowOpen } from "@/lib/hub/week-recap";
 import { WeekRecapSection, BenchCallout } from "@/components/hub/week-recap-section";
 import {
   getWeekStarterPool,
@@ -270,7 +271,11 @@ export async function BetweenWeeksHub({
     // Settled outside the batch above on purpose: its bare catch would let a
     // transient DB error ISR-cache a hub with no recap until the next sync,
     // which is the exact hollow render lib/db-guard.ts exists to prevent.
-    if (week > 1) {
+    // Window: Tuesday week roll through the Thursday MORNING cron (06:00
+    // UTC daily sync), not through kickoff. That sync revalidates the hub,
+    // so the cached page flips to the plain slate view at the same moment
+    // the gate does (lib/hub/week-recap.ts).
+    if (week > 1 && isRecapWindowOpen(new Date(), nextKickoff)) {
       try {
         weekRecap = await getWeekRecap(seasonId, priorWeek);
       } catch (e) {
@@ -430,8 +435,15 @@ export async function BetweenWeeksHub({
           </p>
         </div>
 
+        {/* data-kickoff-target: the slate's first kickoff, read by
+            e2e/hub-post-week.spec.ts to decide which recap-window state to
+            assert. On the server wrapper, not the client island, so it is
+            present even once the countdown itself renders null. */}
         {nextKickoff && (
-          <div className="mt-6 lg:mt-1 shrink-0">
+          <div
+            className="mt-6 lg:mt-1 shrink-0"
+            data-kickoff-target={nextKickoff.toISOString()}
+          >
             <KickoffCountdown target={nextKickoff.toISOString()} />
           </div>
         )}
@@ -541,7 +553,8 @@ export async function BetweenWeeksHub({
         {/* Right rail: the week ahead's supporting cards. Last week's
             superlatives and bench blunder moved into WeekRecapSection above
             so they reach phones too; the rail falls back to them only when
-            the recap itself cannot render (prior week not fully complete). */}
+            the recap is not rendering (window closed, or prior week not
+            fully complete). */}
         <aside className="hidden lg:flex lg:flex-col gap-8">
           {!weekRecap && weeklySuperlatives && (
             <WeekInBooksCard week={priorWeek} superlatives={weeklySuperlatives} />
