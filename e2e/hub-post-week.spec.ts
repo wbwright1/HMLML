@@ -1,0 +1,116 @@
+import { test, expect } from "@playwright/test";
+
+// ============================================================================
+// Post-week recap on the between-weeks hub
+//
+// The Tuesday-morning week roll through Thursday kickoff: the prior week is
+// fully complete, the next slate is set, nothing has kicked off. The hub must
+// LEAD with last week's recap (finals, superlatives, Team of the Week, top
+// performers, dud, bench blunder) in the main column, so a phone sees it
+// rather than jumping straight to next week's slate.
+//
+// Runs under the "hub-post-week" Playwright project (playwright.config.ts),
+// whose dev server is pinned to NFL_STATE_OVERRIDE=regular:2 against the real
+// Postgres, where week 1 of the live season is complete. Every assertion is
+// unconditional: if the recap does not render, the state itself is wrong.
+// ============================================================================
+
+test.describe("Post-week recap (between weeks)", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/");
+  });
+
+  test("the recap block renders in the main column above the slate", async ({ page }) => {
+    const main = page.locator("main");
+    await expect(main).toContainText(/THE SLATE IS SET/i);
+    const recap = page.getByTestId("week-recap");
+    await expect(recap).toBeVisible();
+    // Recap precedes Game of the Week in document order. Kickers render
+    // through CSS `uppercase`, so innerText carries the rendered casing.
+    const text = (await main.innerText()).toUpperCase();
+    const recapAt = text.indexOf("IN THE BOOKS");
+    expect(recapAt).toBeGreaterThan(-1);
+    expect(recapAt).toBeLessThan(text.indexOf("GAME OF THE WEEK"));
+  });
+
+  test("the headline is a serif, number-backed claim with no em-dash", async ({ page }) => {
+    const h = page.getByTestId("recap-headline");
+    await expect(h).toBeVisible();
+    const txt = (await h.innerText()).trim();
+    expect(txt.length).toBeGreaterThan(10);
+    expect(txt).toMatch(/\d+\.\d/);
+    expect(txt).not.toContain("—");
+    const fontStyle = await h.evaluate((el) => getComputedStyle(el).fontStyle);
+    expect(fontStyle).toBe("italic");
+  });
+
+  test("every completed pairing is listed with a W and an L and two scores", async ({ page }) => {
+    const rows = page.getByTestId("recap-result");
+    await expect(rows).toHaveCount(6);
+    for (const row of await rows.all()) {
+      const t = await row.innerText();
+      expect(t).toMatch(/\bW\b/);
+      expect(t).toMatch(/\bL\b/);
+      expect(t.match(/\d+\.\d/g)?.length ?? 0).toBeGreaterThanOrEqual(2);
+    }
+  });
+
+  test("Team of the Week fills every starting slot with a distinct player and sums the total", async ({ page }) => {
+    const slots = page.getByTestId("totw-slot");
+    // The live season starts QB, RB, RB, WR, WR, WR, TE, FLEX, FLEX, SUPER_FLEX.
+    await expect(slots).toHaveCount(10);
+    const hrefs: string[] = [];
+    let sum = 0;
+    for (const slot of await slots.all()) {
+      const t = await slot.innerText();
+      expect(t).not.toContain("Empty");
+      const pts = t.match(/(\d+\.\d)\s*$/);
+      expect(pts).not.toBeNull();
+      sum += Number(pts![1]);
+      // The player link's href (/players/<id>) is the identity; link text is
+      // not, since a headshot monogram or franchise name can share a line.
+      hrefs.push((await slot.locator('a[href^="/players/"]').first().getAttribute("href")) ?? "");
+    }
+    expect(hrefs.every((h) => h.length > 0)).toBe(true);
+    expect(new Set(hrefs).size).toBe(10);
+    const total = await page
+      .getByText("Best Possible Lineup")
+      .locator("xpath=following-sibling::p")
+      .innerText();
+    expect(Math.abs(Number(total) - sum)).toBeLessThan(0.15);
+  });
+
+  test("top performers are started players in descending order", async ({ page }) => {
+    const rows = page.getByTestId("recap-top");
+    await expect(rows).toHaveCount(5);
+    const pts: number[] = [];
+    for (const row of await rows.all()) {
+      const m = (await row.innerText()).match(/(\d+\.\d)\s*$/);
+      expect(m).not.toBeNull();
+      pts.push(Number(m![1]));
+    }
+    for (let i = 1; i < pts.length; i++) expect(pts[i]).toBeLessThanOrEqual(pts[i - 1]);
+  });
+
+  test("the dud and the bench blunder both render with real numbers", async ({ page }) => {
+    const main = page.locator("main");
+    await expect(main).toContainText("Dud of the Week");
+    await expect(main).toContainText("Left On The Bench");
+    await expect(main).toContainText(/left on the bench\. Optimal was \d+\.\d, they started \d+\.\d\./);
+  });
+
+  test("the recap is not duplicated in the desktop rail", async ({ page }) => {
+    // Kickers render uppercase; the sentence "left on the bench." in the
+    // callout body is lowercase, so a case-sensitive match counts kickers only.
+    const text = await page.locator("main").innerText();
+    expect(text.match(/IN THE BOOKS/g)?.length ?? 0).toBe(1);
+    expect(text.match(/LEFT ON THE BENCH/g)?.length ?? 0).toBe(1);
+  });
+
+  test("the recap is visible at phone width", async ({ page }) => {
+    await page.setViewportSize({ width: 400, height: 860 });
+    await page.goto("/");
+    await expect(page.getByTestId("week-recap")).toBeVisible();
+    await expect(page.getByTestId("recap-result").first()).toBeVisible();
+  });
+});

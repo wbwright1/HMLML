@@ -19,11 +19,12 @@ const BASE_URL = process.env.PLAYWRIGHT_TEST_BASE_URL ?? "http://localhost:3000"
 // test, not a mock.
 const PRESEASON_PORT = process.env.PLAYWRIGHT_PRESEASON_PORT ?? "3101";
 const IN_SEASON_PORT = process.env.PLAYWRIGHT_IN_SEASON_PORT ?? "3102";
+const POST_WEEK_PORT = process.env.PLAYWRIGHT_POST_WEEK_PORT ?? "3103";
 
 // Specs pinned to a forced NFL_STATE_OVERRIDE run against the two dev servers
 // above, not the shared default server, and are excluded from the
 // chromium/firefox/webkit projects that follow the real calendar.
-const STATE_FORCED = /(hub-preseason|hub-between-weeks|book-hub)\.spec\.ts/;
+const STATE_FORCED = /(hub-preseason|hub-between-weeks|hub-post-week|book-hub)\.spec\.ts/;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -63,6 +64,11 @@ export default defineConfig({
       testMatch: /(hub-between-weeks|book-hub)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], baseURL: `http://localhost:${IN_SEASON_PORT}` },
     },
+    {
+      name: "hub-post-week",
+      testMatch: /hub-post-week\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"], baseURL: `http://localhost:${POST_WEEK_PORT}` },
+    },
   ],
   webServer: [
     {
@@ -94,6 +100,16 @@ export default defineConfig({
       // resolveHubSeasonType's "everyone is 0-0" demotion back to preseason.
       // Without it this project would silently render the preseason hub.
       env: { NFL_STATE_OVERRIDE: "regular:1:force", NEXT_DIST_DIR: ".next-in-season" },
+      reuseExistingServer: !process.env.CI,
+      timeout: 180_000,
+    },
+    {
+      command: `npx next dev --turbopack -p ${POST_WEEK_PORT}`,
+      url: `http://localhost:${POST_WEEK_PORT}`,
+      // Week 2 with week 1 complete in the real DB: the between-weeks hub
+      // with the post-week recap leading it. No ":force" needed, games have
+      // been played so the 0-0 preseason demotion cannot fire.
+      env: { NFL_STATE_OVERRIDE: "regular:2", NEXT_DIST_DIR: ".next-post-week" },
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
     },

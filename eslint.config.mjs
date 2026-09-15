@@ -7,6 +7,7 @@ const config = [
       ".next/**",
       ".next-preseason/**",
       ".next-in-season/**",
+      ".next-post-week/**",
       "node_modules/**",
       // Subagent worktrees: stale checkout copies, linted in their own runs.
       ".claude/**",
