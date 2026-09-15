@@ -424,7 +424,14 @@ export async function BetweenWeeksHub({
   return (
     <>
       {/* Hero + countdown */}
-      <section className="pt-2 pb-6 lg:flex lg:items-start lg:justify-between lg:gap-8">
+      {/* data-kickoff-target: the slate's first kickoff, read by
+          e2e/hub-post-week.spec.ts to decide which recap-window state to
+          assert. On the server section, not the client island, so it is
+          present whether or not the countdown renders. */}
+      <section
+        className="pt-2 pb-6 lg:flex lg:items-start lg:justify-between lg:gap-8"
+        data-kickoff-target={nextKickoff?.toISOString()}
+      >
         <div className="max-w-2xl">
           <p className="text-kicker mb-3">
             Harambe Memorial League &middot; Week {week} &middot; The Slate Is Set
@@ -435,21 +442,18 @@ export async function BetweenWeeksHub({
           </p>
         </div>
 
-        {/* data-kickoff-target: the slate's first kickoff, read by
-            e2e/hub-post-week.spec.ts to decide which recap-window state to
-            assert. On the server wrapper, not the client island, so it is
-            present even once the countdown itself renders null. */}
-        {nextKickoff && (
-          <div
-            className="mt-6 lg:mt-1 shrink-0"
-            data-kickoff-target={nextKickoff.toISOString()}
-          >
+        {/* The countdown only runs on the slate-only hub. While the recap
+            leads (Tuesday roll to the Thursday morning cron) the headline
+            already says how far off kickoff is, and a ticking clock above
+            last week's receipts pulled the eye away from them for nothing. */}
+        {nextKickoff && !weekRecap && (
+          <div className="mt-6 lg:mt-1 shrink-0">
             <KickoffCountdown target={nextKickoff.toISOString()} />
           </div>
         )}
       </section>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         {/* Left column: last week's receipts, then the week ahead */}
         <div className="space-y-8">
           {/* Post-week recap: leads the hub from the Tuesday week roll until
