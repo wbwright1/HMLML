@@ -31,6 +31,9 @@ import { getBowlName } from "@/lib/bowl-names";
 import { getDivisionStandings } from "@/lib/queries/divisions";
 import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
 import { getWeekBenchLeader } from "@/lib/queries/lineup-efficiency";
+import { getWeekRecap, type WeekRecap } from "@/lib/queries/week-recap";
+import { isRecapWindowOpen } from "@/lib/hub/week-recap";
+import { WeekRecapSection, BenchCallout } from "@/components/hub/week-recap-section";
 import {
   getWeekStarterPool,
   getPlayersToWatchFromPool,
@@ -142,6 +145,9 @@ export async function BetweenWeeksHub({
   let weeklySuperlatives: Awaited<ReturnType<typeof getWeeklySuperlatives>> | null =
     null;
   let benchLeader: Awaited<ReturnType<typeof getWeekBenchLeader>> = null;
+  // The post-week recap (the newsletter): null at week 1 (no completed prior
+  // week) or while the prior week is still being played.
+  let weekRecap: WeekRecap | null = null;
   let pool: Awaited<ReturnType<typeof getWeekStarterPool>> = [];
   let leagueMoves: LeagueMove[] = [];
   let weekReceipts: WeekReceipt[] = [];
@@ -260,6 +266,22 @@ export async function BetweenWeeksHub({
     } catch (e) {
       rethrowUnlessTolerable(e);
       powerPreview = null;
+    }
+
+    // Settled outside the batch above on purpose: its bare catch would let a
+    // transient DB error ISR-cache a hub with no recap until the next sync,
+    // which is the exact hollow render lib/db-guard.ts exists to prevent.
+    // Window: Tuesday week roll through the Thursday MORNING cron (06:00
+    // UTC daily sync), not through kickoff. That sync revalidates the hub,
+    // so the cached page flips to the plain slate view at the same moment
+    // the gate does (lib/hub/week-recap.ts).
+    if (week > 1 && isRecapWindowOpen(new Date(), nextKickoff)) {
+      try {
+        weekRecap = await getWeekRecap(seasonId, priorWeek);
+      } catch (e) {
+        rethrowUnlessTolerable(e);
+        weekRecap = null;
+      }
     }
   }
 
@@ -413,16 +435,35 @@ export async function BetweenWeeksHub({
           </p>
         </div>
 
+        {/* data-kickoff-target: the slate's first kickoff, read by
+            e2e/hub-post-week.spec.ts to decide which recap-window state to
+            assert. On the server wrapper, not the client island, so it is
+            present even once the countdown itself renders null. */}
         {nextKickoff && (
-          <div className="mt-6 lg:mt-1 shrink-0">
+          <div
+            className="mt-6 lg:mt-1 shrink-0"
+            data-kickoff-target={nextKickoff.toISOString()}
+          >
             <KickoffCountdown target={nextKickoff.toISOString()} />
           </div>
         )}
       </section>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
-        {/* Left column: the week ahead */}
+        {/* Left column: last week's receipts, then the week ahead */}
         <div className="space-y-8">
+          {/* Post-week recap: leads the hub from the Tuesday week roll until
+              Thursday kickoff, on every screen size (it used to live in the
+              desktop-only rail, so phones jumped straight to next week). */}
+          {weekRecap && (
+            <WeekRecapSection
+              seasonYear={seasonYear}
+              recap={weekRecap}
+              superlatives={weeklySuperlatives}
+              benchLeader={benchLeader}
+            />
+          )}
+
           {/* Game of the Week */}
           {gameOfWeek && (
             <GameOfWeekSection
@@ -509,12 +550,16 @@ export async function BetweenWeeksHub({
           </HubSection>
         </div>
 
-        {/* Right rail: last week's receipts */}
+        {/* Right rail: the week ahead's supporting cards. Last week's
+            superlatives and bench blunder moved into WeekRecapSection above
+            so they reach phones too; the rail falls back to them only when
+            the recap is not rendering (window closed, or prior week not
+            fully complete). */}
         <aside className="hidden lg:flex lg:flex-col gap-8">
-          {weeklySuperlatives && (
+          {!weekRecap && weeklySuperlatives && (
             <WeekInBooksCard week={priorWeek} superlatives={weeklySuperlatives} />
           )}
-          {benchLeader && <BenchCallout leader={benchLeader} />}
+          {!weekRecap && benchLeader && <BenchCallout leader={benchLeader} />}
           {playersToWatch.length > 0 && (
             <PlayersToWatchCard week={week} players={playersToWatch} />
           )}
@@ -741,42 +786,6 @@ function WeekInBooksCard({
             />
           )}
         </RailRows>
-      </RailCard>
-    </HubSection>
-  );
-}
-
-function BenchCallout({
-  leader,
-}: {
-  leader: NonNullable<Awaited<ReturnType<typeof getWeekBenchLeader>>>;
-}) {
-  const winTail =
-    leader.won === true
-      ? " And still won."
-      : leader.won === false
-        ? " And still lost."
-        : "";
-  return (
-    <HubSection kicker="Left On The Bench">
-      <RailCard tinted>
-        <p className="text-kicker text-accent-gold">Highest Possible &middot; Optimal Lineup</p>
-        <p className="mt-2 text-stat tabular-nums text-5xl text-text-primary leading-none">
-          {leader.pointsLeft.toFixed(1)}
-        </p>
-        <p className="mt-4 text-body-sm text-text-secondary">
-          points{" "}
-          <span className="font-semibold text-text-primary">
-            {leader.franchiseName}
-          </span>{" "}
-          left on the bench. Optimal was{" "}
-          <span className="text-stat tabular-nums text-accent-gold">
-            {leader.optimal.toFixed(1)}
-          </span>
-          , they started{" "}
-          <span className="text-stat tabular-nums">{leader.actual.toFixed(1)}</span>.
-          {winTail}
-        </p>
       </RailCard>
     </HubSection>
   );
