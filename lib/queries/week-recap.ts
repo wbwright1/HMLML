@@ -191,7 +191,7 @@ export async function getWeekRecap(
   return {
     week,
     results,
-    topPerformers: pickTopPerformers(pool, 5),
+    topPerformers: pickTopPerformers(pool, 6),
     dud: pickDud(pool),
     teamOfWeek: assembleTeamOfWeek(rosterPositions, pool),
   };

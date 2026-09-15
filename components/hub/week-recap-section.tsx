@@ -100,24 +100,31 @@ export function WeekRecapSection({
           )}
         </div>
 
-        {(hasResults || recap.teamOfWeek) && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            {hasResults && <ScoreboardCard results={recap.results} />}
-            {recap.teamOfWeek && <TeamOfWeekCard team={recap.teamOfWeek} />}
+        {/* Two top-aligned columns, balanced by content height rather than
+            stretched to the tallest card: the ten-slot Team of the Week is
+            the tallest block, so it takes the Dud beside it and the shorter
+            Final Scores card takes the Top Performers. The bench blunder runs
+            full width below as the closing sting. */}
+        {(hasResults || hasPlayers || recap.teamOfWeek) && (
+          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+            {(hasResults || recap.topPerformers.length > 0) && (
+              <div className="space-y-6">
+                {hasResults && <ScoreboardCard results={recap.results} />}
+                {recap.topPerformers.length > 0 && (
+                  <TopPerformersCard players={recap.topPerformers} />
+                )}
+              </div>
+            )}
+            {(recap.teamOfWeek || recap.dud) && (
+              <div className="space-y-6">
+                {recap.teamOfWeek && <TeamOfWeekCard team={recap.teamOfWeek} />}
+                {recap.dud && <DudCard player={recap.dud} />}
+              </div>
+            )}
           </div>
         )}
 
-        {(hasPlayers || benchLeader) && (
-          <div className="grid gap-6 lg:grid-cols-2">
-            {recap.topPerformers.length > 0 && (
-              <TopPerformersCard players={recap.topPerformers} />
-            )}
-            <div className="space-y-6">
-              {recap.dud && <DudCard player={recap.dud} />}
-              {benchLeader && <BenchCallout leader={benchLeader} />}
-            </div>
-          </div>
-        )}
+        {benchLeader && <BenchCallout leader={benchLeader} />}
       </div>
     </HubSection>
   );

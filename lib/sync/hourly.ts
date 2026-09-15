@@ -1473,6 +1473,21 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
   // Run the remaining syncs independently; a failure in one doesn't block
   // others. Per-player points are a separate step so a failure there does not
   // corrupt the team-level matchup sync (atomic-per-data-type rule).
+  // Per-player rows are re-synced for the PRIOR week too once the season is
+  // under way. Sleeper applies stat corrections through Tuesday and Wednesday,
+  // after the week has rolled; syncMatchupScores already re-reads every
+  // regular-season week each run so the team totals picked those up, but the
+  // player rows behind them stayed frozen at Monday night's box score. Found
+  // week 1 of 2026: four teams' started-player sums trailed their matchup score
+  // (Tokyo Thunderbirds by 5.9), so the recap's Left On The Bench, Team of the
+  // Week and top performers disagreed with the final scores on the same page.
+  // Week 1 has no prior week, and in the preseason bookWeekFor pins the league
+  // week to 1, so the extra step only ever fires from week 2 on.
+  const priorWeek =
+    isNflSeasonUnderway(nflSeasonType) && leagueWeek > 1 ? leagueWeek - 1 : null;
+  const priorNflWeek =
+    isNflSeasonUnderway(nflSeasonType) && currentWeek > 1 ? currentWeek - 1 : null;
+
   const results = await Promise.allSettled([
     // Sleeper's transactions endpoint is indexed by fantasy ROUND, the same
     // axis as the fantasy week, so it takes leagueWeek too. With the raw state
@@ -1485,6 +1500,12 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
     // stats endpoint, which is indexed by NFL week (currentWeek).
     syncPlayerWeekPoints(leagueId, seasonId, seasonYear, leagueWeek),
     syncPlayerWeekStats(seasonId, seasonYear, currentWeek),
+    ...(priorWeek != null
+      ? [syncPlayerWeekPoints(leagueId, seasonId, seasonYear, priorWeek)]
+      : []),
+    ...(priorNflWeek != null
+      ? [syncPlayerWeekStats(seasonId, seasonYear, priorNflWeek)]
+      : []),
   ]);
 
   const dataTypes = [
@@ -1493,6 +1514,8 @@ export async function runHourlySync(): Promise<HourlySyncSummary> {
     "matchups",
     "player_week_points",
     "player_week_stats",
+    ...(priorWeek != null ? ["player_week_points"] : []),
+    ...(priorNflWeek != null ? ["player_week_stats"] : []),
   ];
   const stepResults: SyncStepResult[] = results.map((r, i) => {
     if (r.status === "fulfilled") {
