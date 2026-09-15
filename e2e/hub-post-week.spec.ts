@@ -105,7 +105,7 @@ test.describe("Post-week recap (between weeks)", () => {
 
   test("top performers are started players in descending order", async ({ page }) => {
     const rows = page.getByTestId("recap-top");
-    await expect(rows).toHaveCount(5);
+    await expect(rows).toHaveCount(6);
     const pts: number[] = [];
     for (const row of await rows.all()) {
       const m = (await row.innerText()).match(/(\d+\.\d)\s*$/);
