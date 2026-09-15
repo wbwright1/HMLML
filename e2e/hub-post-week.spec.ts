@@ -15,13 +15,13 @@ import { isRecapWindowOpen } from "../lib/hub/week-recap";
 // Postgres, where week 1 of the live season is complete. Every assertion is
 // unconditional within its branch: the recap window closes at the Thursday
 // MORNING cron (06:00 UTC on kickoff day, lib/hub/week-recap.ts), so the
-// suite reads the hub's own kickoff countdown target and asserts the recap
+// suite reads the hero's stamped kickoff target and asserts the recap
 // is present before that instant and absent after it. Both branches assert;
 // neither self-skips.
 // ============================================================================
 
-/** The kickoff instant the hub is counting down to (KickoffCountdown's
- * ISO target), or null when the hub renders no countdown. */
+/** The slate's first kickoff, stamped on the hero section as
+ * data-kickoff-target, or null when the hub has no kickoff to point at. */
 async function kickoffTarget(page: import("@playwright/test").Page): Promise<Date | null> {
   const el = page.locator("[data-kickoff-target]").first();
   if ((await el.count()) === 0) return null;

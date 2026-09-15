@@ -106,7 +106,7 @@ export function WeekRecapSection({
             Final Scores card takes the Top Performers. The bench blunder runs
             full width below as the closing sting. */}
         {(hasResults || hasPlayers || recap.teamOfWeek) && (
-          <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2 lg:items-start">
             {(hasResults || recap.topPerformers.length > 0) && (
               <div className="space-y-6">
                 {hasResults && <ScoreboardCard results={recap.results} />}
@@ -170,7 +170,7 @@ function recapTiles(
       label: SNARKY_LABELS.MERCY_RULE.displayText,
       value: `+${s.biggestBlowout.margin.toFixed(1)}`,
       who: (
-        <div className="flex min-w-0 items-center gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 [&>a]:shrink-0">
           <TeamFlag team={flagOf(s.biggestBlowout.winnerSlug, s.biggestBlowout.winner)} compact />
           <span className="text-text-tertiary">over</span>
           <TeamFlag team={flagOf(s.biggestBlowout.loserSlug, s.biggestBlowout.loser)} compact />
@@ -185,7 +185,7 @@ function recapTiles(
       label: "Photo Finish",
       value: `+${s.closestWin.margin.toFixed(1)}`,
       who: (
-        <div className="flex min-w-0 items-center gap-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 [&>a]:shrink-0">
           <TeamFlag team={flagOf(s.closestWin.winnerSlug, s.closestWin.winner)} compact />
           <span className="text-text-tertiary">over</span>
           <TeamFlag team={flagOf(s.closestWin.loserSlug, s.closestWin.loser)} compact />
