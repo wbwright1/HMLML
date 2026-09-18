@@ -77,7 +77,9 @@ export function FranchiseIdentity({
         {/* group-hover is inert unless an ancestor carries `group`; a caller
             that wraps this in a TeamLink gets the same gold hover every other
             linked identity has, and one that does not is unaffected. */}
-        <span className="text-body-sm font-semibold text-text-primary truncate min-w-0 flex-1 transition-colors group-hover:text-accent-gold">
+        {/* No flex-1 on the name: the trophies belong right after it, not
+            pushed to the far edge of whatever container this sits in. */}
+        <span className="text-body-sm font-semibold text-text-primary truncate min-w-0 transition-colors group-hover:text-accent-gold">
           {franchise.name}
         </span>
         <span className="shrink-0">

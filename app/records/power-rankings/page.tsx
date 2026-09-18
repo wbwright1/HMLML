@@ -28,9 +28,9 @@ export const metadata = {
 function FormIndicator({ delta }: { delta: number }) {
   if (delta === 0) {
     return (
-      <span className="flex items-center gap-1 font-mono text-sm tabular-nums text-text-tertiary">
+      <span className="flex items-center font-mono text-sm tabular-nums text-text-tertiary">
         <span aria-hidden>–</span>
-        <span>0</span>
+        <span className="sr-only">even with standings</span>
       </span>
     );
   }
@@ -98,15 +98,76 @@ const PLAYOFF_RESULT_LABEL: Record<string, string> = {
   toilet_bowl: "Toilet Bowl",
 };
 
-/** Small labeled stat: mono value over a caption label. */
-function IndexStat({ label, value }: { label: string; value: string }) {
+/** Season-long W-L streak, signed (+3 = W3, -2 = L2). Letter + number always
+ * ride with the color; a dash when there is no streak. */
+function Streak({ value }: { value: number }) {
+  if (value === 0) {
+    return (
+      <span className="font-mono text-sm tabular-nums text-text-tertiary">–</span>
+    );
+  }
+  const winning = value > 0;
   return (
-    <div className="flex flex-col items-end">
-      <span className="font-mono text-sm font-bold tabular-nums text-text-primary">
-        {value}
+    <span
+      className={`font-mono text-sm tabular-nums ${
+        winning ? "font-bold text-accent-green" : "text-accent-warm"
+      }`}
+    >
+      {winning ? "W" : "L"}
+      {Math.abs(value)}
+      <span className="sr-only">
+        {winning ? " game win streak" : " game losing streak"}
       </span>
-      <span className="text-[10px] uppercase tracking-wider text-text-muted">
+    </span>
+  );
+}
+
+/** Labeled stat cell: value over a small caption. Fixed-width on desktop so
+ * the same column lines up card to card; the mobile strip passes a width of
+ * `w-auto` and lets its grid size the cells. */
+function StatCell({
+  label,
+  width = "w-16",
+  align = "end",
+  tone = "ink",
+  children,
+}: {
+  label: string;
+  width?: string;
+  align?: "start" | "end";
+  /** `gold` marks the row's headline number (the power index). */
+  tone?: "ink" | "gold";
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      className={`flex flex-col shrink-0 ${width} ${
+        align === "end" ? "items-end" : "items-start"
+      }`}
+    >
+      <span
+        className={`font-mono text-sm font-bold tabular-nums ${
+          tone === "gold" ? "text-accent-gold" : "text-text-primary"
+        }`}
+      >
+        {children}
+      </span>
+      <span className="text-[10px] uppercase tracking-wider text-text-tertiary whitespace-nowrap">
         {label}
+      </span>
+    </div>
+  );
+}
+
+/** The gold headline number for a row: the power index itself. */
+function PowerIndex({ value }: { value: number }) {
+  return (
+    <div className="flex flex-col items-end shrink-0 w-16 pl-3 border-l border-divider">
+      <span className="font-mono text-lg font-black tabular-nums text-accent-gold">
+        {(value * 100).toFixed(1)}
+      </span>
+      <span className="text-[10px] uppercase tracking-wider text-text-tertiary">
+        Power
       </span>
     </div>
   );
@@ -117,47 +178,23 @@ function IndexStat({ label, value }: { label: string; value: string }) {
 // ---------------------------------------------------------------------------
 
 function RegularEdition({ rankings }: { rankings: PowerRankingEntry[] }) {
+  // The window is min(4, completed weeks); label it honestly in Week 2.
+  const windowWeeks = Math.max(0, ...rankings.map((r) => r.windowGames));
+  const windowLabel = `Last ${windowWeeks}`;
+
   return (
     <>
       <PageSection label="Records" title="Power Rankings.">
         <BackLink href="/records" label="All Records" />
 
         <p className="text-body-lg text-text-secondary max-w-prose">
-          Ranked on the last 4 weeks: recent results, scoring trend, and
-          injuries. Not season-long record.
+          Ranked on the last {windowWeeks === 1 ? "week" : `${windowWeeks} weeks`}:
+          recent results, scoring trend, and injuries. Not season-long record.
         </p>
       </PageSection>
 
-      <section className="pb-8 md:pb-12 space-y-3 md:space-y-6">
+      <section className="pb-8 md:pb-12 space-y-3 md:space-y-4">
         {rankings.map((entry, index) => {
-          const total = entry.wins + entry.losses + entry.ties;
-          const winPct = total > 0 ? (entry.wins / total) * 100 : 0;
-          const pointsDiff = entry.pointsScored - entry.pointsAgainst;
-
-          const badges = (
-            <>
-              {entry.rank === 1 && (
-                <SuperlativeBadge text="Current Leader" variant="green" />
-              )}
-              {entry.championships > 0 && (
-                <SuperlativeBadge
-                  text={`${entry.championships}x Champ`}
-                  variant="gold"
-                />
-              )}
-              {entry.injuryCount > 0 && (
-                <SuperlativeBadge
-                  text={`${entry.injuryCount} Banged Up`}
-                  variant="brown"
-                />
-              )}
-            </>
-          );
-          const hasBadges =
-            entry.rank === 1 ||
-            entry.championships > 0 ||
-            entry.injuryCount > 0;
-
           const rankColor =
             entry.rank <= 3 ? "text-accent-gold" : "text-text-tertiary";
 
@@ -169,6 +206,33 @@ function RegularEdition({ rankings }: { rankings: PowerRankingEntry[] }) {
             avatarUrl: entry.avatarUrl,
           };
 
+          // Season context lives under the name so the Trend cell can be a
+          // bare glyph: "3W-1L · 2nd in standings".
+          const seasonLine = (
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-text-tertiary">
+              <Record wins={entry.wins} losses={entry.losses} ties={entry.ties} />
+              <span aria-hidden>·</span>
+              <span className="tabular-nums whitespace-nowrap">
+                {ordinal(entry.standingsRank)} in standings
+              </span>
+              {entry.injuryCount > 0 && (
+                <SuperlativeBadge
+                  text={`${entry.injuryCount} Banged Up`}
+                  variant="brown"
+                />
+              )}
+            </div>
+          );
+
+          const windowRecord = (
+            <Record
+              wins={entry.windowWins}
+              losses={entry.windowLosses}
+              ties={entry.windowTies}
+            />
+          );
+          const avgPoints = entry.windowAvgPoints.toFixed(1);
+
           return (
             <ScrollReveal key={entry.id} delay={index * 40}>
               <Link
@@ -177,7 +241,7 @@ function RegularEdition({ rankings }: { rankings: PowerRankingEntry[] }) {
               >
                 {/* ------- Mobile: stacked card (hidden on md+) ------- */}
                 <div className="md:hidden">
-                  {/* Row 1: rank · franchise · trend */}
+                  {/* Row 1: rank · franchise + season line · power index */}
                   <div className="flex items-center gap-3">
                     <span
                       className={`font-mono text-3xl font-black tabular-nums w-9 text-center shrink-0 ${rankColor}`}
@@ -190,46 +254,32 @@ function RegularEdition({ rankings }: { rankings: PowerRankingEntry[] }) {
                         championships={entry.championships}
                         variant="compact"
                       />
-                    </div>
-                    <div className="flex flex-col items-end shrink-0">
-                      <FormIndicator delta={entry.formDelta} />
-                      <span className="text-[10px] text-text-muted tabular-nums whitespace-nowrap">
-                        std #{entry.standingsRank}
-                      </span>
+                      {seasonLine}
                     </div>
                   </div>
 
-                  {/* Row 2: badges */}
-                  {hasBadges && (
-                    <div className="flex flex-wrap gap-1 mt-3">{badges}</div>
-                  )}
-
-                  {/* Row 3: stat strip */}
-                  <div className="mt-3 pt-3 border-t border-divider flex items-center justify-between gap-2 font-mono text-xs">
-                    <Record
-                      wins={entry.wins}
-                      losses={entry.losses}
-                      ties={entry.ties}
-                    />
-                    <div className="flex items-center gap-3 text-text-tertiary tabular-nums">
-                      <span>{winPct.toFixed(0)}%</span>
-                      <span>{entry.pointsScored.toFixed(1)} PF</span>
-                      <span
-                        className={
-                          pointsDiff >= 0
-                            ? "text-accent-green"
-                            : "text-accent-warm"
-                        }
-                      >
-                        {pointsDiff >= 0 ? "+" : ""}
-                        {pointsDiff.toFixed(1)}
-                      </span>
-                    </div>
+                  {/* Row 2: window stat strip, power index last */}
+                  <div className="mt-3 pt-3 border-t border-divider grid grid-cols-5 gap-2">
+                    <StatCell label={windowLabel} width="w-auto" align="start">
+                      {windowRecord}
+                    </StatCell>
+                    <StatCell label="Avg PF" width="w-auto" align="start">
+                      {avgPoints}
+                    </StatCell>
+                    <StatCell label="Streak" width="w-auto" align="start">
+                      <Streak value={entry.streak} />
+                    </StatCell>
+                    <StatCell label="Trend" width="w-auto" align="start">
+                      <FormIndicator delta={entry.formDelta} />
+                    </StatCell>
+                    <StatCell label="Power" width="w-auto" align="end" tone="gold">
+                      {(entry.powerScore * 100).toFixed(1)}
+                    </StatCell>
                   </div>
                 </div>
 
-                {/* ------- Desktop: single row (hidden below md) ------- */}
-                <div className="hidden md:flex md:flex-wrap md:items-center md:gap-4">
+                {/* ------- Desktop: single aligned row (hidden below md) ------- */}
+                <div className="hidden md:flex md:items-center md:gap-6">
                   {/* Rank */}
                   <span
                     className={`font-mono text-2xl font-black tabular-nums w-10 text-center shrink-0 ${rankColor}`}
@@ -237,52 +287,30 @@ function RegularEdition({ rankings }: { rankings: PowerRankingEntry[] }) {
                     {entry.rank}
                   </span>
 
-                  {/* Franchise */}
+                  {/* Franchise + season context */}
                   <div className="flex-1 min-w-0">
                     <FranchiseIdentity
                       franchise={franchise}
                       championships={entry.championships}
                       variant="compact"
                     />
-                    {hasBadges && (
-                      <div className="flex flex-wrap gap-1 mt-1">{badges}</div>
-                    )}
+                    {seasonLine}
                   </div>
 
-                  {/* Form vs standings */}
-                  <div className="flex flex-col items-end gap-0.5 shrink-0">
+                  {/* Window stats: fixed widths so columns align down the page */}
+                  <StatCell label={windowLabel} width="w-20">
+                    {windowRecord}
+                  </StatCell>
+                  <StatCell label="Avg PF" width="w-16">
+                    {avgPoints}
+                  </StatCell>
+                  <StatCell label="Streak" width="w-12">
+                    <Streak value={entry.streak} />
+                  </StatCell>
+                  <StatCell label="Trend" width="w-12">
                     <FormIndicator delta={entry.formDelta} />
-                    <span className="text-caption text-text-tertiary normal-case tracking-normal">
-                      vs standings (#{entry.standingsRank})
-                    </span>
-                  </div>
-
-                  {/* Stats */}
-                  <div className="flex flex-col items-end gap-1 text-sm shrink-0">
-                    <Record
-                      wins={entry.wins}
-                      losses={entry.losses}
-                      ties={entry.ties}
-                    />
-                    <div className="flex items-center gap-3 font-mono">
-                      <span className="text-xs text-text-tertiary tabular-nums">
-                        {winPct.toFixed(0)}%
-                      </span>
-                      <span className="text-xs text-text-tertiary tabular-nums">
-                        {entry.pointsScored.toFixed(1)} PF
-                      </span>
-                      <span
-                        className={`text-xs tabular-nums ${
-                          pointsDiff >= 0
-                            ? "text-accent-green"
-                            : "text-text-tertiary"
-                        }`}
-                      >
-                        {pointsDiff >= 0 ? "+" : ""}
-                        {pointsDiff.toFixed(1)}
-                      </span>
-                    </div>
-                  </div>
+                  </StatCell>
+                  <PowerIndex value={entry.powerScore} />
                 </div>
               </Link>
             </ScrollReveal>
@@ -313,7 +341,6 @@ function PreseasonEdition({ rankings }: { rankings: PreseasonPowerEntry[] }) {
 
       <section className="pb-8 md:pb-12 space-y-3 md:space-y-6">
         {rankings.map((entry, index) => {
-          const powerIndex = (entry.powerScore * 100).toFixed(1);
           const historyIndex = (entry.historyScore * 100).toFixed(0);
           const rosterIndex = (entry.rosterScore * 100).toFixed(0);
 
@@ -360,7 +387,7 @@ function PreseasonEdition({ rankings }: { rankings: PreseasonPowerEntry[] }) {
           const lastSeasonStrip =
             entry.lastSeasonYear !== null ? (
               <div className="flex items-center gap-2 font-mono text-xs">
-                <span className="text-text-muted tabular-nums">
+                <span className="text-text-tertiary tabular-nums">
                   {entry.lastSeasonYear}
                 </span>
                 <Record
@@ -379,7 +406,7 @@ function PreseasonEdition({ rankings }: { rankings: PreseasonPowerEntry[] }) {
                 )}
               </div>
             ) : (
-              <span className="font-mono text-xs text-text-muted">
+              <span className="font-mono text-xs text-text-tertiary">
                 No league history
               </span>
             );
@@ -406,7 +433,6 @@ function PreseasonEdition({ rankings }: { rankings: PreseasonPowerEntry[] }) {
                         variant="compact"
                       />
                     </div>
-                    <IndexStat label="Power" value={powerIndex} />
                   </div>
 
                   {/* Row 2: badges */}
@@ -414,19 +440,28 @@ function PreseasonEdition({ rankings }: { rankings: PreseasonPowerEntry[] }) {
                     <div className="flex flex-wrap gap-1 mt-3">{badges}</div>
                   )}
 
-                  {/* Row 3: component + last-season strip */}
-                  <div className="mt-3 pt-3 border-t border-divider flex items-center justify-between gap-2">
-                    {lastSeasonStrip}
-                    <div className="flex items-center gap-3 font-mono text-xs text-text-tertiary tabular-nums">
-                      <span>Hist {historyIndex}</span>
-                      <span>Roster {rosterIndex}</span>
-                      <span>{Math.round(entry.rosterProjPoints)} proj</span>
-                    </div>
+                  {/* Row 3: last season */}
+                  <div className="mt-3">{lastSeasonStrip}</div>
+
+                  {/* Row 4: component indices, power index last */}
+                  <div className="mt-3 pt-3 border-t border-divider grid grid-cols-4 gap-2">
+                    <StatCell label="History" width="w-auto" align="start">
+                      {historyIndex}
+                    </StatCell>
+                    <StatCell label="Roster" width="w-auto" align="start">
+                      {rosterIndex}
+                    </StatCell>
+                    <StatCell label="Proj PF" width="w-auto" align="start">
+                      {Math.round(entry.rosterProjPoints)}
+                    </StatCell>
+                    <StatCell label="Power" width="w-auto" align="end" tone="gold">
+                      {(entry.powerScore * 100).toFixed(1)}
+                    </StatCell>
                   </div>
                 </div>
 
                 {/* ------- Desktop: single row (hidden below md) ------- */}
-                <div className="hidden md:flex md:flex-wrap md:items-center md:gap-4">
+                <div className="hidden md:flex md:items-center md:gap-6">
                   {/* Rank */}
                   <span
                     className={`font-mono text-2xl font-black tabular-nums w-10 text-center shrink-0 ${rankColor}`}
@@ -448,22 +483,16 @@ function PreseasonEdition({ rankings }: { rankings: PreseasonPowerEntry[] }) {
                   </div>
 
                   {/* Component indices */}
-                  <div className="flex items-center gap-5 shrink-0">
-                    <IndexStat label="History" value={historyIndex} />
-                    <IndexStat label="Roster" value={rosterIndex} />
-                    <IndexStat
-                      label="Proj PF"
-                      value={String(Math.round(entry.rosterProjPoints))}
-                    />
-                    <div className="flex flex-col items-end pl-2 border-l border-divider">
-                      <span className="font-mono text-lg font-black tabular-nums text-accent-gold">
-                        {powerIndex}
-                      </span>
-                      <span className="text-[10px] uppercase tracking-wider text-text-muted">
-                        Power
-                      </span>
-                    </div>
-                  </div>
+                  <StatCell label="History" width="w-14">
+                    {historyIndex}
+                  </StatCell>
+                  <StatCell label="Roster" width="w-14">
+                    {rosterIndex}
+                  </StatCell>
+                  <StatCell label="Proj PF" width="w-14">
+                    {Math.round(entry.rosterProjPoints)}
+                  </StatCell>
+                  <PowerIndex value={entry.powerScore} />
                 </div>
               </Link>
             </ScrollReveal>

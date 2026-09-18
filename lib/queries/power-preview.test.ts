@@ -24,6 +24,11 @@ function regularEntry(overrides: Partial<PowerRankingEntry>): PowerRankingEntry 
     standingsRank: 1,
     windowGames: 4,
     injuryCount: 0,
+    windowWins: 3,
+    windowLosses: 1,
+    windowTies: 0,
+    windowAvgPoints: 125,
+    streak: 2,
     ...overrides,
   };
 }
