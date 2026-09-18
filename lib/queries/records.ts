@@ -11,7 +11,7 @@ import {
   rosterPlayers,
   seasons,
 } from "@/lib/db/schema";
-import { eq, and, desc, inArray, sql, sum, count } from "drizzle-orm";
+import { eq, and, desc, sql, sum, count } from "drizzle-orm";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
 
 // ---------------------------------------------------------------------------
@@ -126,6 +126,29 @@ export interface PowerRankingEntry {
   standingsRank: number;
   windowGames: number;
   injuryCount: number;
+  // Display-only window stats (plain, unweighted; the score uses the
+  // recency-weighted versions above).
+  windowWins: number;
+  windowLosses: number;
+  windowTies: number;
+  /** Plain average points per game over the window; 0 when no games. */
+  windowAvgPoints: number;
+  /** Current season-long streak, signed: +3 = W3, -2 = L2, 0 = none. A tie
+   * ends the streak. Counted over the whole season, not just the window. */
+  streak: number;
+}
+
+/** Signed streak from a franchise's completed games, newest first. */
+export function computeStreak(gamesNewestFirst: PowerFormGame[]): number {
+  let streak = 0;
+  for (const g of gamesNewestFirst) {
+    if (g.isWinner === null) break;
+    const sign = g.isWinner ? 1 : -1;
+    if (streak === 0) streak = sign;
+    else if (Math.sign(streak) === sign) streak += sign;
+    else break;
+  }
+  return streak;
 }
 
 export interface TrophyEntry {
@@ -983,11 +1006,17 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
       champCounts.map((c) => [c.franchiseId, c.championships])
     );
 
-    // Rolling window: last min(4, availableWeeks) completed weeks of the
-    // latest season (mirrors the "latest completed week" pattern used in
-    // lib/queries/homepage.ts).
-    const weekRows = await db
-      .selectDistinct({ week: matchups.week })
+    // Every completed game of the latest season, newest first. The rolling
+    // window is the last min(4, availableWeeks) of those weeks (mirrors the
+    // "latest completed week" pattern in lib/queries/homepage.ts); the
+    // streak needs the whole season, so one query serves both.
+    const gameRows = await db
+      .select({
+        week: matchups.week,
+        franchiseId: matchups.franchiseId,
+        points: matchups.points,
+        isWinner: matchups.isWinner,
+      })
       .from(matchups)
       .where(
         and(
@@ -995,39 +1024,29 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
           eq(matchups.status, "complete")
         )
       )
-      .orderBy(desc(matchups.week))
-      .limit(WINDOW_SIZE);
+      .orderBy(desc(matchups.week));
 
-    const windowWeeks = weekRows.map((w) => w.week);
+    const windowWeeks = new Set(
+      [...new Set(gameRows.map((g) => g.week))].slice(0, WINDOW_SIZE)
+    );
+
+    const seasonGamesByFranchise = new Map<string, PowerFormGame[]>();
+    for (const g of gameRows) {
+      const list = seasonGamesByFranchise.get(g.franchiseId) ?? [];
+      list.push({
+        week: g.week,
+        points: Number(g.points ?? 0),
+        isWinner: g.isWinner,
+      });
+      seasonGamesByFranchise.set(g.franchiseId, list);
+    }
 
     const gamesByFranchise = new Map<string, PowerFormGame[]>();
-
-    if (windowWeeks.length > 0) {
-      const gameRows = await db
-        .select({
-          week: matchups.week,
-          franchiseId: matchups.franchiseId,
-          points: matchups.points,
-          isWinner: matchups.isWinner,
-        })
-        .from(matchups)
-        .where(
-          and(
-            eq(matchups.seasonId, latestSeason.id),
-            eq(matchups.status, "complete"),
-            inArray(matchups.week, windowWeeks)
-          )
-        );
-
-      for (const g of gameRows) {
-        const list = gamesByFranchise.get(g.franchiseId) ?? [];
-        list.push({
-          week: g.week,
-          points: Number(g.points ?? 0),
-          isWinner: g.isWinner,
-        });
-        gamesByFranchise.set(g.franchiseId, list);
-      }
+    for (const [franchiseId, games] of seasonGamesByFranchise) {
+      gamesByFranchise.set(
+        franchiseId,
+        games.filter((g) => windowWeeks.has(g.week))
+      );
     }
 
     // Current-roster injury penalty: only starters count.
@@ -1082,6 +1101,13 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
     return rows
       .map((r) => {
         const score = scoreByFranchise.get(r.id);
+        const windowGames = gamesByFranchise.get(r.id) ?? [];
+        const windowWins = windowGames.filter((g) => g.isWinner === true).length;
+        const windowTies = windowGames.filter((g) => g.isWinner === null).length;
+        const windowAvgPoints =
+          windowGames.length > 0
+            ? windowGames.reduce((s, g) => s + g.points, 0) / windowGames.length
+            : 0;
         return {
           rank: score?.rank ?? 0,
           id: r.id,
@@ -1101,6 +1127,11 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
           standingsRank: score?.standingsRank ?? standingsRankMap.get(r.id) ?? 0,
           windowGames: score?.windowGames ?? 0,
           injuryCount: injuryCountByFranchise.get(r.id) ?? 0,
+          windowWins,
+          windowLosses: windowGames.length - windowWins - windowTies,
+          windowTies,
+          windowAvgPoints,
+          streak: computeStreak(seasonGamesByFranchise.get(r.id) ?? []),
         };
       })
       .sort((a, b) => a.rank - b.rank);

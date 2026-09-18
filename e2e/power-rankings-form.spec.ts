@@ -25,12 +25,28 @@ test.describe("Recent-form power rankings", () => {
 
   let seasonId: number;
 
-  test.beforeAll(async () => {
+  // /records and /records/power-rankings are ISR pages prerendered by the
+  // `next build` the Playwright webServer runs BEFORE this seed exists, so the
+  // seeded 2999 season is invisible until the cache is dropped, the same way a
+  // sync run drops it. CRON_SECRET comes from .env.local via playwright.config.
+  async function revalidateSite(baseURL: string) {
+    const secret = process.env.CRON_SECRET?.replace(/^"|"$/g, "");
+    const res = await fetch(`${baseURL}/api/revalidate`, {
+      headers: { authorization: `Bearer ${secret}` },
+    });
+    if (!res.ok) {
+      throw new Error(`/api/revalidate returned ${res.status}; is CRON_SECRET set?`);
+    }
+  }
+
+  test.beforeAll(async ({ baseURL }) => {
     seasonId = await seedPowerRankingsData();
+    await revalidateSite(baseURL!);
   });
 
-  test.afterAll(async () => {
+  test.afterAll(async ({ baseURL }) => {
     if (seasonId) await cleanupPowerRankingsData(seasonId);
+    await revalidateSite(baseURL!);
   });
 
   test("T01: /records/power-rankings ranks the hot-form team above the season-standings leader", async ({
@@ -63,8 +79,8 @@ test.describe("Recent-form power rankings", () => {
     expect(riserIndex).toBeLessThan(leaderIndex);
 
     // A rising/falling glyph with a numeric delta is visible (not color-only).
-    await expect(page.locator("text=▲").first()).toBeVisible();
-    await expect(page.locator("text=▼").first()).toBeVisible();
+    await expect(page.locator("text=▲ >> visible=true").first()).toBeVisible();
+    await expect(page.locator("text=▼ >> visible=true").first()).toBeVisible();
   });
 
   test("T02: records rail shows the hot-form team first, matching power-rankings order", async ({

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computePowerScore } from "./records";
+import { computePowerScore, computeStreak } from "./records";
 import type { PowerFranchiseInput } from "./records";
 
 function franchise(
@@ -196,5 +196,39 @@ describe("computePowerScore: formDelta", () => {
     for (const r of results) {
       expect(r.formDelta).toBe(0);
     }
+  });
+});
+
+describe("computeStreak", () => {
+  const game = (week: number, isWinner: boolean | null) => ({
+    week,
+    points: 100,
+    isWinner,
+  });
+
+  it("returns 0 with no games", () => {
+    expect(computeStreak([])).toBe(0);
+  });
+
+  it("counts consecutive wins from the newest game as a positive streak", () => {
+    expect(
+      computeStreak([game(5, true), game(4, true), game(3, true), game(2, false)])
+    ).toBe(3);
+  });
+
+  it("counts consecutive losses as a negative streak", () => {
+    expect(computeStreak([game(3, false), game(2, false), game(1, true)])).toBe(
+      -2
+    );
+  });
+
+  it("is not capped at the four-week window", () => {
+    const games = Array.from({ length: 7 }, (_, i) => game(7 - i, true));
+    expect(computeStreak(games)).toBe(7);
+  });
+
+  it("ends the streak at a tie, and a tie as the newest game means no streak", () => {
+    expect(computeStreak([game(3, true), game(2, null), game(1, true)])).toBe(1);
+    expect(computeStreak([game(3, null), game(2, true)])).toBe(0);
   });
 });
