@@ -3,7 +3,7 @@ import { getNFLState } from "@/lib/sleeper";
 import { PAGE_REVALIDATE_SECONDS } from "@/lib/cache";
 import { db } from "@/lib/db";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
-import { nflGames } from "@/lib/db/schema";
+import { matchups, nflGames, seasons } from "@/lib/db/schema";
 import { and, eq, sql } from "drizzle-orm";
 import {
   isWithinWeekOneLeadWindow,
@@ -19,32 +19,65 @@ export interface NflState {
   season: string;
 }
 
+/** A parsed NFL_STATE_OVERRIDE. */
+export interface NflStateOverride {
+  /**
+   * The simulated state. When `nextWeek` is true, `state.week` is only a
+   * placeholder (1): getNflState resolves the real week at request time.
+   */
+  state: NflState;
+  /** ":force": treat the week-one lead window as active. */
+  forceLeadWindow: boolean;
+  /** ":recap": hold the between-weeks post-week recap window open. */
+  forceRecapWindow: boolean;
+  /** Week token "next": resolve to the earliest all-scheduled week. */
+  nextWeek: boolean;
+}
+
 /**
- * Preview/dev-only NFL state override, so a Vercel preview deployment can
- * simulate a season phase (e.g. "regular season, week 1, nothing played yet")
- * without waiting for the real calendar. Format:
- * "<type>:<week>[:<season>][:force]", e.g. NFL_STATE_OVERRIDE=regular:1 or
- * regular:1:2026:force. The trailing ":force" also treats the week-one lead
- * window as active (see isWeekOneLeadWindowActive), so a preview can show the
- * regular-season hub before the real calendar reaches 7 days before the
- * earliest week-1 game (KICKOFF_LEAD_DAYS). The week must be 1 to 22; anything
- * outside that range is rejected
- * (week 0 used to render an empty regular-season hub that looked like a data
- * bug). Ignored in production (VERCEL_ENV === "production") and when unset
- * or malformed, so it can never lie on the live site.
+ * Preview/dev-only NFL state override, so a Vercel preview deployment (or a
+ * pinned Playwright dev server) can simulate a season phase without waiting
+ * for the real calendar. Format:
+ *
+ *   "<type>:<week|next>[:<season>][:force][:recap]"
+ *
+ * e.g. NFL_STATE_OVERRIDE=regular:1, regular:1:2026:force, regular:next:force.
+ *
+ * - <week> is 1 to 22; anything outside that range is rejected rather than
+ *   clamped (week 0 used to render an empty regular-season hub that looked
+ *   like a data bug).
+ * - "next" resolves AT REQUEST TIME to the earliest week of that season whose
+ *   matchups are all still "scheduled" (resolveNextScheduledWeek), i.e. the
+ *   between-weeks slate. A fixed number drifts: the e2e projects were pinned
+ *   to regular:1 and regular:2, which stopped reaching the between-weeks and
+ *   post-week states the moment those weeks went final in the live DB.
+ * - ":force" also treats the week-one lead window as active (see
+ *   isWeekOneLeadWindowActive), so a preview can show the regular-season hub
+ *   before the real calendar reaches 7 days before the earliest week-1 game
+ *   (KICKOFF_LEAD_DAYS).
+ * - ":recap" holds the post-week recap window open (isRecapWindowForced), so
+ *   the recap leads the between-weeks hub whatever the weekday.
+ *
+ * Ignored in production (VERCEL_ENV === "production") and when unset or
+ * malformed, so it can never lie on the live site.
  */
 export function parseNflStateOverrideValue(
   raw: string | null | undefined
-): { state: NflState; forceLeadWindow: boolean } | null {
+): NflStateOverride | null {
   if (!raw) return null;
 
-  const m = /^(pre|regular|post|off):(\d{1,2})(?::(\d{4}))?(?::(force))?$/.exec(raw.trim());
+  const m = /^(pre|regular|post|off):(\d{1,2}|next)(?::(\d{4}))?((?::(?:force|recap))*)$/.exec(
+    raw.trim()
+  );
   if (!m) return null;
 
+  const nextWeek = m[2] === "next";
   // Reject rather than clamp, so a typo falls back to the real calendar instead
   // of quietly simulating a different week.
-  const week = Number(m[2]);
+  const week = nextWeek ? 1 : Number(m[2]);
   if (week < 1 || week > 22) return null;
+
+  const flags = new Set(m[4].split(":").filter(Boolean));
 
   return {
     state: {
@@ -52,14 +85,51 @@ export function parseNflStateOverrideValue(
       week,
       season: m[3] ?? String(new Date().getFullYear()),
     },
-    forceLeadWindow: m[4] === "force",
+    forceLeadWindow: flags.has("force"),
+    forceRecapWindow: flags.has("recap"),
+    nextWeek,
   };
 }
 
 /** Env gating around parseNflStateOverrideValue. Never active in production. */
-function parseNflStateOverride(): { state: NflState; forceLeadWindow: boolean } | null {
+function parseNflStateOverride(): NflStateOverride | null {
   if (process.env.VERCEL_ENV === "production") return null;
   return parseNflStateOverrideValue(process.env.NFL_STATE_OVERRIDE);
+}
+
+/**
+ * True when a ":recap" NFL_STATE_OVERRIDE holds the post-week recap window
+ * open (preview/dev only; always false in production).
+ */
+export function isRecapWindowForced(): boolean {
+  return parseNflStateOverride()?.forceRecapWindow ?? false;
+}
+
+/**
+ * The override's "next" week: the earliest week whose matchups are ALL still
+ * "scheduled" (a null status counts as scheduled, the column's default).
+ * Pure; `weeks` is one row per week with whether every matchup in it is
+ * scheduled. Null when no week qualifies (the season is over).
+ */
+export function resolveNextScheduledWeek(
+  weeks: { week: number; allScheduled: boolean }[]
+): number | null {
+  const open = weeks.filter((w) => w.allScheduled).map((w) => w.week);
+  return open.length > 0 ? Math.min(...open) : null;
+}
+
+/** Reads the per-week "all scheduled" rollup for a season year. */
+async function getNextScheduledWeek(seasonYear: number): Promise<number | null> {
+  const rows = await db
+    .select({
+      week: matchups.week,
+      allScheduled: sql<boolean>`bool_and(coalesce(${matchups.status}, 'scheduled') = 'scheduled')`,
+    })
+    .from(matchups)
+    .innerJoin(seasons, eq(seasons.id, matchups.seasonId))
+    .where(eq(seasons.seasonYear, seasonYear))
+    .groupBy(matchups.week);
+  return resolveNextScheduledWeek(rows.map((r) => ({ week: r.week, allScheduled: Boolean(r.allScheduled) })));
 }
 
 /**
@@ -100,7 +170,14 @@ export const isWeekOneLeadWindowActive = cache(async function isWeekOneLeadWindo
 
 export const getNflState = cache(async function getNflState(): Promise<NflState | null> {
   const override = parseNflStateOverride();
-  if (override) return override.state;
+  if (override && !override.nextWeek) return override.state;
+  if (override?.nextWeek) {
+    // Resolved per request against the real matchups, so the pinned e2e
+    // servers always land on the live between-weeks slate. No qualifying
+    // week (season over) falls through to the real calendar below.
+    const week = await getNextScheduledWeek(Number(override.state.season));
+    if (week != null) return { ...override.state, week };
+  }
 
   try {
     const result = await getNFLState(PAGE_REVALIDATE_SECONDS);

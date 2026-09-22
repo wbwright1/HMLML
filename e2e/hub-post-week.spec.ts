@@ -11,13 +11,14 @@ import { isRecapWindowOpen } from "../lib/hub/week-recap";
 // rather than jumping straight to next week's slate.
 //
 // Runs under the "hub-post-week" Playwright project (playwright.config.ts),
-// whose dev server is pinned to NFL_STATE_OVERRIDE=regular:2 against the real
-// Postgres, where week 1 of the live season is complete. Every assertion is
-// unconditional within its branch: the recap window closes at the Thursday
-// MORNING cron (06:00 UTC on kickoff day, lib/hub/week-recap.ts), so the
-// suite reads the hero's stamped kickoff target and asserts the recap
-// is present before that instant and absent after it. Both branches assert;
-// neither self-skips.
+// whose dev server is pinned to NFL_STATE_OVERRIDE=regular:next:recap against
+// the real Postgres: "next" is the earliest week whose matchups are all still
+// scheduled, so the prior week is the last completed one, and ":recap" holds
+// the recap window open on any weekday (the hero stamps data-recap-forced).
+// Without ":recap" the window closes at the Thursday MORNING cron (06:00 UTC
+// on kickoff day, lib/hub/week-recap.ts), so the suite reads the hero's
+// stamped kickoff target and asserts the recap is present before that
+// instant and absent after it. Both branches assert.
 // ============================================================================
 
 /** The slate's first kickoff, stamped on the hero section as
@@ -32,7 +33,9 @@ async function kickoffTarget(page: import("@playwright/test").Page): Promise<Dat
 test.describe("Post-week recap (between weeks)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    const open = isRecapWindowOpen(new Date(), await kickoffTarget(page));
+    const forced =
+      (await page.locator('[data-recap-forced="true"]').count()) > 0;
+    const open = forced || isRecapWindowOpen(new Date(), await kickoffTarget(page));
     if (!open) {
       // Thursday morning cron has passed: the plain slate hub, with the
       // rail fallbacks, and NO recap. Assert that state and stop.

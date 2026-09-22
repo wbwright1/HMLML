@@ -31,6 +31,7 @@ import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
 import { getWeekBenchLeader } from "@/lib/queries/lineup-efficiency";
 import { getWeekRecap, type WeekRecap } from "@/lib/queries/week-recap";
 import { isRecapWindowOpen } from "@/lib/hub/week-recap";
+import { isRecapWindowForced } from "@/lib/queries/nfl-state";
 import { WeekRecapSection, BenchCallout } from "@/components/hub/week-recap-section";
 import {
   getWeekStarterPool,
@@ -91,6 +92,10 @@ export async function BetweenWeeksHub({
   nextKickoff,
 }: BetweenWeeksHubProps) {
   const priorWeek = week > 1 ? week - 1 : week;
+  // A ":recap" NFL_STATE_OVERRIDE (preview/dev only, never production) holds
+  // the recap window open so the pinned e2e server reaches the recap state on
+  // any weekday.
+  const recapForced = isRecapWindowForced();
 
   // League-wide games-played gate. At week 1 every franchise is 0-0-0, so a
   // "1st in Division" claim would be fabricated. It picks the seeded opener
@@ -257,7 +262,7 @@ export async function BetweenWeeksHub({
     // UTC daily sync), not through kickoff. That sync revalidates the hub,
     // so the cached page flips to the plain slate view at the same moment
     // the gate does (lib/hub/week-recap.ts).
-    if (week > 1 && isRecapWindowOpen(new Date(), nextKickoff)) {
+    if (week > 1 && (recapForced || isRecapWindowOpen(new Date(), nextKickoff))) {
       try {
         weekRecap = await getWeekRecap(seasonId, priorWeek);
       } catch (e) {
@@ -414,6 +419,7 @@ export async function BetweenWeeksHub({
       <section
         className="pt-2 pb-6 lg:flex lg:items-start lg:justify-between lg:gap-8"
         data-kickoff-target={nextKickoff?.toISOString()}
+        data-recap-forced={recapForced ? "true" : undefined}
       >
         <div className="max-w-2xl">
           <p className="text-kicker mb-3">
@@ -460,6 +466,7 @@ export async function BetweenWeeksHub({
               avatarOf={(id) => standingBy.get(id)?.avatarUrl ?? null}
               divisionLeaderStatus={gotw.divisionLeaderStatus}
               kicker={gotw.kicker}
+              rivalryName={gotw.namedRivalry?.name ?? null}
               rivalryTagline={gotw.namedRivalry?.tagline ?? null}
               blurb={gotwBlurb}
             />
@@ -567,6 +574,7 @@ function GameOfWeekSection({
   avatarOf,
   divisionLeaderStatus,
   kicker,
+  rivalryName,
   rivalryTagline,
   blurb,
 }: {
@@ -578,6 +586,8 @@ function GameOfWeekSection({
   divisionLeaderStatus: Map<string, string>;
   /** "{lead} · {stakes}", derived from the pick's reasons (gotw-context). */
   kicker: string;
+  /** The named rivalry leading the kicker, when the pick is one. */
+  rivalryName: string | null;
   /** The named rivalry's tagline when the pick is one, printed as a serif aside. */
   rivalryTagline: string | null;
   blurb: string;
@@ -599,6 +609,7 @@ function GameOfWeekSection({
     <HubSection kicker="Game of the Week">
       <GameOfTheWeekCard
         kicker={kicker.toUpperCase()}
+        rivalryName={rivalryName}
         rivalryTagline={rivalryTagline}
         h2hLine={h2hLine}
         teamA={{
