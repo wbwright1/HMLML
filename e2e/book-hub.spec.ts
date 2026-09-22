@@ -5,7 +5,7 @@ import { getSql } from "./helpers/sql";
 // The Book on the hub: line footers on matchup/slate cards, the gold rail
 // card, and the standings ladder's "the playoff line" divider.
 //
-// Drives the real stack (dev server pinned to NFL_STATE_OVERRIDE=regular:1:force
+// Drives the real stack (dev server pinned to NFL_STATE_OVERRIDE=regular:next:force
 // via the "hub-in-season" Playwright project, plus the real Postgres behind
 // POSTGRES_DRIVER=pg). Nothing is mocked. Two guarantees are asserted:
 //   1. When book_lines has rows for the hub's own current week, the hub
@@ -43,8 +43,8 @@ test("the hub surfaces The Book's line when a game is priced for the hub's curre
   // exactly what AC1 asks the underlying query to agree with, rather than
   // independently guessing a week. The regular-season game-window hero uses
   // "Week N." as its h1; the between-weeks hero (the state NFL_STATE_OVERRIDE
-  // =regular:1:force actually lands on pre-kickoff, since no game has started)
-  // states the week in its kicker instead ("... Week N ... The Slate Is Set").
+  // =regular:next:force actually lands on pre-kickoff, since no game has started)
+  // states the week in its kicker instead ("... Week N · Kickoff Thursday").
   const heroText = await page.locator("main section").first().innerText();
   const weekMatch = /Week\s+(\d+)/i.exec(heroText);
   expect(weekMatch, `could not parse a week number out of hero text "${heroText}"`).not.toBeNull();

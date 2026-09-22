@@ -2,6 +2,34 @@ import { describe, it, expect } from "vitest";
 import { generateFromTemplates, kindsForSeason } from "./templates";
 import { sharesSignaturePhrase } from "./phrases";
 import type { StatsContext } from "./stats-context";
+import { gameOfWeekBlurb, stakesFromReasons, type GotwReason } from "@/lib/hub/between-weeks";
+
+/**
+ * What the shared resolver (lib/hub/gotw-context.ts) puts on the context for
+ * the Foopus v Olave Garden fixture: the blurb comes from the real
+ * reason-driven builder, never a hand-written string.
+ */
+function foopusGotw(reasons: GotwReason[] = ["pride"]): NonNullable<StatsContext["gameOfWeek"]> {
+  return {
+    pairKey: "foopus__olave-garden",
+    reasons,
+    namedRivalry: null,
+    form: [],
+    heroNumbers: [],
+    kicker: `Cross-Division · ${stakesFromReasons(reasons)}`,
+    blurb: gameOfWeekBlurb({
+      reasons,
+      teamA: { name: "Foopus", record: "4-1" },
+      teamB: { name: "Olave Garden", record: "2-3" },
+      divisionName: null,
+      h2h: { wins: 3, losses: 1, ties: 0 },
+      lastMeeting: null,
+      playoffMeetingYears: [],
+      namedRivalry: null,
+      bowlName: null,
+    }),
+  };
+}
 
 function baseContext(overrides: Partial<StatsContext> = {}): StatsContext {
   return {
@@ -54,6 +82,7 @@ function baseContext(overrides: Partial<StatsContext> = {}): StatsContext {
         lastMeeting: null,
         playoffMeetingYears: [],
         isTitleRematch: false,
+        namedRivalry: null,
         topProjected: null,
       },
       {
@@ -64,10 +93,12 @@ function baseContext(overrides: Partial<StatsContext> = {}): StatsContext {
         lastMeeting: null,
         playoffMeetingYears: [],
         isTitleRematch: false,
+        namedRivalry: null,
         topProjected: null,
       },
     ],
     gameOfWeekPairKey: null,
+    gameOfWeek: null,
     weekInBooks: {
       week: 4,
       highestScorer: { franchiseName: "Foopus", franchiseSlug: "foopus", points: 145.3 },
@@ -236,8 +267,33 @@ describe("generateFromTemplates (regular season)", () => {
     for (const a of angles) expect(validPairs.has(a.refKey ?? "")).toBe(true);
   });
 
-  it("emits one game-of-week blurb and one hero dek", () => {
-    expect(rows.filter((r) => r.kind === "game_of_week_blurb")).toHaveLength(1);
+  it("a named rivalry is the stored angle's top rung, same as the hub's", () => {
+    const named = baseContext({ seasonType: "regular" });
+    named.currentMatchups = named.currentMatchups.map((m, i) =>
+      i === 0
+        ? {
+            ...m,
+            namedRivalry: {
+              name: "The Custody Battle",
+              tagline: "They used to share a team. Now they share a grudge.",
+              origin: "Editorial lore.",
+              trophyName: null,
+            },
+          }
+        : m
+    );
+    const angle = generateFromTemplates(named).rows.find(
+      (r) => r.kind === "matchup_angle" && r.refKey === named.currentMatchups[0].pairKey
+    );
+    expect(angle?.body).toBe(
+      "The Custody Battle: They used to share a team. Now they share a grudge. Foopus leads it 3-1 all time."
+    );
+  });
+
+  it("emits one hero dek, and no blurb when the resolver featured no game", () => {
+    // No second selection heuristic lives in the template any more: with no
+    // featured game on the context there is nothing true to write about.
+    expect(rows.filter((r) => r.kind === "game_of_week_blurb")).toHaveLength(0);
     expect(rows.filter((r) => r.kind === "hero_dek")).toHaveLength(1);
   });
 
@@ -254,17 +310,65 @@ describe("generateFromTemplates (regular season)", () => {
     for (const r of rows) expect(hasEmDash(r.body)).toBe(false);
   });
 
-  it("features the pair named by gameOfWeekPairKey when set", () => {
+  it("ships the resolver's blurb verbatim, keyed to the featured pair", () => {
+    const featured = foopusGotw(["pride"]);
     const ctxWithGotw = baseContext({
       seasonType: "regular",
-      gameOfWeekPairKey: "better-call-hall__mccarthyism",
+      gameOfWeekPairKey: featured.pairKey,
+      gameOfWeek: featured,
     });
-    const gotw = generateFromTemplates(ctxWithGotw).rows.find(
+    const gotw = generateFromTemplates(ctxWithGotw).rows.filter(
       (r) => r.kind === "game_of_week_blurb"
     );
-    // The blurb should be about the selected pair, not the combined-wins pick.
-    expect(gotw?.body).toContain("McCarthyism");
-    expect(gotw?.body).toContain("Better Call Hall");
+    expect(gotw).toHaveLength(1);
+    // ref_key is what lets the hub refuse a blurb about a different game.
+    expect(gotw[0].refKey).toBe("foopus__olave-garden");
+    expect(gotw[0].body).toBe(featured.blurb);
+    expect(gotw[0].body).toBe(
+      "Foopus (4-1) against Olave Garden (2-3). The best pairing on a thin slate, and somebody's record takes a hit by Monday night. Foopus leads the all-time series 3-1."
+    );
+  });
+
+  it("the template blurb leads with both teams' last-week form, the same facts the prompt gets", () => {
+    // The resolver builds the blurb with the form facts it also hands the
+    // prompt (stats-context), so the template row carries them verbatim.
+    const blurb = gameOfWeekBlurb({
+      reasons: ["series-on-the-line"],
+      teamA: {
+        name: "Foopus",
+        record: "4-1",
+        lastWeek: { points: 176.3, opponentName: "McCarthyism", margin: 22.4, won: true },
+      },
+      teamB: {
+        name: "Olave Garden",
+        record: "2-3",
+        lastWeek: { points: 98.2, opponentName: "Team C", margin: 41.5, won: false },
+      },
+      divisionName: null,
+      h2h: { wins: 3, losses: 2, ties: 0 },
+      lastMeeting: null,
+      playoffMeetingYears: [],
+      namedRivalry: null,
+      bowlName: null,
+    });
+    const featured = {
+      ...foopusGotw(["series-on-the-line"]),
+      blurb,
+      form: [
+        { team: "Foopus", slug: "foopus", points: 176.3, opponent: "McCarthyism", margin: 22.4, result: "won" as const },
+        { team: "Olave Garden", slug: "olave-garden", points: 98.2, opponent: "Team C", margin: 41.5, result: "lost" as const },
+      ],
+    };
+    const rows = generateFromTemplates(
+      baseContext({ seasonType: "regular", gameOfWeekPairKey: featured.pairKey, gameOfWeek: featured })
+    ).rows.filter((r) => r.kind === "game_of_week_blurb");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].body).toBe(
+      "Olave Garden lost by 41.5. Foopus just hung 176.3 on McCarthyism. " +
+        "Now they meet, in a series that sits within a game either way. " +
+        "Foopus leads the all-time series 3-2."
+    );
+    for (const f of featured.form) expect(rows[0].body).toContain(f.team);
   });
 });
 
@@ -548,6 +652,7 @@ describe("generateFromTemplates (week 1 matchup angles)", () => {
         },
         playoffMeetingYears: [],
         isTitleRematch: false,
+        namedRivalry: null,
         topProjected: null,
       },
       {
@@ -559,6 +664,7 @@ describe("generateFromTemplates (week 1 matchup angles)", () => {
         lastMeeting: null,
         playoffMeetingYears: [],
         isTitleRematch: false,
+        namedRivalry: null,
         topProjected: null,
       },
       {
@@ -577,6 +683,7 @@ describe("generateFromTemplates (week 1 matchup angles)", () => {
         },
         playoffMeetingYears: [],
         isTitleRematch: false,
+        namedRivalry: null,
         topProjected: null,
       },
     ],
@@ -616,8 +723,13 @@ describe("generateFromTemplates (week 1 matchup angles)", () => {
 // ---------------------------------------------------------------------------
 
 describe("hero dek vs game of the week blurb", () => {
-  const regularCtx = (week: number) =>
-    baseContext({ seasonType: "regular", week, gameOfWeekPairKey: "foopus__olave-garden" });
+  const regularCtx = (week: number, reasons: GotwReason[] = ["pride"]) =>
+    baseContext({
+      seasonType: "regular",
+      week,
+      gameOfWeekPairKey: "foopus__olave-garden",
+      gameOfWeek: foopusGotw(reasons),
+    });
 
   const bodies = (ctx: StatsContext, kind: string) =>
     generateFromTemplates(ctx)
@@ -625,9 +737,17 @@ describe("hero dek vs game of the week blurb", () => {
       .map((r) => r.body);
 
   it("ships a dek and a GotW blurb that share no signature phrase", () => {
-    // Every week of a season, not just the one that happens to be live.
+    // Every week of a season, and every reason a blurb can lead with.
+    const reasons: GotwReason[] = [
+      "pride",
+      "unbeatens",
+      "top-of-table",
+      "series-on-the-line",
+      "coin-flip-line",
+      "mutual-rival",
+    ];
     for (let week = 1; week <= 14; week++) {
-      const ctx = regularCtx(week);
+      const ctx = regularCtx(week, [reasons[week % reasons.length]]);
       const dek = bodies(ctx, "hero_dek")[0];
       const gotw = bodies(ctx, "game_of_week_blurb")[0];
       expect(dek, `week ${week}`).toBeTruthy();
@@ -636,12 +756,14 @@ describe("hero dek vs game of the week blurb", () => {
     }
   });
 
-  it("leaves the Game of the Week blurb's phrasing untouched", () => {
-    // Owner's call: the GotW line is the better of the two and does not move.
-    const gotw = bodies(regularCtx(1), "game_of_week_blurb")[0];
-    expect(gotw).toContain("headline the slate");
-    expect(gotw).toContain("First place is on the line");
-    expect(gotw).toContain("receipts to settle by Thursday night");
+  it("the GotW blurb no longer asserts stakes it cannot prove", () => {
+    // The old template said "First place is on the line and there are
+    // receipts to settle by Thursday night" about EVERY featured game,
+    // including a 2-0 v 0-2 mismatch, and fantasy games settle on Monday.
+    for (let week = 1; week <= 14; week++) {
+      const gotw = bodies(regularCtx(week), "game_of_week_blurb")[0];
+      expect(gotw).not.toMatch(/first place|receipts to settle|thursday|headline the slate/i);
+    }
   });
 
   it("offers a real pool of dek variants, not a single line", () => {

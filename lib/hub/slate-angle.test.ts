@@ -23,7 +23,6 @@ function base(overrides: Partial<SlateAngleInput> = {}): SlateAngleInput {
     recordA: "0-0",
     recordB: "0-0",
     anyGamesPlayed: false,
-    kickoffWeekday: "Wednesday",
     ...overrides,
   };
 }
@@ -44,6 +43,49 @@ describe("parseStreak", () => {
 });
 
 describe("buildSlateAngle ladder", () => {
+  it("rung 0: a named rivalry leads with its name and tagline, then the series", () => {
+    const result = buildSlateAngleResult(
+      base({
+        teamA: { name: "McCarthyism" },
+        teamB: { name: "Vanilla Vick" },
+        namedRivalry: {
+          name: "The Split Decision",
+          tagline: "They trade wins all season, then settle it in the playoffs.",
+        },
+        h2h: { wins: 4, losses: 4, ties: 0, streak: "2-game win streak" },
+        isTitleRematch: true,
+        bowlName: "HMLML Bowl VI",
+      })
+    );
+    // Outranks even the title rematch and the streak.
+    expect(result.rung).toBe("namedRivalry");
+    expect(result.text).toBe(
+      "The Split Decision: They trade wins all season, then settle it in the playoffs. Dead even at 4-4 all time."
+    );
+  });
+
+  it("rung 0 names the series leader, and drops the tail rather than inventing a series", () => {
+    const leading = buildSlateAngle(
+      base({
+        teamA: { name: "Of Mice and Mendoza" },
+        teamB: { name: "Real Olave Garden" },
+        namedRivalry: { name: "The Custody Battle", tagline: null },
+        h2h: { wins: 0, losses: 4, ties: 0, streak: "4-game losing streak" },
+      })
+    );
+    expect(leading).toBe(
+      "The Custody Battle: Of Mice and Mendoza and Real Olave Garden. Real Olave Garden leads it 4-0 all time."
+    );
+    const fresh = buildSlateAngle(
+      base({ namedRivalry: { name: "The Custody Battle", tagline: "Two owners, one split." } })
+    );
+    expect(fresh).toBe("The Custody Battle: Two owners, one split.");
+  });
+
+  it("without a named rivalry the ladder is unchanged", () => {
+    expect(buildSlateAngleResult(base({ namedRivalry: null })).rung).toBe("firstMeeting");
+  });
+
   it("rung 1: title rematch names the bowl and who won it", () => {
     const result = buildSlateAngleResult(
       base({
@@ -118,7 +160,19 @@ describe("buildSlateAngle ladder", () => {
       })
     );
     expect(result.rung).toBe("playoffHistory");
-    expect(result.text).toContain("2023 playoffs");
+    expect(result.text).toBe("Team Alpha and Team Bravo met in the 2023 playoffs.");
+  });
+
+  it("rung 4: counts multiple playoff meetings instead of guessing at a mood", () => {
+    const result = buildSlateAngleResult(
+      base({
+        h2h: { wins: 2, losses: 2, ties: 0, streak: null },
+        playoffMeetingYears: [2025, 2023],
+      })
+    );
+    expect(result.text).toBe(
+      "Team Alpha and Team Bravo met in the 2025 playoffs. That makes 2 playoff meetings between them."
+    );
   });
 
   it("rung 5: last meeting reports the real score, winner first", () => {
@@ -137,6 +191,32 @@ describe("buildSlateAngle ladder", () => {
     );
     expect(result.rung).toBe("lastMeeting");
     expect(result.text).toContain("Team Bravo 120.4, Team Alpha 101.2");
+    // The tail is the game's own margin, never a decorative "still on the
+    // books" (which collided with the recap's "In The Books" header).
+    expect(result.text).toBe(
+      "Last time out: Team Bravo 120.4, Team Alpha 101.2. That was 2024 week 5, decided by 19.2."
+    );
+    expect(result.text).not.toMatch(/on the books/i);
+  });
+
+  it("rung 5: a playoff last meeting names the playoffs, not a week number", () => {
+    const result = buildSlateAngleResult(
+      base({
+        h2h: { wins: 1, losses: 1, ties: 0, streak: null },
+        lastMeeting: {
+          seasonYear: 2025,
+          week: 16,
+          winner: "A",
+          pointsA: 150.5,
+          pointsB: 94.5,
+          isPlayoff: true,
+        },
+        // Excluded from the playoff rung so the lastMeeting rung is reached.
+        playoffMeetingYears: [],
+      })
+    );
+    expect(result.rung).toBe("lastMeeting");
+    expect(result.text).toContain("That was the 2025 playoffs, decided by 56.0.");
   });
 
   it("rung 6: an uneven-but-close series names the leader, not the first team", () => {
@@ -159,7 +239,8 @@ describe("buildSlateAngle ladder", () => {
     const result = buildSlateAngleResult(base());
     expect(result.rung).toBe("firstMeeting");
     expect(result.text).toContain("have never played");
-    expect(result.text).toContain("Wednesday");
+    // No weekday: the ladder is never handed one it can prove.
+    expect(result.text).not.toMatch(/day\b/);
     // No series claim of any kind.
     expect(result.text).not.toMatch(/\d+-\d+/);
     expect(result.text).not.toMatch(/all time|series|last \d+ meetings|Last time out/);
@@ -250,6 +331,10 @@ describe("copy rules", () => {
       },
     }),
     base({ anyGamesPlayed: true, recordA: "3-1", recordB: "1-3" }),
+    base({
+      namedRivalry: { name: "The Custody Battle", tagline: "They used to share a team. Now they share a grudge." },
+      h2h: { wins: 4, losses: 0, ties: 0, streak: "4-game win streak" },
+    }),
   ];
 
   it("uses no em-dashes or en-dashes", () => {
@@ -488,6 +573,13 @@ describe("length budget with the league's longest real names", () => {
           pointsB: 120.0,
           isPlayoff: false,
         },
+      }),
+      longBase({
+        namedRivalry: {
+          name: "The Split Decision",
+          tagline: "They trade wins all season, then settle it in the playoffs.",
+        },
+        h2h: { wins: 14, losses: 13, ties: 0, streak: null },
       }),
       longBase({
         isTitleRematch: true,

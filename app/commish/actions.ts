@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { revalidateSite } from "@/lib/revalidate";
 import {
   getSessionMember,
@@ -8,6 +9,16 @@ import {
   revokeMemberSessions,
 } from "@/lib/auth";
 import { setPostHidden } from "@/lib/queries/smack";
+import {
+  createRivalry,
+  deleteRivalry,
+  updateRivalry,
+} from "@/lib/queries/rivalries";
+import {
+  parseRivalryForm,
+  parseRivalryId,
+  type RivalryMessageKey,
+} from "@/lib/rivalry-form";
 import type { IssueCodeState } from "./claim-code-state";
 
 /** Throws unless the current session belongs to a commish. Every mutating
@@ -64,4 +75,67 @@ export async function setPostHiddenAction(formData: FormData): Promise<void> {
   await setPostHidden(postId, hidden);
   revalidatePath("/commish");
   revalidateSite("commish-moderation");
+}
+
+// ---------------------------------------------------------------------------
+// Named rivalries
+// ---------------------------------------------------------------------------
+// Plain server-action forms, no client island: each action reports back by
+// redirecting to /commish with a message KEY (never free text; the page only
+// renders keys it knows) and an anchor on the rivalries section. redirect()
+// throws by design, so it is always called outside any try/catch.
+
+/** Sends the commish back to the rivalries section with a result message. */
+function backToRivalries(key: RivalryMessageKey, ok: boolean): never {
+  const param = ok ? "rivalry" : "rivalryError";
+  redirect(`/commish?${param}=${key}#rivalries`);
+}
+
+/** After a successful write: refresh the console AND every public page (the
+ *  rivalry name renders inside ISR-cached HTML and the league-data cache). */
+function revalidateRivalries(): void {
+  revalidatePath("/commish");
+  revalidateSite("commish-rivalries");
+}
+
+export async function createRivalryAction(formData: FormData): Promise<void> {
+  await requireCommish();
+
+  const parsed = parseRivalryForm(formData);
+  if (!parsed.ok) backToRivalries(parsed.error, false);
+
+  const result = await createRivalry(parsed.value);
+  if (!result.ok) backToRivalries(result.reason, false);
+
+  revalidateRivalries();
+  backToRivalries("created", true);
+}
+
+export async function updateRivalryAction(formData: FormData): Promise<void> {
+  await requireCommish();
+
+  const id = parseRivalryId(formData);
+  if (id == null) backToRivalries("not-found", false);
+
+  const parsed = parseRivalryForm(formData);
+  if (!parsed.ok) backToRivalries(parsed.error, false);
+
+  const result = await updateRivalry(id, parsed.value);
+  if (!result.ok) backToRivalries(result.reason, false);
+
+  revalidateRivalries();
+  backToRivalries("updated", true);
+}
+
+export async function deleteRivalryAction(formData: FormData): Promise<void> {
+  await requireCommish();
+
+  const id = parseRivalryId(formData);
+  if (id == null) backToRivalries("not-found", false);
+
+  const deleted = await deleteRivalry(id);
+  if (!deleted) backToRivalries("not-found", false);
+
+  revalidateRivalries();
+  backToRivalries("deleted", true);
 }

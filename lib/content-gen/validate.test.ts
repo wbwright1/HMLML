@@ -36,10 +36,12 @@ function ctx(overrides: Partial<StatsContext> = {}): StatsContext {
         lastMeeting: null,
         playoffMeetingYears: [],
         isTitleRematch: false,
+        namedRivalry: null,
         topProjected: null,
       },
     ],
     gameOfWeekPairKey: null,
+    gameOfWeek: null,
     weekInBooks: null,
     recentTransactions: [],
     franchiseHistory: [],
@@ -169,6 +171,28 @@ describe("findHallucinatedNames", () => {
     expect(findHallucinatedNames("This team is going to disappoint everyone.", ctx())).toEqual([]);
   });
 
+  it("knows a commish-named rivalry's name and tagline, and flags it without one", () => {
+    const body = "The Custody Battle resumes, and Foopus wants the house back.";
+    // No rivalry on the context: the title is an unknown proper noun.
+    expect(findHallucinatedNames(body, ctx())).toEqual(["The Custody Battle"]);
+    const base = ctx();
+    const withRivalry = ctx({
+      currentMatchups: [
+        {
+          ...base.currentMatchups[0],
+          namedRivalry: {
+            name: "The Custody Battle",
+            tagline: "They used to share a team. Now they share a grudge.",
+            origin: null,
+            trophyName: "The Deed",
+          },
+        },
+      ],
+    });
+    expect(findHallucinatedNames(body, withRivalry)).toEqual([]);
+    expect(findHallucinatedNames("Winner Keeps The Deed this year.", withRivalry)).toEqual([]);
+  });
+
   it("flags a plausible-looking but unknown two-word capitalized name", () => {
     expect(findHallucinatedNames("Bobby Newcombe leads the way this year.", ctx())).toEqual([
       "Bobby Newcombe",
@@ -190,6 +214,28 @@ describe("validateRow", () => {
 
   it("accepts a well-formed row", () => {
     expect(validateRow(validBurningQuestion, ctx()).valid).toBe(true);
+  });
+
+  it("accepts a game_of_week_blurb only when its ref_key is the featured pair", () => {
+    const blurb = {
+      kind: "game_of_week_blurb" as const,
+      refKey: "foopus__olave-garden",
+      body: "Foopus against Olave Garden, and one of them leaves the week lighter.",
+      extras: null,
+    };
+    const regular = (key: string | null) =>
+      ctx({ seasonType: "regular", gameOfWeekPairKey: key });
+    expect(validateRow(blurb, regular("foopus__olave-garden")).valid).toBe(true);
+    // A blurb about a different pair, or with no ref_key at all, is refused.
+    expect(validateRow(blurb, regular("other__pair")).valid).toBe(false);
+    expect(validateRow({ ...blurb, refKey: null }, regular("foopus__olave-garden")).valid).toBe(false);
+    expect(validateRow(blurb, regular(null)).valid).toBe(false);
+  });
+
+  it("allows the league's own proper nouns: The Book and bowl names", () => {
+    expect(
+      findHallucinatedNames("A rematch of HMLML Bowl V, and The Book loves it.", ctx())
+    ).toEqual([]);
   });
 
   it("rejects a kind not valid for the season type", () => {

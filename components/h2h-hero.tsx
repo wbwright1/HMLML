@@ -1,6 +1,7 @@
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { StatHero } from "@/components/stat-hero";
 import { SuperlativeBadge } from "@/components/superlative-badge";
+import type { RivalryLore } from "@/lib/rivalry-display";
 
 interface FranchiseData {
   slug: string;
@@ -16,9 +17,17 @@ interface H2HHeroProps {
   teamB: FranchiseData;
   record: { wins: number; losses: number };
   streak?: string;
+  /** The commissioner-named rivalry for this pair, when one exists. */
+  rivalry?: RivalryLore | null;
 }
 
-export function H2HHero({ teamA, teamB, record, streak }: H2HHeroProps) {
+export function H2HHero({
+  teamA,
+  teamB,
+  record,
+  streak,
+  rivalry,
+}: H2HHeroProps) {
   const leader =
     record.wins > record.losses
       ? teamA.name
@@ -32,6 +41,30 @@ export function H2HHero({ teamA, teamB, record, streak }: H2HHeroProps) {
 
   return (
     <div className="space-y-6">
+      {rivalry && (
+        <div className="space-y-2 text-center" data-testid="h2h-rivalry">
+          <p className="text-kicker">
+            Named Rivalry
+            {rivalry.originYear != null && (
+              <>
+                {" "}&middot; Since{" "}
+                <span className="font-mono tabular-nums">
+                  {rivalry.originYear}
+                </span>
+              </>
+            )}
+          </p>
+          <h2 className="font-serif text-h1 italic text-accent-gold">
+            {rivalry.name}
+          </h2>
+          {rivalry.tagline && (
+            <p className="mx-auto max-w-prose font-serif text-body-lg italic text-text-secondary">
+              {rivalry.tagline}
+            </p>
+          )}
+        </div>
+      )}
+
       <div className="sr-only">{srText}</div>
 
       <div
@@ -91,7 +124,19 @@ export function H2HHero({ teamA, teamB, record, streak }: H2HHeroProps) {
           All-time regular season
         </span>
         {streak && <SuperlativeBadge text={streak} variant="green" />}
+        {rivalry?.trophyName && (
+          <SuperlativeBadge text={rivalry.trophyName} variant="gold" />
+        )}
       </div>
+
+      {rivalry?.origin && (
+        <aside
+          aria-label="Rivalry origin"
+          className="mx-auto max-w-prose border-l-2 border-accent-gold/40 pl-4 font-serif text-body italic text-text-tertiary"
+        >
+          {rivalry.origin}
+        </aside>
+      )}
     </div>
   );
 }

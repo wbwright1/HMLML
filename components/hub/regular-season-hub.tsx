@@ -27,6 +27,8 @@ import { getWeeklyLineupAwards } from "@/lib/queries/lineup-efficiency";
 import { SNARKY_LABELS } from "@/lib/content";
 import { getPlayoffProjection } from "@/lib/queries/divisions";
 import { getRivalryWeek, rivalryPairKey } from "@/lib/queries/rivalry-week";
+import { getNamedRivalries } from "@/lib/queries/rivalries";
+import { namedRivalryLookupFrom } from "@/lib/hub/gotw-context";
 import { computeStandingsRaceTags } from "@/lib/queries/playoff-race";
 import { StatChip, GameCard, toLadderEntries } from "@/components/hub/shared";
 import { BetweenWeeksHub } from "@/components/hub/between-weeks-hub";
@@ -176,6 +178,12 @@ export async function RegularSeasonHub({
     // Rivalry data may not be available; badges simply do not render.
   }
 
+  // Commish-named rivalries: the badge shows the league's own name for the
+  // pair. getNamedRivalries rethrows a production DB error itself
+  // (rethrowUnlessTolerable), so a failure cannot ISR-cache a hub that
+  // silently dropped the names.
+  const namedRivalryOf = namedRivalryLookupFrom(await getNamedRivalries());
+
   // Provably-correct playoff-race tags. Renders nothing before week 8, outside
   // the regular season, or when the data is incomplete.
   const raceTags = computeStandingsRaceTags(standings, {
@@ -285,6 +293,12 @@ export async function RegularSeasonHub({
                       matchup.awayTeam.franchiseId
                     )
                   )}
+                  rivalryName={
+                    namedRivalryOf?.(
+                      matchup.homeTeam.franchiseId,
+                      matchup.awayTeam.franchiseId
+                    )?.name ?? null
+                  }
                   bookGame={bookGameByMatchup.get(matchup.matchupId)}
                 />
               ))}

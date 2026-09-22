@@ -25,6 +25,11 @@ interface LiveMatchupCardProps {
   aside?: string;
   /** When true, badges the card as a Rivalry Week matchup (mutual top rivals). */
   isRivalry?: boolean;
+  /**
+   * The commish-named rivalry this pair belongs to. When set, the badge shows
+   * the name instead of the generic "Rivalry Week" label.
+   */
+  rivalryName?: string | null;
   kickoffTime?: string; // "SUN 1PM" for upcoming
   seasonYear: number;
   /**
@@ -51,6 +56,7 @@ export function LiveMatchupCard({
   week,
   aside,
   isRivalry,
+  rivalryName,
   kickoffTime,
   seasonYear,
   winProbHome,
@@ -69,7 +75,10 @@ export function LiveMatchupCard({
   const homePct = showWinProb ? Math.round(winProbHome * 100) : 0;
   const showPlayersLeft = status === "live" && playersLeft != null;
 
-  const rivalryLabel = isRivalry ? ", Rivalry Week" : "";
+  // A named rivalry outranks the auto-detected badge: it is the league's own
+  // name for the pair. The generic label stays for unnamed mutual rivals.
+  const rivalryBadge = rivalryName ? rivalryName : isRivalry ? "Rivalry Week" : null;
+  const rivalryLabel = rivalryBadge ? `, ${rivalryBadge}` : "";
   const ariaLabel = isUpcoming
     ? `${homeTeam.name} versus ${awayTeam.name}, ${kickoffTime ?? "upcoming"}${rivalryLabel}`
     : `${homeTeam.name} ${homeTeam.score.toFixed(1)} versus ${awayTeam.name} ${awayTeam.score.toFixed(1)}, ${status}${showWinProb ? `, ${homeTeam.name} win probability ${homePct} percent` : ""}${showPlayersLeft ? `, ${playersLeft.home} versus ${playersLeft.away} players left to play` : ""}${rivalryLabel}`;
@@ -92,9 +101,13 @@ export function LiveMatchupCard({
             {kickoffTime ?? `Week ${week}`}
           </span>
         )}
-        {isRivalry && (
-          <span className="text-kicker text-accent-gold" title="Mutual top rivals">
-            Rivalry Week
+        {rivalryBadge && (
+          <span
+            className="min-w-0 truncate text-kicker text-accent-gold"
+            title={rivalryName ? "Named rivalry" : "Mutual top rivals"}
+            data-testid="matchup-rivalry-badge"
+          >
+            {rivalryBadge}
           </span>
         )}
         {showPlayersLeft && (

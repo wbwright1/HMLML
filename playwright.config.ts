@@ -96,20 +96,27 @@ export default defineConfig({
     {
       command: `npx next dev --turbopack -p ${IN_SEASON_PORT}`,
       url: `http://localhost:${IN_SEASON_PORT}`,
-      // ":force" makes isWeekOneLeadWindowActive true, which suppresses
-      // resolveHubSeasonType's "everyone is 0-0" demotion back to preseason.
-      // Without it this project would silently render the preseason hub.
-      env: { NFL_STATE_OVERRIDE: "regular:1:force", NEXT_DIST_DIR: ".next-in-season" },
+      // "next" resolves per request to the earliest week whose matchups are
+      // all still scheduled (lib/queries/nfl-state.ts), so this server always
+      // lands on the live between-weeks slate. A fixed week drifted: pinned
+      // to regular:1, it stopped reaching the between-weeks state once week 1
+      // went final in the live DB. ":force" makes isWeekOneLeadWindowActive
+      // true, which suppresses resolveHubSeasonType's "everyone is 0-0"
+      // demotion back to preseason when "next" is still week 1.
+      env: { NFL_STATE_OVERRIDE: "regular:next:force", NEXT_DIST_DIR: ".next-in-season" },
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
     },
     {
       command: `npx next dev --turbopack -p ${POST_WEEK_PORT}`,
       url: `http://localhost:${POST_WEEK_PORT}`,
-      // Week 2 with week 1 complete in the real DB: the between-weeks hub
-      // with the post-week recap leading it. No ":force" needed, games have
-      // been played so the 0-0 preseason demotion cannot fire.
-      env: { NFL_STATE_OVERRIDE: "regular:2", NEXT_DIST_DIR: ".next-post-week" },
+      // The next unplayed week with the prior week complete in the real DB:
+      // the between-weeks hub with the post-week recap leading it. ":recap"
+      // holds the recap window open on any weekday (it normally closes at the
+      // Thursday morning cron). The recap still needs every prior-week
+      // matchup complete, so this state is unreachable while a week is under
+      // way (Thursday night through Monday night); run it between weeks.
+      env: { NFL_STATE_OVERRIDE: "regular:next:recap", NEXT_DIST_DIR: ".next-post-week" },
       reuseExistingServer: !process.env.CI,
       timeout: 180_000,
     },

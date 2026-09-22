@@ -10,6 +10,7 @@ import {
   RegularSchema,
   RegularWireSchema,
   toRowsPreseason,
+  toRowsRegular,
   topUpShortKinds,
 } from "./generate";
 import { kindsForSeason } from "./templates";
@@ -105,6 +106,7 @@ function preseasonContext(overrides: Partial<StatsContext> = {}): StatsContext {
     },
     currentMatchups: [],
     gameOfWeekPairKey: null,
+    gameOfWeek: null,
     weekInBooks: null,
     recentTransactions: [],
     franchiseHistory: [],
@@ -206,6 +208,7 @@ describe("applyDiversityLayer", () => {
           lastMeeting: null,
           playoffMeetingYears: [],
           isTitleRematch: false,
+          namedRivalry: null,
           topProjected: null,
         },
         {
@@ -216,6 +219,7 @@ describe("applyDiversityLayer", () => {
           lastMeeting: null,
           playoffMeetingYears: [],
           isTitleRematch: false,
+          namedRivalry: null,
           topProjected: null,
         },
       ],
@@ -605,6 +609,7 @@ describe("promptStatsView", () => {
             },
             playoffMeetingYears: [2025],
             isTitleRematch: true,
+            namedRivalry: null,
             topProjected: {
               playerName: "Bijan Robinson",
               position: "RB",
@@ -687,5 +692,125 @@ describe("buildUserPrompt", () => {
   it("bans title-defense framing when the context has no champion", () => {
     const prompt = buildUserPrompt(preseasonContext({ lastSeason: null }));
     expect(prompt).toContain("names no reigning champion");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The LLM Game of the Week blurb: claims, ref_key, and the facts it is fed
+// ---------------------------------------------------------------------------
+
+describe("LLM game_of_week_blurb", () => {
+  // Regular season, week 3: Foopus 2-0 v Olave Garden 1-1, Foopus featured.
+  const ctx = preseasonContext({
+    seasonType: "regular",
+    week: 3,
+    leagueStandings: [
+      { name: "Foopus", slug: "foopus", record: "2-0", pointsFor: 300.5 },
+      { name: "Olave Garden", slug: "olave-garden", record: "1-1", pointsFor: 250.2 },
+    ],
+    currentMatchups: [
+      {
+        pairKey: "foopus__olave-garden",
+        home: { name: "Foopus", slug: "foopus", record: "2-0", pointsFor: 300.5 },
+        away: { name: "Olave Garden", slug: "olave-garden", record: "1-1", pointsFor: 250.2 },
+        h2h: { wins: 3, losses: 1, ties: 0, streak: null },
+        lastMeeting: null,
+        playoffMeetingYears: [],
+        isTitleRematch: false,
+        namedRivalry: null,
+        topProjected: null,
+      },
+    ],
+    gameOfWeekPairKey: "foopus__olave-garden",
+    gameOfWeek: {
+      pairKey: "foopus__olave-garden",
+      reasons: ["top-of-table"],
+      kicker: "Cross-Division · Top-three clash",
+      blurb: "template",
+      namedRivalry: null,
+      form: [],
+      heroNumbers: [],
+    },
+  });
+  const parse = (body: string, claims: unknown[] = []) =>
+    RegularWireSchema.parse({
+      matchup_angles: [],
+      game_of_week_blurb: { body, claims },
+      hero_dek: "",
+      smack_posts: [],
+    });
+  const blurbs = (rows: HubContentInsert[]) =>
+    rows.filter((r) => r.kind === "game_of_week_blurb");
+
+  it("hands the model a named rivalry as a fact, and the matchup its lore", () => {
+    const rivalry = { name: "The Custody Battle", tagline: "They used to share a team." };
+    const prompt = buildUserPrompt({
+      ...ctx,
+      currentMatchups: ctx.currentMatchups.map((m) => ({
+        ...m,
+        namedRivalry: { ...rivalry, origin: "Two owners, one split.", trophyName: null },
+      })),
+      gameOfWeek: { ...ctx.gameOfWeek!, reasons: ["named-rivalry"], namedRivalry: rivalry },
+    });
+    expect(prompt).toContain(`named rivalry "The Custody Battle"`);
+    expect(prompt).toContain("do not quote the tagline");
+    expect(prompt).toContain('"origin": "Two owners, one split."');
+    // The plain context carries neither.
+    expect(buildUserPrompt(ctx)).not.toContain("The Custody Battle");
+  });
+
+  it("keeps a clean blurb and keys it to the featured pair", () => {
+    const rows = blurbs(toRowsRegular(parse("Foopus (2-0) against Olave Garden (1-1). Somebody leaves lighter."), ctx));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].refKey).toBe("foopus__olave-garden");
+  });
+
+  it("a superlative survives verifyClaims when it carries a true claim", () => {
+    const body = "Foopus brings the most wins in the building into this one against Olave Garden.";
+    expect(blurbs(toRowsRegular(parse(body), ctx))).toHaveLength(0);
+    const kept = blurbs(
+      toRowsRegular(parse(body, [{ metric: "wins", subject: "foopus", extreme: "best" }]), ctx)
+    );
+    expect(kept).toHaveLength(1);
+  });
+
+  it("writes no blurb when the resolver featured no game", () => {
+    const rows = toRowsRegular(parse("Foopus against Olave Garden."), {
+      ...ctx,
+      gameOfWeekPairKey: null,
+      gameOfWeek: null,
+    });
+    expect(blurbs(rows)).toHaveLength(0);
+  });
+
+  it("hands the model the pick's reasons and the kicker it must not echo", () => {
+    const prompt = buildUserPrompt(ctx);
+    expect(prompt).toContain('["top-of-table"]');
+    expect(prompt).toContain("Cross-Division · Top-three clash");
+    expect(prompt).toContain("ONLY stakes you may claim");
+  });
+
+  it("hands the model both teams' last-week form as citable facts", () => {
+    const form = [
+      { team: "Foopus", slug: "foopus", points: 176.3, opponent: "McCarthyism", margin: 40.2, result: "won" as const },
+      { team: "Olave Garden", slug: "olave-garden", points: 90.1, opponent: "Team C", margin: 30, result: "lost" as const },
+    ];
+    const prompt = buildUserPrompt({ ...ctx, gameOfWeek: { ...ctx.gameOfWeek!, form } });
+    expect(prompt).toContain("Open the blurb with last week's form for BOTH teams");
+    expect(prompt).toContain(JSON.stringify(form));
+    expect(buildUserPrompt(ctx)).not.toContain("last week's form for BOTH teams");
+  });
+
+  it("tells the blurb never to print the numbers the hero headline owns", () => {
+    const prompt = buildUserPrompt({ ...ctx, gameOfWeek: { ...ctx.gameOfWeek!, heroNumbers: ["64.2"] } });
+    expect(prompt).toContain('already states ["64.2"]; never print those numbers in the blurb');
+    expect(buildUserPrompt(ctx)).not.toContain("never print those numbers");
+  });
+
+  it("tells hero_dek the headline now states the week's biggest fact", () => {
+    const prompt = buildUserPrompt(ctx);
+    expect(prompt).toContain("states the single biggest fact");
+    expect(prompt).toContain("Do NOT restate any of those facts or their numbers");
+    expect(prompt).not.toContain("the live day count is added at render time. It renders");
   });
 });

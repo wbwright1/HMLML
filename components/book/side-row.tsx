@@ -241,6 +241,24 @@ export function YourPickRow({
 }
 
 /**
+ * A named rivalry's label for a game card header, beside StatusKicker. Renders
+ * nothing for an unnamed pair. Plain text from BookGame, so it adds no client
+ * state and no fetch to the islands that render it.
+ */
+export function RivalryKicker({ game }: { game: BookGame }) {
+  if (!game.rivalryName) return null;
+  return (
+    <span
+      className="min-w-0 truncate text-kicker text-text-secondary"
+      data-testid="book-rivalry-name"
+    >
+      <span aria-hidden="true">· </span>
+      {game.rivalryName}
+    </span>
+  );
+}
+
+/**
  * The kicker above a game card: when it locks, that it is live, or that it is
  * done. `showPush` adds the push to the FINAL label, which is where a push
  * belongs: it is a property of the game, so no single side row can carry it.

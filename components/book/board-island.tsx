@@ -8,6 +8,7 @@ import { useBookSlip } from "@/components/book/use-book-slip";
 import {
   SideRow,
   StatusKicker,
+  RivalryKicker,
   YourPickRow,
 } from "@/components/book/side-row";
 import {
@@ -159,7 +160,10 @@ function GameCard({
   return (
     <div className="card-surface p-5">
       <div className="mb-3.5 flex items-center justify-between gap-3">
-        <StatusKicker game={game} />
+        <span className="flex min-w-0 items-center gap-2">
+          <StatusKicker game={game} />
+          <RivalryKicker game={game} />
+        </span>
         {showConsensus && (
           <span className="text-body-sm text-text-tertiary">
             <span className="font-mono tabular-nums">{leaderPct}%</span> of the

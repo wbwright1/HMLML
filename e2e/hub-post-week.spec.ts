@@ -11,14 +11,19 @@ import { isRecapWindowOpen } from "../lib/hub/week-recap";
 // rather than jumping straight to next week's slate.
 //
 // Runs under the "hub-post-week" Playwright project (playwright.config.ts),
-// whose dev server is pinned to NFL_STATE_OVERRIDE=regular:2 against the real
-// Postgres, where week 1 of the live season is complete. Every assertion is
-// unconditional within its branch: the recap window closes at the Thursday
-// MORNING cron (06:00 UTC on kickoff day, lib/hub/week-recap.ts), so the
-// suite reads the hero's stamped kickoff target and asserts the recap
-// is present before that instant and absent after it. Both branches assert;
-// neither self-skips.
+// whose dev server is pinned to NFL_STATE_OVERRIDE=regular:next:recap against
+// the real Postgres: "next" is the earliest week whose matchups are all still
+// scheduled, so the prior week is the last completed one, and ":recap" holds
+// the recap window open on any weekday (the hero stamps data-recap-forced).
+// Without ":recap" the window closes at the Thursday MORNING cron (06:00 UTC
+// on kickoff day, lib/hub/week-recap.ts), so the suite reads the hero's
+// stamped kickoff target and asserts the recap is present before that
+// instant and absent after it. Both branches assert.
 // ============================================================================
+
+/** The hero kicker's schedule clause: the kickoff day, or the slate fallback. */
+const HERO_SCHEDULE_TAIL =
+  /KICKOFF (MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY|TODAY)|THE SLATE IS SET/i;
 
 /** The slate's first kickoff, stamped on the hero section as
  * data-kickoff-target, or null when the hub has no kickoff to point at. */
@@ -32,11 +37,13 @@ async function kickoffTarget(page: import("@playwright/test").Page): Promise<Dat
 test.describe("Post-week recap (between weeks)", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
-    const open = isRecapWindowOpen(new Date(), await kickoffTarget(page));
+    const forced =
+      (await page.locator('[data-recap-forced="true"]').count()) > 0;
+    const open = forced || isRecapWindowOpen(new Date(), await kickoffTarget(page));
     if (!open) {
       // Thursday morning cron has passed: the plain slate hub, with the
       // rail fallbacks, and NO recap. Assert that state and stop.
-      await expect(page.locator("main")).toContainText(/THE SLATE IS SET/i);
+      await expect(page.getByTestId("hero-kicker")).toContainText(HERO_SCHEDULE_TAIL);
       await expect(page.getByTestId("week-recap")).toHaveCount(0);
       await expect(page.locator("main")).toContainText(/IN THE BOOKS/);
       test.skip(true, "recap window closed (post Thursday cron); slate-only state asserted");
@@ -45,7 +52,7 @@ test.describe("Post-week recap (between weeks)", () => {
 
   test("the recap block renders in the main column above the slate", async ({ page }) => {
     const main = page.locator("main");
-    await expect(main).toContainText(/THE SLATE IS SET/i);
+    await expect(page.getByTestId("hero-kicker")).toContainText(HERO_SCHEDULE_TAIL);
     const recap = page.getByTestId("week-recap");
     await expect(recap).toBeVisible();
     // Recap precedes Game of the Week in document order. Kickers render
@@ -65,6 +72,62 @@ test.describe("Post-week recap (between weeks)", () => {
     expect(txt).not.toContain("—");
     const fontStyle = await h.evaluate((el) => getComputedStyle(el).fontStyle);
     expect(fontStyle).toBe("italic");
+  });
+
+  // The hero headline leads with LAST week while the recap sits under it
+  // (lib/hub/hero-headline.ts). Every number it prints must be a number the
+  // recap's own finals print, so the take is provably about last week.
+  test("the hero headline is a take on last week's finals, backed by the recap", async ({ page }) => {
+    const h1 = page.getByTestId("hero-headline");
+    const text = (await h1.innerText()).trim();
+    const rung = await h1.getAttribute("data-hero-rung");
+    expect(text).not.toMatch(/days? (to|until) kickoff/i);
+    expect(text).not.toContain("—");
+    const finalsText = (await page.getByTestId("recap-result").allInnerTexts()).join(" ");
+    if (rung === "mercy" || rung === "monster" || rung === "photo-finish" || rung === "dud") {
+      const num = /(\d+\.\d)/.exec(text)?.[1];
+      expect(num, text).toBeTruthy();
+      if (rung === "mercy" || rung === "photo-finish") {
+        // A margin: some listed final's two scores differ by exactly it.
+        const scores = (await page.getByTestId("recap-result").allInnerTexts()).map((t) =>
+          (t.match(/\d+\.\d/g) ?? []).map(Number)
+        );
+        const margins = scores
+          .filter((s) => s.length >= 2)
+          .map((s) => Math.abs(s[0] - s[1]).toFixed(1));
+        // Scores print to one decimal and the margin is rounded from the raw
+        // scores, so the two can differ by up to 0.1 (204.94 - 140.78 = 64.16
+        // prints 64.2, the shown 204.9 - 140.8 gives 64.1). 0.15 absorbs that
+        // plus float error and still rejects every other final's margin.
+        expect(
+          margins.some((m) => Math.abs(Number(m) - Number(num)) < 0.15),
+          `${num} vs ${margins.join(", ")}`
+        ).toBe(true);
+      } else {
+        expect(finalsText).toContain(num!);
+      }
+      // The numeral renders in the mono face inside the serif headline.
+      await expect(h1.locator("span.font-mono").first()).toHaveText(num!);
+    } else {
+      // No finals rung fired: a slate rung or the fallback, never a day count.
+      expect(rung).toMatch(/^(unbeaten-clash|winless-clash|division-flip|named-rivalry|winless-watch|fallback)$/);
+    }
+  });
+
+  test("the recap headline and the Game of the Week blurb never restate the hero's number", async ({ page }) => {
+    // The hero owns its fact (lib/hub/hero-claim.ts): the two lines right
+    // under it state a different true fact instead of echoing its figure.
+    const hero = (await page.getByTestId("hero-headline").innerText()).trim();
+    const heroNumbers = hero.match(/\d+\.\d/g) ?? [];
+    const recapHeadline = (await page.getByTestId("recap-headline").innerText()).trim();
+    expect(recapHeadline.length).toBeGreaterThan(0);
+    const blurb = page.getByTestId("gotw-blurb");
+    const blurbText = (await blurb.count()) > 0 ? (await blurb.innerText()).trim() : "";
+    for (const n of heroNumbers) {
+      const printed = new RegExp(`(^|[^\\d.])${n.replace(".", "\\.")}(?![\\d])`);
+      expect(recapHeadline, `recap headline repeats ${n}`).not.toMatch(printed);
+      expect(blurbText, `Game of the Week blurb repeats ${n}`).not.toMatch(printed);
+    }
   });
 
   test("every completed pairing is listed with a W and an L and two scores", async ({ page }) => {

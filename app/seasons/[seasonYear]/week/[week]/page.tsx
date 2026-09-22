@@ -3,6 +3,8 @@ import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
 import { PageSection } from "@/components/page-section";
 import { MatchupRow } from "@/components/matchup-row";
+import { getNamedRivalryLookup } from "@/lib/queries/named-rivalries-optional";
+import { findNamedRivalry } from "@/lib/queries/rivalries";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { EmptyState } from "@/components/empty-state";
@@ -61,6 +63,9 @@ export default async function WeekResultsPage({
   // silently hiding the "next week" arrow would be the same cacheable lie in
   // miniature.
   const nextWeekHasData = (await getMatchupsByWeek(season.id, week + 1)).length > 0;
+
+  // Named rivalries label their rows; optional lore, empty on a failed read.
+  const rivalryLookup = await getNamedRivalryLookup();
 
   const isPlayoffWeek =
     season.playoffWeekStart != null && week >= season.playoffWeekStart;
@@ -126,12 +131,19 @@ export default async function WeekResultsPage({
             actionHref={`/seasons/${year}`}
           />
         ) : (
-          matchups.map((matchup, index) => (
+          matchups.map((matchup, index) => {
+            const rivalryName =
+              findNamedRivalry(
+                rivalryLookup,
+                matchup.homeTeam.franchiseId,
+                matchup.awayTeam.franchiseId,
+              )?.name ?? null;
+            return (
             <ScrollReveal key={matchup.matchupId} delay={index * 40}>
               <Link
                 href={`/matchups/${year}/${week}/${matchup.matchupId}`}
                 className="block rounded-lg transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                aria-label={`View matchup detail: ${matchup.homeTeam.franchiseName} versus ${matchup.awayTeam.franchiseName}`}
+                aria-label={`View matchup detail: ${matchup.homeTeam.franchiseName} versus ${matchup.awayTeam.franchiseName}${rivalryName ? `, ${rivalryName}` : ""}`}
               >
                 <MatchupRow
                   matchup={{
@@ -149,10 +161,12 @@ export default async function WeekResultsPage({
                         ? "final"
                         : "preview"
                   }
+                  rivalryName={rivalryName}
                 />
               </Link>
             </ScrollReveal>
-          ))
+            );
+          })
         )}
       </section>
     </>

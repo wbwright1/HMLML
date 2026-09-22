@@ -60,6 +60,7 @@ export function GameCard({
   hubLive,
   avatars,
   isRivalry,
+  rivalryName,
   bookGame,
 }: {
   matchup: PairedMatchup;
@@ -70,6 +71,8 @@ export function GameCard({
   avatars?: ReadonlyMap<string, string>;
   /** True when this pairing is a mutual-top-rival Rivalry Week matchup. */
   isRivalry?: boolean;
+  /** The commish-named rivalry's name for this pair; replaces the generic badge. */
+  rivalryName?: string | null;
   /** The Book's priced line for this matchup, when one exists. Omitted
    * entirely (no footer at all) when book_lines has no row for the week. */
   bookGame?: BookGame;
@@ -137,6 +140,7 @@ export function GameCard({
       playersLeft={playersLeft}
       aside={aside}
       isRivalry={isRivalry}
+      rivalryName={rivalryName}
       bookFooter={bookFooter}
     />
   );

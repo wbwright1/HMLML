@@ -48,6 +48,7 @@ function ctx(overrides: Partial<StatsContext> = {}): StatsContext {
     lastSeason: null,
     currentMatchups: [],
     gameOfWeekPairKey: null,
+    gameOfWeek: null,
     weekInBooks: null,
     recentTransactions: [],
     franchiseHistory: [

@@ -18,6 +18,7 @@ function minimalContext(overrides: Partial<StatsContext> = {}): StatsContext {
     },
     currentMatchups: [],
     gameOfWeekPairKey: null,
+    gameOfWeek: null,
     weekInBooks: null,
     recentTransactions: [],
     franchiseHistory: [],

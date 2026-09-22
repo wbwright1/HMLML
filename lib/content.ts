@@ -346,6 +346,13 @@ export interface MatchupTrashAngles {
   /** Keyed by matchupPairKey(slugA, slugB); order-independent. */
   readonly byPair: Readonly<Record<string, string>>;
   readonly gameOfWeekBlurb: string;
+  /**
+   * The stored blurb's ref_key (matchupPairKey of the game it was written
+   * about), or null for a seed or a legacy row written before ref_key was
+   * populated. The hub renders a stored blurb ONLY when this matches the pair
+   * it features; see components/hub/between-weeks-hub.tsx.
+   */
+  readonly gameOfWeekRefKey: string | null;
 }
 
 /** A smack-feed card (authored by the Site Desk). Mirrors the eventual DB row shape. */
@@ -487,37 +494,48 @@ const OFFSEASON_RECEIPTS: readonly OffseasonReceipt[] = Object.freeze([
 // unchanged: an LLM-authored matchup_angle row from hub_content still wins
 // over the builder, and the builder wins over nothing at all. The
 // game-of-the-week blurb stays generic (no team names, no invented stats).
+//
+// It is also reason-neutral: the hub almost never renders it (the shared
+// Game of the Week resolver writes a reason-derived blurb for the actual
+// pick), so it must be true of ANY featured game. No "first place", no
+// "stakes", no weekday: the only things true of every game are that both
+// teams have a record and one of them leaves the week worse off.
 const MATCHUP_ANGLES: MatchupTrashAngles = Object.freeze({
   byPair: Object.freeze({}),
   gameOfWeekBlurb:
-    'First place on the line and a week that actually matters. Two teams, one slate, and receipts to settle by Thursday night.',
+    'The pick of this week\'s matchups. Both sides bring a record in, and only one of them likes what it looks like after Monday night.',
+  gameOfWeekRefKey: null,
 });
 
-// Before a single game has been played (week 1, pre-kickoff), "first place"
-// is a fabrication: every team is 0-0-0. This opener-appropriate variant
-// makes the same "this is the marquee matchup" claim without inventing
-// stakes that do not exist yet.
+// Before a single game has been played (week 1, pre-kickoff) nobody has a
+// record at all, so the opener variant says only what is true of any
+// week-1 game: somebody leaves it 1-0.
 const GAME_OF_WEEK_BLURB_OPENER =
-  'Nobody has a record yet, but this is the matchup the whole league circled first. Two teams, one slate, and the first receipts of the year up for grabs.';
+  'Nobody has a record yet. By Monday night one of these two is 1-0 and the other gets to explain the lineup.';
 
 const MATCHUP_ANGLES_OPENER: MatchupTrashAngles = Object.freeze({
   byPair: Object.freeze({}),
   gameOfWeekBlurb: GAME_OF_WEEK_BLURB_OPENER,
+  gameOfWeekRefKey: null,
 });
 
 /**
- * The hero dek the between-weeks hub renders when nothing generated one (no
- * hub_content row, a generation run that has not landed yet, or a stored dek
- * the render guard rejected). It lives here rather than inline in the
+ * The LAST-resort hero dek on the between-weeks hub. When nothing generated a
+ * dek (no hub_content row, a run that has not landed yet, or a stored dek the
+ * render guard rejected), the hub first builds a second data sentence from a
+ * different rung than its headline (heroDekFromData in
+ * lib/hub/hero-headline.ts); this neutral line renders only when no other
+ * rung fires. It lives here rather than inline in the
  * component because copy belongs in the centralized content constants.
  *
  * It is also the copy that has to be MOST careful, because it is the one line
  * guaranteed to render beside the seeded Game of the Week blurb and kicker.
- * It must share no signature phrase with BOTH seeded blurbs above (which say
- * "Two teams, one slate ... receipts to settle" and "the first receipts of
- * the year") or with stakesClause's kickers ("Division lead at stake",
- * "Pride at stake", "Season openers"). See lib/content-gen/phrases.ts;
- * lib/content.test.ts asserts all of it.
+ * It must share no signature phrase with either seeded blurb above (the
+ * played-games "pick of this week's matchups" line and the week-1 opener) or
+ * with the Game of the Week kickers from stakesFromReasons in
+ * lib/hub/between-weeks.ts ("Division lead on the line", "Pride at stake",
+ * "Season openers"). See lib/content-gen/phrases.ts; lib/content.test.ts
+ * asserts the blurb half of it.
  */
 export const HERO_DEK_FALLBACK =
   'Lineups lock, excuses start Monday. Nobody in this league gets to sit this week out.';
@@ -575,10 +593,10 @@ function buildSmackPosts(now: number): readonly SmackPost[] {
 
 /** The seeded editorial defaults, stamped for `now`. Always the fallback. */
 /**
- * `anyGamesPlayed` picks which seeded gameOfWeekBlurb ships: the default
- * "first place on the line" line once the league has played a game, or the
- * opener-appropriate variant before any game has been played (true claims
- * only; see GAME_OF_WEEK_BLURB_OPENER). Defaults to true so callers that
+ * `anyGamesPlayed` picks which seeded gameOfWeekBlurb ships: the
+ * reason-neutral MATCHUP_ANGLES line once the league has played a game, or
+ * the opener variant before any game has been played (true claims only; see
+ * GAME_OF_WEEK_BLURB_OPENER). Defaults to true so callers that
  * omit it (there are none left in this codebase, but the type is exported)
  * keep the pre-existing behavior.
  */
@@ -690,8 +708,13 @@ export function overlayHubEditorial(
       const angle = str(row.body);
       if (key && angle) byPair[key] = angle;
     }
-    const gotwBlurb = str(gotwRows[0]?.body) ?? seeds.matchupAngles.gameOfWeekBlurb;
-    result.matchupAngles = { byPair, gameOfWeekBlurb: gotwBlurb };
+    const storedBlurb = str(gotwRows[0]?.body);
+    result.matchupAngles = {
+      byPair,
+      gameOfWeekBlurb: storedBlurb ?? seeds.matchupAngles.gameOfWeekBlurb,
+      // The ref_key travels with the body it was written for, never alone.
+      gameOfWeekRefKey: storedBlurb ? str(gotwRows[0]?.refKey) : null,
+    };
   }
 
   // smack_post -> smackPosts (full replace; Site Desk voice, timestamped from created_at).
@@ -726,10 +749,10 @@ export interface HubEditorialOptions {
   now?: number;
   /**
    * Whether the league has played at least one game this season. Picks the
-   * seeded GOTW blurb: the opener-appropriate variant when false (never
-   * claims "first place on the line" before any game exists), the default
-   * variant when true or omitted. A published DB blurb (game_of_week_blurb
-   * hub_content) still overrides either seed, same as before.
+   * seeded GOTW blurb: the opener variant when false (nobody has a record
+   * yet), the reason-neutral default when true or omitted. Neither seed
+   * claims first place or stakes. A published game_of_week_blurb row
+   * overrides either seed only when its ref_key matches the hub's pick.
    */
   anyGamesPlayed?: boolean;
 }

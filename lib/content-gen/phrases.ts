@@ -26,14 +26,29 @@
 //
 // COLLIDED, FIXED:
 //   * lib/content-gen/templates.ts regularHeroDek + gameOfWeek
-//       Both used "receipts to settle" on the same hub render. The GotW blurb
-//       is unchanged (owner's call: it is the better line); regularHeroDek is
-//       now a 6-variant pool rotated deterministically by ctx.week, and the
+//       Both used "receipts to settle" on the same hub render. regularHeroDek
+//       is a 6-variant pool rotated deterministically by ctx.week, and the
 //       phrase signal below stops any variant echoing the GotW blurb.
-//   * lib/hub/between-weeks.ts stakesClause + the GotW blurb
-//       The GotW card kicker read "First place on the line" directly above a
-//       blurb reading "First place is on the line". The kicker now says
-//       "Division lead at stake" / "Pride at stake".
+//   * The GotW blurb + kicker (rewritten Sep 2026)
+//       The old blurb said "First place is on the line and there are receipts
+//       to settle by Thursday night" about every featured game, true or not.
+//       Both lines are now derived from the pick's reasons
+//       (gameOfWeekBlurb + stakesFromReasons in lib/hub/between-weeks.ts):
+//       the KICKER owns "on the line" ("Division lead on the line", only for
+//       a real division-lead flip) and "at stake" ("Playoff spot at stake",
+//       "Pride at stake"), and the BLURB uses no entry on this list at all
+//       (a unit test walks every reason). The template and the hub's
+//       render-time fallback are the same function.
+//   * lib/hub/slate-angle.ts fixed tails
+//       "{yr} week {w}, still on the books." echoed the recap's "Week N, In
+//       The Books" header; "have been circling that one ever since" and "The
+//       first receipt gets written {weekday}" asserted things nobody had
+//       checked. Each tail is now a data fact (the margin, the playoff
+//       meeting count) or a neutral line, and no rung names a weekday.
+//   * lib/hub/between-weeks.ts betweenWeeksHeadline (since retired)
+//       "{N} days until it matters again." sat above a recap of the week that
+//       just mattered. The day count then moved to the hero kicker, and the
+//       headline became a data-derived take (lib/hub/hero-headline.ts).
 //   * lib/content.ts MATCHUP_ANGLES.gameOfWeekBlurb + the hub dek fallback
 //       The seed path (no hub_content rows in the DB) reproduced the same
 //       collision: the seeded GotW blurb and the hardcoded dek fallback in
@@ -73,7 +88,8 @@
 //     hero_dek spec also now tells it not to reuse the GotW blurb's phrasing)
 //   * lib/content.ts DIVISION_EDITORIAL / BURNING_QUESTIONS /
 //     BOLD_PREDICTIONS / OFFSEASON_RECEIPTS / SMACK_SEED
-//   * lib/hub/between-weeks.ts (other clause builders), lib/live-aside.ts,
+//   * lib/hub/between-weeks.ts genericSlateAngle ("Both records move by
+//     Monday night": true of every game), lib/live-aside.ts,
 //     lib/playoff-labels.ts, lib/awards.ts superlative labels
 //   * lib/book/shared.ts + lib/book/futures.ts: deterministic per-market copy
 //     on /book, no overlap with hub copy

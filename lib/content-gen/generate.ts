@@ -10,6 +10,7 @@ import {
 } from "@/lib/content-gen/templates";
 import { validateRow } from "@/lib/content-gen/validate";
 import { verifyClaims, type Claim, type RankableMetric } from "@/lib/content-gen/claims";
+import type { GotwReason } from "@/lib/hub/between-weeks";
 import {
   extractAnchors,
   FRANCHISE_UNIQUE_KINDS,
@@ -223,7 +224,13 @@ function regularSchemaShape(bodyField: z.ZodString, claimSchema: z.ZodTypeAny) {
       .array(z.object({ pairKey: z.string().max(PAIR_KEY_MAX), body: bodyField, claims }))
       .max(8)
       .default([]),
-    game_of_week_blurb: bodyField.default(""),
+    // An object with a claims array, like every other row: without one, any
+    // superlative marker ("only", "1st", "most") tripped verifyClaims with
+    // zero claims to back it, so the LLM blurb never survived and the
+    // template shipped every week.
+    game_of_week_blurb: z
+      .object({ body: bodyField, claims })
+      .default({ body: "", claims: [] }),
     hero_dek: bodyField.default(""),
     smack_posts: z.array(z.object({ text: bodyField, claims })).max(6).default([]),
   });
@@ -311,6 +318,7 @@ export function promptStatsView(ctx: StatsContext): unknown {
       playoffMeetingYears: m.playoffMeetingYears,
       isTitleRematch: m.isTitleRematch,
       topProjected: m.topProjected,
+      namedRivalry: m.namedRivalry,
     })),
   };
 }
@@ -354,20 +362,58 @@ GRADED CHECKLIST (violating rows are discarded downstream, so a violation shrink
 5. Breadth: the 2-row cap counts EVERY row that identifies a franchise, whether by exact name or by an unambiguous description ("the reigning champion", "the league's worst win rate"), and division_notes count when they name or clearly point at a franchise. No franchise is the subject of more than 2 rows across the ENTIRE response; no player is named in more than 1 offseason_receipt. Touch as many different franchises, players, and positions as the real data supports. smack_posts are EXEMPT from this cap: a smack may name any franchise or player, including one already at its 2-row limit in the other lists, and smacks are encouraged to name a specific franchise or player so the roast has a real target (never impersonating one; you are the Site Desk). Do not let the cap force every smack into franchise-free league-wide color.`;
 }
 
+// What each Game of the Week reason proves, for the prompt. Kept beside the
+// spec so a new reason in lib/hub/between-weeks.ts fails typecheck here.
+const GOTW_REASON_MEANINGS: Record<GotwReason, string> = {
+  "title-rematch": "rematch of last season's title game",
+  "named-rivalry": "a rivalry the league has named",
+  "division-lead-flip": "division game whose winner is guaranteed to lead or share the division, whatever the division's other games do",
+  "playoff-clinch": "a win clinches a playoff spot",
+  unbeatens: "both teams are undefeated",
+  "top-of-table": "both teams are in the top three of the standings",
+  "series-on-the-line": "the all-time series is tied or within one game",
+  "coin-flip-line": "The Book's spread is within a field goal",
+  "playoff-history": "the pair has met in the playoffs",
+  "mutual-rival": "each is the other's most-played opponent",
+  "season-opener": "no games played yet",
+  pride: "no standings stakes at all; do not invent any",
+};
+const GOTW_REASON_GLOSSARY = Object.entries(GOTW_REASON_MEANINGS)
+  .map(([k, v]) => `${k} = ${v}`)
+  .join("; ");
+
 function regularSpec(ctx: StatsContext): string {
   const pairKeys = ctx.currentMatchups.map((m) => m.pairKey);
   const gotwClause = ctx.gameOfWeekPairKey
     ? `the featured Game of the Week, which is the matchup with pairKey ${JSON.stringify(ctx.gameOfWeekPairKey)}`
     : "the marquee matchup of the week";
+  // The reasons the featured game was picked are facts (the resolver proved
+  // each one from the records); the card's kicker already states the top one,
+  // so the blurb must not repeat its wording.
+  const gotwFacts = ctx.gameOfWeek
+    ? ` It was picked for these reasons, the ONLY stakes you may claim for it: ${JSON.stringify(ctx.gameOfWeek.reasons)} (${GOTW_REASON_GLOSSARY}). The card's kicker above your blurb reads ${JSON.stringify(ctx.gameOfWeek.kicker)}; do not reuse its wording ("on the line", "at stake"). Never claim first place, a division lead, a playoff spot or any other stakes that are not in that list, never name a weekday, and never write "receipts to settle". Any superlative or ordinal ("only", "most", "1st") needs a claim object in "claims"${
+        ctx.gameOfWeek.namedRivalry
+          ? `. This game is the league's named rivalry ${JSON.stringify(ctx.gameOfWeek.namedRivalry.name)}: the kicker already leads with that name${ctx.gameOfWeek.namedRivalry.tagline ? ` and the card prints its tagline ${JSON.stringify(ctx.gameOfWeek.namedRivalry.tagline)} right under it, so do not quote the tagline` : ""}. You may call it by name; its "origin" in that matchup's STATS entry is background lore, never a source of years, scores or events`
+          : ""
+      }${
+        ctx.gameOfWeek.form.length > 0
+          ? `. Open the blurb with last week's form for BOTH teams, the sharper result first. These are facts you may cite with the numbers exactly as given: ${JSON.stringify(ctx.gameOfWeek.form)} ("margin" is the final margin, "points" the team's own score). A superlative about one of them ("week-high", "worst loss in the league") is not in that list and needs a claim object like any other`
+          : ""
+      }${
+        ctx.gameOfWeek.heroNumbers.length > 0
+          ? `. The hub's headline directly above this card already states ${JSON.stringify(ctx.gameOfWeek.heroNumbers)}; never print those numbers in the blurb. Use that team's other fact instead (its own score, or the opponent's name without the margin)`
+          : ""
+      }`
+    : "";
   return `This is REGULAR SEASON content for week ${ctx.week} (week-scoped). Produce this exact JSON shape. Character budgets are HARD limits: a field over its budget gets that entire row discarded downstream (the response is not rejected, but that row is), so stay comfortably under, not right at, the number.
 {
   "matchup_angles": [ { "pairKey": <one of ${JSON.stringify(pairKeys)}>, "body": "trash-talk angle for this matchup, under ${BODY_MAX} characters", "claims": [] } ]  // one per current matchup${
     ctx.week === 1
       ? `. WEEK 1: no team has a current-season record, so NEVER write one (a "0-0" line is an automatic rejection) and never call anyone hot, cold, or slumping. Each angle must hang on a real receipt from that matchup's own JSON: h2h (including its streak, written from the HOME team's perspective), lastMeeting, playoffMeetingYears, isTitleRematch, or topProjected. When h2h is all zeros and lastMeeting is null, say plainly that it is their first meeting; do not invent a rivalry. Every angle must have its OWN hook, so two cards never read the same`
       : ""
-  }
-  "game_of_week_blurb": "blurb for ${gotwClause}, under ${BODY_MAX} characters",
-  "hero_dek": "one-sentence hero subhead for the week, under ${BODY_MAX} characters. Do NOT mention a specific number of days until kickoff; the live day count is added at render time. It renders directly above the Game of the Week card, whose own blurb and whose kicker (a short stakes line such as 'Division lead at stake' or 'Pride at stake') are both visible on the same screen, so it must not reuse ANY phrase from either (no shared 'receipts to settle', 'on the line', 'at stake', 'headline the slate' style idioms): different sentences, different angles.",
+  }. A matchup whose "namedRivalry" is set is a rivalry the league named itself: you may use its name and quote its tagline verbatim as that matchup's hook; its "origin" is lore, not a source of numbers
+  "game_of_week_blurb": { "body": "blurb for ${gotwClause}, under ${BODY_MAX} characters", "claims": [] }  //${gotwFacts}
+  "hero_dek": "one-sentence hero subhead for the week, under ${BODY_MAX} characters. Do NOT mention a specific number of days until kickoff or name a weekday; the kicker line already names the kickoff day. It sits directly under the hero headline, which is built at render time from the data and states the single biggest fact: last week's biggest result (the widest losing margin, the top score, the closest final or the lowest score in weekInBooks) while last week's recap is up, or this week's sharpest slate fact (two unbeatens or two winless teams meeting, a division lead in play, a named rivalry) after it. Do NOT restate any of those facts or their numbers; pick a different angle. It also renders directly above the Game of the Week card, whose own blurb and whose kicker (a short stakes line such as 'Division lead on the line', 'Battle of unbeatens' or 'Pride at stake') are both visible on the same screen, so it must not reuse ANY phrase from either (no shared 'receipts to settle', 'on the line', 'at stake', 'headline the slate' style idioms): different sentences, different angles.",
   "smack_posts": [ { "text": "site desk post, under ${BODY_MAX} characters", "claims": [] }, ... ]  // 5 to 6, MORE than the ~5 that will ship: over-generate so a diverse subset can be picked
 }
 
@@ -456,7 +502,7 @@ export function toRowsPreseason(out: PreseasonOut, ctx: StatsContext): HubConten
   return rows;
 }
 
-function toRowsRegular(out: RegularOut, ctx: StatsContext): HubContentInsert[] {
+export function toRowsRegular(out: RegularOut, ctx: StatsContext): HubContentInsert[] {
   const validPairs = new Set(ctx.currentMatchups.map((m) => m.pairKey));
   const dropForClaims = makeClaimDropper(ctx);
   const rows: HubContentInsert[] = [];
@@ -466,8 +512,19 @@ function toRowsRegular(out: RegularOut, ctx: StatsContext): HubContentInsert[] {
     if (dropForClaims(a.body, a.claims)) continue;
     rows.push({ week: ctx.week, kind: "matchup_angle", refKey: a.pairKey, body: noEmDash(a.body), extras: null });
   }
-  if (out.game_of_week_blurb.trim() && !dropForClaims(out.game_of_week_blurb, [])) {
-    rows.push({ week: ctx.week, kind: "game_of_week_blurb", refKey: null, body: noEmDash(out.game_of_week_blurb), extras: null });
+  const gotw = out.game_of_week_blurb;
+  if (
+    ctx.gameOfWeekPairKey &&
+    gotw.body.trim() &&
+    !dropForClaims(gotw.body, gotw.claims)
+  ) {
+    rows.push({
+      week: ctx.week,
+      kind: "game_of_week_blurb",
+      refKey: ctx.gameOfWeekPairKey,
+      body: noEmDash(gotw.body),
+      extras: null,
+    });
   }
   if (out.hero_dek.trim() && !dropForClaims(out.hero_dek, [])) {
     rows.push({ week: ctx.week, kind: "hero_dek", refKey: null, body: noEmDash(out.hero_dek), extras: null });

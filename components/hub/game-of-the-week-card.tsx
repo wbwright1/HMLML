@@ -1,5 +1,27 @@
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { TeamLink } from "@/components/team-link";
+import { EditorialBody } from "@/components/editorial-emphasis";
+
+/**
+ * Prints a short label with every numeral in the mono/tabular face (the
+ * three-font rule), e.g. the "4-4" in "SERIES TIED 4-4" or the "1" in
+ * "1st in Division 1". Words stay in the surrounding Geist.
+ */
+function MonoDigits({ text }: { text: string }) {
+  return (
+    <>
+      {text.split(/(\d[\d.,-]*)/g).map((part, i) =>
+        /^\d/.test(part) ? (
+          <span key={i} className="font-mono tabular-nums">
+            {part}
+          </span>
+        ) : (
+          part
+        )
+      )}
+    </>
+  );
+}
 
 export interface GameOfTheWeekTeam {
   name: string;
@@ -15,8 +37,13 @@ export interface GameOfTheWeekTeam {
 }
 
 interface GameOfTheWeekCardProps {
-  /** Top-left kicker, e.g. "DIVISION 1 REMATCH · DIVISION LEAD AT STAKE". */
+  /** Top-left kicker, e.g. "DIVISION 1 REMATCH · DIVISION LEAD ON THE LINE",
+   * or "THE CUSTODY BATTLE · 2-0 MEETS 0-2" when a named rivalry leads. */
   kicker: string;
+  /** The named rivalry leading the kicker, stamped as data-named-rivalry. */
+  rivalryName?: string | null;
+  /** A named rivalry's tagline, set as a serif italic aside under the kicker. */
+  rivalryTagline?: string | null;
   /** Top-right all-time series line, e.g. "All-time GW leads 14-9". */
   h2hLine: string;
   teamA: GameOfTheWeekTeam;
@@ -33,6 +60,8 @@ interface GameOfTheWeekCardProps {
  */
 export function GameOfTheWeekCard({
   kicker,
+  rivalryName,
+  rivalryTagline,
   h2hLine,
   teamA,
   teamB,
@@ -43,11 +72,23 @@ export function GameOfTheWeekCard({
       <div className="relative">
         {/* Header: kicker + all-time series */}
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
-          <p className="text-kicker text-accent-gold" data-testid="gotw-kicker">
-            {kicker}
+          <p
+            className="text-kicker text-accent-gold"
+            data-testid="gotw-kicker"
+            data-named-rivalry={rivalryName ?? undefined}
+          >
+            <MonoDigits text={kicker} />
           </p>
           <p className="text-caption font-mono tabular-nums text-text-tertiary">{h2hLine}</p>
         </div>
+        {rivalryTagline && (
+          <p
+            className="mt-2 font-serif italic text-body text-text-secondary"
+            data-testid="gotw-rivalry-tagline"
+          >
+            <MonoDigits text={rivalryTagline} />
+          </p>
+        )}
 
         {/* Teams */}
         <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-4">
@@ -74,7 +115,12 @@ export function GameOfTheWeekCard({
             </TeamLink>
             <p className="mt-1 text-body-sm text-text-tertiary">
               <span className="text-stat tabular-nums">{teamA.record}</span>
-              {teamA.status && <span> &middot; {teamA.status}</span>}
+              {teamA.status && (
+                <span>
+                  {" "}
+                  &middot; <MonoDigits text={teamA.status} />
+                </span>
+              )}
             </p>
           </div>
 
@@ -105,7 +151,12 @@ export function GameOfTheWeekCard({
             </TeamLink>
             <p className="mt-1 text-body-sm text-text-tertiary">
               <span className="text-stat tabular-nums">{teamB.record}</span>
-              {teamB.status && <span> &middot; {teamB.status}</span>}
+              {teamB.status && (
+                <span>
+                  {" "}
+                  &middot; <MonoDigits text={teamB.status} />
+                </span>
+              )}
             </p>
           </div>
         </div>
@@ -116,7 +167,7 @@ export function GameOfTheWeekCard({
           className="mt-4 font-serif italic text-body-lg text-text-secondary"
           data-testid="gotw-blurb"
         >
-          {blurb}
+          <EditorialBody body={blurb} />
         </p>
       </div>
     </div>

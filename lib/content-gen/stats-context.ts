@@ -2,7 +2,6 @@ import { getDivisionStandings } from "@/lib/queries/divisions";
 import {
   getLastCompletedSeason,
   getSeasonStandings,
-  getTitleGamePair,
 } from "@/lib/queries/seasons";
 import { getMatchupsByWeek } from "@/lib/queries/matchups";
 import {
@@ -21,11 +20,11 @@ import { getWeekBenchLeader } from "@/lib/queries/lineup-efficiency";
 import { getWeekStandouts } from "@/lib/queries/week-standouts";
 import { getRecentTransactions } from "@/lib/queries/offseason";
 import { matchupPairKey } from "@/lib/content";
-import {
-  selectGameOfTheWeek,
-  markTitleRematch,
-  type GotwCandidate,
-} from "@/lib/hub/between-weeks";
+import { namedRivalryLookupFrom, resolveGameOfTheWeek } from "@/lib/hub/gotw-context";
+import { heroHeadline } from "@/lib/hub/hero-headline";
+import { getNamedRivalries, type NamedRivalry } from "@/lib/queries/rivalries";
+import { rivalryPairKey } from "@/lib/queries/rivalry-week";
+import type { GotwReason } from "@/lib/hub/between-weeks";
 import type { NflSeasonType } from "@/lib/queries/nfl-state";
 import { getLeagueLongevity } from "@/lib/queries/franchise-longevity";
 import { getRosterProjections } from "@/lib/queries/roster-projections";
@@ -102,6 +101,20 @@ export interface StatsMatchup {
   isTitleRematch: boolean;
   /** Highest projected starter in this matchup, either side. */
   topProjected: StatsTopProjected | null;
+  /**
+   * The commish-named rivalry this pair belongs to, or null. Editorial facts
+   * the league wrote itself (lib/queries/rivalries.ts): the name and tagline
+   * are quotable as written, the origin is background, never a source of
+   * years or scores.
+   */
+  namedRivalry: StatsNamedRivalry | null;
+}
+
+export interface StatsNamedRivalry {
+  name: string;
+  tagline: string | null;
+  origin: string | null;
+  trophyName: string | null;
 }
 
 export interface StatsScorer {
@@ -221,6 +234,42 @@ export interface StatsContext {
    * written about the same matchup the hub renders. Null when there is no slate.
    */
   gameOfWeekPairKey: string | null;
+  /**
+   * Why the featured game was picked and what the hub card says about it,
+   * straight from the shared resolver (lib/hub/gotw-context.ts). Handed to
+   * the model as facts, and `blurb` is the template fallback verbatim, so
+   * the generated and the rendered copy both come from the same reasons.
+   * Null when there is no slate.
+   */
+  gameOfWeek: {
+    pairKey: string;
+    reasons: GotwReason[];
+    /** The card's kicker ("{lead} · {stakes}"), rendered above the blurb. */
+    kicker: string;
+    blurb: string;
+    /** The named rivalry the pick belongs to, when that is a reason. */
+    namedRivalry: { name: string; tagline: string | null } | null;
+    /**
+     * Each featured team's prior-week result (the facts the template blurb
+     * opens with), home team first. Empty at week 1 or while the prior week
+     * is incomplete.
+     */
+    form: {
+      team: string;
+      slug: string;
+      points: number;
+      opponent: string;
+      margin: number;
+      result: "won" | "lost" | "tied";
+    }[];
+    /**
+     * The numbers the hub's hero headline prints while the recap renders
+     * (lib/hub/hero-headline.ts, e.g. ["64.2"] for "Taking Boutte lost by
+     * 64.2"). The hero owns that fact, so the blurb must not print them; the
+     * hub drops a stored blurb that does. Empty when no finals rung fires.
+     */
+    heroNumbers: string[];
+  } | null;
   weekInBooks: StatsWeekInBooks | null;
   recentTransactions: StatsTransaction[];
   /** Multi-season history per franchise. Empty when the DB has too little history, or on query failure. */
@@ -311,15 +360,15 @@ export async function buildStatsContext(
   const { seasonId, seasonYear, week, seasonType } = input;
   const priorWeek = week > 1 ? week - 1 : week;
 
-  const [divisionGroups, currentMatchupRows, lastCompleted, recentTransactions, titlePair] =
+  const [divisionGroups, currentMatchupRows, lastCompleted, recentTransactions, seasonStandings] =
     await Promise.all([
       getDivisionStandings(seasonId),
       getMatchupsByWeek(seasonId, week),
       getLastCompletedSeason(),
       getRecentTransactions(seasonId, 6),
-      // Only relevant at week 1 (the "HMLML Bowl" rematch override below);
-      // skip the query entirely for every other week.
-      week === 1 ? getTitleGamePair() : Promise.resolve(null),
+      // The exact standings rows the hub hands the Game of the Week resolver,
+      // so both sides score the same records.
+      getSeasonStandings(seasonId),
     ]);
 
   const divisions: StatsDivision[] = divisionGroups.map((g) => {
@@ -339,7 +388,7 @@ export async function buildStatsContext(
   // week's projected starters. Both extras are best-effort (an empty result
   // just drops a rung off the angle ladder), which is why they are settled
   // separately from the counts rather than allowed to fail the whole context.
-  const [h2hResults, historyResults, starterPool] = await Promise.all([
+  const [h2hResults, historyResults, starterPool, namedRivalries] = await Promise.all([
     Promise.all(
       currentMatchupRows.map((m) =>
         getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId),
@@ -351,7 +400,15 @@ export async function buildStatsContext(
       ),
     ).catch((): HeadToHeadGame[][] => []),
     getWeekStarterPool(seasonId, week).catch((): PoolRow[] => []),
+    // Optional enrichment, like the two above: without it the named-rivalry
+    // reason and rung simply do not fire. The hub only renders a stored blurb
+    // whose ref_key matches its own pick, so a miss here can never put this
+    // run's blurb under a different game.
+    getNamedRivalries().catch((): NamedRivalry[] => []),
   ]);
+  const namedRivalryByPair = new Map(
+    namedRivalries.map((r) => [rivalryPairKey(r.franchiseAId, r.franchiseBId), r]),
+  );
 
   // Highest projected starter per Sleeper matchupId, from the same pool the
   // hub's Players to Watch rail scores over.
@@ -364,39 +421,76 @@ export async function buildStatsContext(
       g.teams.map((t) => [t.franchiseId, t] as const),
     ),
   );
-  // Game of the Week: the same selection the between-weeks hub makes, so the
-  // generated blurb targets the matchup the hub features. Uses division +
-  // records from the standings map (the fields selectGameOfTheWeek weighs),
-  // plus franchiseId so markTitleRematch can identify the week-1 rematch.
-  const gotwCandidates: GotwCandidate[] = currentMatchupRows.map((m) => {
-    const a = standingBy.get(m.homeTeam.franchiseId);
-    const b = standingBy.get(m.awayTeam.franchiseId);
-    return {
-      matchupId: m.matchupId,
-      teamA: {
-        wins: a?.wins ?? 0,
-        losses: a?.losses ?? 0,
-        ties: a?.ties ?? 0,
-        pointsFor: Number(a?.pointsScored ?? 0),
-        division: a?.division ?? null,
-        franchiseId: m.homeTeam.franchiseId,
-      },
-      teamB: {
-        wins: b?.wins ?? 0,
-        losses: b?.losses ?? 0,
-        ties: b?.ties ?? 0,
-        pointsFor: Number(b?.pointsScored ?? 0),
-        division: b?.division ?? null,
-        franchiseId: m.awayTeam.franchiseId,
-      },
-    };
-  });
-  const markedGotwCandidates = markTitleRematch(gotwCandidates, titlePair);
-  const gotwId = selectGameOfTheWeek(markedGotwCandidates, undefined, week);
-  const gotwRow = currentMatchupRows.find((m) => m.matchupId === gotwId);
-  const gameOfWeekPairKey = gotwRow
-    ? matchupPairKey(gotwRow.homeTeam.franchiseSlug, gotwRow.awayTeam.franchiseSlug)
-    : null;
+  // Game of the Week: the SAME resolver the between-weeks hub calls
+  // (lib/hub/gotw-context.ts), with the same standings rows, so the generated
+  // blurb is always written about the game the hub features. The per-matchup
+  // pieces fetched above are handed in rather than re-queried.
+  const gotw =
+    currentMatchupRows.length > 0
+      ? await resolveGameOfTheWeek({
+          seasonId,
+          seasonYear,
+          week,
+          matchups: currentMatchupRows,
+          standings: seasonStandings,
+          // The same lookup the hub builds from the same rows, so both pick
+          // the same game for the same reasons.
+          namedRivalryOf: namedRivalryLookupFrom(namedRivalries),
+          prefetched: {
+            h2hByMatchup: new Map(
+              currentMatchupRows.map((m, i) => [m.matchupId, h2hResults[i] ?? null]),
+            ),
+            historyByMatchup: new Map(
+              currentMatchupRows.map((m, i) => [
+                m.matchupId,
+                summarizeMeetingHistory(historyResults[i] ?? [], m.homeTeam.franchiseId),
+              ]),
+            ),
+            pool: starterPool,
+          },
+        })
+      : null;
+  const gameOfWeekPairKey = gotw?.pairKey ?? null;
+  const gotwMatchup = currentMatchupRows.find((m) => m.matchupId === gotw?.pick?.matchupId);
+  const gotwForm: NonNullable<StatsContext["gameOfWeek"]>["form"] = [];
+  if (gotw && gotwMatchup) {
+    for (const [team, f] of [
+      [gotwMatchup.homeTeam, gotw.form.a],
+      [gotwMatchup.awayTeam, gotw.form.b],
+    ] as const) {
+      if (!f) continue;
+      gotwForm.push({
+        team: team.franchiseName,
+        slug: team.franchiseSlug,
+        points: Math.round(f.points * 10) / 10,
+        opponent: f.opponentName,
+        margin: f.margin,
+        result: f.margin === 0 ? "tied" : f.won ? "won" : "lost",
+      });
+    }
+  }
+  const gameOfWeek: StatsContext["gameOfWeek"] =
+    gotw?.pairKey && gotw.kicker && gotw.blurb
+      ? {
+          pairKey: gotw.pairKey,
+          reasons: gotw.reasons,
+          kicker: gotw.kicker,
+          blurb: gotw.blurb,
+          namedRivalry: gotw.namedRivalry,
+          form: gotwForm,
+          heroNumbers: [
+            ...heroHeadline({
+              recapShown: true,
+              priorFinals: gotw.priorFinals,
+              slate: [],
+              standings: [],
+            }).claim.numbers,
+          ],
+        }
+      : null;
+  const titleRematchIds = new Set(
+    (gotw?.candidates ?? []).filter((c) => c.isTitleRematch).map((c) => c.matchupId),
+  );
 
   const currentMatchups: StatsMatchup[] = currentMatchupRows.map((m, i) => {
     const record = (t: {
@@ -453,10 +547,15 @@ export async function buildStatsContext(
           playoffMeetingYears: summary.playoffMeetingYears,
         };
       })(),
-      isTitleRematch: Boolean(
-        markedGotwCandidates.find((c) => c.matchupId === m.matchupId)
-          ?.isTitleRematch,
-      ),
+      isTitleRematch: titleRematchIds.has(m.matchupId),
+      namedRivalry: (() => {
+        const r = namedRivalryByPair.get(
+          rivalryPairKey(m.homeTeam.franchiseId, m.awayTeam.franchiseId),
+        );
+        return r
+          ? { name: r.name, tagline: r.tagline, origin: r.origin, trophyName: r.trophyName }
+          : null;
+      })(),
       topProjected: (() => {
         const top = topProjectedByMatchup.get(m.matchupId);
         if (!top) return null;
@@ -661,6 +760,7 @@ export async function buildStatsContext(
     lastSeason,
     currentMatchups,
     gameOfWeekPairKey,
+    gameOfWeek,
     weekInBooks,
     recentTransactions,
     franchiseHistory,

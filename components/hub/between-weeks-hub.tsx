@@ -15,7 +15,7 @@ import { GameOfTheWeekCard } from "@/components/hub/game-of-the-week-card";
 import { SlateCard } from "@/components/hub/slate-card";
 import { teamAcronym } from "@/lib/team-acronym";
 import type { PairedMatchup } from "@/lib/queries/matchups";
-import { getTitleGamePair, type getSeasonStandings } from "@/lib/queries/seasons";
+import type { getSeasonStandings } from "@/lib/queries/seasons";
 import {
   getHeadToHead,
   getHeadToHeadHistory,
@@ -27,17 +27,15 @@ import {
   type MeetingHistorySummary,
   type SlateAngleInput,
 } from "@/lib/hub/slate-angle";
-import { getBowlName } from "@/lib/bowl-names";
-import { getDivisionStandings } from "@/lib/queries/divisions";
 import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
 import { getWeekBenchLeader } from "@/lib/queries/lineup-efficiency";
 import { getWeekRecap, type WeekRecap } from "@/lib/queries/week-recap";
 import { isRecapWindowOpen } from "@/lib/hub/week-recap";
+import { isRecapWindowForced } from "@/lib/queries/nfl-state";
 import { WeekRecapSection, BenchCallout } from "@/components/hub/week-recap-section";
 import {
   getWeekStarterPool,
   getPlayersToWatchFromPool,
-  sumProjectedByFranchise,
   topProjectedStarterByMatchup,
   type PlayerToWatch,
 } from "@/lib/queries/players-to-watch";
@@ -48,7 +46,6 @@ import {
   getHubEditorial,
   HERO_DEK_FALLBACK,
   matchupPairKey,
-  type HubEditorial,
 } from "@/lib/content";
 import { sharesPhraseWithAny } from "@/lib/content-gen/phrases";
 import { getHubPowerPreview, type HubPowerPreview } from "@/lib/queries/power-preview";
@@ -57,16 +54,22 @@ import { HubSection, RailCard, RailRows } from "@/components/hub/rail-card";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { buildHubLineFooter } from "@/lib/book/shared";
+import { formatH2HLine, formatSlateH2H, gameOfWeekBlurb } from "@/lib/hub/between-weeks";
 import {
-  selectGameOfTheWeek,
-  markTitleRematch,
-  betweenWeeksHeadline,
-  formatH2HLine,
-  formatSlateH2H,
-  stakesClause,
-  kickoffWeekdayName,
-  type GotwCandidate,
-} from "@/lib/hub/between-weeks";
+  heroDekFromData,
+  heroHeadline,
+  heroKickerTail,
+  numeralSegments,
+  repeatsHeroNumber,
+  type HeroHeadlineInput,
+  type HeroSlateTeam,
+} from "@/lib/hub/hero-headline";
+import {
+  namedRivalryLookupFrom,
+  resolveGameOfTheWeek,
+  type GotwResolution,
+} from "@/lib/hub/gotw-context";
+import { getNamedRivalries } from "@/lib/queries/rivalries";
 
 type Standing = Awaited<ReturnType<typeof getSeasonStandings>>[number];
 
@@ -94,13 +97,15 @@ export async function BetweenWeeksHub({
   nextKickoff,
 }: BetweenWeeksHubProps) {
   const priorWeek = week > 1 ? week - 1 : week;
+  // A ":recap" NFL_STATE_OVERRIDE (preview/dev only, never production) holds
+  // the recap window open so the pinned e2e server reaches the recap state on
+  // any weekday.
+  const recapForced = isRecapWindowForced();
 
   // League-wide games-played gate. At week 1 every franchise is 0-0-0, so a
-  // "1st in Division" or "first place on the line" claim would be fabricated
-  // (the sort has nothing real to sort on). Once any game has been played,
-  // division-leader claims are honest again. Computed from the standings prop
-  // up front so both the editorial blurb selection and the GOTW/division
-  // logic below share the same flag.
+  // "1st in Division" claim would be fabricated. It picks the seeded opener
+  // blurb below; the Game of the Week resolver derives the same flag itself
+  // from the same standings.
   const anyGamesPlayed = standings.some(
     (s) => (s.wins ?? 0) + (s.losses ?? 0) + (s.ties ?? 0) > 0
   );
@@ -114,7 +119,6 @@ export async function BetweenWeeksHub({
     week,
     anyGamesPlayed,
   });
-  const headline = betweenWeeksHeadline(nextKickoff);
 
   // Member smack feed: real posts win when present. Site Desk seeds only stand
   // in when the board is genuinely empty (no posts at all); when posts exist
@@ -139,9 +143,7 @@ export async function BetweenWeeksHub({
     return s ? `${s.wins ?? 0}-${s.losses ?? 0}` : "0-0";
   };
 
-  // Rail + division data (degrades to empty when the DB or week has nothing).
-  const divisionLeaderStatus = new Map<string, string>();
-  const leadsDivision = new Set<string>();
+  // Rail data (degrades to empty when the DB or week has nothing).
   let weeklySuperlatives: Awaited<ReturnType<typeof getWeeklySuperlatives>> | null =
     null;
   let benchLeader: Awaited<ReturnType<typeof getWeekBenchLeader>> = null;
@@ -152,6 +154,10 @@ export async function BetweenWeeksHub({
   let leagueMoves: LeagueMove[] = [];
   let weekReceipts: WeekReceipt[] = [];
   let bookGames: BookGame[] = [];
+  // Whether the batch below actually landed, so the Game of the Week resolver
+  // reuses what it fetched instead of querying it again, and fetches it
+  // itself when the batch did not land.
+  let batchLanded = false;
   let powerPreview: HubPowerPreview | null = null;
   // The full record (streak included), not just the counts: the derived slate
   // angle reads the streak, and it is oriented from the HOME team's
@@ -181,7 +187,6 @@ export async function BetweenWeeksHub({
       // future data change ever lets it) resurrect a false claim. Skip the
       // fetches outright rather than relying on the empty-shape fallback.
       const [
-        divisions,
         superlatives,
         bench,
         weekPool,
@@ -191,7 +196,6 @@ export async function BetweenWeeksHub({
         h2hResults,
         historyResults,
       ] = await Promise.all([
-        getDivisionStandings(seasonId),
         week === 1
           ? Promise.resolve(null)
           : getWeeklySuperlatives(seasonId, priorWeek),
@@ -233,20 +237,6 @@ export async function BetweenWeeksHub({
       weekReceipts = receipts;
       bookGames = board;
 
-      if (anyGamesPlayed) {
-        for (const group of divisions) {
-          group.teams.forEach((t, i) => {
-            if (i === 0) {
-              leadsDivision.add(t.franchiseId);
-              divisionLeaderStatus.set(
-                t.franchiseId,
-                `1st in ${group.divisionName}`
-              );
-            }
-          });
-        }
-      }
-
       matchups.forEach((m, i) => {
         h2hByMatchup.set(m.matchupId, h2hResults[i]);
 
@@ -257,6 +247,7 @@ export async function BetweenWeeksHub({
           summarizeMeetingHistory(historyResults[i] ?? [], m.homeTeam.franchiseId)
         );
       });
+      batchLanded = true;
     } catch {
       // DB may be unavailable; the hero + countdown still render.
     }
@@ -275,7 +266,7 @@ export async function BetweenWeeksHub({
     // UTC daily sync), not through kickoff. That sync revalidates the hub,
     // so the cached page flips to the plain slate view at the same moment
     // the gate does (lib/hub/week-recap.ts).
-    if (week > 1 && isRecapWindowOpen(new Date(), nextKickoff)) {
+    if (week > 1 && (recapForced || isRecapWindowOpen(new Date(), nextKickoff))) {
       try {
         weekRecap = await getWeekRecap(seasonId, priorWeek);
       } catch (e) {
@@ -285,50 +276,57 @@ export async function BetweenWeeksHub({
     }
   }
 
-  // Week-1 title rematch: this league opens every season with a rematch of
-  // last season's championship game. Only queried at week 1 (weeks 2+ have no
-  // use for it), and null degrades to the existing heuristic untouched.
-  const titlePair = week === 1 ? await getTitleGamePair() : null;
+  // Game of the Week: one shared resolver (lib/hub/gotw-context.ts) picks,
+  // explains and describes it, and the content generator calls the SAME one,
+  // so the stored blurb and this card can never be about different games.
+  // Pieces the batch above already fetched are handed in, not re-queried.
+  // Commish-named rivalries, fetched once for both the Game of the Week
+  // resolver and the slate ladder so the two can never disagree about a
+  // pair. Outside the batch's bare catch on purpose: getNamedRivalries
+  // rethrows a production DB error (rethrowUnlessTolerable) rather than
+  // letting ISR cache a hub that silently forgot the league's rivalries.
+  const namedRivalryOf =
+    seasonId != null && matchups.length > 0
+      ? namedRivalryLookupFrom(await getNamedRivalries())
+      : null;
 
-  // Game of the Week selection from the current slate. Projected totals come
-  // from the same starter pool Players to Watch scores over, so no extra
-  // query; they only drive the ranking when anyGamesPlayed is false.
-  const projectedByFranchise = sumProjectedByFranchise(pool);
-  const candidates: GotwCandidate[] = matchups.map((m) => {
-    const a = standingBy.get(m.homeTeam.franchiseId);
-    const b = standingBy.get(m.awayTeam.franchiseId);
-    return {
-      matchupId: m.matchupId,
-      teamA: {
-        wins: a?.wins ?? 0,
-        losses: a?.losses ?? 0,
-        ties: a?.ties ?? 0,
-        pointsFor: Number(a?.pointsScored ?? 0),
-        division: a?.division ?? null,
-        franchiseId: m.homeTeam.franchiseId,
-      },
-      teamB: {
-        wins: b?.wins ?? 0,
-        losses: b?.losses ?? 0,
-        ties: b?.ties ?? 0,
-        pointsFor: Number(b?.pointsScored ?? 0),
-        division: b?.division ?? null,
-        franchiseId: m.awayTeam.franchiseId,
-      },
-      projectedA: projectedByFranchise.get(m.homeTeam.franchiseId) ?? 0,
-      projectedB: projectedByFranchise.get(m.awayTeam.franchiseId) ?? 0,
-    };
-  });
-  const markedCandidates = markTitleRematch(candidates, titlePair);
+  let gotw: GotwResolution | null = null;
+  if (seasonId != null && matchups.length > 0) {
+    try {
+      gotw = await resolveGameOfTheWeek({
+        seasonId,
+        seasonYear,
+        week,
+        matchups,
+        standings,
+        namedRivalryOf,
+        prefetched: {
+          ...(batchLanded
+            ? {
+                h2hByMatchup,
+                historyByMatchup: h2hHistoryByMatchup,
+                pool,
+                bookGames,
+              }
+            : {}),
+          // The recap already loaded last week's finals; the blurb's form
+          // facts reuse them rather than querying the week again.
+          ...(weekRecap ? { priorFinals: weekRecap.results } : {}),
+        },
+      });
+    } catch (e) {
+      rethrowUnlessTolerable(e);
+      gotw = null;
+    }
+  }
 
-  const gotwId = selectGameOfTheWeek(markedCandidates, anyGamesPlayed, week);
+  const gotwId = gotw?.pick?.matchupId ?? null;
   const gameOfWeek = matchups.find((m) => m.matchupId === gotwId) ?? null;
   const restOfSlate = matchups.filter((m) => m.matchupId !== gotwId);
-  const isTitleRematchGame = Boolean(
-    markedCandidates.find((c) => c.matchupId === gotwId)?.isTitleRematch
+  const bowlName = gotw?.bowlName ?? null;
+  const titleRematchIds = new Set(
+    (gotw?.candidates ?? []).filter((c) => c.isTitleRematch).map((c) => c.matchupId)
   );
-  const bowlName = titlePair ? getBowlName(titlePair.seasonYear) : null;
-  const kickoffWeekday = kickoffWeekdayName(nextKickoff);
   const bookGameByMatchup = new Map(bookGames.map((g) => [g.matchupId, g]));
 
   // Highest projected starter per matchup, from the SAME pool Players to Watch
@@ -340,10 +338,17 @@ export async function BetweenWeeksHub({
   // overridden card would silently consume a hook (the streak, say) that a
   // builder-driven card could have used, and the visible slate would be less
   // varied than it needed to be.
+  //
+  // Except for a commish-named rivalry: its card always takes the builder's
+  // rivalry rung (name, tagline, series). A named rivalry that is not the
+  // Game of the Week lives on this grid, and a generated angle that never
+  // mentions the name would make the league's own rivalry vanish from the hub.
   const angleOverrideOf = (m: PairedMatchup): string | null =>
-    editorial.matchupAngles.byPair[
-      matchupPairKey(m.homeTeam.franchiseSlug, m.awayTeam.franchiseSlug)
-    ] ?? null;
+    namedRivalryOf?.(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
+      ? null
+      : (editorial.matchupAngles.byPair[
+          matchupPairKey(m.homeTeam.franchiseSlug, m.awayTeam.franchiseSlug)
+        ] ?? null);
   const needsBuiltAngle = restOfSlate.filter((m) => angleOverrideOf(m) == null);
 
   // Built as one batch: that is what makes the cards provably distinct
@@ -365,14 +370,12 @@ export async function BetweenWeeksHub({
             projectedPoints: star.projectedPoints,
           }
         : null,
-      isTitleRematch: Boolean(
-        markedCandidates.find((c) => c.matchupId === m.matchupId)?.isTitleRematch
-      ),
+      isTitleRematch: titleRematchIds.has(m.matchupId),
       bowlName,
       recordA: record(m.homeTeam.franchiseId),
       recordB: record(m.awayTeam.franchiseId),
       anyGamesPlayed,
-      kickoffWeekday,
+      namedRivalry: namedRivalryOf?.(m.homeTeam.franchiseId, m.awayTeam.franchiseId) ?? null,
     };
   });
   const builtAngles = buildSlateAngles(slateAngleInputs);
@@ -394,6 +397,68 @@ export async function BetweenWeeksHub({
     }
   }
 
+  // The hero headline is a data-derived take (lib/hub/hero-headline.ts): last
+  // week's finals while the recap renders under it, this week's slate
+  // otherwise. The schedule fact lives in the kicker line instead.
+  const heroSlateTeam = (id: string, name: string): HeroSlateTeam => {
+    const s = standingBy.get(id);
+    return {
+      franchiseId: id,
+      name,
+      wins: s?.wins ?? 0,
+      losses: s?.losses ?? 0,
+      ties: s?.ties ?? 0,
+    };
+  };
+  const candidateById = new Map((gotw?.candidates ?? []).map((c) => [c.matchupId, c]));
+  const heroInput: HeroHeadlineInput = {
+    recapShown: weekRecap != null,
+    // The recap's finals when it renders; otherwise the ones the resolver
+    // loaded for the Game of the Week's form facts (slate rungs lead then,
+    // so these only feed the dek fallback).
+    priorFinals: weekRecap?.results ?? gotw?.priorFinals ?? [],
+    slate: matchups.map((m) => {
+      const home = standingBy.get(m.homeTeam.franchiseId);
+      const away = standingBy.get(m.awayTeam.franchiseId);
+      const sameDivision = home?.division != null && home.division === away?.division;
+      return {
+        a: heroSlateTeam(m.homeTeam.franchiseId, m.homeTeam.franchiseName),
+        b: heroSlateTeam(m.awayTeam.franchiseId, m.awayTeam.franchiseName),
+        divisionName: sameDivision ? (home?.divisionName ?? null) : null,
+        canFlipDivisionLead: candidateById.get(m.matchupId)?.canFlipDivisionLead === true,
+        namedRivalry:
+          namedRivalryOf?.(m.homeTeam.franchiseId, m.awayTeam.franchiseId) ?? null,
+        isGameOfWeek: m.matchupId === gotwId,
+      };
+    }),
+    standings: standings.map((s) => heroSlateTeam(s.franchiseId, s.franchiseName)),
+  };
+  const headline = heroHeadline(heroInput);
+  const kickerTail = heroKickerTail(nextKickoff);
+
+  // The featured card's blurb. A stored (generated) blurb is used ONLY when
+  // its ref_key names the pair this card features: hub_content rows outlive
+  // the run that wrote them, and a blurb about a different game (or a legacy
+  // row with no ref_key) would put one matchup's words under another's names.
+  // Otherwise the resolver's reason-derived blurb renders, which is the same
+  // text the generator's template writes, so the fallback is never generic.
+  //
+  // The hero headline owns its fact (lib/hub/hero-claim.ts). A stored blurb
+  // that prints the hero's number is dropped, and the derived blurb is
+  // rebuilt with the claim so its form opener states each team's other true
+  // fact instead ("just hung 204.9 on Taking Boutte", not "by 64.2" again).
+  const gotwPairKey = gotw?.pairKey ?? null;
+  const storedGotwBlurb =
+    gotwPairKey && editorial.matchupAngles.gameOfWeekRefKey === gotwPairKey
+      ? editorial.matchupAngles.gameOfWeekBlurb
+      : null;
+  const gotwBlurb =
+    storedGotwBlurb && !repeatsHeroNumber(storedGotwBlurb, headline.claim)
+      ? storedGotwBlurb
+      : gotw?.blurbInput
+        ? gameOfWeekBlurb({ ...gotw.blurbInput, heroClaim: headline.claim })
+        : (gotw?.blurb ?? editorial.matchupAngles.gameOfWeekBlurb);
+
   // Last line of defense on the copy-echo fix (issue #274). The generator's
   // diversity layer stops a dek that echoes the Game of the Week card from
   // ever being WRITTEN, but hub_content rows persist: a dek generated before
@@ -401,25 +466,17 @@ export async function BetweenWeeksHub({
   // replaces it. Rather than ship the echo for hours, fall back to the seeded
   // dek, which is phrase-distinct from every line below it by construction.
   //
-  // BOTH generated lines on the Game of the Week card are compared, not just
-  // the blurb: the kicker's stakes clause is generated copy too, and "at
-  // stake" is itself a signature phrase. Computed here with the same inputs
-  // GameOfWeekSection uses below, so the two can never disagree.
-  const gotwStakes = gameOfWeek
-    ? stakesClause(
-        leadsDivision.has(gameOfWeek.homeTeam.franchiseId),
-        leadsDivision.has(gameOfWeek.awayTeam.franchiseId),
-        anyGamesPlayed
-      )
-    : null;
-  const linesBelowHero = [
-    editorial.matchupAngles.gameOfWeekBlurb,
-    gotwStakes ?? "",
-  ].filter(Boolean);
+  // BOTH lines on the Game of the Week card are compared: the blurb that
+  // actually renders, and the kicker ("... on the line" / "... at stake" are
+  // signature phrases too).
+  //
+  // The headline is compared too: a stored dek written before the headline
+  // became a take can restate the very fact it now leads with.
+  const linesBelowHero = [gotwBlurb, gotw?.kicker ?? "", headline.text].filter(Boolean);
   const heroDek =
     editorial.heroDek && !sharesPhraseWithAny(editorial.heroDek, linesBelowHero)
       ? editorial.heroDek
-      : HERO_DEK_FALLBACK;
+      : (heroDekFromData(heroInput, headline) ?? HERO_DEK_FALLBACK);
 
   return (
     <>
@@ -431,20 +488,35 @@ export async function BetweenWeeksHub({
       <section
         className="pt-2 pb-6 lg:flex lg:items-start lg:justify-between lg:gap-8"
         data-kickoff-target={nextKickoff?.toISOString()}
+        data-recap-forced={recapForced ? "true" : undefined}
       >
         <div className="max-w-2xl">
-          <p className="text-kicker mb-3">
-            Harambe Memorial League &middot; Week {week} &middot; The Slate Is Set
+          <p className="text-kicker mb-3" data-testid="hero-kicker">
+            Harambe Memorial League &middot; Week {week} &middot; {kickerTail}
           </p>
-          <h1 className="text-display">{headline}</h1>
+          <h1
+            className="text-display"
+            data-testid="hero-headline"
+            data-hero-rung={headline.rung}
+          >
+            {numeralSegments(headline.text).map((seg, i) =>
+              seg.numeral ? (
+                <span key={i} className="font-mono not-italic tabular-nums text-[0.8em]">
+                  {seg.text}
+                </span>
+              ) : (
+                seg.text
+              )
+            )}
+          </h1>
           <p className="mt-3 text-body-lg text-text-secondary" data-testid="hero-dek">
             <EditorialBody body={heroDek} />
           </p>
         </div>
 
         {/* The countdown only runs on the slate-only hub. While the recap
-            leads (Tuesday roll to the Thursday morning cron) the headline
-            already says how far off kickoff is, and a ticking clock above
+            leads (Tuesday roll to the Thursday morning cron) the kicker
+            already names the kickoff day, and a ticking clock above
             last week's receipts pulled the eye away from them for nothing. */}
         {nextKickoff && !weekRecap && (
           <div className="mt-6 lg:mt-1 shrink-0">
@@ -465,24 +537,22 @@ export async function BetweenWeeksHub({
               recap={weekRecap}
               superlatives={weeklySuperlatives}
               benchLeader={benchLeader}
+              heroClaim={headline.claim}
             />
           )}
 
           {/* Game of the Week */}
-          {gameOfWeek && (
+          {gameOfWeek && gotw?.kicker && (
             <GameOfWeekSection
               matchup={gameOfWeek}
               h2h={h2hByMatchup.get(gameOfWeek.matchupId) ?? null}
               record={record}
-              divisionOf={(id) => standingBy.get(id)?.division ?? null}
-              divisionNameOf={(id) => standingBy.get(id)?.divisionName ?? null}
               avatarOf={(id) => standingBy.get(id)?.avatarUrl ?? null}
-              divisionLeaderStatus={divisionLeaderStatus}
-              leadsDivision={leadsDivision}
-              anyGamesPlayed={anyGamesPlayed}
-              editorial={editorial}
-              isTitleRematch={isTitleRematchGame}
-              bowlName={bowlName}
+              divisionLeaderStatus={gotw.divisionLeaderStatus}
+              kicker={gotw.kicker}
+              rivalryName={gotw.namedRivalry?.name ?? null}
+              rivalryTagline={gotw.namedRivalry?.tagline ?? null}
+              blurb={gotwBlurb}
             />
           )}
 
@@ -585,30 +655,26 @@ function GameOfWeekSection({
   matchup,
   h2h,
   record,
-  divisionOf,
-  divisionNameOf,
   avatarOf,
   divisionLeaderStatus,
-  leadsDivision,
-  anyGamesPlayed,
-  editorial,
-  isTitleRematch,
-  bowlName,
+  kicker,
+  rivalryName,
+  rivalryTagline,
+  blurb,
 }: {
   matchup: PairedMatchup;
   h2h: { wins: number; losses: number; ties: number } | null;
   record: (id: string) => string;
-  divisionOf: (id: string) => number | null;
-  divisionNameOf: (id: string) => string | null;
   avatarOf: (id: string) => string | null;
+  /** "1st in {Division}" by the seedTeams tiebreak chain (gotw-context). */
   divisionLeaderStatus: Map<string, string>;
-  leadsDivision: Set<string>;
-  anyGamesPlayed: boolean;
-  editorial: HubEditorial;
-  /** True when this matchup is the week-1 rematch of last season's title game. */
-  isTitleRematch: boolean;
-  /** "HMLML Bowl {roman}" name for last completed season, or null (legacy era). */
-  bowlName: string | null;
+  /** "{lead} · {stakes}", derived from the pick's reasons (gotw-context). */
+  kicker: string;
+  /** The named rivalry leading the kicker, when the pick is one. */
+  rivalryName: string | null;
+  /** The named rivalry's tagline when the pick is one, printed as a serif aside. */
+  rivalryTagline: string | null;
+  blurb: string;
 }) {
   const home = matchup.homeTeam;
   const away = matchup.awayTeam;
@@ -619,49 +685,16 @@ function GameOfWeekSection({
   const homeAbbr = home.franchiseAbbreviation ?? teamAcronym(home.franchiseName);
   const awayAbbr = away.franchiseAbbreviation ?? teamAcronym(away.franchiseName);
 
-  // Division rematch framing, derived honestly from the two teams' divisions.
-  const homeDiv = divisionOf(home.franchiseId);
-  const awayDiv = divisionOf(away.franchiseId);
-  const isDivisionRematch = homeDiv != null && homeDiv === awayDiv;
-  const divisionName = isDivisionRematch
-    ? divisionNameOf(home.franchiseId)
-    : null;
-  // The week-1 title rematch framing wins over the division/cross-division
-  // framing (a rematch of last season's championship is the whole point of
-  // opening week, division-mate or not). Falls back to "Title Game Rematch"
-  // when the champion's season predates the "HMLML Bowl" naming (legacy era).
-  const kickerLead = isTitleRematch
-    ? bowlName
-      ? `${bowlName} Rematch`
-      : "Title Game Rematch"
-    : divisionName
-      ? `${divisionName} Rematch`
-      : "Cross-Division";
-  const stakes = stakesClause(
-    leadsDivision.has(home.franchiseId),
-    leadsDivision.has(away.franchiseId),
-    anyGamesPlayed
-  );
-  const kicker = `${kickerLead} · ${stakes}`;
-
   const h2hLine = h2h
     ? formatH2HLine(h2h, homeAbbr, awayAbbr)
     : "First-ever meeting";
-
-  // The featured card prefers the dedicated Game of the Week blurb (which the
-  // generator writes about this exact pair via ctx.gameOfWeekPairKey), falling
-  // back to a per-pair matchup angle if no GOTW blurb exists.
-  const blurb =
-    editorial.matchupAngles.gameOfWeekBlurb ||
-    editorial.matchupAngles.byPair[
-      matchupPairKey(home.franchiseSlug, away.franchiseSlug)
-    ] ||
-    "";
 
   return (
     <HubSection kicker="Game of the Week">
       <GameOfTheWeekCard
         kicker={kicker.toUpperCase()}
+        rivalryName={rivalryName}
+        rivalryTagline={rivalryTagline}
         h2hLine={h2hLine}
         teamA={{
           name: home.franchiseName,

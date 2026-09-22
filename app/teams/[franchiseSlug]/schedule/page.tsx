@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/empty-state";
 import { FranchiseScheduleRow } from "@/components/franchise-schedule-row";
 import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getFranchiseSchedule } from "@/lib/queries/schedule";
+import { getNamedRivalryLookup } from "@/lib/queries/named-rivalries-optional";
+import { findNamedRivalry } from "@/lib/queries/rivalries";
 
 interface FranchiseSchedulePageProps {
   params: Promise<{ franchiseSlug: string }>;
@@ -82,6 +84,9 @@ export default async function FranchiseSchedulePage({
     }
   }
 
+  // Named rivalries label their rows; optional lore, empty on a failed read.
+  const rivalryLookup = await getNamedRivalryLookup();
+
   return (
     <section className="py-8 md:py-12 space-y-8">
       <ScrollReveal>
@@ -139,6 +144,15 @@ export default async function FranchiseSchedulePage({
                 key={week.matchupId}
                 week={week}
                 seasonYear={latestSeason!.seasonYear}
+                rivalryName={
+                  week.opponent
+                    ? (findNamedRivalry(
+                        rivalryLookup,
+                        franchise.id,
+                        week.opponent.franchiseId,
+                      )?.name ?? null)
+                    : null
+                }
               />
             ))}
           </div>

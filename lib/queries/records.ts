@@ -798,7 +798,10 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
     });
 
     return rivalries;
-  } catch {
+  } catch (e) {
+    // Throw rather than hand /records/rivalries an empty list ISR would cache.
+    // rivalry-week.ts keeps its own empty-state catch: the badge is optional.
+    rethrowUnlessTolerable(e);
     return [];
   }
 }
