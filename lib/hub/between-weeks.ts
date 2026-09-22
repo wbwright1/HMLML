@@ -1,13 +1,15 @@
 // Pure, DB-free logic for the between-weeks hub (state 1d). Everything here is
-// deterministic and unit-tested; the RSC (components/hub/between-weeks-hub.tsx)
-// gathers data and hands it to these helpers.
+// deterministic and unit-tested; the data is gathered once by
+// lib/hub/gotw-context.ts (shared by the hub RSC and the content generator, so
+// the two can never feature different games) and handed to these helpers.
 
 import { formatRecord } from "@/lib/format-record";
 import { daysUntil } from "@/lib/hub/live-pill-label";
 import { LEAGUE_TIME_ZONE } from "@/lib/time-zone";
+import type { PlayoffRaceTag } from "@/lib/queries/playoff-race";
 
 // ---------------------------------------------------------------------------
-// Game of the Week heuristic
+// Game of the Week: inputs
 // ---------------------------------------------------------------------------
 
 export interface GotwTeam {
@@ -17,25 +19,163 @@ export interface GotwTeam {
   pointsFor: number;
   /** Division id, or null for a season with no divisions. */
   division: number | null;
-  /** Franchise id, used only to identify the week-1 title-game rematch via
-   * markTitleRematch; optional since ranking itself never needs it. */
+  /** Franchise id; identifies the week-1 title rematch via markTitleRematch. */
   franchiseId?: string;
+  /** 1-based place inside the division by the seedTeams tiebreak chain. */
+  divisionRank?: number | null;
+  /** 1-based place league-wide by the seedTeams tiebreak chain. */
+  overallRank?: number | null;
+  /** Provable playoff-race tag (lib/queries/playoff-race.ts, week 8+ only). */
+  raceTag?: PlayoffRaceTag | null;
+  /**
+   * Projected starting total for this matchup, from the week's starter pool.
+   * Only drives the ranking before any game has been played (a 0-0 record
+   * has nothing to rank on); omitted is treated as 0.
+   */
+  projected?: number;
+}
+
+/** All-time series from team A's perspective. */
+export interface GotwH2H {
+  wins: number;
+  losses: number;
+  ties: number;
+}
+
+export interface GotwLastMeeting {
+  seasonYear: number;
+  week: number;
+  /** Winning side, or null for a tie. */
+  winner: "A" | "B" | null;
+  pointsA: number;
+  pointsB: number;
+  isPlayoff: boolean;
+}
+
+/** A commish-named rivalry (Stream D wires the lookup; null until then). */
+export interface GotwNamedRivalry {
+  name: string;
+  tagline: string | null;
 }
 
 export interface GotwCandidate {
   matchupId: number;
   teamA: GotwTeam;
   teamB: GotwTeam;
-  /** Each team's projected starting total for this matchup, summed from the
-   * week's player_week_points pool. Used only when no games have been played
-   * yet (record-based ranking is meaningless at 0-0-0); undefined/omitted is
-   * treated as 0. */
-  projectedA?: number;
-  projectedB?: number;
-  /** Set by markTitleRematch when this pairing is exactly last season's
-   * champion vs. runner-up. Only honored by selectGameOfTheWeek at week 1. */
+  /** Set by markTitleRematch; only honored at week 1. */
   isTitleRematch?: boolean;
+  /**
+   * Division game in which EITHER side leaves the week leading (or sharing
+   * the lead of) the division if it wins, in the best case of the division's
+   * other games. See canFlipDivisionLead.
+   */
+  canFlipDivisionLead?: boolean;
+  h2h?: GotwH2H | null;
+  lastMeeting?: GotwLastMeeting | null;
+  /** Season years the pair met in a playoff game, newest first. */
+  playoffMeetingYears?: number[];
+  /** Mutual most-played opponents (lib/queries/rivalry-week.ts). */
+  isMutualRival?: boolean;
+  namedRivalry?: GotwNamedRivalry | null;
+  /** The Book's spread for this game when The Book is trading this week. */
+  bookSpread?: number | null;
+  /** How many of the two franchises were featured as last week's GotW (0-2). */
+  featuredLastWeek?: number;
 }
+
+export interface GotwSelectContext {
+  week: number;
+  /** League-wide: has any game of this season been played? Defaults to a
+   * detection from the candidates' records. */
+  anyGamesPlayed?: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Game of the Week: reasons and weights
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a game is worth featuring. Every reason is a claim the data proves, so
+ * the kicker and blurb built from them are true by construction.
+ */
+export type GotwReason =
+  | "title-rematch"
+  | "named-rivalry"
+  | "division-lead-flip"
+  | "playoff-clinch"
+  | "unbeatens"
+  | "top-of-table"
+  | "series-on-the-line"
+  | "coin-flip-line"
+  | "playoff-history"
+  | "mutual-rival"
+  | "season-opener"
+  | "pride";
+
+/**
+ * Score added per reason. Declaration order doubles as the tiebreak order
+ * between equal weights, so it is also the order reasons are reported in.
+ *
+ * - title-rematch: informational only; the week-1 rematch is an OVERRIDE
+ *   (selectGameOfTheWeek returns it before any scoring runs).
+ * - named-rivalry is the biggest bonus: a rivalry the league named itself is
+ *   the one game nobody needs sold to them. It still does not beat two
+ *   unbeatens fighting for a division on its own merits.
+ * - division-lead-flip / playoff-clinch: real standings consequences.
+ * - unbeatens stacks on top of the record-quality base on purpose, so two
+ *   2-0 teams crush a 2-0 team against an 0-2 team.
+ * - The small ones (series, line, playoff history, mutual rival) break ties
+ *   between otherwise similar games.
+ */
+export const GOTW_REASON_WEIGHTS: Readonly<Record<GotwReason, number>> = Object.freeze({
+  "title-rematch": 100,
+  "named-rivalry": 25,
+  "division-lead-flip": 15,
+  "playoff-clinch": 15,
+  unbeatens: 10,
+  "top-of-table": 8,
+  "series-on-the-line": 5,
+  "coin-flip-line": 5,
+  "playoff-history": 4,
+  "mutual-rival": 4,
+  "season-opener": 0,
+  pride: 0,
+});
+
+const REASON_ORDER = Object.keys(GOTW_REASON_WEIGHTS) as GotwReason[];
+
+/**
+ * Weight of the record-quality base. Quality is a 0..1 blend that leans on
+ * the WORSE of the two teams (65/35), because a marquee game needs two good
+ * teams, not one great team carrying a mismatch:
+ *   2-0 v 2-0 = 1.00, 2-0 v 1-1 = 0.68, 1-1 v 1-1 = 0.50, 2-0 v 0-2 = 0.35.
+ */
+export const GOTW_QUALITY_WEIGHT = 40;
+const QUALITY_MIN_SHARE = 0.65;
+
+/** Deducted when both teams are mathematically eliminated. */
+export const GOTW_BOTH_ELIMINATED_PENALTY = 25;
+/** Deducted when one team is mathematically eliminated. */
+export const GOTW_ONE_ELIMINATED_PENALTY = 8;
+/** Deducted per franchise that was last week's Game of the Week. */
+export const GOTW_REPEAT_PENALTY = 10;
+/** A Book spread this tight (points, either way) reads as a coin flip. */
+export const GOTW_COIN_FLIP_SPREAD = 3;
+/** An all-time series needs this many games before "within a game" means anything. */
+export const GOTW_SERIES_MIN_GAMES = 4;
+/** "Top of the table" means both teams sit in the league's top N. */
+export const GOTW_TOP_OF_TABLE = 3;
+
+export interface GotwPick {
+  matchupId: number;
+  /** Every reason this game carries, heaviest first. Never empty. */
+  reasons: GotwReason[];
+  score: number;
+}
+
+// ---------------------------------------------------------------------------
+// Game of the Week: helpers
+// ---------------------------------------------------------------------------
 
 /** Last completed season's title-game participants, order-insensitive. */
 export interface TitleGamePair {
@@ -45,10 +185,8 @@ export interface TitleGamePair {
 
 /**
  * Flags the candidate whose two franchises are exactly {champion, runnerUp}
- * from last season's title game (order-insensitive). Pure and shared by both
- * Game of the Week callers (the hub RSC and the content generator) so they
- * agree on the same pick. A null titlePair (no completed season, or the query
- * failed) is a no-op.
+ * from last season's title game (order-insensitive). A null titlePair is a
+ * no-op.
  */
 export function markTitleRematch(
   candidates: GotwCandidate[],
@@ -63,119 +201,454 @@ export function markTitleRematch(
   });
 }
 
-function teamGames(t: GotwTeam): number {
+interface RecordLike {
+  wins: number;
+  losses: number;
+  ties: number;
+}
+
+function teamGames(t: RecordLike): number {
   return t.wins + t.losses + t.ties;
 }
 
-function combinedProjected(c: GotwCandidate): number {
-  return (c.projectedA ?? 0) + (c.projectedB ?? 0);
-}
-
-function projectedCloseness(c: GotwCandidate): number {
-  return Math.abs((c.projectedA ?? 0) - (c.projectedB ?? 0));
-}
-
-/**
- * Combined win% across both teams, games-weighted so mid-season matchups with
- * unequal games played are compared fairly (a win is worth 1, a tie 0.5).
- */
-export function combinedWinPct(c: GotwCandidate): number {
-  const games = teamGames(c.teamA) + teamGames(c.teamB);
-  if (games === 0) return 0;
-  const points =
-    c.teamA.wins + c.teamB.wins + (c.teamA.ties + c.teamB.ties) * 0.5;
-  return points / games;
-}
-
-function teamWinPct(t: GotwTeam): number {
+function winPct(t: RecordLike): number {
   const games = teamGames(t);
   return games === 0 ? 0 : (t.wins + t.ties * 0.5) / games;
 }
 
-/**
- * How evenly matched the two teams are, by win%. Smaller is closer; a marquee
- * game wants two strong teams that are also near each other in the standings.
- */
-export function recordCloseness(c: GotwCandidate): number {
-  return Math.abs(teamWinPct(c.teamA) - teamWinPct(c.teamB));
-}
-
-export function combinedPointsFor(c: GotwCandidate): number {
-  return c.teamA.pointsFor + c.teamB.pointsFor;
+function isUnbeaten(t: RecordLike): boolean {
+  return teamGames(t) > 0 && t.losses === 0 && t.ties === 0;
 }
 
 export function isDivisionGame(c: GotwCandidate): boolean {
   return c.teamA.division != null && c.teamA.division === c.teamB.division;
 }
 
+/** 0..1 blend of two strengths, weighted toward the weaker one. */
+function blendQuality(x: number, y: number): number {
+  const lo = Math.min(x, y);
+  const hi = Math.max(x, y);
+  return QUALITY_MIN_SHARE * lo + (1 - QUALITY_MIN_SHARE) * hi;
+}
+
+/** A division team's record plus who it plays this week (null = unknown/bye). */
+export interface DivisionRaceTeam extends RecordLike {
+  franchiseId: string;
+  division: number | null;
+  opponentId?: string | null;
+}
+
 /**
- * Picks the Game of the Week matchupId, or null when there are no candidates.
+ * True when a division game decides who leads the division: whichever side
+ * wins leaves the week leading or sharing the lead, in the best case of the
+ * division's other games. Records only (win%, ties as half a win); no
+ * tiebreakers, so "shares the lead" is a statement about records.
  *
- * Heuristic: prefer a division matchup (a rematch with stakes); among the pool,
- * rank by the two teams' combined record, breaking ties by how close the two
- * are, then by combined points-for, then matchupId for determinism. When no
- * division game is on the slate, the whole slate is the pool.
+ * The rest of the division is resolved in the best case for the winner:
+ * a division-mate playing outside the division loses; two division-mates
+ * playing each other are tried both ways (one of them must win).
  *
- * When no games have been played yet (week 1: every candidate is 0-0-0), the
- * record-based ranking has nothing to sort on and degrades to an arbitrary
- * pick by matchupId. In that case rank by combined projected strength
- * instead (highest first), breaking ties by how evenly matched the two
- * projections are, then matchupId. `anyGamesPlayed` defaults to an
- * auto-detection from the candidates' records so existing callers keep their
- * current behavior unchanged.
+ * False for a non-division game, or when either team is missing from
+ * `divisionTeams`. Callers gate it on "any game played" themselves: at 0-0
+ * every division game trivially qualifies and the claim would be empty.
+ */
+export function canFlipDivisionLead(
+  aId: string,
+  bId: string,
+  divisionTeams: DivisionRaceTeam[]
+): boolean {
+  const a = divisionTeams.find((t) => t.franchiseId === aId);
+  const b = divisionTeams.find((t) => t.franchiseId === bId);
+  if (!a || !b || a.division == null || a.division !== b.division) return false;
+
+  const others = divisionTeams.filter(
+    (t) => t.division === a.division && t.franchiseId !== aId && t.franchiseId !== bId
+  );
+  return canLeadAfterWin(a, b, others) && canLeadAfterWin(b, a, others);
+}
+
+function canLeadAfterWin(
+  winner: RecordLike,
+  loser: RecordLike,
+  others: DivisionRaceTeam[]
+): boolean {
+  const winnerPct = winPct({ ...winner, wins: winner.wins + 1 });
+  const loserPct = winPct({ ...loser, losses: loser.losses + 1 });
+  if (loserPct > winnerPct) return false;
+
+  // Games between two of the "others": one side must win. Everyone else in
+  // the division is assumed to lose (the winner's best case).
+  const ids = new Set(others.map((o) => o.franchiseId));
+  const internal: [DivisionRaceTeam, DivisionRaceTeam][] = [];
+  const seen = new Set<string>();
+  for (const o of others) {
+    if (seen.has(o.franchiseId)) continue;
+    if (o.opponentId && ids.has(o.opponentId)) {
+      const opp = others.find((x) => x.franchiseId === o.opponentId)!;
+      internal.push([o, opp]);
+      seen.add(o.franchiseId);
+      seen.add(opp.franchiseId);
+    }
+  }
+  const external = others.filter((o) => !seen.has(o.franchiseId));
+  const externalBest = Math.max(
+    -1,
+    ...external.map((o) => winPct({ ...o, losses: o.losses + 1 }))
+  );
+
+  // Enumerate the (tiny) set of intra-division outcomes; the winner can lead
+  // if ANY outcome leaves nobody strictly ahead of it.
+  const outcomes = 1 << internal.length;
+  for (let mask = 0; mask < outcomes; mask++) {
+    let best = externalBest;
+    internal.forEach(([x, y], i) => {
+      const xWins = (mask >> i) & 1;
+      const w = xWins ? x : y;
+      const l = xWins ? y : x;
+      best = Math.max(
+        best,
+        winPct({ ...w, wins: w.wins + 1 }),
+        winPct({ ...l, losses: l.losses + 1 })
+      );
+    });
+    if (best <= winnerPct) return true;
+  }
+  return false;
+}
+
+function anyPlayed(candidates: GotwCandidate[]): boolean {
+  return candidates.some((c) => teamGames(c.teamA) + teamGames(c.teamB) > 0);
+}
+
+/**
+ * Every reason a candidate carries, heaviest first. Pure; exported so the
+ * kicker, blurb and tests all read the same list.
+ */
+export function gotwReasons(
+  c: GotwCandidate,
+  ctx: { week: number; anyGamesPlayed: boolean }
+): GotwReason[] {
+  const played = ctx.anyGamesPlayed;
+  const out = new Set<GotwReason>();
+
+  if (c.isTitleRematch && ctx.week === 1) out.add("title-rematch");
+  if (c.namedRivalry) out.add("named-rivalry");
+  if (played && isDivisionGame(c) && c.canFlipDivisionLead) out.add("division-lead-flip");
+  if (played && (c.teamA.raceTag === "win-and-in" || c.teamB.raceTag === "win-and-in")) {
+    out.add("playoff-clinch");
+  }
+  if (played && isUnbeaten(c.teamA) && isUnbeaten(c.teamB)) out.add("unbeatens");
+  if (
+    played &&
+    c.teamA.overallRank != null &&
+    c.teamB.overallRank != null &&
+    c.teamA.overallRank <= GOTW_TOP_OF_TABLE &&
+    c.teamB.overallRank <= GOTW_TOP_OF_TABLE
+  ) {
+    out.add("top-of-table");
+  }
+  const h2h = c.h2h;
+  if (h2h && teamGames(h2h) >= GOTW_SERIES_MIN_GAMES && Math.abs(h2h.wins - h2h.losses) <= 1) {
+    out.add("series-on-the-line");
+  }
+  if (c.bookSpread != null && Math.abs(c.bookSpread) <= GOTW_COIN_FLIP_SPREAD) {
+    out.add("coin-flip-line");
+  }
+  if ((c.playoffMeetingYears ?? []).length > 0) out.add("playoff-history");
+  if (c.isMutualRival) out.add("mutual-rival");
+  if (!played) out.add("season-opener");
+  if (out.size === 0) out.add("pride");
+
+  return REASON_ORDER.filter((r) => out.has(r));
+}
+
+/**
+ * Numeric score for a candidate. Exported for the tests and for diagnostics
+ * (the replay script prints it). `maxProjectedTeam` normalizes projections
+ * before any game is played.
+ */
+export function scoreGotwCandidate(
+  c: GotwCandidate,
+  reasons: GotwReason[],
+  ctx: { anyGamesPlayed: boolean; maxProjectedTeam: number }
+): number {
+  let quality: number;
+  if (ctx.anyGamesPlayed) {
+    quality = blendQuality(winPct(c.teamA), winPct(c.teamB));
+  } else {
+    const max = ctx.maxProjectedTeam;
+    quality =
+      max > 0 ? blendQuality((c.teamA.projected ?? 0) / max, (c.teamB.projected ?? 0) / max) : 0;
+  }
+
+  let score = GOTW_QUALITY_WEIGHT * quality;
+  for (const r of reasons) {
+    if (r !== "title-rematch") score += GOTW_REASON_WEIGHTS[r];
+  }
+
+  const elim = [c.teamA, c.teamB].filter((t) => t.raceTag === "eliminated").length;
+  if (elim === 2) score -= GOTW_BOTH_ELIMINATED_PENALTY;
+  else if (elim === 1) score -= GOTW_ONE_ELIMINATED_PENALTY;
+
+  score -= GOTW_REPEAT_PENALTY * (c.featuredLastWeek ?? 0);
+  return score;
+}
+
+/**
+ * Picks the Game of the Week, or null for an empty slate.
  *
- * Week-1 title rematch override: this league opens every season with a
- * rematch of the prior season's championship game (the "HMLML Bowl"). When
- * `week` is exactly 1 and exactly one candidate carries `isTitleRematch`
- * (set by markTitleRematch), that candidate wins outright, before any
- * record- or projection-based ranking runs. The override is scoped to week 1
- * only (weeks 2+ pass `week` unset or non-1 and keep the existing heuristic
- * untouched), and stays inert if zero or more than one candidate is flagged,
- * so the function degrades safely rather than guessing.
+ * Week-1 override: this league opens every season with a rematch of the prior
+ * title game. At week 1, exactly one flagged candidate wins outright; zero or
+ * two flagged candidates fall through to the scoring below.
+ *
+ * Otherwise every candidate is scored: a record-quality base (projections
+ * before any game is played) that leans on the weaker team, plus the weight of
+ * each reason it carries, minus penalties for eliminated teams and for a
+ * franchise that was featured last week. Ties break toward the better weaker
+ * team (higher minimum points-for, or projection before week 1's games), then
+ * the lower matchupId, so the pick is deterministic.
  */
 export function selectGameOfTheWeek(
   candidates: GotwCandidate[],
-  anyGamesPlayed?: boolean,
-  week?: number
-): number | null {
+  ctx: GotwSelectContext
+): GotwPick | null {
   if (candidates.length === 0) return null;
+  const played = ctx.anyGamesPlayed ?? anyPlayed(candidates);
+  const reasonCtx = { week: ctx.week, anyGamesPlayed: played };
 
-  if (week === 1) {
+  if (ctx.week === 1) {
     const flagged = candidates.filter((c) => c.isTitleRematch);
-    if (flagged.length === 1) return flagged[0].matchupId;
+    if (flagged.length === 1) {
+      const c = flagged[0];
+      const reasons = gotwReasons(c, reasonCtx);
+      return { matchupId: c.matchupId, reasons, score: GOTW_REASON_WEIGHTS["title-rematch"] };
+    }
   }
 
-  const played =
-    anyGamesPlayed ??
-    candidates.some((c) => teamGames(c.teamA) + teamGames(c.teamB) > 0);
-
-  const divisionGames = candidates.filter(isDivisionGame);
-  const pool = divisionGames.length > 0 ? divisionGames : candidates;
-
-  const ranked = [...pool].sort((a, b) => {
-    if (!played) {
-      const projDiff = combinedProjected(b) - combinedProjected(a);
-      if (projDiff !== 0) return projDiff;
-
-      const closenessDiff = projectedCloseness(a) - projectedCloseness(b);
-      if (closenessDiff !== 0) return closenessDiff;
-
-      return a.matchupId - b.matchupId;
-    }
-
-    const winPctDiff = combinedWinPct(b) - combinedWinPct(a);
-    if (winPctDiff !== 0) return winPctDiff;
-
-    const closenessDiff = recordCloseness(a) - recordCloseness(b);
-    if (closenessDiff !== 0) return closenessDiff;
-
-    const pfDiff = combinedPointsFor(b) - combinedPointsFor(a);
-    if (pfDiff !== 0) return pfDiff;
-
-    return a.matchupId - b.matchupId;
+  const maxProjectedTeam = Math.max(
+    0,
+    ...candidates.flatMap((c) => [c.teamA.projected ?? 0, c.teamB.projected ?? 0])
+  );
+  const scored = candidates.map((c) => {
+    // A second flagged rematch (the degenerate case) must not claim the
+    // rematch reason it did not win on.
+    const reasons = gotwReasons({ ...c, isTitleRematch: false }, reasonCtx);
+    return {
+      c,
+      reasons,
+      score: scoreGotwCandidate(c, reasons, { anyGamesPlayed: played, maxProjectedTeam }),
+      tiebreak: played
+        ? Math.min(c.teamA.pointsFor, c.teamB.pointsFor)
+        : Math.min(c.teamA.projected ?? 0, c.teamB.projected ?? 0),
+    };
   });
 
-  return ranked[0].matchupId;
+  scored.sort((x, y) => {
+    if (y.score !== x.score) return y.score - x.score;
+    if (y.tiebreak !== x.tiebreak) return y.tiebreak - x.tiebreak;
+    return x.c.matchupId - y.c.matchupId;
+  });
+
+  const best = scored[0];
+  return { matchupId: best.c.matchupId, reasons: best.reasons, score: best.score };
+}
+
+// ---------------------------------------------------------------------------
+// Game of the Week: kicker, stakes, blurb (all derived from reasons)
+// ---------------------------------------------------------------------------
+
+/**
+ * A pair "rematches" only when it met this season already or last season.
+ * Two division-mates who have not met since 2023 are playing a division game,
+ * not a rematch.
+ */
+export function isRecentRematch(
+  lastMeeting: Pick<GotwLastMeeting, "seasonYear"> | null | undefined,
+  seasonYear: number
+): boolean {
+  return lastMeeting != null && lastMeeting.seasonYear >= seasonYear - 1;
+}
+
+/** The kicker's first clause: what kind of game this is. */
+export function gotwKickerLead(opts: {
+  isTitleRematch: boolean;
+  bowlName: string | null;
+  divisionName: string | null;
+  isRecentRematch: boolean;
+}): string {
+  if (opts.isTitleRematch) {
+    return opts.bowlName ? `${opts.bowlName} Rematch` : "Title Game Rematch";
+  }
+  if (opts.divisionName) {
+    return opts.isRecentRematch ? `${opts.divisionName} Rematch` : `${opts.divisionName} Game`;
+  }
+  return "Cross-Division";
+}
+
+/**
+ * The kicker's second clause, from the heaviest reason that has kicker copy.
+ * True by construction: each clause is only reachable through the reason
+ * that proves it ("Division lead on the line" needs division-lead-flip, which
+ * needs a game whose winner leads or shares the division).
+ */
+export function stakesFromReasons(
+  reasons: GotwReason[],
+  facts: {
+    namedRivalry?: GotwNamedRivalry | null;
+    h2h?: GotwH2H | null;
+    playoffMeetingYears?: number[];
+  } = {}
+): string {
+  for (const r of reasons) {
+    switch (r) {
+      case "title-rematch":
+        // The kicker lead already says it ("HMLML Bowl VI Rematch").
+        continue;
+      case "named-rivalry":
+        if (facts.namedRivalry) return facts.namedRivalry.name;
+        continue;
+      case "division-lead-flip":
+        return "Division lead on the line";
+      case "playoff-clinch":
+        return "Playoff spot at stake";
+      case "unbeatens":
+        return "Battle of unbeatens";
+      case "top-of-table":
+        return "Top-three clash";
+      case "series-on-the-line": {
+        const h = facts.h2h;
+        if (!h) continue;
+        return h.wins === h.losses
+          ? `Series tied ${formatRecord(h.wins, h.losses, h.ties)}`
+          : "One game apart all time";
+      }
+      case "coin-flip-line":
+        return "Coin-flip line";
+      case "playoff-history": {
+        const year = facts.playoffMeetingYears?.[0];
+        if (year == null) continue;
+        return `Met in the ${year} playoffs`;
+      }
+      case "mutual-rival":
+        return "Rivalry week";
+      case "season-opener":
+        return "Season openers";
+      case "pride":
+        return "Pride at stake";
+    }
+  }
+  return "Pride at stake";
+}
+
+export interface GotwBlurbInput {
+  reasons: GotwReason[];
+  teamA: { name: string; record: string; raceTag?: PlayoffRaceTag | null };
+  teamB: { name: string; record: string; raceTag?: PlayoffRaceTag | null };
+  divisionName: string | null;
+  h2h: GotwH2H | null;
+  lastMeeting: GotwLastMeeting | null;
+  playoffMeetingYears: number[];
+  namedRivalry: GotwNamedRivalry | null;
+  bowlName: string | null;
+}
+
+/** The series sentence: always true, reads the h2h from team A's side. */
+function seriesSentence(input: GotwBlurbInput): string {
+  const h = input.h2h;
+  if (!h || teamGames(h) === 0) {
+    return input.lastMeeting ? "" : "They have never played each other.";
+  }
+  if (h.wins === h.losses) {
+    return `The all-time series is dead even at ${formatRecord(h.wins, h.losses, h.ties)}.`;
+  }
+  const aLeads = h.wins > h.losses;
+  const leader = aLeads ? input.teamA.name : input.teamB.name;
+  const lead = Math.max(h.wins, h.losses);
+  const trail = Math.min(h.wins, h.losses);
+  return `${leader} leads the all-time series ${formatRecord(lead, trail, h.ties)}.`;
+}
+
+/**
+ * The Game of the Week blurb, built from the pick's reasons so it never claims
+ * stakes the data does not prove. Used verbatim by the content generator's
+ * template fallback AND by the hub at render time when no stored blurb
+ * matches the pick, so both paths say the same true thing.
+ *
+ * Deliberately avoids every stock idiom on lib/content-gen/phrases.ts's list
+ * ("on the line", "at stake", "receipts to settle", "headline the slate"):
+ * the kicker above it owns "on the line"/"at stake", and the hero dek guard
+ * compares against both.
+ */
+export function gameOfWeekBlurb(input: GotwBlurbInput): string {
+  const a = `${input.teamA.name} (${input.teamA.record})`;
+  const b = `${input.teamB.name} (${input.teamB.record})`;
+  // The first reason whose supporting fact is actually present; a reason
+  // without its fact (a named-rivalry reason with no rivalry row, say) is
+  // skipped rather than printed half-empty.
+  const winAndIn = [input.teamA, input.teamB].filter((t) => t.raceTag === "win-and-in");
+  const top =
+    input.reasons.find(
+      (r) =>
+        (r !== "named-rivalry" || input.namedRivalry != null) &&
+        (r !== "playoff-clinch" || winAndIn.length > 0) &&
+        (r !== "playoff-history" || input.playoffMeetingYears.length > 0)
+    ) ?? "pride";
+
+  let lead: string;
+  switch (top) {
+    case "title-rematch": {
+      const game = input.bowlName ?? "last season's title game";
+      lead = `${input.teamA.name} and ${input.teamB.name} open the season with a rematch of ${game}.`;
+      break;
+    }
+    case "named-rivalry": {
+      const r = input.namedRivalry!;
+      lead = `${r.name}: ${a} against ${b}.${r.tagline ? ` ${r.tagline}` : ""}`;
+      break;
+    }
+    case "division-lead-flip":
+      lead = `${a} and ${b} meet inside ${input.divisionName ?? "the division"}, and whoever wins walks out on top of it or tied for it.`;
+      break;
+    case "playoff-clinch": {
+      if (winAndIn.length === 2) {
+        lead = `${a} and ${b} can both clinch a playoff spot with a win, and only one of them does it this week.`;
+      } else {
+        const who = winAndIn[0];
+        const other = who === input.teamA ? input.teamB : input.teamA;
+        lead = `${who.name} (${who.record}) clinches a playoff spot with a win over ${other.name} (${other.record}).`;
+      }
+      break;
+    }
+    case "unbeatens":
+      lead = `${a} and ${b} are both unbeaten, and by Monday night one of them will not be.`;
+      break;
+    case "top-of-table":
+      lead = `${a} and ${b} both sit in the top three of the standings, and one of them leaves with a loss.`;
+      break;
+    case "series-on-the-line":
+      lead = `${a} against ${b}, in a series that sits within a game either way.`;
+      break;
+    case "coin-flip-line":
+      lead = `${a} against ${b}, and the Book can barely split them.`;
+      break;
+    case "playoff-history": {
+      const year = input.playoffMeetingYears[0];
+      lead = `${a} against ${b}. They met in the ${year} playoffs.`;
+      break;
+    }
+    case "mutual-rival":
+      lead = `${a} against ${b}. Neither side has played anyone more often.`;
+      break;
+    case "season-opener":
+      lead = `${input.teamA.name} and ${input.teamB.name} open the season. Nobody has a record yet, so on projections alone this is the one to watch first.`;
+      break;
+    default:
+      lead = `${a} against ${b}. The best pairing on a thin slate, and somebody's record takes a hit by Monday night.`;
+  }
+
+  const series = seriesSentence(input);
+  // "series-on-the-line" already leans on the series; say the number there.
+  return series ? `${lead} ${series}` : lead;
 }
 
 // ---------------------------------------------------------------------------
@@ -196,25 +669,46 @@ const DAY_WORDS = [
   "Ten",
 ] as const;
 
+/** Rotates a variant pool by the week so Tuesdays do not all read the same. */
+function pickByWeek(pool: readonly string[], week: number): string {
+  const i = ((Math.trunc(week) % pool.length) + pool.length) % pool.length;
+  return pool[i];
+}
+
 /**
- * Serif hero headline derived from the days-to-kickoff count, staying graceful
- * across counts and degrading to a static line when the kickoff is unknown or
- * already past. Copy carries the site voice; no em-dashes.
+ * Serif hero headline from the days-to-kickoff count and the kickoff weekday.
+ * Every variant is literally true for its inputs: the day count is the same
+ * calendar-day count the countdown pill uses, and the weekday is the actual
+ * weekday of the slate's first kickoff in the league's home timezone. The
+ * pool rotates by `week` so the line is not identical every week. Degrades to
+ * "The slate is set." when the kickoff is unknown or already past.
  */
 export function betweenWeeksHeadline(
   nextKickoff: Date | null,
-  now: Date = new Date()
+  now: Date = new Date(),
+  week = 0
 ): string {
   if (!nextKickoff) return "The slate is set.";
   if (nextKickoff.getTime() - now.getTime() <= 0) return "The slate is set.";
 
-  // Shared floor-based day count (matches the countdown DAYS card and the pill).
   const days = daysUntil(nextKickoff, now);
-  if (days === 0) return "Kickoff is today.";
+  const weekday = kickoffWeekdayName(nextKickoff);
+
+  if (days === 0) {
+    return pickByWeek(["Kickoff is today.", `${weekday} kickoff. That is today.`], week);
+  }
+  if (days === 1) {
+    return pickByWeek(
+      ["Kickoff is tomorrow.", `${weekday} kickoff, one day out.`, "One day to kickoff."],
+      week
+    );
+  }
 
   const word = DAY_WORDS[days] ?? String(days);
-  const unit = days === 1 ? "day" : "days";
-  return `${word} ${unit} until it matters again.`;
+  const pool = [`${word} days to kickoff.`, `${word} days until ${weekday} kickoff.`];
+  // "Kickoff is Thursday." only reads unambiguously inside the coming week.
+  if (days <= 6) pool.push(`Kickoff is ${weekday}.`);
+  return pickByWeek(pool, week);
 }
 
 // ---------------------------------------------------------------------------
@@ -256,51 +750,19 @@ export function formatSlateH2H(h2h: H2HInput): string {
 }
 
 /**
- * The Game of the Week kicker's second clause, kept truthful and generic.
- * Before a single game has been played, a division lead and bragging rights
- * are both fabrications (nobody has won or lost anything yet), so that case
- * gets its own truthful branch. Once games exist: either team leading its
- * division means the division lead is at stake; otherwise we fall back to
- * pride so we never overstate the stakes.
- *
- * Wording note (issue #274): this kicker renders directly above the Game of
- * the Week blurb, which says "First place is on the line and there are
- * receipts to settle...". The blurb keeps its phrasing (owner's call), so the
- * kicker is what avoids the echo: "at stake", never "on the line".
- */
-export function stakesClause(
-  aLeadsDivision: boolean,
-  bLeadsDivision: boolean,
-  anyGamesPlayed: boolean
-): string {
-  if (!anyGamesPlayed) return "Season openers";
-  return aLeadsDivision || bLeadsDivision
-    ? "Division lead at stake"
-    : "Pride at stake";
-}
-
-/**
  * A truthful, records-based angle for a slate matchup. Site voice, no
- * em-dashes. `kickoffWeekday` names the actual day the slate opens (e.g.
- * "Wednesday" for the 2026 week-1 opener), never a hardcoded day.
- *
- * No longer the slate's default: it is the LAST rung of the ladder in
- * lib/hub/slate-angle.ts, reachable only from week 2 on. Before a game has
- * been played both records are "0-0", which is the absence of a fact rather
- * than a fact, so the builder gates this rung off at week 1 entirely.
+ * em-dashes. The last rung of the ladder in lib/hub/slate-angle.ts, reachable
+ * only once games have been played. The tail is true of every game: the
+ * result posts to both records by the Monday night finish.
  */
-export function genericSlateAngle(
-  recordA: string,
-  recordB: string,
-  kickoffWeekday: string
-): string {
-  return `${recordA} against ${recordB}. Somebody's number moves ${kickoffWeekday}.`;
+export function genericSlateAngle(recordA: string, recordB: string): string {
+  return `${recordA} against ${recordB}. Both records move by Monday night.`;
 }
 
 /**
  * Full weekday name (e.g. "Wednesday") of a kickoff instant in the league's
- * home timezone, for genericSlateAngle. Falls back to "kickoff" when there is
- * no kickoff date to name a day from.
+ * home timezone. Falls back to "kickoff" when there is no kickoff date to name
+ * a day from.
  */
 export function kickoffWeekdayName(target: Date | null): string {
   if (!target) return "kickoff";

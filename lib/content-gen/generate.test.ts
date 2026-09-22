@@ -10,6 +10,7 @@ import {
   RegularSchema,
   RegularWireSchema,
   toRowsPreseason,
+  toRowsRegular,
   topUpShortKinds,
 } from "./generate";
 import { kindsForSeason } from "./templates";
@@ -105,6 +106,7 @@ function preseasonContext(overrides: Partial<StatsContext> = {}): StatsContext {
     },
     currentMatchups: [],
     gameOfWeekPairKey: null,
+    gameOfWeek: null,
     weekInBooks: null,
     recentTransactions: [],
     franchiseHistory: [],
@@ -687,5 +689,80 @@ describe("buildUserPrompt", () => {
   it("bans title-defense framing when the context has no champion", () => {
     const prompt = buildUserPrompt(preseasonContext({ lastSeason: null }));
     expect(prompt).toContain("names no reigning champion");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The LLM Game of the Week blurb: claims, ref_key, and the facts it is fed
+// ---------------------------------------------------------------------------
+
+describe("LLM game_of_week_blurb", () => {
+  // Regular season, week 3: Foopus 2-0 v Olave Garden 1-1, Foopus featured.
+  const ctx = preseasonContext({
+    seasonType: "regular",
+    week: 3,
+    leagueStandings: [
+      { name: "Foopus", slug: "foopus", record: "2-0", pointsFor: 300.5 },
+      { name: "Olave Garden", slug: "olave-garden", record: "1-1", pointsFor: 250.2 },
+    ],
+    currentMatchups: [
+      {
+        pairKey: "foopus__olave-garden",
+        home: { name: "Foopus", slug: "foopus", record: "2-0", pointsFor: 300.5 },
+        away: { name: "Olave Garden", slug: "olave-garden", record: "1-1", pointsFor: 250.2 },
+        h2h: { wins: 3, losses: 1, ties: 0, streak: null },
+        lastMeeting: null,
+        playoffMeetingYears: [],
+        isTitleRematch: false,
+        topProjected: null,
+      },
+    ],
+    gameOfWeekPairKey: "foopus__olave-garden",
+    gameOfWeek: {
+      pairKey: "foopus__olave-garden",
+      reasons: ["top-of-table"],
+      kicker: "Cross-Division · Top-three clash",
+      blurb: "template",
+    },
+  });
+  const parse = (body: string, claims: unknown[] = []) =>
+    RegularWireSchema.parse({
+      matchup_angles: [],
+      game_of_week_blurb: { body, claims },
+      hero_dek: "",
+      smack_posts: [],
+    });
+  const blurbs = (rows: HubContentInsert[]) =>
+    rows.filter((r) => r.kind === "game_of_week_blurb");
+
+  it("keeps a clean blurb and keys it to the featured pair", () => {
+    const rows = blurbs(toRowsRegular(parse("Foopus (2-0) against Olave Garden (1-1). Somebody leaves lighter."), ctx));
+    expect(rows).toHaveLength(1);
+    expect(rows[0].refKey).toBe("foopus__olave-garden");
+  });
+
+  it("a superlative survives verifyClaims when it carries a true claim", () => {
+    const body = "Foopus brings the most wins in the building into this one against Olave Garden.";
+    expect(blurbs(toRowsRegular(parse(body), ctx))).toHaveLength(0);
+    const kept = blurbs(
+      toRowsRegular(parse(body, [{ metric: "wins", subject: "foopus", extreme: "best" }]), ctx)
+    );
+    expect(kept).toHaveLength(1);
+  });
+
+  it("writes no blurb when the resolver featured no game", () => {
+    const rows = toRowsRegular(parse("Foopus against Olave Garden."), {
+      ...ctx,
+      gameOfWeekPairKey: null,
+      gameOfWeek: null,
+    });
+    expect(blurbs(rows)).toHaveLength(0);
+  });
+
+  it("hands the model the pick's reasons and the kicker it must not echo", () => {
+    const prompt = buildUserPrompt(ctx);
+    expect(prompt).toContain('["top-of-table"]');
+    expect(prompt).toContain("Cross-Division · Top-three clash");
+    expect(prompt).toContain("ONLY stakes you may claim");
   });
 });

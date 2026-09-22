@@ -73,8 +73,6 @@ export interface SlateAngleInput {
   recordB: string;
   /** League-wide gate: false before a single game of the season has been played. */
   anyGamesPlayed: boolean;
-  /** Weekday the slate opens, e.g. "Wednesday". */
-  kickoffWeekday: string;
 }
 
 /**
@@ -285,9 +283,12 @@ const RUNGS: RungEntry[] = [
     build: (input) => {
       const year = input.playoffMeetingYears[0];
       if (year == null) return null;
+      // The tail is a count, not a mood: how many playoff meetings are on
+      // file, and only when there is more than the one the lead names.
+      const count = input.playoffMeetingYears.length;
       return fit(
-        `These two met in the ${year} playoffs.`,
-        `${input.teamA.name} and ${input.teamB.name} have been circling that one ever since.`
+        `${input.teamA.name} and ${input.teamB.name} met in the ${year} playoffs.`,
+        count > 1 ? `That makes ${count} playoff meetings between them.` : undefined
       );
     },
   },
@@ -303,9 +304,13 @@ const RUNGS: RungEntry[] = [
       const loser = nameOf(input, otherSide(last.winner));
       const hi = last.winner === "A" ? last.pointsA : last.pointsB;
       const lo = last.winner === "A" ? last.pointsB : last.pointsA;
+      // The tail is the game's own margin, a fact, not a decorative claim.
+      const when = last.isPlayoff
+        ? `the ${last.seasonYear} playoffs`
+        : `${last.seasonYear} week ${last.week}`;
       return fit(
         `Last time out: ${winner} ${pts(hi)}, ${loser} ${pts(lo)}.`,
-        `${last.seasonYear} week ${last.week}, still on the books.`
+        `That was ${when}, decided by ${pts(hi - lo)}.`
       );
     },
   },
@@ -337,7 +342,7 @@ const RUNGS: RungEntry[] = [
       if (seriesTotal(input.h2h) > 0 || input.lastMeeting) return null;
       return fit(
         `${input.teamA.name} and ${input.teamB.name} have never played.`,
-        `The first receipt gets written ${input.kickoffWeekday}.`
+        "No history, no excuses."
       );
     },
   },
@@ -365,7 +370,7 @@ const COLLISION_RUNGS: RungEntry[] = [
       if (ZERO_RECORD.test(input.recordA) || ZERO_RECORD.test(input.recordB)) {
         return null;
       }
-      return genericSlateAngle(input.recordA, input.recordB, input.kickoffWeekday);
+      return genericSlateAngle(input.recordA, input.recordB);
     },
   },
 ];
@@ -402,7 +407,7 @@ export function buildSlateAngleResult(input: SlateAngleInput): SlateAngleResult 
   // the two franchises named, so two such cards cannot collide.
   return {
     rung: "firstMeeting",
-    text: `${input.teamA.name} and ${input.teamB.name}, no history on file. It starts ${input.kickoffWeekday}.`,
+    text: `${input.teamA.name} and ${input.teamB.name}, no history on file. This one opens the file.`,
   };
 }
 

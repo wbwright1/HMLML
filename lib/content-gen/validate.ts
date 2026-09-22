@@ -78,7 +78,12 @@ const COMMON_ALLOWLIST = new Set([
   "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday",
   "Labor Day", "Memorial Day", "New Year", "New Year's",
   "Week One", "Week Zero", "Site Desk", "Group Chat",
+  // The site's own sportsbook, named in Game of the Week copy.
+  "The Book",
 ]);
+
+/** "HMLML Bowl V": the league's own title-game names (lib/bowl-names.ts). */
+const BOWL_NAME = /^(?:The )?HMLML Bowl [IVXLCDM]+$/;
 
 function knownNames(ctx: StatsContext): string[] {
   const names = new Set<string>();
@@ -133,7 +138,7 @@ export function findHallucinatedNames(body: string, ctx: StatsContext): string[]
   const matches = body.match(/\b[A-Z][a-zA-Z'-]*(?:\s+[A-Z][a-zA-Z'-]*)+\b/g) ?? [];
   const flagged: string[] = [];
   for (const m of matches) {
-    if (COMMON_ALLOWLIST.has(m)) continue;
+    if (COMMON_ALLOWLIST.has(m) || BOWL_NAME.test(m)) continue;
     const known = names.some((n) => n && (n.includes(m) || m.includes(n)));
     if (!known) flagged.push(m);
   }
@@ -279,11 +284,14 @@ function refKeyValid(row: ValidatableRow, ctx: StatsContext): boolean {
     case "trade_verdict":
       // refKey is the trade's transaction id; it must resolve to a real recent trade.
       return row.refKey != null && ctx.recentTrades.some((t) => String(t.id) === row.refKey);
+    case "game_of_week_blurb":
+      // Keyed to the featured pair (matchupPairKey), so the hub can refuse a
+      // stored blurb written about a different game than the one it features.
+      return row.refKey != null && row.refKey === ctx.gameOfWeekPairKey;
     case "burning_question":
     case "bold_prediction":
     case "hero_dek":
     case "smack_post":
-    case "game_of_week_blurb":
       return row.refKey == null;
     default:
       return false;

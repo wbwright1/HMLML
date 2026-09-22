@@ -679,31 +679,30 @@ function slateAngleInput(
     recordA: m.home.record,
     recordB: m.away.record,
     anyGamesPlayed,
-    kickoffWeekday: "this week",
   };
 }
 
+/**
+ * The Game of the Week blurb, verbatim from the shared resolver
+ * (lib/hub/gotw-context.ts): built from the pick's reasons, records and
+ * series, so it never claims stakes the data does not prove. The hub renders
+ * the same text at request time when no stored blurb matches its pick, so
+ * this row and the render-time fallback can never disagree.
+ *
+ * ref_key is the featured pair's matchupPairKey: the hub only renders a
+ * stored blurb whose ref_key names the game it is actually featuring, and
+ * next week's resolver reads it to go easy on last week's featured teams.
+ * No featured game (an empty slate) means no blurb; there is deliberately
+ * no second selection heuristic here to disagree with the resolver.
+ */
 function gameOfWeek(ctx: StatsContext): HubContentInsert | null {
-  if (ctx.currentMatchups.length === 0) return null;
-  // Prefer the pair the hub will feature (selectGameOfTheWeek, carried on the
-  // context) so the blurb is about the right matchup; fall back to the
-  // most-combined-wins heuristic when no featured pair is set.
-  const featured = ctx.gameOfWeekPairKey
-    ? ctx.currentMatchups.find((m) => m.pairKey === ctx.gameOfWeekPairKey)
-    : null;
-  const wins = (rec: string): number => parseInt(rec.split("-")[0] ?? "0", 10) || 0;
-  const best =
-    featured ??
-    [...ctx.currentMatchups].sort(
-      (a, b) =>
-        wins(b.home.record) + wins(b.away.record) - (wins(a.home.record) + wins(a.away.record)),
-    )[0];
-  const body = `${best.home.name} (${best.home.record}) and ${best.away.name} (${best.away.record}) headline the slate. First place is on the line and there are receipts to settle by Thursday night.`;
+  const gotw = ctx.gameOfWeek;
+  if (!gotw) return null;
   return {
     week: ctx.week,
     kind: "game_of_week_blurb",
-    refKey: null,
-    body,
+    refKey: gotw.pairKey,
+    body: gotw.blurb,
     extras: null,
   };
 }

@@ -90,6 +90,18 @@ describe("overlayHubEditorial", () => {
     );
     expect(out.matchupAngles.byPair["a__b"]).toBe("angle text");
     expect(out.matchupAngles.gameOfWeekBlurb).toBe("the blurb");
+    // A legacy row with no ref_key carries none, so the hub will not trust it.
+    expect(out.matchupAngles.gameOfWeekRefKey).toBeNull();
+  });
+
+  it("carries the stored blurb's ref_key so the hub can match it to its pick", async () => {
+    const seeds = await getHubEditorial();
+    const out = overlayHubEditorial(
+      seeds,
+      grouped([r("game_of_week_blurb", "keyed blurb", "foopus__real-olave-garden")]),
+    );
+    expect(out.matchupAngles.gameOfWeekBlurb).toBe("keyed blurb");
+    expect(out.matchupAngles.gameOfWeekRefKey).toBe("foopus__real-olave-garden");
   });
 
   it("replaces smack posts as Site Desk voice, timestamped from created_at", async () => {

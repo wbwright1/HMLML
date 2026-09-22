@@ -203,18 +203,30 @@ describe('UT-28: opener-aware seeded GOTW blurb', () => {
     );
   });
 
-  it('keeps the first-place blurb once games have been played', async () => {
-    const editorial = await getHubEditorial({ anyGamesPlayed: true });
-    expect(editorial.matchupAngles.gameOfWeekBlurb.toLowerCase()).toContain(
-      'first place'
-    );
+  // Both seeds are reason-neutral: the shared resolver writes the real blurb
+  // for the actual pick, and a seed must be true of ANY featured game.
+  it('never claims first place, stakes, a stock idiom or a weekday, in either variant', async () => {
+    for (const opts of [{ anyGamesPlayed: true }, { anyGamesPlayed: false }, {}]) {
+      const blurb = (await getHubEditorial(opts)).matchupAngles.gameOfWeekBlurb;
+      expect(blurb.toLowerCase()).not.toMatch(
+        /first place|on the line|at stake|receipts|one slate|thursday|wednesday|sunday/
+      );
+    }
+  });
+
+  it('carries no stored ref_key on a seed, so the hub never mistakes it for a pair-specific blurb', async () => {
+    for (const anyGamesPlayed of [true, false]) {
+      const editorial = await getHubEditorial({ anyGamesPlayed });
+      expect(editorial.matchupAngles.gameOfWeekRefKey).toBeNull();
+    }
   });
 
   it('defaults to the played-games blurb when anyGamesPlayed is omitted', async () => {
-    const editorial = await getHubEditorial({});
-    expect(editorial.matchupAngles.gameOfWeekBlurb.toLowerCase()).toContain(
-      'first place'
-    );
+    const [omitted, played] = await Promise.all([
+      getHubEditorial({}),
+      getHubEditorial({ anyGamesPlayed: true }),
+    ]);
+    expect(omitted.matchupAngles.gameOfWeekBlurb).toBe(played.matchupAngles.gameOfWeekBlurb);
   });
 
   it('the opener variant carries no em-dashes', async () => {
