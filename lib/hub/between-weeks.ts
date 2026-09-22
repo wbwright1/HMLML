@@ -66,8 +66,8 @@ export interface GotwCandidate {
   isTitleRematch?: boolean;
   /**
    * Division game in which EITHER side leaves the week leading (or sharing
-   * the lead of) the division if it wins, in the best case of the division's
-   * other games. See canFlipDivisionLead.
+   * the lead of) the division if it wins, whatever the division's other
+   * games do. See canFlipDivisionLead.
    */
   canFlipDivisionLead?: boolean;
   h2h?: GotwH2H | null;
@@ -240,13 +240,16 @@ export interface DivisionRaceTeam extends RecordLike {
 
 /**
  * True when a division game decides who leads the division: whichever side
- * wins leaves the week leading or sharing the lead, in the best case of the
- * division's other games. Records only (win%, ties as half a win); no
+ * wins leaves the week leading or sharing the lead, GUARANTEED, whatever the
+ * division's other games do. Records only (win%, ties as half a win); no
  * tiebreakers, so "shares the lead" is a statement about records.
  *
- * The rest of the division is resolved in the best case for the winner:
- * a division-mate playing outside the division loses; two division-mates
- * playing each other are tried both ways (one of them must win).
+ * The rest of the division is resolved in the worst case for the winner:
+ * a division-mate playing outside the division (or with no known opponent)
+ * wins; two division-mates playing each other are tried both ways, and the
+ * winner must stay on top in every outcome. The hub prints "Division lead on
+ * the line" and "whoever wins walks out on top of it" off this flag, so it
+ * must never be true when the other games could take the lead away.
  *
  * False for a non-division game, or when either team is missing from
  * `divisionTeams`. Callers gate it on "any game played" themselves: at 0-0
@@ -277,7 +280,7 @@ function canLeadAfterWin(
   if (loserPct > winnerPct) return false;
 
   // Games between two of the "others": one side must win. Everyone else in
-  // the division is assumed to lose (the winner's best case).
+  // the division is assumed to win (the winner's worst case).
   const ids = new Set(others.map((o) => o.franchiseId));
   const internal: [DivisionRaceTeam, DivisionRaceTeam][] = [];
   const seen = new Set<string>();
@@ -293,11 +296,11 @@ function canLeadAfterWin(
   const external = others.filter((o) => !seen.has(o.franchiseId));
   const externalBest = Math.max(
     -1,
-    ...external.map((o) => winPct({ ...o, losses: o.losses + 1 }))
+    ...external.map((o) => winPct({ ...o, wins: o.wins + 1 }))
   );
 
-  // Enumerate the (tiny) set of intra-division outcomes; the winner can lead
-  // if ANY outcome leaves nobody strictly ahead of it.
+  // Enumerate the (tiny) set of intra-division outcomes; the winner is
+  // guaranteed the lead only if EVERY outcome leaves nobody strictly ahead.
   const outcomes = 1 << internal.length;
   for (let mask = 0; mask < outcomes; mask++) {
     let best = externalBest;
@@ -311,9 +314,9 @@ function canLeadAfterWin(
         winPct({ ...l, losses: l.losses + 1 })
       );
     });
-    if (best <= winnerPct) return true;
+    if (best > winnerPct) return false;
   }
-  return false;
+  return true;
 }
 
 function anyPlayed(candidates: GotwCandidate[]): boolean {
@@ -653,7 +656,7 @@ export function gameOfWeekBlurb(input: GotwBlurbInput): string {
       break;
     }
     case "division-lead-flip":
-      lead = `${a} and ${b} meet inside ${input.divisionName ?? "the division"}, and whoever wins can walk out on top of it or tied for it.`;
+      lead = `${a} and ${b} meet inside ${input.divisionName ?? "the division"}, and whoever wins walks out on top of it or tied for it.`;
       break;
     case "playoff-clinch": {
       if (winAndIn.length === 2) {

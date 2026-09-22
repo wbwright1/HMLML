@@ -300,10 +300,41 @@ describe("canFlipDivisionLead", () => {
     expect(canFlipDivisionLead("X", "Y", div)).toBe(false);
   });
 
-  it("a division-mate playing outside the division may lose (best case)", () => {
-    // B wins -> 2-1; C (2-0) plays outside and can drop to 2-1: a tie at the top.
+  it("a division-mate playing outside the division is assumed to win (worst case)", () => {
+    // B wins -> 2-1; C (2-0) plays outside and may go 3-0: B is not on top.
     const div = [t("A", 2, 0, "B"), t("B", 1, 1, "A"), t("C", 2, 0, "Z"), t("D", 0, 2)];
+    expect(canFlipDivisionLead("A", "B", div)).toBe(false);
+  });
+
+  it("week-5 shape: 1-1 v 1-1 while a 2-0 division-mate plays outside: false", () => {
+    // The live 2026 week-5 slate: VV 1-1 v BCH 1-1 in the division while MCC
+    // (2-0) plays outside it. The winner goes 2-1, MCC can go 3-0, so the
+    // "Division lead on the line" claim would not be true.
+    const div = [
+      t("VV", 1, 1, "BCH"),
+      t("BCH", 1, 1, "VV"),
+      t("MCC", 2, 0, "OUT"),
+      t("D", 0, 2, "OUT2"),
+    ];
+    expect(canFlipDivisionLead("VV", "BCH", div)).toBe(false);
+  });
+
+  it("a division-mate with no known opponent is assumed to win", () => {
+    const div = [t("A", 2, 0, "B"), t("B", 2, 0, "A"), t("C", 2, 0), t("D", 0, 2)];
+    // Winner 3-0; C at best 3-0: a share of the lead, still guaranteed.
     expect(canFlipDivisionLead("A", "B", div)).toBe(true);
+    const ahead = [t("A", 1, 1, "B"), t("B", 1, 1, "A"), t("C", 2, 0), t("D", 0, 2)];
+    expect(canFlipDivisionLead("A", "B", ahead)).toBe(false);
+  });
+
+  it("two division-mates playing each other: EVERY outcome must leave the winner on top", () => {
+    // A/B winner -> 3-0. C 2-0 v D 2-0: the C/D winner also goes 3-0, a tie at
+    // most, in both outcomes: true.
+    const tied = [t("A", 2, 0, "B"), t("B", 2, 0, "A"), t("C", 2, 0, "D"), t("D", 2, 0, "C")];
+    expect(canFlipDivisionLead("A", "B", tied)).toBe(true);
+    // A/B winner -> 2-1. C 2-0 v D 1-1: C winning goes 3-0; one bad outcome is enough.
+    const oneBad = [t("A", 1, 1, "B"), t("B", 1, 1, "A"), t("C", 2, 0, "D"), t("D", 1, 1, "C")];
+    expect(canFlipDivisionLead("A", "B", oneBad)).toBe(false);
   });
 
   it("false for a cross-division game or an unknown team", () => {
@@ -487,18 +518,9 @@ describe("gameOfWeekBlurb", () => {
   it("claims a division outcome only for division-lead-flip", () => {
     for (const r of all) {
       const text = gameOfWeekBlurb({ ...base, reasons: [r] });
-      if (r === "division-lead-flip") expect(text).toContain("can walk out on top of it or tied for it");
+      if (r === "division-lead-flip") expect(text).toContain("whoever wins walks out on top of it or tied for it");
       else expect(text, r).not.toMatch(/on top of it/);
     }
-  });
-
-  it("states the division outcome as possible, never guaranteed", () => {
-    // canFlipDivisionLead is a best-case test: a 1-1 v 1-1 division game
-    // qualifies while a 2-0 division-mate plays outside the division, yet if
-    // that team wins, this game's winner (2-1) is not on top. The blurb must
-    // not promise an outcome the other games can take away.
-    const text = gameOfWeekBlurb({ ...base, reasons: ["division-lead-flip"] });
-    expect(text).not.toMatch(/whoever wins walks out/);
   });
 
   it("the double win-and-in blurb never claims the loser misses out this week", () => {

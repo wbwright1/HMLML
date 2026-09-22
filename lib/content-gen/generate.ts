@@ -364,7 +364,7 @@ GRADED CHECKLIST (violating rows are discarded downstream, so a violation shrink
 const GOTW_REASON_MEANINGS: Record<GotwReason, string> = {
   "title-rematch": "rematch of last season's title game",
   "named-rivalry": "a rivalry the league has named",
-  "division-lead-flip": "division game whose winner CAN lead or share the division if the division's other games break its way (not guaranteed)",
+  "division-lead-flip": "division game whose winner is guaranteed to lead or share the division, whatever the division's other games do",
   "playoff-clinch": "a win clinches a playoff spot",
   unbeatens: "both teams are undefeated",
   "top-of-table": "both teams are in the top three of the standings",
