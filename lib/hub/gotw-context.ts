@@ -20,6 +20,7 @@ import {
   namedRivalryKicker,
   selectGameOfTheWeek,
   stakesFromReasons,
+  teamFormFrom,
   type DivisionRaceTeam,
   type GotwCandidate,
   type GotwH2H,
@@ -27,7 +28,10 @@ import {
   type GotwNamedRivalry,
   type GotwPick,
   type GotwReason,
+  type GotwTeamForm,
+  type WeekFinalLike,
 } from "@/lib/hub/between-weeks";
+import { finalsFromPairedMatchups } from "@/lib/hub/hero-headline";
 import {
   buildSeasonLookups,
   seedTeams,
@@ -51,7 +55,7 @@ import { summarizeMeetingHistory, type MeetingHistorySummary } from "@/lib/hub/s
 import { matchupPairKey } from "@/lib/content";
 import { getBowlName } from "@/lib/bowl-names";
 import { formatRecord } from "@/lib/format-record";
-import type { PairedMatchup } from "@/lib/queries/matchups";
+import { getMatchupsByWeek, type PairedMatchup } from "@/lib/queries/matchups";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -122,6 +126,8 @@ export interface GotwSource {
   /** Franchise slugs of last week's featured game (from its stored ref_key). */
   priorFeaturedSlugs: Set<string>;
   raceTags: Map<string, PlayoffRaceTag>;
+  /** The prior week's finals; empty at week 1 or while it is incomplete. */
+  priorFinals?: readonly WeekFinalLike[];
 }
 
 export interface GotwResolution {
@@ -146,6 +152,13 @@ export interface GotwResolution {
    */
   namedRivalry: GotwNamedRivalry | null;
   anyGamesPlayed: boolean;
+  /** The prior week's finals the form facts came from (empty when none). */
+  priorFinals: readonly WeekFinalLike[];
+  /**
+   * Each featured team's prior-week result (home = a, away = b), which the
+   * blurb opens with. Null per side when the prior week is not complete.
+   */
+  form: { a: GotwTeamForm | null; b: GotwTeamForm | null };
   /**
    * "1st in {Division}" per franchise that leads its division by the seedTeams
    * tiebreak chain. Empty before any game is played (a 0-0 lead is not one).
@@ -296,6 +309,8 @@ export function resolveFromSource(source: GotwSource): GotwResolution {
     bowlName: null,
     namedRivalry: null,
     anyGamesPlayed,
+    priorFinals: source.priorFinals ?? [],
+    form: { a: null, b: null },
     divisionLeaderStatus,
     candidates,
   };
@@ -340,17 +355,28 @@ export function resolveFromSource(source: GotwSource): GotwResolution {
           gameType: lead,
         })
       : `${lead} · ${stakes}`;
+  const finals = source.priorFinals ?? [];
+  const form = {
+    a: teamFormFrom(finals, matchup.homeTeam.franchiseId),
+    b: teamFormFrom(finals, matchup.awayTeam.franchiseId),
+  };
+  const winless = (s: GotwStandingRow | undefined) =>
+    (s?.wins ?? 0) === 0 && (s?.ties ?? 0) === 0 && (s?.losses ?? 0) > 0;
   const blurb = gameOfWeekBlurb({
     reasons: pick.reasons,
     teamA: {
       name: matchup.homeTeam.franchiseName,
       record: recordOf(home),
       raceTag: candidate.teamA.raceTag,
+      lastWeek: form.a,
+      winless: winless(home),
     },
     teamB: {
       name: matchup.awayTeam.franchiseName,
       record: recordOf(away),
       raceTag: candidate.teamB.raceTag,
+      lastWeek: form.b,
+      winless: winless(away),
     },
     divisionName,
     h2h: candidate.h2h ?? null,
@@ -372,6 +398,7 @@ export function resolveFromSource(source: GotwSource): GotwResolution {
     isTitleRematch,
     bowlName,
     namedRivalry,
+    form,
   };
 }
 
@@ -394,6 +421,12 @@ export interface GotwLoadInput {
     pool?: PoolRow[];
     /** The Book board for THIS week, or [] when The Book trades another week. */
     bookGames?: BookGame[];
+    /**
+     * The prior week's finals, when the caller already has them (the hub's
+     * post-week recap). Otherwise they are loaded here from the prior week's
+     * matchups; empty unless every one of them is complete.
+     */
+    priorFinals?: readonly WeekFinalLike[];
   };
 }
 
@@ -429,44 +462,64 @@ export async function resolveGameOfTheWeek(input: GotwLoadInput): Promise<GotwRe
   const pre = input.prefetched ?? {};
   const divisionOf = new Map(standings.map((s) => [s.franchiseId, s.division ?? null]));
 
-  const [seasonLookups, h2hList, historyList, pool, bookGames, titlePair, mutual, prior, seasons] =
-    await Promise.all([
-      buildSeasonLookups(seasonId, divisionOf),
-      pre.h2hByMatchup
-        ? Promise.resolve(null)
-        : Promise.all(
-            matchups.map((m) =>
-              orEmpty(getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId), null)
+  const [
+    seasonLookups,
+    h2hList,
+    historyList,
+    pool,
+    bookGames,
+    titlePair,
+    mutual,
+    prior,
+    seasons,
+    priorFinals,
+  ] = await Promise.all([
+    buildSeasonLookups(seasonId, divisionOf),
+    pre.h2hByMatchup
+      ? Promise.resolve(null)
+      : Promise.all(
+          matchups.map((m) =>
+            orEmpty(getHeadToHead(m.homeTeam.franchiseId, m.awayTeam.franchiseId), null)
+          )
+        ),
+    pre.historyByMatchup
+      ? Promise.resolve(null)
+      : Promise.all(
+          matchups.map((m) =>
+            orEmpty(
+              getHeadToHeadHistory(m.homeTeam.franchiseId, m.awayTeam.franchiseId),
+              []
             )
-          ),
-      pre.historyByMatchup
-        ? Promise.resolve(null)
-        : Promise.all(
-            matchups.map((m) =>
-              orEmpty(
-                getHeadToHeadHistory(m.homeTeam.franchiseId, m.awayTeam.franchiseId),
-                []
-              )
-            )
-          ),
-      pre.pool ? Promise.resolve(pre.pool) : orEmpty(getWeekStarterPool(seasonId, week), []),
-      pre.bookGames
-        ? Promise.resolve(pre.bookGames)
-        : orEmpty(
-            (async () => {
-              const bw = await resolveBookWeek();
-              if (!bw || bw.week !== week || bw.seasonYear !== seasonYear) return [];
-              return getBookBoard(bw.seasonId, bw.seasonYear, bw.week);
-            })(),
-            [] as BookGame[]
-          ),
-      week === 1 ? getTitleGamePair() : Promise.resolve(null),
-      getRivalryWeek(matchups),
-      week > 1
-        ? orEmpty(getPublishedHubContent(seasonId, week - 1), {})
-        : Promise.resolve({}),
-      orEmpty(getAllSeasons(), []),
-    ]);
+          )
+        ),
+    pre.pool ? Promise.resolve(pre.pool) : orEmpty(getWeekStarterPool(seasonId, week), []),
+    pre.bookGames
+      ? Promise.resolve(pre.bookGames)
+      : orEmpty(
+          (async () => {
+            const bw = await resolveBookWeek();
+            if (!bw || bw.week !== week || bw.seasonYear !== seasonYear) return [];
+            return getBookBoard(bw.seasonId, bw.seasonYear, bw.week);
+          })(),
+          [] as BookGame[]
+        ),
+    week === 1 ? getTitleGamePair() : Promise.resolve(null),
+    getRivalryWeek(matchups),
+    week > 1
+      ? orEmpty(getPublishedHubContent(seasonId, week - 1), {})
+      : Promise.resolve({}),
+    orEmpty(getAllSeasons(), []),
+    // Last week's form for the blurb: optional enrichment like the rest
+    // (without it the blurb simply opens with the reason sentence).
+    pre.priorFinals
+      ? Promise.resolve(pre.priorFinals)
+      : week > 1
+        ? orEmpty(
+            getMatchupsByWeek(seasonId, week - 1).then(finalsFromPairedMatchups),
+            [] as WeekFinalLike[]
+          )
+        : Promise.resolve([] as WeekFinalLike[]),
+  ]);
 
   const h2hByMatchup =
     pre.h2hByMatchup ??
@@ -503,5 +556,6 @@ export async function resolveGameOfTheWeek(input: GotwLoadInput): Promise<GotwRe
     bookSpreadByMatchup: new Map(bookGames.map((g) => [g.matchupId, g.spread])),
     priorFeaturedSlugs: priorFeaturedSlugsFromRefKey(priorRow?.refKey),
     raceTags,
+    priorFinals,
   });
 }

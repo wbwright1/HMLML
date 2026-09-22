@@ -14,6 +14,7 @@ function foopusGotw(reasons: GotwReason[] = ["pride"]): NonNullable<StatsContext
     pairKey: "foopus__olave-garden",
     reasons,
     namedRivalry: null,
+    form: [],
     kicker: `Cross-Division · ${stakesFromReasons(reasons)}`,
     blurb: gameOfWeekBlurb({
       reasons,
@@ -325,6 +326,48 @@ describe("generateFromTemplates (regular season)", () => {
     expect(gotw[0].body).toBe(
       "Foopus (4-1) against Olave Garden (2-3). The best pairing on a thin slate, and somebody's record takes a hit by Monday night. Foopus leads the all-time series 3-1."
     );
+  });
+
+  it("the template blurb leads with both teams' last-week form, the same facts the prompt gets", () => {
+    // The resolver builds the blurb with the form facts it also hands the
+    // prompt (stats-context), so the template row carries them verbatim.
+    const blurb = gameOfWeekBlurb({
+      reasons: ["series-on-the-line"],
+      teamA: {
+        name: "Foopus",
+        record: "4-1",
+        lastWeek: { points: 176.3, opponentName: "McCarthyism", margin: 22.4, won: true },
+      },
+      teamB: {
+        name: "Olave Garden",
+        record: "2-3",
+        lastWeek: { points: 98.2, opponentName: "Team C", margin: 41.5, won: false },
+      },
+      divisionName: null,
+      h2h: { wins: 3, losses: 2, ties: 0 },
+      lastMeeting: null,
+      playoffMeetingYears: [],
+      namedRivalry: null,
+      bowlName: null,
+    });
+    const featured = {
+      ...foopusGotw(["series-on-the-line"]),
+      blurb,
+      form: [
+        { team: "Foopus", slug: "foopus", points: 176.3, opponent: "McCarthyism", margin: 22.4, result: "won" as const },
+        { team: "Olave Garden", slug: "olave-garden", points: 98.2, opponent: "Team C", margin: 41.5, result: "lost" as const },
+      ],
+    };
+    const rows = generateFromTemplates(
+      baseContext({ seasonType: "regular", gameOfWeekPairKey: featured.pairKey, gameOfWeek: featured })
+    ).rows.filter((r) => r.kind === "game_of_week_blurb");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].body).toBe(
+      "Olave Garden lost by 41.5. Foopus just hung 176.3 on McCarthyism. " +
+        "Now they meet, in a series that sits within a game either way. " +
+        "Foopus leads the all-time series 3-2."
+    );
+    for (const f of featured.form) expect(rows[0].body).toContain(f.team);
   });
 });
 

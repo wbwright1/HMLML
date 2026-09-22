@@ -188,6 +188,61 @@ describe("resolveFromSource on the real 2026 week 3", () => {
   });
 });
 
+// The real week-2 finals (live DB), in getWeekRecap's shape.
+const W2: [string, number, string, number][] = [
+  ["TTT", 204.94, "TB", 140.78],
+  ["MCC", 163.9, "OMM", 114.54],
+  ["LDL", 127.18, "BCH", 95.56],
+  ["VV", 118.4, "FOO", 93.22],
+  ["BGS", 128.36, "WLD", 103.6],
+  ["ROG", 152.1, "BCM", 127.4],
+];
+const W2_FINALS = W2.map(([w, wp, l, lp]) => ({
+  winner: { franchiseId: w, name: NAME.get(w)!, points: wp },
+  loser: { franchiseId: l, name: NAME.get(l)!, points: lp },
+  margin: Math.round((wp - lp) * 10) / 10,
+}));
+
+describe("resolveFromSource: last week's form", () => {
+  it("opens the blurb with both featured teams' week-2 results", () => {
+    const r = resolveFromSource(source({ priorFinals: W2_FINALS }));
+    const [, a, b] = WEEK3.find(([id]) => id === r.pick!.matchupId)!;
+    const fa = r.form.a!;
+    const fb = r.form.b!;
+    expect(fa).not.toBeNull();
+    expect(fb).not.toBeNull();
+    // Every number is the team's own final.
+    const own = (id: string) => W2.find((g) => g[0] === id || g[2] === id)!;
+    expect(fa.points).toBe(own(a)[0] === a ? own(a)[1] : own(a)[3]);
+    expect(fb.points).toBe(own(b)[0] === b ? own(b)[1] : own(b)[3]);
+    const [first, second] = r.blurb!.split(". ");
+    expect(first.startsWith(NAME.get(a)!) || first.startsWith(NAME.get(b)!)).toBe(true);
+    expect(second.startsWith(NAME.get(a)!) || second.startsWith(NAME.get(b)!)).toBe(true);
+  });
+
+  it("the TTT v WLD blurb leads with the 64.2-point win", () => {
+    // Pin the pick to TTT v WLD by going easy on the other two 2-0 v 1-1 games.
+    const r = resolveFromSource(
+      source({
+        priorFinals: W2_FINALS,
+        priorFeaturedSlugs: new Set(["ldl", "vv", "mcc", "bgs"]),
+      })
+    );
+    expect(r.pick!.matchupId).toBe(3);
+    expect(r.blurb!.startsWith(
+      "The Tokyo Thunderbirds just ran Taking Boutte off the field by 64.2. " +
+        "Watson Love Diggs lost to Bucky's General Store by 24.8. "
+    )).toBe(true);
+  });
+
+  it("without finals there is no form and the blurb opens with the reason", () => {
+    const r = resolveFromSource(source());
+    expect(r.form).toEqual({ a: null, b: null });
+    expect(r.priorFinals).toEqual([]);
+    expect(r.blurb).not.toMatch(/last week|just (ran|hung|escaped)|lost by/);
+  });
+});
+
 describe("priorFeaturedSlugsFromRefKey", () => {
   it("splits a matchupPairKey, and a null ref_key means no penalty", () => {
     expect([...priorFeaturedSlugsFromRefKey("foopus__real-olave-garden")]).toEqual([

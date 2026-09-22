@@ -13,6 +13,9 @@ import {
   gameOfWeekBlurb,
   genericSlateAngle,
   kickoffWeekdayName,
+  formSentence,
+  teamFormFrom,
+  type WeekFinalLike,
   GOTW_REASON_WEIGHTS,
   type GotwCandidate,
   type GotwTeam,
@@ -554,6 +557,143 @@ describe("gameOfWeekBlurb", () => {
   it("says a first meeting plainly", () => {
     const text = gameOfWeekBlurb({ ...base, h2h: null, reasons: ["pride"] });
     expect(text).toMatch(/They have never played each other\.$/);
+  });
+
+  // Blake: lead with each team's last week. The live week-2 finals for the
+  // two sides of The Custody Battle: ROG beat BCM 152.1-127.4, OMM lost to
+  // MCC 163.9-114.54 and is 0-2.
+  describe("with last week's form", () => {
+    const rog = {
+      name: "Real Olave Garden",
+      record: "2-0",
+      lastWeek: { points: 152.1, opponentName: "Better call Myballs", margin: 24.7, won: true },
+    };
+    const omm = {
+      name: "Of Mice and Mendoza",
+      record: "0-2",
+      winless: true,
+      lastWeek: { points: 114.54, opponentName: "McCarthyism", margin: 49.4, won: false },
+    };
+    const custody = {
+      ...base,
+      teamA: rog,
+      teamB: omm,
+      divisionName: "Division 2",
+      h2h: { wins: 3, losses: 1, ties: 0 },
+      playoffMeetingYears: [],
+      namedRivalry: { name: "The Custody Battle", tagline: "They used to share a team." },
+    };
+
+    it("opens with the sharper result, then the rivalry's chapter, then the series", () => {
+      const text = gameOfWeekBlurb({ ...custody, reasons: ["named-rivalry"] });
+      expect(text).toBe(
+        "Of Mice and Mendoza lost by 49.4 and is still looking for a first win. " +
+          "Real Olave Garden beat Better call Myballs by 24.7 last week. " +
+          "Now The Custody Battle, chapter five. " +
+          "Real Olave Garden leads the all-time series 3-1."
+      );
+    });
+
+    it("keeps team A first when the two results are equally sharp", () => {
+      const text = gameOfWeekBlurb({
+        ...custody,
+        teamB: { ...omm, winless: false, lastWeek: { ...omm.lastWeek, margin: 20.1 } },
+        reasons: ["pride"],
+      });
+      expect(text.startsWith("Real Olave Garden beat Better call Myballs by 24.7 last week. ")).toBe(true);
+      expect(text).toContain("Of Mice and Mendoza lost to McCarthyism by 20.1.");
+    });
+
+    it("drops the repeated names and records from the reason sentence", () => {
+      const text = gameOfWeekBlurb({ ...custody, reasons: ["division-lead-flip"] });
+      expect(text).toContain(
+        "Now they meet inside Division 2, and whoever wins walks out on top of it or tied for it."
+      );
+      expect(text).not.toContain("(2-0)");
+    });
+
+    it("says the next chapter when there is no series on file", () => {
+      const text = gameOfWeekBlurb({ ...custody, h2h: null, reasons: ["named-rivalry"] });
+      expect(text).toContain("Now the next chapter of The Custody Battle.");
+    });
+
+    it("one side with no result still leads with the other side's form", () => {
+      const text = gameOfWeekBlurb({ ...custody, teamA: { ...rog, lastWeek: null }, reasons: ["pride"] });
+      expect(text.startsWith("Of Mice and Mendoza lost by 49.4")).toBe(true);
+    });
+
+    it("never uses a stock idiom or an em-dash, for any reason, and stays under 400", () => {
+      for (const r of all) {
+        const text = gameOfWeekBlurb({
+          ...custody,
+          reasons: [r],
+          teamA: { ...rog, raceTag: "win-and-in" },
+        });
+        const norm = normalize(text);
+        for (const phrase of SIGNATURE_PHRASES) expect(norm, r).not.toContain(phrase);
+        expect(text, r).not.toMatch(/[—–]|first place|thursday/i);
+        expect(text.length, r).toBeLessThanOrEqual(400);
+      }
+    });
+  });
+});
+
+describe("formSentence", () => {
+  const f = (points: number, margin: number, won: boolean, winless = false) =>
+    formSentence({
+      name: "TTT",
+      record: "2-0",
+      winless,
+      lastWeek: { points, opponentName: "TB", margin, won },
+    })!.text;
+
+  it("ranks each result by how much it says", () => {
+    expect(f(204.94, 64.2, true)).toBe("TTT just ran TB off the field by 64.2.");
+    expect(f(176.3, 20, true)).toBe("TTT just hung 176.3 on TB.");
+    expect(f(120.8, 0.8, true)).toBe("TTT just escaped TB by 0.8.");
+    expect(f(130, 20, true)).toBe("TTT beat TB by 20.0 last week.");
+    expect(f(140.78, 64.2, false)).toBe("TTT lost by 64.2.");
+    expect(f(82.48, 30, false)).toBe("TTT managed 82.5 in a loss to TB.");
+    expect(f(120, 1.2, false, true)).toBe("TTT lost to TB by 1.2 and is still looking for a first win.");
+    expect(f(120, 0, false)).toBe("TTT tied TB at 120.0 last week.");
+  });
+
+  it("is null without a result", () => {
+    expect(formSentence({ name: "TTT", record: "0-0" })).toBeNull();
+  });
+});
+
+describe("teamFormFrom", () => {
+  const finals: WeekFinalLike[] = [
+    {
+      winner: { franchiseId: "TTT", name: "The Tokyo Thunderbirds", points: 204.94 },
+      loser: { franchiseId: "TB", name: "Taking Boutte", points: 140.78 },
+      margin: 64.2,
+    },
+    {
+      winner: { franchiseId: "A", name: "A", points: 100 },
+      loser: { franchiseId: "B", name: "B", points: 100 },
+      margin: 0,
+    },
+  ];
+  it("reads each side from its own perspective", () => {
+    expect(teamFormFrom(finals, "TTT")).toEqual({
+      points: 204.94,
+      opponentName: "Taking Boutte",
+      margin: 64.2,
+      won: true,
+    });
+    expect(teamFormFrom(finals, "TB")).toEqual({
+      points: 140.78,
+      opponentName: "The Tokyo Thunderbirds",
+      margin: 64.2,
+      won: false,
+    });
+  });
+  it("a tie is nobody's win, and a team with no final has no form", () => {
+    expect(teamFormFrom(finals, "A")?.won).toBe(false);
+    expect(teamFormFrom(finals, "B")?.won).toBe(false);
+    expect(teamFormFrom(finals, "ZZZ")).toBeNull();
   });
 });
 

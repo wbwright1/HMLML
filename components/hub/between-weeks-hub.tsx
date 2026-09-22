@@ -299,14 +299,19 @@ export async function BetweenWeeksHub({
         matchups,
         standings,
         namedRivalryOf,
-        prefetched: batchLanded
-          ? {
-              h2hByMatchup,
-              historyByMatchup: h2hHistoryByMatchup,
-              pool,
-              bookGames,
-            }
-          : undefined,
+        prefetched: {
+          ...(batchLanded
+            ? {
+                h2hByMatchup,
+                historyByMatchup: h2hHistoryByMatchup,
+                pool,
+                bookGames,
+              }
+            : {}),
+          // The recap already loaded last week's finals; the blurb's form
+          // facts reuse them rather than querying the week again.
+          ...(weekRecap ? { priorFinals: weekRecap.results } : {}),
+        },
       });
     } catch (e) {
       rethrowUnlessTolerable(e);
@@ -422,7 +427,10 @@ export async function BetweenWeeksHub({
   const candidateById = new Map((gotw?.candidates ?? []).map((c) => [c.matchupId, c]));
   const heroInput: HeroHeadlineInput = {
     recapShown: weekRecap != null,
-    priorFinals: weekRecap?.results ?? [],
+    // The recap's finals when it renders; otherwise the ones the resolver
+    // loaded for the Game of the Week's form facts (slate rungs lead then,
+    // so these only feed the dek fallback).
+    priorFinals: weekRecap?.results ?? gotw?.priorFinals ?? [],
     slate: matchups.map((m) => {
       const home = standingBy.get(m.homeTeam.franchiseId);
       const away = standingBy.get(m.awayTeam.franchiseId);

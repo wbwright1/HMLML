@@ -728,6 +728,7 @@ describe("LLM game_of_week_blurb", () => {
       kicker: "Cross-Division · Top-three clash",
       blurb: "template",
       namedRivalry: null,
+      form: [],
     },
   });
   const parse = (body: string, claims: unknown[] = []) =>
@@ -786,6 +787,17 @@ describe("LLM game_of_week_blurb", () => {
     expect(prompt).toContain('["top-of-table"]');
     expect(prompt).toContain("Cross-Division · Top-three clash");
     expect(prompt).toContain("ONLY stakes you may claim");
+  });
+
+  it("hands the model both teams' last-week form as citable facts", () => {
+    const form = [
+      { team: "Foopus", slug: "foopus", points: 176.3, opponent: "McCarthyism", margin: 40.2, result: "won" as const },
+      { team: "Olave Garden", slug: "olave-garden", points: 90.1, opponent: "Team C", margin: 30, result: "lost" as const },
+    ];
+    const prompt = buildUserPrompt({ ...ctx, gameOfWeek: { ...ctx.gameOfWeek!, form } });
+    expect(prompt).toContain("Open the blurb with last week's form for BOTH teams");
+    expect(prompt).toContain(JSON.stringify(form));
+    expect(buildUserPrompt(ctx)).not.toContain("last week's form for BOTH teams");
   });
 
   it("tells hero_dek the headline now states the week's biggest fact", () => {

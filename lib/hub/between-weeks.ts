@@ -580,10 +580,118 @@ export function namedRivalryKicker(
   return `${rivalryName} · ${facts.gameType}`;
 }
 
+/** One side of a completed final (getWeekRecap's RecapTeam satisfies it). */
+export interface WeekFinalSideLike {
+  franchiseId: string;
+  name: string;
+  points: number;
+}
+
+/** A completed prior-week final; margin 0 is a tie. */
+export interface WeekFinalLike {
+  winner: WeekFinalSideLike;
+  loser: WeekFinalSideLike;
+  margin: number;
+}
+
+/** A team's prior-week result, from its own side. */
+export interface GotwTeamForm {
+  points: number;
+  opponentName: string;
+  /** Absolute final margin, one decimal. 0 is a tie. */
+  margin: number;
+  won: boolean;
+}
+
+/** The team's prior-week result from a week's finals, or null if it had none. */
+export function teamFormFrom(
+  finals: readonly WeekFinalLike[],
+  franchiseId: string
+): GotwTeamForm | null {
+  for (const f of finals) {
+    if (f.winner.franchiseId === franchiseId) {
+      return { points: f.winner.points, opponentName: f.loser.name, margin: f.margin, won: f.margin > 0 };
+    }
+    if (f.loser.franchiseId === franchiseId) {
+      return { points: f.loser.points, opponentName: f.winner.name, margin: f.margin, won: false };
+    }
+  }
+  return null;
+}
+
+/** Form thresholds; the hero ladder (lib/hub/hero-headline.ts) uses the same
+ * mercy line, so "ran off the field" means the same thing in both places. */
+export const FORM_MERCY_MARGIN = 40;
+export const FORM_BIG_SCORE = 160;
+export const FORM_ESCAPE_MARGIN = 3;
+export const FORM_DUD_SCORE = 90;
+
+interface BlurbTeam {
+  name: string;
+  record: string;
+  raceTag?: PlayoffRaceTag | null;
+  /** Last week's result, when the prior week is complete. */
+  lastWeek?: GotwTeamForm | null;
+  /** No wins and no ties yet (with games played). */
+  winless?: boolean;
+}
+
+/**
+ * One team's last week as a sentence, plus how sharp it is (a mercy-rule
+ * result beats a routine one), so the blurb can open with the sharper side.
+ * Every number is the team's own final.
+ */
+export function formSentence(team: BlurbTeam): { text: string; sharpness: number } | null {
+  const f = team.lastWeek;
+  if (!f) return null;
+  const pts = f.points.toFixed(1);
+  const m = f.margin.toFixed(1);
+  if (f.margin === 0) {
+    return { text: `${team.name} tied ${f.opponentName} at ${pts} last week.`, sharpness: 1 };
+  }
+  if (f.won) {
+    if (f.margin >= FORM_MERCY_MARGIN) {
+      return { text: `${team.name} just ran ${f.opponentName} off the field by ${m}.`, sharpness: 4 };
+    }
+    if (f.points >= FORM_BIG_SCORE) {
+      return { text: `${team.name} just hung ${pts} on ${f.opponentName}.`, sharpness: 3 };
+    }
+    if (f.margin <= FORM_ESCAPE_MARGIN) {
+      return { text: `${team.name} just escaped ${f.opponentName} by ${m}.`, sharpness: 2.5 };
+    }
+    return { text: `${team.name} beat ${f.opponentName} by ${m} last week.`, sharpness: 1 };
+  }
+  let head: string;
+  let sharpness: number;
+  if (f.margin >= FORM_MERCY_MARGIN) {
+    head = `${team.name} lost by ${m}`;
+    sharpness = 4;
+  } else if (f.points <= FORM_DUD_SCORE) {
+    head = `${team.name} managed ${pts} in a loss to ${f.opponentName}`;
+    sharpness = 3;
+  } else if (f.margin <= FORM_ESCAPE_MARGIN) {
+    head = `${team.name} lost to ${f.opponentName} by ${m}`;
+    sharpness = 2.5;
+  } else {
+    head = `${team.name} lost to ${f.opponentName} by ${m}`;
+    sharpness = 1;
+  }
+  if (team.winless) {
+    return { text: `${head} and is still looking for a first win.`, sharpness: sharpness + 1 };
+  }
+  return { text: `${head}.`, sharpness };
+}
+
+const CHAPTER_WORDS = [
+  "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen",
+  "eighteen", "nineteen", "twenty",
+] as const;
+
 export interface GotwBlurbInput {
   reasons: GotwReason[];
-  teamA: { name: string; record: string; raceTag?: PlayoffRaceTag | null };
-  teamB: { name: string; record: string; raceTag?: PlayoffRaceTag | null };
+  teamA: BlurbTeam;
+  teamB: BlurbTeam;
   divisionName: string | null;
   h2h: GotwH2H | null;
   lastMeeting: GotwLastMeeting | null;
@@ -620,6 +728,14 @@ function seriesSentence(input: GotwBlurbInput): string {
  * compares against both.
  */
 export function gameOfWeekBlurb(input: GotwBlurbInput): string {
+  // Last week's form leads, sharper side first (ties keep team A first).
+  // With it in front, the reason sentence drops the names and records it
+  // would otherwise repeat (the card prints both records above the blurb).
+  const forms = [formSentence(input.teamA), formSentence(input.teamB)]
+    .filter((f): f is { text: string; sharpness: number } => f != null)
+    .sort((x, y) => y.sharpness - x.sharpness)
+    .map((f) => f.text);
+  const withForm = forms.length > 0;
   const a = `${input.teamA.name} (${input.teamA.record})`;
   const b = `${input.teamB.name} (${input.teamB.record})`;
   // The first reason whose supporting fact is actually present; a reason
@@ -650,12 +766,21 @@ export function gameOfWeekBlurb(input: GotwBlurbInput): string {
       // and a playoff meeting when there is one on file.
       const r = input.namedRivalry!;
       const year = input.playoffMeetingYears[0];
-      lead = `${a} against ${b}, the latest chapter of ${r.name}.`;
+      if (withForm) {
+        // "Chapter" counts this meeting: every game on file, plus this one.
+        const met = input.h2h ? teamGames(input.h2h) : 0;
+        const chapter = met > 0 ? (CHAPTER_WORDS[met] ?? String(met + 1)) : null;
+        lead = chapter ? `Now ${r.name}, chapter ${chapter}.` : `Now the next chapter of ${r.name}.`;
+      } else {
+        lead = `${a} against ${b}, the latest chapter of ${r.name}.`;
+      }
       if (year != null) coda = `They met in the ${year} playoffs too.`;
       break;
     }
     case "division-lead-flip":
-      lead = `${a} and ${b} meet inside ${input.divisionName ?? "the division"}, and whoever wins walks out on top of it or tied for it.`;
+      lead = withForm
+        ? `Now they meet inside ${input.divisionName ?? "the division"}, and whoever wins walks out on top of it or tied for it.`
+        : `${a} and ${b} meet inside ${input.divisionName ?? "the division"}, and whoever wins walks out on top of it or tied for it.`;
       break;
     case "playoff-clinch": {
       if (winAndIn.length === 2) {
@@ -668,35 +793,49 @@ export function gameOfWeekBlurb(input: GotwBlurbInput): string {
       break;
     }
     case "unbeatens":
-      lead = `${a} and ${b} are both unbeaten, and by Monday night one of them will not be.`;
+      lead = withForm
+        ? "Both are still unbeaten, and by Monday night one of them will not be."
+        : `${a} and ${b} are both unbeaten, and by Monday night one of them will not be.`;
       break;
     case "top-of-table":
-      lead = `${a} and ${b} both sit in the top three of the standings, and one of them leaves with a loss.`;
+      lead = withForm
+        ? "Both sit in the top three of the standings, and one of them leaves with a loss."
+        : `${a} and ${b} both sit in the top three of the standings, and one of them leaves with a loss.`;
       break;
     case "series-on-the-line":
-      lead = `${a} against ${b}, in a series that sits within a game either way.`;
+      lead = withForm
+        ? "Now they meet, in a series that sits within a game either way."
+        : `${a} against ${b}, in a series that sits within a game either way.`;
       break;
     case "coin-flip-line":
-      lead = `${a} against ${b}, and the Book can barely split them.`;
+      lead = withForm
+        ? "Now they meet, and the Book can barely split them."
+        : `${a} against ${b}, and the Book can barely split them.`;
       break;
     case "playoff-history": {
       const year = input.playoffMeetingYears[0];
-      lead = `${a} against ${b}. They met in the ${year} playoffs.`;
+      lead = withForm
+        ? `They met in the ${year} playoffs, and now they meet again.`
+        : `${a} against ${b}. They met in the ${year} playoffs.`;
       break;
     }
     case "mutual-rival":
-      lead = `${a} against ${b}. Neither side has played anyone more often.`;
+      lead = withForm
+        ? "Now they meet, and neither side has played anyone more often."
+        : `${a} against ${b}. Neither side has played anyone more often.`;
       break;
     case "season-opener":
       lead = `${input.teamA.name} and ${input.teamB.name} open the season. Nobody has a record yet, so on projections alone this is the one to watch first.`;
       break;
     default:
-      lead = `${a} against ${b}. The best pairing on a thin slate, and somebody's record takes a hit by Monday night.`;
+      lead = withForm
+        ? "Now they meet, and somebody's record takes a hit by Monday night."
+        : `${a} against ${b}. The best pairing on a thin slate, and somebody's record takes a hit by Monday night.`;
   }
 
   const series = seriesSentence(input);
   // "series-on-the-line" already leans on the series; say the number there.
-  return [lead, series, coda].filter(Boolean).join(" ");
+  return [...forms, lead, series, coda].filter(Boolean).join(" ");
 }
 
 // ---------------------------------------------------------------------------

@@ -248,6 +248,19 @@ export interface StatsContext {
     blurb: string;
     /** The named rivalry the pick belongs to, when that is a reason. */
     namedRivalry: { name: string; tagline: string | null } | null;
+    /**
+     * Each featured team's prior-week result (the facts the template blurb
+     * opens with), home team first. Empty at week 1 or while the prior week
+     * is incomplete.
+     */
+    form: {
+      team: string;
+      slug: string;
+      points: number;
+      opponent: string;
+      margin: number;
+      result: "won" | "lost" | "tied";
+    }[];
   } | null;
   weekInBooks: StatsWeekInBooks | null;
   recentTransactions: StatsTransaction[];
@@ -430,6 +443,24 @@ export async function buildStatsContext(
         })
       : null;
   const gameOfWeekPairKey = gotw?.pairKey ?? null;
+  const gotwMatchup = currentMatchupRows.find((m) => m.matchupId === gotw?.pick?.matchupId);
+  const gotwForm: NonNullable<StatsContext["gameOfWeek"]>["form"] = [];
+  if (gotw && gotwMatchup) {
+    for (const [team, f] of [
+      [gotwMatchup.homeTeam, gotw.form.a],
+      [gotwMatchup.awayTeam, gotw.form.b],
+    ] as const) {
+      if (!f) continue;
+      gotwForm.push({
+        team: team.franchiseName,
+        slug: team.franchiseSlug,
+        points: Math.round(f.points * 10) / 10,
+        opponent: f.opponentName,
+        margin: f.margin,
+        result: f.margin === 0 ? "tied" : f.won ? "won" : "lost",
+      });
+    }
+  }
   const gameOfWeek: StatsContext["gameOfWeek"] =
     gotw?.pairKey && gotw.kicker && gotw.blurb
       ? {
@@ -438,6 +469,7 @@ export async function buildStatsContext(
           kicker: gotw.kicker,
           blurb: gotw.blurb,
           namedRivalry: gotw.namedRivalry,
+          form: gotwForm,
         }
       : null;
   const titleRematchIds = new Set(
