@@ -31,9 +31,10 @@ export interface HeroClaim {
 export const NO_HERO_CLAIM: HeroClaim = { kind: "none", franchiseIds: [], numbers: [] };
 
 /**
- * Splits copy so every numeral ("64.2", "2-0", "0-3") can render in the mono
- * face inside a serif headline. Pure; the hub maps `numeral` parts to a mono
- * span.
+ * Splits copy into numeral ("64.2", "2-0", "0-3") and prose runs. Backs
+ * `numeralsIn` and the hero dedupe checks; the hero itself renders its
+ * headline as one serif run (see components/hub/between-weeks-hub.tsx), so
+ * nothing maps these parts to a mono span any more.
  */
 export function numeralSegments(text: string): { text: string; numeral: boolean }[] {
   return text

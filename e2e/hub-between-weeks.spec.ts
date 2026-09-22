@@ -59,10 +59,10 @@ test.describe("Between-Weeks Hub (1d)", () => {
     );
     if (rung === "fallback") expect(text).toBe("The slate is set.");
 
-    // Every numeral in the serif headline renders in the mono face.
-    const numerals = text.match(/\d+(?:[.,]\d+)*(?:-\d+)*/g) ?? [];
-    const monoTexts = (await h1.locator("span.font-mono").allInnerTexts()).map((x) => x.trim());
-    expect(monoTexts).toEqual(numerals);
+    // The headline is one serif run: no numeral is swapped into the mono
+    // face mid-sentence (an upright mono figure inside italic serif broke
+    // the line).
+    await expect(h1.locator("span.font-mono")).toHaveCount(0);
 
     // The claims are checkable against the page.
     const main = (await page.locator("main").innerText()).toUpperCase();
