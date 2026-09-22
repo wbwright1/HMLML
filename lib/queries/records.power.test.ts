@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computePowerScore, computeStreak } from "./records";
+import { computePowerScore, computeRankChanges, computeStreak } from "./records";
 import type { PowerFranchiseInput } from "./records";
 
 function franchise(
@@ -230,5 +230,51 @@ describe("computeStreak", () => {
   it("ends the streak at a tie, and a tie as the newest game means no streak", () => {
     expect(computeStreak([game(3, true), game(2, null), game(1, true)])).toBe(1);
     expect(computeStreak([game(3, null), game(2, true)])).toBe(0);
+  });
+});
+
+describe("computeRankChanges", () => {
+  it("is previous rank minus current rank: positive climbed, negative slid, zero held", () => {
+    const previous = [
+      { franchiseId: "a", rank: 1 },
+      { franchiseId: "b", rank: 2 },
+      { franchiseId: "c", rank: 5 },
+    ];
+    const current = [
+      { franchiseId: "c", rank: 2 },
+      { franchiseId: "a", rank: 1 },
+      { franchiseId: "b", rank: 4 },
+    ];
+
+    const moved = computeRankChanges(current, previous);
+    expect(moved.get("c")).toBe(3);
+    expect(moved.get("b")).toBe(-2);
+    expect(moved.get("a")).toBe(0);
+  });
+
+  it("is null for a franchise missing from last week's edition", () => {
+    const moved = computeRankChanges([{ franchiseId: "new", rank: 1 }], []);
+    expect(moved.get("new")).toBeNull();
+  });
+
+  it("tracks a win that jumps a team past last week's leader", () => {
+    // Week 1: "lead" outscored "climb". Week 2: "climb" wins big, "lead" loses.
+    const week1 = { week: 1 };
+    const lead = franchise("lead", {
+      games: [{ ...week1, points: 150, isWinner: true }],
+    });
+    const climb = franchise("climb", {
+      games: [{ ...week1, points: 100, isWinner: false }],
+    });
+    const lastWeek = computePowerScore([lead, climb]);
+
+    const thisWeek = computePowerScore([
+      { ...lead, games: [...lead.games, { week: 2, points: 60, isWinner: false }] },
+      { ...climb, games: [...climb.games, { week: 2, points: 170, isWinner: true }] },
+    ]);
+
+    const moved = computeRankChanges(thisWeek, lastWeek);
+    expect(moved.get("climb")).toBe(1);
+    expect(moved.get("lead")).toBe(-1);
   });
 });

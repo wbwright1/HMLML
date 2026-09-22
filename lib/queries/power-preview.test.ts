@@ -20,7 +20,7 @@ function regularEntry(overrides: Partial<PowerRankingEntry>): PowerRankingEntry 
     pointsAgainst: 400,
     championships: 0,
     powerScore: 0.5,
-    formDelta: 0,
+    rankChange: 0,
     standingsRank: 1,
     windowGames: 4,
     injuryCount: 0,
@@ -67,7 +67,7 @@ function makeRegularEntries(n: number): PowerRankingEntry[] {
       slug: `f${i + 1}`,
       name: `Franchise ${i + 1}`,
       standingsRank: i + 1,
-      formDelta: 0,
+      rankChange: 0,
     })
   );
 }
@@ -86,13 +86,13 @@ describe("buildPowerPreview", () => {
     expect(preview!.top[0].record).toBe("6-2");
   });
 
-  it("riser is the max positive formDelta and faller the max negative, correct franchises picked", () => {
+  it("riser is the max positive rankChange and faller the max negative, correct franchises picked", () => {
     const entries = makeRegularEntries(6);
-    entries[0].formDelta = 1; // f1
-    entries[1].formDelta = 3; // f2, biggest riser
-    entries[2].formDelta = -1; // f3
-    entries[3].formDelta = -4; // f4, biggest faller
-    entries[4].formDelta = 0;
+    entries[0].rankChange = 1; // f1
+    entries[1].rankChange = 3; // f2, biggest riser
+    entries[2].rankChange = -1; // f3
+    entries[3].rankChange = -4; // f4, biggest faller
+    entries[4].rankChange = 0;
 
     const view: PowerRankingsView = { mode: "regular", entries };
     const preview = buildPowerPreview(view, 4);
@@ -104,7 +104,7 @@ describe("buildPowerPreview", () => {
     expect(preview!.faller?.delta).toBe(4);
   });
 
-  it("all formDelta === 0 leaves both movers null while top rows still return", () => {
+  it("all rankChange === 0 leaves both movers null while top rows still return", () => {
     const entries = makeRegularEntries(5);
     const view: PowerRankingsView = { mode: "regular", entries };
     const preview = buildPowerPreview(view, 4);
@@ -115,14 +115,24 @@ describe("buildPowerPreview", () => {
     expect(preview!.top).toHaveLength(4);
   });
 
-  it("ties on formDelta resolve to the better (lower) power rank", () => {
+  it("week 1 (rankChange null everywhere) leaves both movers null", () => {
+    const entries = makeRegularEntries(5).map((e) => ({ ...e, rankChange: null }));
+    const preview = buildPowerPreview({ mode: "regular", entries }, 4);
+
+    expect(preview).not.toBeNull();
+    expect(preview!.riser).toBeNull();
+    expect(preview!.faller).toBeNull();
+    expect(preview!.top[0].rankChange).toBeNull();
+  });
+
+  it("ties on rankChange resolve to the better (lower) power rank", () => {
     const entries = makeRegularEntries(6);
     // f3 (rank 3) and f5 (rank 5) tie at +2; f3 should win as riser.
-    entries[2].formDelta = 2;
-    entries[4].formDelta = 2;
+    entries[2].rankChange = 2;
+    entries[4].rankChange = 2;
     // f4 (rank 4) and f6 (rank 6) tie at -2; f4 should win as faller.
-    entries[3].formDelta = -2;
-    entries[5].formDelta = -2;
+    entries[3].rankChange = -2;
+    entries[5].rankChange = -2;
 
     const view: PowerRankingsView = { mode: "regular", entries };
     const preview = buildPowerPreview(view, 4);
@@ -132,7 +142,7 @@ describe("buildPowerPreview", () => {
     expect(preview!.faller?.slug).toBe("f4");
   });
 
-  it("preseason mode populates powerIndex and nulls record/formDelta/movers", () => {
+  it("preseason mode populates powerIndex and nulls record/rankChange/movers", () => {
     const entries = [
       preseasonEntry({ rank: 1, id: "f1", slug: "f1", powerScore: 0.812 }),
       preseasonEntry({ rank: 2, id: "f2", slug: "f2", powerScore: 0.7 }),
@@ -145,7 +155,7 @@ describe("buildPowerPreview", () => {
     expect(preview!.mode).toBe("preseason");
     expect(preview!.top[0].powerIndex).toBe("81.2");
     expect(preview!.top[0].record).toBeNull();
-    expect(preview!.top[0].formDelta).toBeNull();
+    expect(preview!.top[0].rankChange).toBeNull();
     expect(preview!.riser).toBeNull();
     expect(preview!.faller).toBeNull();
   });

@@ -23,14 +23,17 @@ export const metadata = {
     "Current season power rankings for the Harambe Memorial League Memorial League.",
 };
 
-/** Trend vs. season standings: sage ▲ for climbers, rust ▼ for sliders, neutral
- * dash for even. Never color alone; the glyph + value always ride together. */
-function FormIndicator({ delta }: { delta: number }) {
-  if (delta === 0) {
+/** Spots moved since last week's edition: sage ▲ for climbers, rust ▼ for
+ * sliders, neutral dash for holding (or Week 1, with nothing to compare). Never
+ * color alone; the glyph + value always ride together. */
+function MovedIndicator({ delta }: { delta: number | null }) {
+  if (!delta) {
     return (
       <span className="flex items-center font-mono text-sm tabular-nums text-text-tertiary">
         <span aria-hidden>–</span>
-        <span className="sr-only">even with standings</span>
+        <span className="sr-only">
+          {delta === null ? "no prior week" : "held position from last week"}
+        </span>
       </span>
     );
   }
@@ -39,7 +42,7 @@ function FormIndicator({ delta }: { delta: number }) {
       <span className="flex items-center gap-1 font-mono text-sm font-bold tabular-nums text-accent-green">
         <span aria-hidden>▲</span>
         <span>{delta}</span>
-        <span className="sr-only">spots ahead of standings</span>
+        <span className="sr-only">{delta === 1 ? "spot" : "spots"} up from last week</span>
       </span>
     );
   }
@@ -47,7 +50,7 @@ function FormIndicator({ delta }: { delta: number }) {
     <span className="flex items-center gap-1 font-mono text-sm font-bold tabular-nums text-accent-warm">
       <span aria-hidden>▼</span>
       <span>{Math.abs(delta)}</span>
-      <span className="sr-only">spots behind standings</span>
+      <span className="sr-only">{delta === -1 ? "spot" : "spots"} down from last week</span>
     </span>
   );
 }
@@ -206,7 +209,7 @@ function RegularEdition({ rankings }: { rankings: PowerRankingEntry[] }) {
             avatarUrl: entry.avatarUrl,
           };
 
-          // Season context lives under the name so the Trend cell can be a
+          // Season context lives under the name so the Moved cell can be a
           // bare glyph: "3W-1L · 2nd in standings".
           const seasonLine = (
             <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-xs text-text-tertiary">
@@ -269,8 +272,8 @@ function RegularEdition({ rankings }: { rankings: PowerRankingEntry[] }) {
                     <StatCell label="Streak" width="w-auto" align="start">
                       <Streak value={entry.streak} />
                     </StatCell>
-                    <StatCell label="Trend" width="w-auto" align="start">
-                      <FormIndicator delta={entry.formDelta} />
+                    <StatCell label="Moved" width="w-auto" align="start">
+                      <MovedIndicator delta={entry.rankChange} />
                     </StatCell>
                     <StatCell label="Power" width="w-auto" align="end" tone="gold">
                       {(entry.powerScore * 100).toFixed(1)}
@@ -307,8 +310,8 @@ function RegularEdition({ rankings }: { rankings: PowerRankingEntry[] }) {
                   <StatCell label="Streak" width="w-12">
                     <Streak value={entry.streak} />
                   </StatCell>
-                  <StatCell label="Trend" width="w-12">
-                    <FormIndicator delta={entry.formDelta} />
+                  <StatCell label="Moved" width="w-12">
+                    <MovedIndicator delta={entry.rankChange} />
                   </StatCell>
                   <PowerIndex value={entry.powerScore} />
                 </div>
