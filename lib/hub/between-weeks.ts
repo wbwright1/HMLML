@@ -653,11 +653,11 @@ export function gameOfWeekBlurb(input: GotwBlurbInput): string {
       break;
     }
     case "division-lead-flip":
-      lead = `${a} and ${b} meet inside ${input.divisionName ?? "the division"}, and whoever wins walks out on top of it or tied for it.`;
+      lead = `${a} and ${b} meet inside ${input.divisionName ?? "the division"}, and whoever wins can walk out on top of it or tied for it.`;
       break;
     case "playoff-clinch": {
       if (winAndIn.length === 2) {
-        lead = `${a} and ${b} can both clinch a playoff spot with a win, and only one of them does it this week.`;
+        lead = `${a} and ${b} can both clinch a playoff spot with a win, and only one of them gets the win.`;
       } else {
         const who = winAndIn[0];
         const other = who === input.teamA ? input.teamB : input.teamA;

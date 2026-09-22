@@ -487,9 +487,31 @@ describe("gameOfWeekBlurb", () => {
   it("claims a division outcome only for division-lead-flip", () => {
     for (const r of all) {
       const text = gameOfWeekBlurb({ ...base, reasons: [r] });
-      if (r === "division-lead-flip") expect(text).toContain("on top of it or tied for it");
+      if (r === "division-lead-flip") expect(text).toContain("can walk out on top of it or tied for it");
       else expect(text, r).not.toMatch(/on top of it/);
     }
+  });
+
+  it("states the division outcome as possible, never guaranteed", () => {
+    // canFlipDivisionLead is a best-case test: a 1-1 v 1-1 division game
+    // qualifies while a 2-0 division-mate plays outside the division, yet if
+    // that team wins, this game's winner (2-1) is not on top. The blurb must
+    // not promise an outcome the other games can take away.
+    const text = gameOfWeekBlurb({ ...base, reasons: ["division-lead-flip"] });
+    expect(text).not.toMatch(/whoever wins walks out/);
+  });
+
+  it("the double win-and-in blurb never claims the loser misses out this week", () => {
+    // win-and-in means a win clinches; the loser can still clinch on other
+    // results, so "only one of them does it this week" was not provable.
+    const text = gameOfWeekBlurb({
+      ...base,
+      reasons: ["playoff-clinch"],
+      teamA: { ...base.teamA, raceTag: "win-and-in" },
+      teamB: { ...base.teamB, raceTag: "win-and-in" },
+    });
+    expect(text).toContain("only one of them gets the win");
+    expect(text).not.toMatch(/does it this week/);
   });
 
   it("states the series from the right side", () => {
