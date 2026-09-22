@@ -15,7 +15,15 @@ import {
   type H2HGridRow,
 } from "@/components/franchise-h2h-grid";
 import { getFranchiseBySlug } from "@/lib/queries/franchises";
-import { getRivalries } from "@/lib/queries/records";
+import { getAllFranchiseOptions, getRivalries } from "@/lib/queries/records";
+import { getNamedRivalriesOrEmpty } from "@/lib/queries/named-rivalries-optional";
+import type { NamedRivalry } from "@/lib/queries/rivalries";
+import {
+  formatSeriesRecord,
+  namedRivalriesFor,
+  seriesRecordFor,
+} from "@/lib/rivalry-display";
+import { NamedRivalryCard } from "@/components/named-rivalry-card";
 import { getFranchiseExtremes } from "@/lib/queries/franchise-stats";
 import { getFranchiseCornerstone } from "@/lib/queries/franchise-players";
 import { getFranchiseAwards } from "@/lib/queries/awards";
@@ -145,6 +153,38 @@ export default async function FranchiseDetailPage({
 
   const primaryRival = myRivalries[0];
 
+  // Commissioner-named rivalries: optional lore, so a failed read renders the
+  // page without them. Franchise options carry the opponent's crest data even
+  // for a named pair that has not met yet.
+  let namedList: NamedRivalry[] = [];
+  let franchiseOptions: Awaited<ReturnType<typeof getAllFranchiseOptions>> = [];
+  try {
+    namedList = await getNamedRivalriesOrEmpty();
+    if (namedRivalriesFor(namedList, franchise.id).length > 0) {
+      franchiseOptions = await getAllFranchiseOptions();
+    }
+  } catch {
+    namedList = [];
+  }
+  const optionById = new Map(franchiseOptions.map((f) => [f.id, f]));
+  const namedRivals = namedRivalriesFor(namedList, franchise.id).flatMap(
+    ({ rivalry, opponentId }) => {
+      const opponent = optionById.get(opponentId);
+      if (!opponent) return [];
+      return [
+        {
+          rivalry,
+          opponent,
+          record: seriesRecordFor(rivalries, franchise.id, opponentId),
+        },
+      ];
+    },
+  );
+  const namedByOpponentSlug = new Map(
+    namedRivals.map((n) => [n.opponent.slug, n.rivalry.name]),
+  );
+  const signatureRival = namedRivals[0];
+
   const trophies = buildFranchiseTrophies(
     franchise.seasonHistory,
     franchiseAwards,
@@ -176,6 +216,7 @@ export default async function FranchiseDetailPage({
         ties: r.ties,
         winPct: r.winPct,
         tag,
+        rivalryName: namedByOpponentSlug.get(r.opponent.slug) ?? null,
       };
     });
 
@@ -248,7 +289,24 @@ export default async function FranchiseDetailPage({
     });
   }
 
-  if (primaryRival) {
+  // A named rival takes the signature slot over the most-played opponent:
+  // the commish named it, so it is the rivalry this franchise is known for.
+  if (signatureRival) {
+    const rec = signatureRival.record;
+    const meetings = rec?.totalGames ?? 0;
+    callouts.push({
+      kicker: signatureRival.rivalry.name,
+      value: rec ? formatSeriesRecord(rec) : "0-0",
+      subline: `vs ${signatureRival.opponent.name} · ${meetings} meeting${meetings !== 1 ? "s" : ""}.`,
+      tone: !rec
+        ? "neutral"
+        : rec.wins > rec.losses
+          ? "gold"
+          : rec.wins < rec.losses
+            ? "sting"
+            : "neutral",
+    });
+  } else if (primaryRival) {
     callouts.push({
       kicker: "Primary Rival",
       value: `${primaryRival.wins}-${primaryRival.losses}`,
@@ -289,6 +347,31 @@ export default async function FranchiseDetailPage({
         {callouts.length > 0 && (
           <ScrollReveal delay={100}>
             <FranchiseSignatureBand callouts={callouts} />
+          </ScrollReveal>
+        )}
+
+        {namedRivals.length > 0 && (
+          <ScrollReveal delay={125}>
+            <div
+              className={`grid gap-4 ${namedRivals.length > 1 ? "md:grid-cols-2" : ""}`}
+            >
+              {namedRivals.map(({ rivalry, opponent, record }) => (
+                <NamedRivalryCard
+                  key={rivalry.id}
+                  lore={rivalry}
+                  teamA={{
+                    slug: franchise.slug,
+                    name: franchise.name,
+                    abbreviation: franchise.abbreviation,
+                    brandingColor: franchise.brandingColor,
+                    avatarUrl: franchise.avatarUrl,
+                  }}
+                  teamB={opponent}
+                  record={record}
+                  headingLevel="h2"
+                />
+              ))}
+            </div>
           </ScrollReveal>
         )}
 

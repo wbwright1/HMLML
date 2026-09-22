@@ -12,6 +12,8 @@ import {
 } from "@/lib/queries/records";
 import { EmptyState } from "@/components/empty-state";
 import { FranchisePairSelector } from "@/app/records/head-to-head/franchise-selector";
+import { getNamedRivalryLookup } from "@/lib/queries/named-rivalries-optional";
+import { findNamedRivalry, type NamedRivalry } from "@/lib/queries/rivalries";
 
 // Dynamically rendered: ?a= and ?b= drive the pairing query, and awaiting searchParams opts a route out
 // of static rendering, so a `revalidate` export here would be inert. Caching
@@ -49,16 +51,23 @@ export default async function HeadToHeadPage({
 
   let record: Awaited<ReturnType<typeof getHeadToHead>> | null = null;
   let history: Awaited<ReturnType<typeof getHeadToHeadHistory>> = [];
+  let namedRivalry: NamedRivalry | null = null;
 
   if (bothSelected) {
+    // The named rivalry is optional lore (its loader never throws); the record
+    // and the game log are the page, so their failure must not cache hollow.
+    const lookupPromise = getNamedRivalryLookup();
     try {
       [record, history] = await Promise.all([
         getHeadToHead(teamA.id, teamB.id),
         getHeadToHeadHistory(teamA.id, teamB.id),
       ]);
-    } catch {
-      // Query error
+    } catch (e) {
+      rethrowUnlessTolerable(e);
+      // Query error in local dev / build prerender
     }
+    const lookup = await lookupPromise;
+    namedRivalry = findNamedRivalry(lookup, teamA.id, teamB.id);
   }
 
   return (
@@ -102,6 +111,7 @@ export default async function HeadToHeadPage({
                 teamB={teamB}
                 record={{ wins: record.wins, losses: record.losses }}
                 streak={record.streak ?? undefined}
+                rivalry={namedRivalry}
               />
             </ScrollReveal>
 

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { SuperlativeBadge } from "@/components/superlative-badge";
+import { RivalryChip } from "@/components/rivalry-chip";
 
 export interface H2HGridRow {
   opponent: {
@@ -16,6 +17,8 @@ export interface H2HGridRow {
   winPct: number;
   /** "OWNS" on the best matchup, "OWNED BY" on the worst; null otherwise. */
   tag: "OWNS" | "OWNED BY" | null;
+  /** The commissioner-named rivalry with this opponent, shown as a label. */
+  rivalryName?: string | null;
 }
 
 function RecordFigure({ row }: { row: H2HGridRow }) {
@@ -85,7 +88,7 @@ export function FranchiseH2HGrid({
             key={row.opponent.slug}
             href={`/records/head-to-head?a=${franchiseSlug}&b=${row.opponent.slug}`}
             className="block rounded-[14px] border border-border bg-surface p-3 transition-colors hover:border-border-strong hover:bg-surface-muted"
-            aria-label={`${row.opponent.name}: ${row.wins} wins, ${row.losses} losses${row.ties > 0 ? `, ${row.ties} ties` : ""}, ${pctLabel}`}
+            aria-label={`${row.opponent.name}${row.rivalryName ? ` (${row.rivalryName})` : ""}: ${row.wins} wins, ${row.losses} losses${row.ties > 0 ? `, ${row.ties} ties` : ""}, ${pctLabel}`}
           >
             <div className="flex items-center gap-3">
               <FranchiseLogo
@@ -106,6 +109,11 @@ export function FranchiseH2HGrid({
                     <TagBadge tag={row.tag} />
                   </span>
                 </div>
+                {row.rivalryName && (
+                  <div className="mt-1">
+                    <RivalryChip name={row.rivalryName} />
+                  </div>
+                )}
                 {/* Desktop: inline bar under the name */}
                 <div className="mt-1.5 hidden sm:block">
                   <WinBar pct={row.winPct} tag={row.tag} />
