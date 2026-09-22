@@ -12,7 +12,9 @@ import {
   uniqueIndex,
   unique,
   index,
+  check,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // seasons
@@ -608,6 +610,46 @@ export const leagueAwards = pgTable(
 );
 
 // ---------------------------------------------------------------------------
+// rivalries
+// ---------------------------------------------------------------------------
+// Commissioner-named rivalries: the league's lore layer on top of the
+// auto-detected mutual rivals in lib/queries/rivalry-week.ts. One row per
+// franchise pair, stored in canonical order (franchise_a_id < franchise_b_id,
+// enforced by a CHECK) so a pair can only exist once regardless of which side
+// the commish picked first. Keyed by franchise id, matching rivalryPairKey.
+// FKs cascade: a franchise row that is deleted takes its rivalry with it
+// (only test fixtures ever delete franchises).
+export const rivalries = pgTable(
+  "rivalries",
+  {
+    id: serial("id").primaryKey(),
+    franchiseAId: text("franchise_a_id")
+      .notNull()
+      .references(() => franchises.id, { onDelete: "cascade" }),
+    franchiseBId: text("franchise_b_id")
+      .notNull()
+      .references(() => franchises.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    tagline: text("tagline"), // one line, shown on cards
+    origin: text("origin"), // a sentence or two of lore
+    originYear: integer("origin_year"),
+    trophyName: text("trophy_name"),
+    createdAt: timestamp("created_at").defaultNow(),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uq_rivalries_pair").on(table.franchiseAId, table.franchiseBId),
+    index("idx_rivalries_franchise_b_id").on(table.franchiseBId),
+    check(
+      "chk_rivalries_canonical_pair",
+      // COLLATE "C": byte order, the same order JavaScript's `<` uses in
+      // rivalryPairKey, whatever the database's default collation is.
+      sql`${table.franchiseAId} COLLATE "C" < ${table.franchiseBId} COLLATE "C"`,
+    ),
+  ],
+);
+
+// ---------------------------------------------------------------------------
 // player_values
 // ---------------------------------------------------------------------------
 // Dynasty trade-value snapshots for players and draft picks, sourced from
@@ -1003,6 +1045,9 @@ export type NewSmackPostRow = typeof smackPosts.$inferInsert;
 
 export type LeagueAward = typeof leagueAwards.$inferSelect;
 export type NewLeagueAward = typeof leagueAwards.$inferInsert;
+
+export type Rivalry = typeof rivalries.$inferSelect;
+export type NewRivalry = typeof rivalries.$inferInsert;
 
 export type PlayerValue = typeof playerValues.$inferSelect;
 export type NewPlayerValue = typeof playerValues.$inferInsert;
