@@ -12,6 +12,8 @@ import {
 import { getMatchupLineups } from "@/lib/queries/player-points";
 import { getHubLiveData } from "@/lib/queries/homepage";
 import { getRivalryWeek, rivalryPairKey } from "@/lib/queries/rivalry-week";
+import { getNamedRivalryLookup } from "@/lib/queries/named-rivalries-optional";
+import { findNamedRivalry } from "@/lib/queries/rivalries";
 import { computeWinProbability } from "@/lib/win-probability";
 import { deriveLiveAside } from "@/lib/live-aside";
 import type { MatchupTeam } from "@/lib/queries/matchups";
@@ -92,6 +94,14 @@ export default async function MatchupDetailPage({
     // Per-player lineup data may not be available
   }
 
+  // A commissioner-named rivalry outranks the auto-detected "Rivalry Week"
+  // kicker. Optional lore: its loader returns an empty lookup on failure.
+  const namedRivalry = findNamedRivalry(
+    await getNamedRivalryLookup(),
+    homeTeam.franchiseId,
+    awayTeam.franchiseId,
+  );
+
   // Rivalry Week: is this pairing a mutual-top-rival matchup?
   let isRivalry = false;
   try {
@@ -152,7 +162,24 @@ export default async function MatchupDetailPage({
 
           {/* Score + status */}
           <div className="flex flex-col items-center gap-2 order-first md:order-none">
-            {isRivalry && (
+            {namedRivalry ? (
+              <div
+                className="flex flex-col items-center gap-1 text-center"
+                data-testid="matchup-rivalry"
+              >
+                <Link
+                  href={`/records/head-to-head?a=${homeTeam.franchiseSlug}&b=${awayTeam.franchiseSlug}`}
+                  className="text-kicker text-accent-gold transition-colors hover:text-text-primary"
+                >
+                  {namedRivalry.name}
+                </Link>
+                {namedRivalry.tagline && (
+                  <span className="max-w-xs font-serif text-body-sm italic text-text-secondary">
+                    {namedRivalry.tagline}
+                  </span>
+                )}
+              </div>
+            ) : isRivalry && (
               <span
                 className="text-kicker text-accent-gold"
                 title="Mutual top rivals"
