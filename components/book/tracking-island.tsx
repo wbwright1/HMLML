@@ -8,6 +8,7 @@ import { useBookSlip } from "@/components/book/use-book-slip";
 import {
   SideRow,
   StatusKicker,
+  RivalryKicker,
   YourPickRow,
 } from "@/components/book/side-row";
 import {
@@ -486,7 +487,10 @@ function SlateCard({
           open ? "mb-2.5" : "mb-3.5"
         }`}
       >
-        <StatusKicker game={game} showPush />
+        <span className="flex min-w-0 items-center gap-2">
+          <StatusKicker game={game} showPush />
+          <RivalryKicker game={game} />
+        </span>
         <span className="text-[12px] text-text-tertiary">
           <span className="font-mono font-bold tabular-nums text-text-secondary">
             {inCount}

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { buildRivalryLookup, findNamedRivalry, getNamedRivalries } from "@/lib/queries/rivalries";
 import {
   bookLines,
   bookPicks,
@@ -487,6 +488,9 @@ export async function getBookBoard(
 
   const kickoffs = await getRosterKickoffStates(seasonId, seasonYear, week);
   const pickCounts = await getWeekPickCounts(seasonId, week);
+  // Named rivalries label the card header. getNamedRivalries rethrows a
+  // production DB error itself, same as every other read on this path.
+  const rivalryLookup = buildRivalryLookup(await getNamedRivalries());
 
   const games: BookGame[] = [];
 
@@ -552,6 +556,8 @@ export async function getBookBoard(
           : coverSide(homePoints, awayPoints, line.spread),
       homePicks: counts.home,
       awayPicks: counts.away,
+      rivalryName:
+        findNamedRivalry(rivalryLookup, homeRow.franchiseId, awayRow.franchiseId)?.name ?? null,
     });
   }
 

@@ -69,6 +69,11 @@ export interface BookGame {
   coveringSide: CoverResult | null;
   homePicks: number;
   awayPicks: number;
+  /**
+   * The commish-named rivalry this pair belongs to ("The Custody Battle"), or
+   * null. Shown in the card header beside the status kicker.
+   */
+  rivalryName: string | null;
 }
 
 export interface MemberBookPick {
