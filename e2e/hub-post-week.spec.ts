@@ -106,8 +106,8 @@ test.describe("Post-week recap (between weeks)", () => {
       } else {
         expect(finalsText).toContain(num!);
       }
-      // The numeral renders in the mono face inside the serif headline.
-      await expect(h1.locator("span.font-mono").first()).toHaveText(num!);
+      // The numeral stays in the serif: the headline is one run, no mono span.
+      await expect(h1.locator("span.font-mono")).toHaveCount(0);
     } else {
       // No finals rung fired: a slate rung or the fallback, never a day count.
       expect(rung).toMatch(/^(unbeaten-clash|winless-clash|division-flip|named-rivalry|winless-watch|fallback)$/);

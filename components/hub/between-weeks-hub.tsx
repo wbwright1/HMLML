@@ -59,7 +59,6 @@ import {
   heroDekFromData,
   heroHeadline,
   heroKickerTail,
-  numeralSegments,
   repeatsHeroNumber,
   type HeroHeadlineInput,
   type HeroSlateTeam,
@@ -494,20 +493,18 @@ export async function BetweenWeeksHub({
           <p className="text-kicker mb-3" data-testid="hero-kicker">
             Harambe Memorial League &middot; Week {week} &middot; {kickerTail}
           </p>
+          {/* One serif run, numerals included. The three-font rule's
+              "every numeral in mono" clause is for stats set in Geist; an
+              upright mono figure dropped into an italic serif sentence
+              breaks the line (Blake, 2026-09-22: "64.2" in the hero looked
+              really bad). The recap headline below sets its numbers the
+              same way. */}
           <h1
             className="text-display"
             data-testid="hero-headline"
             data-hero-rung={headline.rung}
           >
-            {numeralSegments(headline.text).map((seg, i) =>
-              seg.numeral ? (
-                <span key={i} className="font-mono not-italic tabular-nums text-[0.8em]">
-                  {seg.text}
-                </span>
-              ) : (
-                seg.text
-              )
-            )}
+            {headline.text}
           </h1>
           <p className="mt-3 text-body-lg text-text-secondary" data-testid="hero-dek">
             <EditorialBody body={heroDek} />

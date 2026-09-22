@@ -159,7 +159,7 @@ Card gradient fill: `linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255
 ### Typography (three-font rule)
 - **Instrument Serif, italic (400)** -- display, page titles, wordmark, editorial asides. Classes: `.text-display` (40-56px), `.text-h1` (36-44px), `.text-h2` (28-32px). Bound to `font-serif` / `var(--font-serif)`. Minimal negative tracking (serif needs less than Geist did).
 - **Geist** -- all UI, labels, body, buttons. Weights 400/500/600/700/900. Classes: `.text-h3` (20-24px, 500), `.text-body-lg` (18px), `.text-body` (16px), `.text-body-sm` (14px), `.text-caption` (12px, 500, .06em, uppercase). This is the default `font-sans`.
-- **JetBrains Mono, tabular** -- EVERY numeral: scores, records, stats, ranks. Class `.text-stat` (700, `tabular-nums`) / `font-mono` / `var(--font-mono)`. Never render a score or stat in the serif or in Geist.
+- **JetBrains Mono, tabular** -- EVERY numeral: scores, records, stats, ranks. Class `.text-stat` (700, `tabular-nums`) / `font-mono` / `var(--font-mono)`. Never render a score or stat in the serif or in Geist. One exception: a numeral inside a serif italic display sentence (the hub hero headline, the recap headline) stays in the serif; an upright mono figure dropped mid-sentence breaks the line.
 - **Kicker** (`.text-kicker`): 10-11px, weight 600, `letter-spacing:.18em`, uppercase, `--text-tertiary` -- the small eyebrow label above titles and card groups.
 - Tabular figures (`font-variant-numeric: tabular-nums`) on all `td`/`th` and every score/stat number.
 
