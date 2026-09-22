@@ -19,6 +19,39 @@ export const RIVALRY_LIMITS = {
 } as const;
 
 /**
+ * Every message the rivalry forms can show. The /commish actions report a
+ * result by redirecting with one of these KEYS in the query string, and the
+ * page renders only a known key, so a crafted URL can never put arbitrary
+ * text on the console.
+ */
+export const RIVALRY_MESSAGES = {
+  created: "Rivalry saved. The whole site picks it up on the next render.",
+  updated: "Rivalry updated.",
+  deleted: "Rivalry deleted.",
+  "missing-franchise": "Pick both franchises.",
+  "self-rival": "A franchise cannot be its own rival.",
+  "missing-name": "A rivalry needs a name.",
+  "name-too-long": `Name is capped at ${RIVALRY_LIMITS.name} characters.`,
+  "tagline-too-long": `Tagline is capped at ${RIVALRY_LIMITS.tagline} characters.`,
+  "origin-too-long": `Origin is capped at ${RIVALRY_LIMITS.origin} characters.`,
+  "trophy-too-long": `Trophy name is capped at ${RIVALRY_LIMITS.trophyName} characters.`,
+  "bad-year": `Origin year must be a four-digit year (${RIVALRY_LIMITS.minYear}-${RIVALRY_LIMITS.maxYear}).`,
+  "duplicate-pair": "Those two already have a named rivalry. Edit that one instead.",
+  "unknown-franchise": "One of those franchises no longer exists.",
+  "not-found": "That rivalry is already gone.",
+  invalid: "That rivalry did not validate.",
+} as const;
+
+export type RivalryMessageKey = keyof typeof RIVALRY_MESSAGES;
+
+/** Narrows an untrusted query-string value to a known message key. */
+export function asRivalryMessageKey(v: unknown): RivalryMessageKey | null {
+  return typeof v === "string" && Object.hasOwn(RIVALRY_MESSAGES, v)
+    ? (v as RivalryMessageKey)
+    : null;
+}
+
+/**
  * Orders a franchise pair the way the rivalries table stores it: byte order,
  * which is JavaScript's `<` on strings and the same order rivalryPairKey uses.
  * Returns null for a franchise paired with itself.
@@ -34,11 +67,11 @@ export function canonicalRivalryPair(
 }
 
 /** Trimmed text; blank becomes null so optional columns store NULL, not "". */
-function optionalText(max: number, label: string) {
+function optionalText(max: number, key: RivalryMessageKey) {
   return z
     .string()
     .trim()
-    .max(max, `${label} is capped at ${max} characters.`)
+    .max(max, key)
     .transform((s) => (s.length === 0 ? null : s))
     .nullable()
     .default(null);
@@ -46,16 +79,16 @@ function optionalText(max: number, label: string) {
 
 const rivalryFormSchema = z
   .object({
-    franchiseOneId: z.string().trim().min(1, "Pick both franchises."),
-    franchiseTwoId: z.string().trim().min(1, "Pick both franchises."),
+    franchiseOneId: z.string().trim().min(1, "missing-franchise"),
+    franchiseTwoId: z.string().trim().min(1, "missing-franchise"),
     name: z
       .string()
       .trim()
-      .min(1, "A rivalry needs a name.")
-      .max(RIVALRY_LIMITS.name, `Name is capped at ${RIVALRY_LIMITS.name} characters.`),
-    tagline: optionalText(RIVALRY_LIMITS.tagline, "Tagline"),
-    origin: optionalText(RIVALRY_LIMITS.origin, "Origin"),
-    trophyName: optionalText(RIVALRY_LIMITS.trophyName, "Trophy name"),
+      .min(1, "missing-name")
+      .max(RIVALRY_LIMITS.name, "name-too-long"),
+    tagline: optionalText(RIVALRY_LIMITS.tagline, "tagline-too-long"),
+    origin: optionalText(RIVALRY_LIMITS.origin, "origin-too-long"),
+    trophyName: optionalText(RIVALRY_LIMITS.trophyName, "trophy-too-long"),
     originYear: z
       .string()
       .trim()
@@ -69,17 +102,14 @@ const rivalryFormSchema = z
           n < RIVALRY_LIMITS.minYear ||
           n > RIVALRY_LIMITS.maxYear
         ) {
-          ctx.addIssue({
-            code: "custom",
-            message: `Origin year must be a four-digit year (${RIVALRY_LIMITS.minYear}-${RIVALRY_LIMITS.maxYear}).`,
-          });
+          ctx.addIssue({ code: "custom", message: "bad-year" });
           return z.NEVER;
         }
         return n;
       }),
   })
   .refine((v) => v.franchiseOneId !== v.franchiseTwoId, {
-    message: "A franchise cannot be its own rival.",
+    message: "self-rival",
     path: ["franchiseTwoId"],
   });
 
@@ -95,7 +125,7 @@ export interface RivalryInput {
 
 export type RivalryParseResult =
   | { ok: true; value: RivalryInput }
-  | { ok: false; error: string };
+  | { ok: false; error: RivalryMessageKey };
 
 /** Anything with FormData's `get`, so tests can pass a plain FormData. */
 interface FormLike {
@@ -114,7 +144,7 @@ const FIELDS = [
 
 /**
  * Parses a create/edit rivalry form into a canonical-order RivalryInput, or
- * the first validation message in the site's calm voice.
+ * the key of the first validation message (see RIVALRY_MESSAGES).
  */
 export function parseRivalryForm(form: FormLike): RivalryParseResult {
   // A missing field reads as blank, so a required one fails with its own
@@ -128,12 +158,12 @@ export function parseRivalryForm(form: FormLike): RivalryParseResult {
   if (!parsed.success) {
     return {
       ok: false,
-      error: parsed.error.issues[0]?.message ?? "That rivalry did not validate.",
+      error: asRivalryMessageKey(parsed.error.issues[0]?.message) ?? "invalid",
     };
   }
   const v = parsed.data;
   const pair = canonicalRivalryPair(v.franchiseOneId, v.franchiseTwoId);
-  if (!pair) return { ok: false, error: "A franchise cannot be its own rival." };
+  if (!pair) return { ok: false, error: "self-rival" };
   return {
     ok: true,
     value: {

@@ -4,6 +4,8 @@ import {
   parseRivalryForm,
   parseRivalryId,
   RIVALRY_LIMITS,
+  RIVALRY_MESSAGES,
+  asRivalryMessageKey,
 } from "./rivalry-form";
 import { rivalryPairKey } from "./queries/rivalry-week";
 
@@ -109,23 +111,46 @@ describe("parseRivalryForm", () => {
   });
 
   it.each([
-    [{ franchiseTwoId: BASE.franchiseOneId }, "A franchise cannot be its own rival."],
-    [{ franchiseOneId: "" }, "Pick both franchises."],
-    [{ name: "   " }, "A rivalry needs a name."],
-    [{ name: "x".repeat(RIVALRY_LIMITS.name + 1) }, "Name is capped"],
-    [{ tagline: "x".repeat(RIVALRY_LIMITS.tagline + 1) }, "Tagline is capped"],
-    [{ originYear: "21" }, "Origin year must be a four-digit year"],
-    [{ originYear: "1899" }, "Origin year must be a four-digit year"],
-    [{ originYear: "2021.5" }, "Origin year must be a four-digit year"],
-  ])("rejects %o", (patch, message) => {
-    const r = parseRivalryForm(form({ ...BASE, ...patch }));
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.error).toContain(message);
+    [{ franchiseTwoId: BASE.franchiseOneId }, "self-rival"],
+    [{ franchiseOneId: "" }, "missing-franchise"],
+    [{ name: "   " }, "missing-name"],
+    [{ name: "x".repeat(RIVALRY_LIMITS.name + 1) }, "name-too-long"],
+    [{ tagline: "x".repeat(RIVALRY_LIMITS.tagline + 1) }, "tagline-too-long"],
+    [{ origin: "x".repeat(RIVALRY_LIMITS.origin + 1) }, "origin-too-long"],
+    [{ trophyName: "x".repeat(RIVALRY_LIMITS.trophyName + 1) }, "trophy-too-long"],
+    [{ originYear: "21" }, "bad-year"],
+    [{ originYear: "1899" }, "bad-year"],
+    [{ originYear: "2021.5" }, "bad-year"],
+  ] as const)("rejects %o with %s", (patch, key) => {
+    expect(parseRivalryForm(form({ ...BASE, ...patch }))).toEqual({
+      ok: false,
+      error: key,
+    });
   });
 
   it("reports a missing required field with its own message", () => {
     const r = parseRivalryForm(new FormData());
-    expect(r).toEqual({ ok: false, error: "Pick both franchises." });
+    expect(r).toEqual({ ok: false, error: "missing-franchise" });
+  });
+
+  it("accepts a name exactly at the cap", () => {
+    const r = parseRivalryForm(form({ ...BASE, name: "x".repeat(RIVALRY_LIMITS.name) }));
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe("asRivalryMessageKey", () => {
+  it("accepts only known keys, so a crafted URL cannot inject text", () => {
+    expect(asRivalryMessageKey("created")).toBe("created");
+    expect(asRivalryMessageKey("duplicate-pair")).toBe("duplicate-pair");
+    expect(asRivalryMessageKey("You have been hacked")).toBeNull();
+    expect(asRivalryMessageKey("toString")).toBeNull();
+    expect(asRivalryMessageKey(["created"])).toBeNull();
+    expect(asRivalryMessageKey(undefined)).toBeNull();
+  });
+
+  it("every message is free of em-dashes", () => {
+    for (const m of Object.values(RIVALRY_MESSAGES)) expect(m).not.toContain("\u2014");
   });
 });
 
