@@ -1,13 +1,15 @@
 import { test, expect } from "@playwright/test";
 import type { Page, Locator } from "@playwright/test";
 import { signaturePhrasesIn } from "../lib/content-gen/phrases";
+import { getSql } from "./helpers/sql";
 
 // ============================================================================
 // Between-Weeks Hub (state 1d)
 //
 // The Tue/Wed lull: regular season, no live game, the slate set but not yet
 // kicked off. Runs under the "hub-in-season" Playwright project, whose dev
-// server is pinned to NFL_STATE_OVERRIDE=regular:1:force (playwright.config.ts).
+// server is pinned to NFL_STATE_OVERRIDE=regular:next:force (playwright.config.ts):
+// "next" resolves per request to the earliest all-scheduled week.
 // Bundled with #249's fix because it shares that server and had the same
 // silent-skip defect (a runtime isBetweenWeeks() guard letting every test
 // self-skip with zero assertions exercised).
@@ -17,7 +19,7 @@ import { signaturePhrasesIn } from "../lib/content-gen/phrases";
 // rather than an implicit one; every other test in the file also asserts
 // unconditionally now.
 //
-// Fallback documented in the PR: if the forced regular:1:force state does not
+// Fallback documented in the PR: if the forced regular:next:force state does not
 // land the hub in the between-weeks sub-state (computeIsBetweenWeeks needs a
 // slate with no kicked-off games), this file is dropped from the
 // hub-in-season project's testMatch and from STATE_FORCED in
@@ -176,8 +178,14 @@ test.describe("Between-Weeks Hub (1d)", () => {
     const [a, b] = records.map(parse);
 
     if (/division lead/i.test(kicker)) {
-      // A division game, never a cross-division one.
-      expect(kicker).toMatch(/^DIVISION \d+ (REMATCH|GAME) · /);
+      // A division game, never a cross-division one. A named rivalry leads
+      // with its own name instead of the division (T24 pins that shape).
+      const rivalry = await page.getByTestId("gotw-kicker").getAttribute("data-named-rivalry");
+      if (rivalry) {
+        expect(kicker).toBe(`${rivalry.toUpperCase()} · DIVISION LEAD ON THE LINE`);
+      } else {
+        expect(kicker).toMatch(/^DIVISION \d+ (REMATCH|GAME) · /);
+      }
       // Games have been played: a 0-0 record leads nothing.
       expect(a.w + a.l + a.t + b.w + b.l + b.t).toBeGreaterThan(0);
       // Either side, winning, draws level with the other side losing.
@@ -191,6 +199,73 @@ test.describe("Between-Weeks Hub (1d)", () => {
 
     // The retired stakes wording and a 0-0 "lead" never render.
     expect(kicker).not.toMatch(/DIVISION LEAD AT STAKE/);
+  });
+
+  test("T24: a commish-named rivalry leads the GotW kicker, with its tagline aside", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const kickerEl = page.getByTestId("gotw-kicker");
+    const kicker = (await kickerEl.innerText()).trim();
+    // Shape either way: exactly "{lead} · {stakes}", both clauses non-empty.
+    expect(kicker).toMatch(/^[^·]+\S · \S[^·]+$/);
+
+    // The featured pair, read off the card's two team links.
+    const gotwHeading = page.getByText("Game of the Week", { exact: true });
+    const card = gotwHeading.locator("xpath=following-sibling::*[1]");
+    const slugs = (await card.locator('a[href^="/teams/"]').evaluateAll((els) =>
+      els.map((el) => (el.getAttribute("href") ?? "").split("/")[2])
+    )).filter(Boolean);
+    expect(new Set(slugs).size).toBe(2);
+    const [s1, s2] = [...new Set(slugs)];
+
+    // Every named rivalry in the live DB, with its pair's slugs.
+    const sql = getSql();
+    const rows = (await sql`
+      SELECT r.name, r.tagline, fa.slug AS a_slug, fb.slug AS b_slug
+      FROM rivalries r
+      JOIN franchises fa ON fa.id = r.franchise_a_id
+      JOIN franchises fb ON fb.id = r.franchise_b_id
+    `) as { name: string; tagline: string | null; a_slug: string; b_slug: string }[];
+    const featured = rows.find(
+      (r) => (r.a_slug === s1 && r.b_slug === s2) || (r.a_slug === s2 && r.b_slug === s1)
+    );
+
+    const attr = await kickerEl.getAttribute("data-named-rivalry");
+    const tagline = page.getByTestId("gotw-rivalry-tagline");
+    const leadsWithSomeRivalry = rows.some((r) =>
+      kicker.startsWith(`${r.name.toUpperCase()} · `)
+    );
+    const isTitleRematch = /REMATCH ·/.test(kicker) && /BOWL|TITLE GAME/.test(kicker);
+
+    if (featured && !isTitleRematch) {
+      // The featured game IS a named rivalry (the live 2026 week-3 slate
+      // features The Custody Battle): its name leads the kicker, the second
+      // clause is a real fact, and the tagline sits under it in the serif.
+      expect(attr).toBe(featured.name);
+      expect(kicker.startsWith(`${featured.name.toUpperCase()} · `)).toBe(true);
+      const second = kicker.slice(featured.name.length + 3);
+      expect(second).toMatch(
+        /^(\d+-\d+(-\d+)? MEETS \d+-\d+(-\d+)?|DIVISION LEAD ON THE LINE|PLAYOFF SPOT AT STAKE|BATTLE OF UNBEATENS|TOP-THREE CLASH|CROSS-DIVISION|DIVISION \d+ (GAME|REMATCH))$/
+      );
+      if (featured.tagline) {
+        await expect(tagline).toHaveText(featured.tagline);
+        const fontStyle = await tagline.evaluate((el) => getComputedStyle(el).fontStyle);
+        expect(fontStyle).toBe("italic");
+      } else {
+        await expect(tagline).toHaveCount(0);
+      }
+      // The blurb names the rivalry too, unless a stored LLM blurb for this
+      // exact pair replaced the reason-derived one; either way it never
+      // echoes the tagline the card already prints.
+      const blurb = (await page.getByTestId("gotw-blurb").innerText()).trim();
+      if (featured.tagline) expect(blurb).not.toContain(featured.tagline);
+    } else {
+      // Not a named rivalry: no rivalry name leads, and no tagline renders.
+      expect(attr).toBeNull();
+      expect(leadsWithSomeRivalry).toBe(false);
+      await expect(tagline).toHaveCount(0);
+    }
   });
 
   test("T23: the GotW blurb and headline assert nothing they cannot prove", async ({ page }) => {
