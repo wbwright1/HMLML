@@ -30,7 +30,14 @@ async function removeNemesis() {
 }
 
 test.beforeAll(async () => {
-  ready = (await membersTableExists()) && (await rivalriesTableExists());
+  // Migration 0017 is applied to the live DB, so a missing rivalries table is
+  // a broken environment, not a reason to skip: fail loudly (as
+  // rivalries-named.spec.ts does) instead of reporting a green run that
+  // exercised nothing.
+  if (!(await rivalriesTableExists())) {
+    throw new Error("rivalries table missing: apply migration 0017 first");
+  }
+  ready = await membersTableExists();
   if (!ready) return;
   await fx.seed();
   await removeNemesis();
@@ -47,7 +54,7 @@ test.afterAll(async () => {
 });
 
 test.beforeEach(async () => {
-  test.skip(!ready, "members or rivalries table not present");
+  test.skip(!ready, "members table not present");
 });
 
 test("the commish creates, edits and deletes a named rivalry", async ({ page }) => {
