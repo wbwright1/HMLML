@@ -76,7 +76,7 @@ const W3_SLATE: HeroSlateGame[] = [
   game(W3.TTT, W3.WLD, { isGameOfWeek: true }),
   game(W3.BCH, W3.TB),
   game(W3.MCC, W3.BGS),
-  game(W3.LDL, W3.VV, { namedRivalry: { name: "The Split Decision" } }),
+  game(W3.LDL, W3.VV),
 ];
 
 function final(w: Id, wp: number, l: Id, lp: number): HeroFinal {

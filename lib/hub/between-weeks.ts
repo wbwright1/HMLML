@@ -117,9 +117,12 @@ export type GotwReason =
  *
  * - title-rematch: informational only; the week-1 rematch is an OVERRIDE
  *   (selectGameOfTheWeek returns it before any scoring runs).
- * - named-rivalry is the biggest bonus: a rivalry the league named itself is
- *   the one game nobody needs sold to them. It still does not beat two
- *   unbeatens fighting for a division on its own merits.
+ * - named-rivalry (12) sits between top-of-table and a division-lead flip
+ *   (Blake, 2026-09-22; it was 25). A rivalry the league named itself breaks
+ *   ties between comparable games and lifts an even game over a better one,
+ *   but it no longer carries a mismatch: a 2-0 v 0-2 rivalry (quality 14 +
+ *   12 = 26) loses to a plain 2-0 v 1-1 game (27), and it can never beat two
+ *   unbeatens.
  * - division-lead-flip / playoff-clinch: real standings consequences.
  * - unbeatens stacks on top of the record-quality base on purpose, so two
  *   2-0 teams crush a 2-0 team against an 0-2 team.
@@ -128,7 +131,7 @@ export type GotwReason =
  */
 export const GOTW_REASON_WEIGHTS: Readonly<Record<GotwReason, number>> = Object.freeze({
   "title-rematch": 100,
-  "named-rivalry": 25,
+  "named-rivalry": 12,
   "division-lead-flip": 15,
   "playoff-clinch": 15,
   unbeatens: 10,

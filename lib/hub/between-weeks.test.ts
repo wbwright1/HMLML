@@ -79,14 +79,38 @@ describe("selectGameOfTheWeek", () => {
     expect(pickId([cross, flip])).toBe(2);
   });
 
-  it("a named rivalry is a large bonus: it lifts a mismatch over a 2-0 v 1-1 game", () => {
+  it("weighs a named rivalry between top-of-table and a division-lead flip", () => {
+    const w = GOTW_REASON_WEIGHTS;
+    expect(w["named-rivalry"]).toBe(12);
+    expect(w["named-rivalry"]).toBeGreaterThan(w["top-of-table"]);
+    expect(w["named-rivalry"]).toBeLessThan(w["division-lead-flip"]);
+  });
+
+  it("a named rivalry no longer carries a mismatch: a 2-0 v 1-1 game beats a 2-0 v 0-2 rivalry", () => {
     const rivalry = candidate(1, team(2, 0, 331, 2), team(0, 2, 197, 2), {
       namedRivalry: { name: "The Custody Battle", tagline: null },
     });
     const decent = candidate(2, team(2, 0, 275, 1), team(1, 1, 295, 3));
-    const pick = selectGameOfTheWeek([rivalry, decent], { week: 3 });
+    expect(pickId([rivalry, decent], 3)).toBe(2);
+  });
+
+  it("a named rivalry between two 2-0 teams still beats two 2-0 non-rivals", () => {
+    const rivalry = candidate(1, team(2, 0, 300, 1), team(2, 0, 290, 3), {
+      namedRivalry: { name: "The Split Decision", tagline: null },
+    });
+    const plain = candidate(2, team(2, 0, 340, 2), team(2, 0, 330, 1));
+    const pick = selectGameOfTheWeek([plain, rivalry], { week: 3 });
     expect(pick?.matchupId).toBe(1);
     expect(pick?.reasons[0]).toBe("named-rivalry");
+  });
+
+  it("a named rivalry still lifts an even game over a better but lopsided one", () => {
+    // 1-1 v 1-1 with the name (20 + 12) over a 2-0 v 1-1 non-rival (27).
+    const rivalry = candidate(1, team(1, 1, 250, 2), team(1, 1, 240, 3), {
+      namedRivalry: { name: "The Custody Battle", tagline: null },
+    });
+    const decent = candidate(2, team(2, 0, 275, 1), team(1, 1, 295, 3));
+    expect(pickId([rivalry, decent], 3)).toBe(1);
   });
 
   it("but a named-rivalry mismatch still loses to two unbeatens fighting for a division", () => {
@@ -100,7 +124,7 @@ describe("selectGameOfTheWeek", () => {
   });
 
   it("a named rivalry between two bad teams never beats a battle of unbeatens", () => {
-    // 0-2 v 0-2 (and 0-3 v 1-2 later on) with the name: quality 0 + 25. Two
+    // 0-2 v 0-2 (and 0-3 v 1-2 later on) with the name: quality 0 + 12. Two
     // 2-0 teams from different divisions with nothing else going for them:
     // quality 40 + unbeatens 10. The name is a tiebreaker-sized bonus between
     // comparable games, not a trump card over a real marquee game.
@@ -263,12 +287,15 @@ describe("the real 2026 week 3 slate", () => {
     expect([3, 5, 6]).toContain(second);
   });
 
-  it("can feature ROG v OMM once the league names the rivalry", () => {
+  it("keeps ROG v OMM off the Game of the Week even once the league names the rivalry", () => {
+    // At weight 25 the name carried this 2-0 v 0-2 mismatch to the top card;
+    // at 12 it scores 26 against the 2-0 v 1-1 games' 27, so it stays a
+    // slate card (which still prints the rivalry's name and tagline).
     const rivalry = { name: "The Custody Battle", tagline: null };
     const named = slate.map((c) => (c.matchupId === 1 ? { ...c, namedRivalry: rivalry } : c));
     const pick = selectGameOfTheWeek(named, { week: 3 });
-    expect(pick!.matchupId).toBe(1);
-    expect(stakesFromReasons(pick!.reasons, { namedRivalry: rivalry })).toBe("The Custody Battle");
+    expect(pick!.matchupId).not.toBe(1);
+    expect([3, 5, 6]).toContain(pick!.matchupId);
   });
 });
 

@@ -280,8 +280,9 @@ test.describe("Between-Weeks Hub (1d)", () => {
     const isTitleRematch = /REMATCH ·/.test(kicker) && /BOWL|TITLE GAME/.test(kicker);
 
     if (featured && !isTitleRematch) {
-      // The featured game IS a named rivalry (the live 2026 week-3 slate
-      // features The Custody Battle): its name leads the kicker, the second
+      // The featured game IS a named rivalry (at weight 12 that takes a real
+      // game, not just a name: the 2-0 v 0-2 Custody Battle stays a slate card
+      // in week 3): its name leads the kicker, the second
       // clause is a real fact, and the tagline sits under it in the serif.
       expect(attr).toBe(featured.name);
       expect(kicker.startsWith(`${featured.name.toUpperCase()} · `)).toBe(true);

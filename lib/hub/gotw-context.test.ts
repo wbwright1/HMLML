@@ -99,21 +99,32 @@ describe("resolveFromSource on the real 2026 week 3", () => {
     expect(second).not.toBe(first);
   });
 
-  it("features the named rivalry once one exists, with its name as the stakes", () => {
-    const r = resolveFromSource(
-      source({
-        namedRivalryOf: (x, y) =>
-          [x, y].sort().join("|") === "OMM|ROG"
-            ? { name: "The Custody Battle", tagline: "One team, two owners, one ugly split." }
-            : null,
-      })
+  const custodyOf = (x: string, y: string) =>
+    [x, y].sort().join("|") === "OMM|ROG"
+      ? { name: "The Custody Battle", tagline: "One team, two owners, one ugly split." }
+      : null;
+
+  it("a named 2-0 v 0-2 rivalry stays off the top card (weight 12)", () => {
+    const r = resolveFromSource(source({ namedRivalryOf: custodyOf }));
+    expect(r.pick!.matchupId).not.toBe(1);
+    expect(r.namedRivalry).toBeNull();
+    // The candidate still carries the name, so its slate card can print it.
+    expect(r.candidates.find((c) => c.matchupId === 1)!.namedRivalry?.name).toBe(
+      "The Custody Battle"
     );
+  });
+
+  it("features a named rivalry that is also a real game, with its name leading the kicker", () => {
+    // Give ROG v OMM two even records: 1-1 v 1-1 plus the name beats 2-0 v 1-1
+    // (and with every other Division 2 team 0-2, the winner leads it).
+    const even = standings.map((s) =>
+      s.franchiseId === "ROG" || s.franchiseId === "OMM" ? { ...s, wins: 1, losses: 1 } : s
+    );
+    const r = resolveFromSource(source({ namedRivalryOf: custodyOf, standings: even }));
     expect(r.pick!.matchupId).toBe(1);
     expect(r.stakes).toBe("The Custody Battle");
     expect(r.blurb).toContain("The Custody Battle");
-    // The name leads the kicker; the second clause is the true record clash,
-    // since ROG v OMM carries no standings stake this week.
-    expect(r.kicker).toBe("The Custody Battle · 2-0 meets 0-2");
+    expect(r.kicker).toBe("The Custody Battle · Division lead on the line");
     expect(r.namedRivalry).toEqual({
       name: "The Custody Battle",
       tagline: "One team, two owners, one ugly split.",
@@ -129,8 +140,12 @@ describe("resolveFromSource on the real 2026 week 3", () => {
     expect(lookup("ROG", "TTT")).toBeNull();
     expect(lookup("ROG", "ROG")).toBeNull();
     expect(namedRivalryLookupFrom([])).toBeNull();
+    // Wired through to the candidates (whether or not the name wins the card).
     const r = resolveFromSource(source({ namedRivalryOf: lookup }));
-    expect(r.pick!.matchupId).toBe(1);
+    expect(r.candidates.find((c) => c.matchupId === 1)!.namedRivalry?.name).toBe(
+      "The Custody Battle"
+    );
+    expect(r.candidates.filter((c) => c.namedRivalry).map((c) => c.matchupId)).toEqual([1]);
   });
 
   it("carries no rivalry when the pick is not a named rivalry", () => {
