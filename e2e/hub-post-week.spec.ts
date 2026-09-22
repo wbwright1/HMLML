@@ -95,9 +95,12 @@ test.describe("Post-week recap (between weeks)", () => {
         const margins = scores
           .filter((s) => s.length >= 2)
           .map((s) => Math.abs(s[0] - s[1]).toFixed(1));
-        // Scores print to one decimal, so allow the rounding of two roundings.
+        // Scores print to one decimal and the margin is rounded from the raw
+        // scores, so the two can differ by up to 0.1 (204.94 - 140.78 = 64.16
+        // prints 64.2, the shown 204.9 - 140.8 gives 64.1). 0.15 absorbs that
+        // plus float error and still rejects every other final's margin.
         expect(
-          margins.some((m) => Math.abs(Number(m) - Number(num)) <= 0.1),
+          margins.some((m) => Math.abs(Number(m) - Number(num)) < 0.15),
           `${num} vs ${margins.join(", ")}`
         ).toBe(true);
       } else {
