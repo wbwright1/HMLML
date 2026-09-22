@@ -308,6 +308,22 @@ test.describe("Between-Weeks Hub (1d)", () => {
       expect(leadsWithSomeRivalry).toBe(false);
       await expect(tagline).toHaveCount(0);
     }
+
+    // A named rivalry that did NOT take the top card still carries its name
+    // and tagline on its slate card (the builder's rivalry rung always beats
+    // a stored generated angle for a named pair).
+    for (const card of await page.getByTestId("slate-card").all()) {
+      const cardSlugs = new Set(
+        (await card.locator('a[href^="/teams/"]').evaluateAll((els) =>
+          els.map((el) => (el.getAttribute("href") ?? "").split("/")[2])
+        )).filter(Boolean)
+      );
+      const named = rows.find((r) => cardSlugs.has(r.a_slug) && cardSlugs.has(r.b_slug));
+      if (!named) continue;
+      const angle = (await card.getByTestId("slate-angle").innerText()).trim();
+      expect(angle.startsWith(`${named.name}: `), angle).toBe(true);
+      if (named.tagline) expect(angle).toContain(named.tagline);
+    }
   });
 
   test("T23: the GotW blurb and headline assert nothing they cannot prove", async ({ page }) => {

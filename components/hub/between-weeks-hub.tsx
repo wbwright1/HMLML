@@ -337,10 +337,17 @@ export async function BetweenWeeksHub({
   // overridden card would silently consume a hook (the streak, say) that a
   // builder-driven card could have used, and the visible slate would be less
   // varied than it needed to be.
+  //
+  // Except for a commish-named rivalry: its card always takes the builder's
+  // rivalry rung (name, tagline, series). A named rivalry that is not the
+  // Game of the Week lives on this grid, and a generated angle that never
+  // mentions the name would make the league's own rivalry vanish from the hub.
   const angleOverrideOf = (m: PairedMatchup): string | null =>
-    editorial.matchupAngles.byPair[
-      matchupPairKey(m.homeTeam.franchiseSlug, m.awayTeam.franchiseSlug)
-    ] ?? null;
+    namedRivalryOf?.(m.homeTeam.franchiseId, m.awayTeam.franchiseId)
+      ? null
+      : (editorial.matchupAngles.byPair[
+          matchupPairKey(m.homeTeam.franchiseSlug, m.awayTeam.franchiseSlug)
+        ] ?? null);
   const needsBuiltAngle = restOfSlate.filter((m) => angleOverrideOf(m) == null);
 
   // Built as one batch: that is what makes the cards provably distinct
