@@ -1,11 +1,14 @@
 import Link from "next/link";
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { LiveIndicator } from "@/components/live-indicator";
+import { RivalryChip } from "@/components/rivalry-chip";
 import type { FranchiseScheduleWeek } from "@/lib/queries/schedule";
 
 interface FranchiseScheduleRowProps {
   week: FranchiseScheduleWeek;
   seasonYear: number;
+  /** The commissioner-named rivalry with this week's opponent, if any. */
+  rivalryName?: string | null;
 }
 
 export function ResultBadge({ result }: { result: "W" | "L" | "T" }) {
@@ -33,6 +36,7 @@ export function ResultBadge({ result }: { result: "W" | "L" | "T" }) {
 export function FranchiseScheduleRow({
   week,
   seasonYear,
+  rivalryName = null,
 }: FranchiseScheduleRowProps) {
   const { opponent } = week;
 
@@ -56,16 +60,21 @@ export function FranchiseScheduleRow({
 
       <div className="flex-1 min-w-0">
         {opponent ? (
-          <FranchiseIdentity
-            franchise={{
-              slug: opponent.franchiseSlug,
-              name: opponent.franchiseName,
-              abbreviation: opponent.franchiseAbbreviation ?? undefined,
-              brandingColor: opponent.franchiseBrandingColor ?? undefined,
-              avatarUrl: opponent.avatarUrl,
-            }}
-            variant="compact"
-          />
+          <div className="flex min-w-0 flex-col items-start gap-1 sm:flex-row sm:items-center sm:gap-3">
+            <div className="min-w-0">
+              <FranchiseIdentity
+                franchise={{
+                  slug: opponent.franchiseSlug,
+                  name: opponent.franchiseName,
+                  abbreviation: opponent.franchiseAbbreviation ?? undefined,
+                  brandingColor: opponent.franchiseBrandingColor ?? undefined,
+                  avatarUrl: opponent.avatarUrl,
+                }}
+                variant="compact"
+              />
+            </div>
+            {rivalryName && <RivalryChip name={rivalryName} />}
+          </div>
         ) : (
           <span className="text-body-sm text-text-tertiary">Bye week</span>
         )}
@@ -98,7 +107,7 @@ export function FranchiseScheduleRow({
     <Link
       href={`/matchups/${seasonYear}/${week.week}/${week.matchupId}`}
       className="block rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
-      aria-label={`Week ${week.week}: versus ${opponent.franchiseName}, view matchup detail`}
+      aria-label={`Week ${week.week}: versus ${opponent.franchiseName}${rivalryName ? `, ${rivalryName}` : ""}, view matchup detail`}
     >
       {content}
     </Link>

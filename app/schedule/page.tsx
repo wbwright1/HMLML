@@ -8,6 +8,8 @@ import { SeasonPicker } from "@/components/season-picker";
 import { getLatestSeason, getSeasonByYearSimple } from "@/lib/queries/matchups";
 import { getAllSeasons } from "@/lib/queries/seasons";
 import { getSeasonSchedule } from "@/lib/queries/schedule";
+import { getNamedRivalryLookup } from "@/lib/queries/named-rivalries-optional";
+import { findNamedRivalry } from "@/lib/queries/rivalries";
 
 interface SchedulePageProps {
   searchParams: Promise<{ season?: string }>;
@@ -92,6 +94,9 @@ export default async function SchedulePage({
     // Schedule data may not be available
   }
 
+  // Named rivalries label their rows; optional lore, empty on a failed read.
+  const rivalryLookup = await getNamedRivalryLookup();
+
   const seasonYears = allSeasons.map((s) => s.seasonYear);
 
   return (
@@ -124,12 +129,19 @@ export default async function SchedulePage({
                 Week <span className="font-mono tabular-nums">{week}</span>
               </h3>
               <div className="space-y-3">
-                {weekMatchups.map((matchup, index) => (
+                {weekMatchups.map((matchup, index) => {
+                  const rivalryName =
+                    findNamedRivalry(
+                      rivalryLookup,
+                      matchup.homeTeam.franchiseId,
+                      matchup.awayTeam.franchiseId,
+                    )?.name ?? null;
+                  return (
                   <ScrollReveal key={matchup.matchupId} delay={index * 40}>
                     <Link
                       href={`/matchups/${activeSeason.seasonYear}/${week}/${matchup.matchupId}`}
                       className="block rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
-                      aria-label={`${matchup.homeTeam.franchiseName} versus ${matchup.awayTeam.franchiseName}, view detail`}
+                      aria-label={`${matchup.homeTeam.franchiseName} versus ${matchup.awayTeam.franchiseName}${rivalryName ? `, ${rivalryName}` : ""}, view detail`}
                     >
                       <MatchupRow
                         matchup={{
@@ -141,10 +153,12 @@ export default async function SchedulePage({
                           matchupId: matchup.matchupId,
                         }}
                         variant={getVariant(matchup.status)}
+                        rivalryName={rivalryName}
                       />
                     </Link>
                   </ScrollReveal>
-                ))}
+                  );
+                })}
               </div>
             </div>
           ))}

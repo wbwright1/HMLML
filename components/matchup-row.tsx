@@ -1,6 +1,7 @@
 import { FranchiseIdentity } from "@/components/franchise-identity";
 import { LiveIndicator } from "@/components/live-indicator";
 import { ResultBadge } from "@/components/franchise-schedule-row";
+import { RivalryChip } from "@/components/rivalry-chip";
 
 interface MatchupTeamInfo {
   franchiseId: string;
@@ -23,6 +24,8 @@ interface MatchupRowProps {
     matchupId: number;
   };
   variant?: "live" | "final" | "preview";
+  /** The commissioner-named rivalry for this pairing, shown as a gold chip. */
+  rivalryName?: string | null;
 }
 
 function teamResult(
@@ -35,7 +38,11 @@ function teamResult(
   return mine > theirs ? "W" : "L";
 }
 
-export function MatchupRow({ matchup, variant = "final" }: MatchupRowProps) {
+export function MatchupRow({
+  matchup,
+  variant = "final",
+  rivalryName = null,
+}: MatchupRowProps) {
   const { homeTeam, awayTeam, homeScore, awayScore } = matchup;
 
   const homeWins = variant === "final" && homeScore > awayScore;
@@ -43,10 +50,11 @@ export function MatchupRow({ matchup, variant = "final" }: MatchupRowProps) {
   const homeResult = teamResult(variant, homeScore, awayScore);
   const awayResult = teamResult(variant, awayScore, homeScore);
 
-  const ariaLabel =
+  const baseLabel =
     variant === "preview"
       ? `${homeTeam.franchiseName} versus ${awayTeam.franchiseName}`
       : `${homeTeam.franchiseName} ${homeScore.toFixed(1)} versus ${awayTeam.franchiseName} ${awayScore.toFixed(1)}`;
+  const ariaLabel = rivalryName ? `${baseLabel}, ${rivalryName}` : baseLabel;
 
   const statusFooter =
     variant === "preview" ? (
@@ -127,7 +135,8 @@ export function MatchupRow({ matchup, variant = "final" }: MatchupRowProps) {
             )}
           </div>
 
-          <div className="flex justify-center border-t border-divider pt-2">
+          <div className="flex flex-wrap items-center justify-center gap-2 border-t border-divider pt-2">
+            {rivalryName && <RivalryChip name={rivalryName} />}
             {statusFooter}
           </div>
         </div>
@@ -170,7 +179,12 @@ export function MatchupRow({ matchup, variant = "final" }: MatchupRowProps) {
         </div>
 
         {/* Center Divider */}
-        <div className="flex flex-col items-center justify-center shrink-0 w-12">
+        <div
+          className={`flex flex-col items-center justify-center gap-1 shrink-0 ${
+            rivalryName ? "max-w-[12rem]" : "w-12"
+          }`}
+        >
+          {rivalryName && <RivalryChip name={rivalryName} />}
           {statusFooter}
         </div>
 

@@ -7,6 +7,8 @@ import { SuperlativeBadge } from "@/components/superlative-badge";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { ScorePoller } from "./score-poller";
 import { getCurrentWeekMatchups } from "@/lib/queries/matchups";
+import { getNamedRivalryLookup } from "@/lib/queries/named-rivalries-optional";
+import { findNamedRivalry } from "@/lib/queries/rivalries";
 
 // ISR: rendered once, then served from cache until a successful sync calls
 // revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
@@ -43,6 +45,9 @@ export default async function MatchupsPage() {
   }
 
   const { matchups, seasonYear, week } = data;
+
+  // Named rivalries label their rows; optional lore, empty on a failed read.
+  const rivalryLookup = await getNamedRivalryLookup();
 
   // Determine variant based on matchup status
   const getVariant = (status: string): "live" | "final" | "preview" => {
@@ -99,12 +104,19 @@ export default async function MatchupsPage() {
       </PageSection>
 
       <section className="pb-8 md:pb-12 space-y-4">
-        {matchups.map((matchup, index) => (
+        {matchups.map((matchup, index) => {
+          const rivalryName =
+            findNamedRivalry(
+              rivalryLookup,
+              matchup.homeTeam.franchiseId,
+              matchup.awayTeam.franchiseId,
+            )?.name ?? null;
+          return (
           <ScrollReveal key={matchup.matchupId} delay={index * 40}>
             <Link
               href={`/matchups/${seasonYear}/${week}/${matchup.matchupId}`}
               className="block rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
-              aria-label={`${matchup.homeTeam.franchiseName} versus ${matchup.awayTeam.franchiseName}, view detail`}
+              aria-label={`${matchup.homeTeam.franchiseName} versus ${matchup.awayTeam.franchiseName}${rivalryName ? `, ${rivalryName}` : ""}, view detail`}
             >
               <MatchupRow
                 matchup={{
@@ -116,10 +128,12 @@ export default async function MatchupsPage() {
                   matchupId: matchup.matchupId,
                 }}
                 variant={getVariant(matchup.status)}
+                rivalryName={rivalryName}
               />
             </Link>
           </ScrollReveal>
-        ))}
+          );
+        })}
 
         {/* Live score polling -- renders only during game windows */}
         <ScorePoller initialIsGameWindow={hasLiveMatchups} />
