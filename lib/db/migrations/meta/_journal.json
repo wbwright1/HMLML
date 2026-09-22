@@ -120,6 +120,13 @@
       "when": 1788358475262,
       "tag": "0016_magical_landau",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1790098378712,
+      "tag": "0017_rivalries",
+      "breakpoints": true
     }
   ]
 }
