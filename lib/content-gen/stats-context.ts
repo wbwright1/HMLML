@@ -2,7 +2,6 @@ import { getDivisionStandings } from "@/lib/queries/divisions";
 import {
   getLastCompletedSeason,
   getSeasonStandings,
-  getTitleGamePair,
 } from "@/lib/queries/seasons";
 import { getMatchupsByWeek } from "@/lib/queries/matchups";
 import {

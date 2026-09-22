@@ -45,7 +45,6 @@ import {
   getHubEditorial,
   HERO_DEK_FALLBACK,
   matchupPairKey,
-  type HubEditorial,
 } from "@/lib/content";
 import { sharesPhraseWithAny } from "@/lib/content-gen/phrases";
 import { getHubPowerPreview, type HubPowerPreview } from "@/lib/queries/power-preview";

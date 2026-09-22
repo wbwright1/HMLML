@@ -12,7 +12,7 @@ function FormIndicator({ delta }: { delta: number }) {
   if (delta === 0) {
     return (
       <span className="flex items-center gap-1 font-mono text-xs tabular-nums text-text-tertiary">
-        <span aria-hidden>&ndash;</span>
+        <span aria-hidden>&plusmn;</span>
         <span>0</span>
       </span>
     );

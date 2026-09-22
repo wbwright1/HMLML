@@ -143,6 +143,74 @@ test.describe("Between-Weeks Hub (1d)", () => {
     expect(blurb.length).toBeGreaterThan(20);
   });
 
+  // The Game of the Week kicker used to say "DIVISION LEAD AT STAKE" whenever
+  // either team led its division, including a 2-0 team against an 0-2 team
+  // with every other division-mate at 0-2 (the lead could not change hands).
+  // It now says "Division lead on the line" only for a division game the
+  // underdog can win its way to the top of. The full proof needs the whole
+  // division, but one necessary condition is checkable from the two records
+  // the card prints: if the trailing team wins, it must at least draw level
+  // with the leading team on win%. A kicker that fails that is false.
+  test("T22: the kicker only claims a division lead the two records make possible", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const kicker = (await page.getByTestId("gotw-kicker").innerText()).trim();
+    expect(kicker.length).toBeGreaterThan(0);
+
+    const gotwHeading = page.getByText("Game of the Week", { exact: true });
+    const card = gotwHeading.locator("xpath=following-sibling::*[1]");
+    const records = (await card.locator("span.text-stat").allInnerTexts())
+      .map((r) => r.trim())
+      .filter((r) => /^\d+-\d+(-\d+)?$/.test(r));
+    expect(records).toHaveLength(2);
+
+    const parse = (r: string) => {
+      const [w, l, t = 0] = r.split("-").map(Number);
+      return { w, l, t };
+    };
+    const pct = (x: { w: number; l: number; t: number }) => {
+      const g = x.w + x.l + x.t;
+      return g === 0 ? 0 : (x.w + x.t / 2) / g;
+    };
+    const [a, b] = records.map(parse);
+
+    if (/division lead/i.test(kicker)) {
+      // A division game, never a cross-division one.
+      expect(kicker).toMatch(/^DIVISION \d+ (REMATCH|GAME) · /);
+      // Games have been played: a 0-0 record leads nothing.
+      expect(a.w + a.l + a.t + b.w + b.l + b.t).toBeGreaterThan(0);
+      // Either side, winning, draws level with the other side losing.
+      for (const [x, y] of [
+        [a, b],
+        [b, a],
+      ]) {
+        expect(pct({ ...x, w: x.w + 1 })).toBeGreaterThanOrEqual(pct({ ...y, l: y.l + 1 }));
+      }
+    }
+
+    // The retired stakes wording and a 0-0 "lead" never render.
+    expect(kicker).not.toMatch(/DIVISION LEAD AT STAKE/);
+  });
+
+  test("T23: the GotW blurb and headline assert nothing they cannot prove", async ({ page }) => {
+    await page.goto("/");
+    const blurb = (await page.getByTestId("gotw-blurb").innerText()).trim();
+    // The old template, seed and any legacy stored row said all of this about
+    // every featured game. A stored blurb now renders only when its ref_key
+    // names the featured pair; otherwise the reason-derived blurb does.
+    expect(blurb).not.toMatch(/first place|receipts to settle|thursday night/i);
+
+    const headline = (await page.locator("main section").first().locator("h1").innerText()).trim();
+    expect(headline).not.toMatch(/matters again/i);
+
+    // Not asserted here: the slate ladder's retired "still on the books"
+    // tail. Stored matchup_angle rows written by the old template keep
+    // rendering until the next generate-content run replaces them, so a
+    // page-level check would test the database, not this code. The builder
+    // itself is pinned in lib/hub/slate-angle.test.ts.
+  });
+
   test("T04: no em-dashes anywhere in the hub copy", async ({ page }) => {
     await page.goto("/");
     const text = await page.locator("main").innerText();
@@ -326,9 +394,17 @@ test.describe("Between-Weeks Hub (1d)", () => {
     await expect(hero(page).locator("h1")).toBeVisible();
     await expect(page.getByText("Game of the Week", { exact: true })).toBeVisible();
 
-    // Right-rail modules (League Moves, This Week in HMLML History, Left On
-    // The Bench) are desktop-only.
-    await expect(page.getByText("Left On The Bench", { exact: true })).toBeHidden();
+    // Right-rail modules (League Moves, This Week in HMLML History) are
+    // desktop-only. Left On The Bench is too, EXCEPT while the post-week recap
+    // leads the hub: #300 moved it into the recap in the main column so phones
+    // see it, and there it must be visible.
+    const recapLeads = (await page.getByTestId("week-recap").count()) > 0;
+    const bench = page.getByText("Left On The Bench", { exact: true });
+    if (recapLeads) {
+      await expect(page.getByTestId("week-recap").getByText("Left On The Bench", { exact: true })).toBeVisible();
+    } else {
+      await expect(bench).toBeHidden();
+    }
     await expect(page.getByText("League Moves", { exact: true })).toBeHidden();
     await expect(
       page.getByText("This Week in HMLML History", { exact: true })
