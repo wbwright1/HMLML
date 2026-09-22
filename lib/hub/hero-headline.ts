@@ -18,6 +18,20 @@
 import { daysUntil } from "@/lib/hub/live-pill-label";
 import { kickoffWeekdayName } from "@/lib/hub/between-weeks";
 import { formatRecord } from "@/lib/format-record";
+import {
+  NO_HERO_CLAIM,
+  numeralsIn,
+  type HeroClaim,
+  type HeroClaimKind,
+} from "@/lib/hub/hero-claim";
+
+export {
+  NO_HERO_CLAIM,
+  numeralSegments,
+  repeatsHeroNumber,
+  type HeroClaim,
+  type HeroClaimKind,
+} from "@/lib/hub/hero-claim";
 
 // ---------------------------------------------------------------------------
 // Thresholds
@@ -102,7 +116,9 @@ export type HeroRung =
 export interface HeroLine {
   rung: HeroRung;
   text: string;
+  claim: HeroClaim;
 }
+
 
 export const HERO_FALLBACK_HEADLINE = "The slate is set.";
 
@@ -161,6 +177,15 @@ function gotwFirst(slate: readonly HeroSlateGame[]): HeroSlateGame[] {
   return [...slate].sort((x, y) => Number(y.isGameOfWeek) - Number(x.isGameOfWeek));
 }
 
+function line(
+  rung: HeroRung,
+  text: string,
+  kind: HeroClaimKind,
+  franchiseIds: readonly string[]
+): HeroLine {
+  return { rung, text, claim: { kind, franchiseIds, numbers: numeralsIn(text) } };
+}
+
 // ---------------------------------------------------------------------------
 // Rungs: last week's finals
 // ---------------------------------------------------------------------------
@@ -175,10 +200,12 @@ function mercyRung(finals: readonly HeroFinal[]): HeroLine | null {
     null
   );
   if (!worst || worst.margin < HERO_MERCY_MARGIN) return null;
-  return {
-    rung: "mercy",
-    text: `${worst.loser.name} lost by ${pts(worst.margin)}. It was not that close.`,
-  };
+  return line(
+    "mercy",
+    `${worst.loser.name} lost by ${pts(worst.margin)}. It was not that close.`,
+    "blowout",
+    [worst.loser.franchiseId, worst.winner.franchiseId]
+  );
 }
 
 function allSides(finals: readonly HeroFinal[]): HeroFinalSide[] {
@@ -193,10 +220,12 @@ function monsterRung(finals: readonly HeroFinal[]): HeroLine | null {
   // "and the rest of the league noticed" needs the top score to be the top
   // score alone: a shared high is not a statement about one team.
   if (sides.filter((s) => s.points === top.points).length > 1) return null;
-  return {
-    rung: "monster",
-    text: `${top.name} put up ${pts(top.points)} and the rest of the league noticed.`,
-  };
+  return line(
+    "monster",
+    `${top.name} put up ${pts(top.points)} and the rest of the league noticed.`,
+    "monster-score",
+    [top.franchiseId]
+  );
 }
 
 function photoFinishRung(finals: readonly HeroFinal[]): HeroLine | null {
@@ -205,10 +234,12 @@ function photoFinishRung(finals: readonly HeroFinal[]): HeroLine | null {
     null
   );
   if (!closest || closest.margin > HERO_PHOTO_MARGIN) return null;
-  return {
-    rung: "photo-finish",
-    text: `Decided by ${pts(closest.margin)}. ${closest.loser.name} is still refreshing the box score.`,
-  };
+  return line(
+    "photo-finish",
+    `Decided by ${pts(closest.margin)}. ${closest.loser.name} is still refreshing the box score.`,
+    "photo-finish",
+    [closest.loser.franchiseId, closest.winner.franchiseId]
+  );
 }
 
 function dudRung(finals: readonly HeroFinal[]): HeroLine | null {
@@ -217,10 +248,9 @@ function dudRung(finals: readonly HeroFinal[]): HeroLine | null {
   const low = sides.reduce((a, b) => (b.points < a.points ? b : a));
   if (low.points > HERO_DUD_SCORE) return null;
   if (sides.filter((s) => s.points === low.points).length > 1) return null;
-  return {
-    rung: "dud",
-    text: `${low.name} managed ${pts(low.points)}. That was the whole week.`,
-  };
+  return line("dud", `${low.name} managed ${pts(low.points)}. That was the whole week.`, "dud", [
+    low.franchiseId,
+  ]);
 }
 
 function finalsRungs(finals: readonly HeroFinal[]): HeroLine[] {
@@ -246,16 +276,18 @@ function unbeatenClashRung(input: HeroHeadlineInput): HeroLine | null {
     count === 2
       ? `Two teams are ${rec}, and they play each other this week.`
       : `${countWord(count)} teams are ${rec}. Two of them play each other this week.`;
-  return { rung: "unbeaten-clash", text };
+  return line("unbeaten-clash", text, "slate", [gotw.a.franchiseId, gotw.b.franchiseId]);
 }
 
 function winlessClashRung(input: HeroHeadlineInput): HeroLine | null {
   const clash = gotwFirst(input.slate).find((g) => isWinless(g.a) && isWinless(g.b));
   if (!clash || games(clash.a) !== games(clash.b)) return null;
-  return {
-    rung: "winless-clash",
-    text: `Somebody is about to be ${formatRecord(0, clash.a.losses + 1, 0)}.`,
-  };
+  return line(
+    "winless-clash",
+    `Somebody is about to be ${formatRecord(0, clash.a.losses + 1, 0)}.`,
+    "slate",
+    [clash.a.franchiseId, clash.b.franchiseId]
+  );
 }
 
 function divisionFlipRung(input: HeroHeadlineInput): HeroLine | null {
@@ -263,21 +295,25 @@ function divisionFlipRung(input: HeroHeadlineInput): HeroLine | null {
   if (!anyPlayed) return null;
   const game = gotwFirst(input.slate).find((g) => g.canFlipDivisionLead && g.divisionName);
   if (!game) return null;
-  return {
-    rung: "division-flip",
-    text: `${game.a.name} and ${game.b.name} play for a share of ${game.divisionName}.`,
-  };
+  return line(
+    "division-flip",
+    `${game.a.name} and ${game.b.name} play for a share of ${game.divisionName}.`,
+    "slate",
+    [game.a.franchiseId, game.b.franchiseId]
+  );
 }
 
 function namedRivalryRung(input: HeroHeadlineInput): HeroLine | null {
   const game = gotwFirst(input.slate).find((g) => g.namedRivalry);
   if (!game?.namedRivalry) return null;
-  return {
-    rung: "named-rivalry",
-    text: game.isGameOfWeek
+  return line(
+    "named-rivalry",
+    game.isGameOfWeek
       ? `${game.namedRivalry.name} is the Game of the Week.`
       : `${game.namedRivalry.name} is back on the slate.`,
-  };
+    "slate",
+    [game.a.franchiseId, game.b.franchiseId]
+  );
 }
 
 function winlessWatchRung(input: HeroHeadlineInput): HeroLine | null {
@@ -293,10 +329,12 @@ function winlessWatchRung(input: HeroHeadlineInput): HeroLine | null {
     }
   }
   if (!best) return null;
-  return {
-    rung: "winless-watch",
-    text: `${best.team.name} is ${record(best.team)} and gets ${best.opp.name} (${record(best.opp)}) next.`,
-  };
+  return line(
+    "winless-watch",
+    `${best.team.name} is ${record(best.team)} and gets ${best.opp.name} (${record(best.opp)}) next.`,
+    "slate",
+    [best.team.franchiseId, best.opp.franchiseId]
+  );
 }
 
 function slateRungs(input: HeroHeadlineInput): HeroLine[] {
@@ -322,7 +360,7 @@ export function heroHeadlineLadder(input: HeroHeadlineInput): HeroLine[] {
   const finals = finalsRungs(input.priorFinals);
   const slate = slateRungs(input);
   const ordered = input.recapShown ? [...finals, ...slate] : [...slate, ...finals];
-  return [...ordered, { rung: "fallback", text: HERO_FALLBACK_HEADLINE }];
+  return [...ordered, { rung: "fallback", text: HERO_FALLBACK_HEADLINE, claim: NO_HERO_CLAIM }];
 }
 
 /** The hero headline: the sharpest true line for this week. */
@@ -355,18 +393,6 @@ export function heroKickerTail(nextKickoff: Date | null, now: Date = new Date())
   if (days === 0) return "Kickoff Today";
   if (days > 6) return "The Slate Is Set";
   return `Kickoff ${kickoffWeekdayName(nextKickoff)}`;
-}
-
-/**
- * Splits copy so every numeral ("64.2", "2-0", "0-3") can render in the mono
- * face inside a serif headline. Pure; the hub maps `numeral` parts to a mono
- * span.
- */
-export function numeralSegments(text: string): { text: string; numeral: boolean }[] {
-  return text
-    .split(/(\d+(?:[.,]\d+)*(?:-\d+)*)/g)
-    .filter((p) => p.length > 0)
-    .map((p) => ({ text: p, numeral: /^\d/.test(p) }));
 }
 
 // ---------------------------------------------------------------------------

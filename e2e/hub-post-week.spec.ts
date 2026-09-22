@@ -114,6 +114,22 @@ test.describe("Post-week recap (between weeks)", () => {
     }
   });
 
+  test("the recap headline and the Game of the Week blurb never restate the hero's number", async ({ page }) => {
+    // The hero owns its fact (lib/hub/hero-claim.ts): the two lines right
+    // under it state a different true fact instead of echoing its figure.
+    const hero = (await page.getByTestId("hero-headline").innerText()).trim();
+    const heroNumbers = hero.match(/\d+\.\d/g) ?? [];
+    const recapHeadline = (await page.getByTestId("recap-headline").innerText()).trim();
+    expect(recapHeadline.length).toBeGreaterThan(0);
+    const blurb = page.getByTestId("gotw-blurb");
+    const blurbText = (await blurb.count()) > 0 ? (await blurb.innerText()).trim() : "";
+    for (const n of heroNumbers) {
+      const printed = new RegExp(`(^|[^\\d.])${n.replace(".", "\\.")}(?![\\d])`);
+      expect(recapHeadline, `recap headline repeats ${n}`).not.toMatch(printed);
+      expect(blurbText, `Game of the Week blurb repeats ${n}`).not.toMatch(printed);
+    }
+  });
+
   test("every completed pairing is listed with a W and an L and two scores", async ({ page }) => {
     const rows = page.getByTestId("recap-result");
     await expect(rows).toHaveCount(6);

@@ -1,3 +1,4 @@
+import { heroHeadline, heroHeadlineLadder, type HeroFinal } from "@/lib/hub/hero-headline";
 import { describe, it, expect } from "vitest";
 import {
   assembleTeamOfWeek,
@@ -163,6 +164,69 @@ describe("recapHeadline", () => {
   it("never emits an em-dash", () => {
     const h = recapHeadline(1, { highestScorer: high, lowestScorer: low, biggestBlowout: blowout, closestWin: close });
     expect(h).not.toContain("—");
+  });
+});
+
+describe("recapHeadline: skips the fact the hub hero already states", () => {
+  // Week 2 of 2026 as the live DB has it (the hero's week-3 input).
+  const final = (w: string, wn: string, wp: number, l: string, ln: string, lp: number): HeroFinal => ({
+    winner: { franchiseId: w, name: wn, points: wp },
+    loser: { franchiseId: l, name: ln, points: lp },
+    margin: Math.round(Math.abs(wp - lp) * 10) / 10,
+  });
+  const W2: HeroFinal[] = [
+    final("TTT", "The Tokyo Thunderbirds", 204.94, "TB", "Taking Boutte", 140.78),
+    final("MCC", "McCarthyism", 163.9, "OMM", "Of Mice and Mendoza", 114.54),
+    final("LDL", "Latter Day Lamb Special", 127.18, "BCH", "Better call Hall", 95.56),
+    final("VV", "Vanilla Vick", 118.4, "FOO", "Foopus", 93.22),
+    final("BGS", "Bucky’s General Store", 128.36, "WLD", "Watson Love Diggs", 103.6),
+    final("ROG", "Real Olave Garden", 152.1, "BCM", "Better call Myballs", 127.4),
+  ];
+  // What getWeeklySuperlatives returns for that week (points unrounded).
+  const W2_SUPERLATIVES = {
+    highestScorer: { franchiseName: "The Tokyo Thunderbirds", points: 204.94 },
+    lowestScorer: { franchiseName: "Foopus", points: 93.22 },
+    biggestBlowout: { winner: "The Tokyo Thunderbirds", loser: "Taking Boutte", margin: 64.16 },
+    closestWin: { winner: "Real Olave Garden", loser: "Better call Myballs", margin: 24.7 },
+  };
+  const heroOf = (finals: HeroFinal[]) =>
+    heroHeadline({ recapShown: true, priorFinals: finals, slate: [], standings: [] });
+
+  it("without a claim, the live week reads as before (the 64.2 echo this fixes)", () => {
+    expect(recapHeadline(2, W2_SUPERLATIVES)).toBe(
+      "The Tokyo Thunderbirds hung 204.9. Taking Boutte got run off the field by 64.2."
+    );
+  });
+
+  it("hero = Taking Boutte lost by 64.2: the recap takes its next pairing and never prints 64.2", () => {
+    const hero = heroOf(W2);
+    expect(hero.text).toBe("Taking Boutte lost by 64.2. It was not that close.");
+    const h = recapHeadline(2, W2_SUPERLATIVES, hero.claim);
+    expect(h).toBe("The Tokyo Thunderbirds hung 204.9. Foopus managed 93.2.");
+    expect(h).not.toContain("64.2");
+  });
+
+  it("hero = the monster score: the recap leads with the blowout instead", () => {
+    // The same week, had the hero led with its 204.9 (its second rung).
+    const monster = heroHeadlineLadder({ recapShown: true, priorFinals: W2, slate: [], standings: [] })
+      .find((l) => l.rung === "monster")!;
+    expect(monster.text).toBe("The Tokyo Thunderbirds put up 204.9 and the rest of the league noticed.");
+    const h = recapHeadline(2, W2_SUPERLATIVES, monster.claim);
+    expect(h).toBe("Taking Boutte got run off the field by 64.2. Foopus managed 93.2.");
+    expect(h).not.toContain("204.9");
+  });
+
+  it("the number backstop drops a fact the kind check would keep", () => {
+    // A slate claim that happens to print the same figure as the high score.
+    const claim = { kind: "slate" as const, franchiseIds: [], numbers: ["204.9"] };
+    expect(recapHeadline(2, W2_SUPERLATIVES, claim)).toBe(
+      "Taking Boutte got run off the field by 64.2. Foopus managed 93.2."
+    );
+  });
+
+  it("a claim that asserts nothing changes nothing", () => {
+    const claim = { kind: "none" as const, franchiseIds: [], numbers: [] };
+    expect(recapHeadline(2, W2_SUPERLATIVES, claim)).toBe(recapHeadline(2, W2_SUPERLATIVES));
   });
 });
 

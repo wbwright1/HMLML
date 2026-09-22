@@ -12,6 +12,7 @@ import {
   type RecapPlayer,
   type TeamOfWeek,
 } from "@/lib/hub/week-recap";
+import type { HeroClaim } from "@/lib/hub/hero-claim";
 import type { RecapTeam, WeekRecap } from "@/lib/queries/week-recap";
 import type { WeeklySuperlatives } from "@/lib/queries/superlatives";
 import type { WeekBenchLeader } from "@/lib/queries/lineup-efficiency";
@@ -31,11 +32,14 @@ export function WeekRecapSection({
   recap,
   superlatives,
   benchLeader,
+  heroClaim = null,
 }: {
   seasonYear: number;
   recap: WeekRecap;
   superlatives: WeeklySuperlatives | null;
   benchLeader: WeekBenchLeader | null;
+  /** The hub hero's claim: the recap headline states a different fact. */
+  heroClaim?: HeroClaim | null;
 }) {
   const week = recap.week;
   const headline = recapHeadline(week, {
@@ -43,7 +47,7 @@ export function WeekRecapSection({
     lowestScorer: superlatives?.lowestScorer ?? null,
     biggestBlowout: superlatives?.biggestBlowout ?? null,
     closestWin: superlatives?.closestWin ?? null,
-  });
+  }, heroClaim);
   const teamBySlug = new Map<string, RecapTeam>();
   for (const r of recap.results) {
     teamBySlug.set(r.winner.slug, r.winner);

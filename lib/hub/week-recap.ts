@@ -6,6 +6,7 @@
 
 import { deriveStartingSlots } from "@/lib/lineup-slots";
 import { LEAGUE_TIME_ZONE, timeZoneOffsetMs } from "@/lib/time-zone";
+import { repeatsHeroNumber, type HeroClaim, type HeroClaimKind } from "@/lib/hub/hero-claim";
 
 // ---------------------------------------------------------------------------
 // Window: the recap holds from the Tuesday week roll until the Thursday
@@ -211,28 +212,56 @@ export interface RecapHeadlineInput {
  * claims something the numbers do not back. Prefers the high score paired
  * with the mercy-rule loser; degrades to whichever facts exist. Copy stays
  * free of em-dashes (the hub spec forbids them).
+ *
+ * The hero headline above the recap owns its fact. When `heroClaim` names
+ * one of these four facts (by kind, or because the hero printed the same
+ * number), that fact is dropped and the next pairing of the remaining facts
+ * leads, so the week's biggest line is never said twice in a row.
  */
-export function recapHeadline(week: number, s: RecapHeadlineInput): string {
-  const high = s.highestScorer;
-  const low = s.lowestScorer;
-  const blowout = s.biggestBlowout;
-  const close = s.closestWin;
+export function recapHeadline(
+  week: number,
+  s: RecapHeadlineInput,
+  heroClaim?: HeroClaim | null
+): string {
+  const skip = (kind: HeroClaimKind, printed: string): boolean =>
+    heroClaim != null &&
+    (heroClaim.kind === kind || repeatsHeroNumber(printed, heroClaim));
+  const high =
+    s.highestScorer && !skip("monster-score", s.highestScorer.points.toFixed(1))
+      ? s.highestScorer
+      : null;
+  const low =
+    s.lowestScorer && !skip("dud", s.lowestScorer.points.toFixed(1)) ? s.lowestScorer : null;
+  const blowout =
+    s.biggestBlowout && !skip("blowout", s.biggestBlowout.margin.toFixed(1))
+      ? s.biggestBlowout
+      : null;
+  const close =
+    s.closestWin && !skip("photo-finish", s.closestWin.margin.toFixed(1)) ? s.closestWin : null;
 
-  if (high && blowout && blowout.loser !== high.franchiseName) {
-    return `${high.franchiseName} hung ${high.points.toFixed(1)}. ${blowout.loser} got run off the field by ${blowout.margin.toFixed(1)}.`;
-  }
-  if (high && low && low.franchiseName !== high.franchiseName) {
-    return `${high.franchiseName} hung ${high.points.toFixed(1)}. ${low.franchiseName} managed ${low.points.toFixed(1)}.`;
-  }
-  if (high && close) {
-    return `${high.franchiseName} hung ${high.points.toFixed(1)}. ${close.winner} survived by ${close.margin.toFixed(1)}.`;
-  }
+  const hung = high ? `${high.franchiseName} hung ${high.points.toFixed(1)}.` : "";
+  const runOff = blowout
+    ? `${blowout.loser} got run off the field by ${blowout.margin.toFixed(1)}.`
+    : "";
+  const managed = low ? `${low.franchiseName} managed ${low.points.toFixed(1)}.` : "";
+  const survived = close ? `${close.winner} survived by ${close.margin.toFixed(1)}.` : "";
+
+  if (high && blowout && blowout.loser !== high.franchiseName) return `${hung} ${runOff}`;
+  if (high && low && low.franchiseName !== high.franchiseName) return `${hung} ${managed}`;
+  if (high && close) return `${hung} ${survived}`;
+  // Only reachable when the hero took the high score (without a claim, a
+  // week with any scores always has one).
+  if (blowout && low && low.franchiseName !== blowout.loser) return `${runOff} ${managed}`;
+  if (blowout && close) return `${runOff} ${survived}`;
+  if (low && close) return `${managed} ${survived}`;
   if (high) {
     return `${high.franchiseName} hung ${high.points.toFixed(1)} and nobody came close.`;
   }
+  if (blowout) return runOff;
   if (close) {
     return `${close.winner} escaped ${close.loser} by ${close.margin.toFixed(1)}.`;
   }
+  if (low) return managed;
   return `Week ${week} is in the books.`;
 }
 

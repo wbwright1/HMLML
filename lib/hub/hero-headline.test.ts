@@ -5,6 +5,7 @@ import {
   heroDekFromData,
   heroKickerTail,
   numeralSegments,
+  repeatsHeroNumber,
   finalsFromPairedMatchups,
   HERO_FALLBACK_HEADLINE,
   type HeroFinal,
@@ -106,10 +107,47 @@ const LIVE: HeroHeadlineInput = {
 
 // ---------------------------------------------------------------------------
 
+describe("heroHeadline: the claim the surfaces below it skip", () => {
+  it("the live week-3 headline claims Taking Boutte's 64.2 blowout, loser first", () => {
+    expect(heroHeadline(LIVE).claim).toEqual({
+      kind: "blowout",
+      franchiseIds: ["TB", "TTT"],
+      numbers: ["64.2"],
+    });
+  });
+
+  it("each finals rung claims its own fact family and number", () => {
+    const monster = heroHeadlineLadder(LIVE).find((l) => l.rung === "monster")!;
+    expect(monster.claim).toEqual({
+      kind: "monster-score",
+      franchiseIds: ["TTT"],
+      numbers: ["204.9"],
+    });
+  });
+
+  it("slate rungs claim their teams and the records they printed", () => {
+    const h = heroHeadline({ ...LIVE, recapShown: false });
+    expect(h.claim).toEqual({ kind: "slate", franchiseIds: ["BCM", "FOO"], numbers: ["0-3"] });
+  });
+
+  it("the fallback claims nothing", () => {
+    const h = heroHeadline({ recapShown: true, priorFinals: [], slate: [], standings: [] });
+    expect(h.claim).toEqual({ kind: "none", franchiseIds: [], numbers: [] });
+  });
+
+  it("repeatsHeroNumber matches whole printed numerals only", () => {
+    const claim = heroHeadline(LIVE).claim;
+    expect(repeatsHeroNumber("Taking Boutte got run off the field by 64.2.", claim)).toBe(true);
+    expect(repeatsHeroNumber("The Tokyo Thunderbirds hung 204.9.", claim)).toBe(false);
+    expect(repeatsHeroNumber("Somebody scored 164.2.", claim)).toBe(false);
+    expect(repeatsHeroNumber("anything 64.2", null)).toBe(false);
+  });
+});
+
 describe("heroHeadline: the live week-3 shape", () => {
   it("recap shown: leads with Taking Boutte's 64.2-point loss, dek takes the 204.9", () => {
     const h = heroHeadline(LIVE);
-    expect(h).toEqual({ rung: "mercy", text: "Taking Boutte lost by 64.2. It was not that close." });
+    expect(h).toMatchObject({ rung: "mercy", text: "Taking Boutte lost by 64.2. It was not that close." });
     expect(heroDekFromData(LIVE, h)).toBe(
       "The Tokyo Thunderbirds put up 204.9 and the rest of the league noticed."
     );
@@ -118,7 +156,7 @@ describe("heroHeadline: the live week-3 shape", () => {
   it("recap not shown: leads with the 0-2 v 0-2 game, dek names the rivalry on the slate", () => {
     const input = { ...LIVE, recapShown: false };
     const h = heroHeadline(input);
-    expect(h).toEqual({ rung: "winless-clash", text: "Somebody is about to be 0-3." });
+    expect(h).toMatchObject({ rung: "winless-clash", text: "Somebody is about to be 0-3." });
     expect(heroDekFromData(input, h)).toBe("The Custody Battle is back on the slate.");
   });
 
@@ -144,7 +182,7 @@ describe("heroHeadline: recap-mode rungs", () => {
 
   it("monster score: a sole top score of 180 or more", () => {
     const h = heroHeadline(recap([final("TTT", 190.44, "TB", 170), final("ROG", 120, "BCM", 110)]));
-    expect(h).toEqual({
+    expect(h).toMatchObject({
       rung: "monster",
       text: "The Tokyo Thunderbirds put up 190.4 and the rest of the league noticed.",
     });
@@ -156,7 +194,7 @@ describe("heroHeadline: recap-mode rungs", () => {
 
   it("photo finish: decided by 3 or less, never a tie", () => {
     const h = heroHeadline(recap([final("VV", 120.8, "FOO", 120), final("ROG", 130, "BCM", 110)]));
-    expect(h).toEqual({
+    expect(h).toMatchObject({
       rung: "photo-finish",
       text: "Decided by 0.8. Foopus is still refreshing the box score.",
     });
@@ -166,7 +204,7 @@ describe("heroHeadline: recap-mode rungs", () => {
 
   it("dud: a sole low score of 90 or less", () => {
     const h = heroHeadline(recap([final("ROG", 120, "OMM", 82.48), final("MCC", 130, "BCM", 110)]));
-    expect(h).toEqual({ rung: "dud", text: "Of Mice and Mendoza managed 82.5. That was the whole week." });
+    expect(h).toMatchObject({ rung: "dud", text: "Of Mice and Mendoza managed 82.5. That was the whole week." });
   });
 
   it("orders mercy > monster > photo finish > dud", () => {
@@ -186,7 +224,7 @@ describe("heroHeadline: recap-mode rungs", () => {
 
   it("an ordinary week falls through to the slate, then the fallback", () => {
     const flat = [final("ROG", 130, "OMM", 120)];
-    expect(heroHeadline(recap(flat))).toEqual({ rung: "fallback", text: HERO_FALLBACK_HEADLINE });
+    expect(heroHeadline(recap(flat))).toMatchObject({ rung: "fallback", text: HERO_FALLBACK_HEADLINE });
     expect(
       heroHeadline({
         ...recap(flat),
@@ -207,7 +245,7 @@ describe("heroHeadline: slate-mode rungs", () => {
   it("unbeaten clash only when the Game of the Week is two unbeatens, with the true count", () => {
     const standings = Object.values(W3);
     const g = [game(W3.TTT, W3.LDL, { isGameOfWeek: true }), game(W3.ROG, W3.OMM)];
-    expect(heroHeadline(slate(g, standings))).toEqual({
+    expect(heroHeadline(slate(g, standings))).toMatchObject({
       rung: "unbeaten-clash",
       text: "Four teams are 2-0. Two of them play each other this week.",
     });
@@ -237,7 +275,7 @@ describe("heroHeadline: slate-mode rungs", () => {
     const a = t("TTT", 3, 1);
     const b = t("LDL", 3, 1);
     const g = [game(a, b, { divisionName: "Division 1", canFlipDivisionLead: true, isGameOfWeek: true })];
-    expect(heroHeadline(slate(g, [a, b]))).toEqual({
+    expect(heroHeadline(slate(g, [a, b]))).toMatchObject({
       rung: "division-flip",
       text: "The Tokyo Thunderbirds and Latter Day Lamb Special play for a share of Division 1.",
     });
@@ -254,7 +292,7 @@ describe("heroHeadline: slate-mode rungs", () => {
 
   it("winless watch: the winless team facing the best record", () => {
     const g = [game(W3.TB, W3.BCH), game(W3.OMM, W3.ROG)];
-    expect(heroHeadline(slate(g, []))).toEqual({
+    expect(heroHeadline(slate(g, []))).toMatchObject({
       rung: "winless-watch",
       text: "Of Mice and Mendoza is 0-2 and gets Real Olave Garden (2-0) next.",
     });

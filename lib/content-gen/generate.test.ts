@@ -729,6 +729,7 @@ describe("LLM game_of_week_blurb", () => {
       blurb: "template",
       namedRivalry: null,
       form: [],
+      heroNumbers: [],
     },
   });
   const parse = (body: string, claims: unknown[] = []) =>
@@ -798,6 +799,12 @@ describe("LLM game_of_week_blurb", () => {
     expect(prompt).toContain("Open the blurb with last week's form for BOTH teams");
     expect(prompt).toContain(JSON.stringify(form));
     expect(buildUserPrompt(ctx)).not.toContain("last week's form for BOTH teams");
+  });
+
+  it("tells the blurb never to print the numbers the hero headline owns", () => {
+    const prompt = buildUserPrompt({ ...ctx, gameOfWeek: { ...ctx.gameOfWeek!, heroNumbers: ["64.2"] } });
+    expect(prompt).toContain('already states ["64.2"]; never print those numbers in the blurb');
+    expect(buildUserPrompt(ctx)).not.toContain("never print those numbers");
   });
 
   it("tells hero_dek the headline now states the week's biggest fact", () => {

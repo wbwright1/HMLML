@@ -396,6 +396,10 @@ function regularSpec(ctx: StatsContext): string {
         ctx.gameOfWeek.form.length > 0
           ? `. Open the blurb with last week's form for BOTH teams, the sharper result first. These are facts you may cite with the numbers exactly as given: ${JSON.stringify(ctx.gameOfWeek.form)} ("margin" is the final margin, "points" the team's own score). A superlative about one of them ("week-high", "worst loss in the league") is not in that list and needs a claim object like any other`
           : ""
+      }${
+        ctx.gameOfWeek.heroNumbers.length > 0
+          ? `. The hub's headline directly above this card already states ${JSON.stringify(ctx.gameOfWeek.heroNumbers)}; never print those numbers in the blurb. Use that team's other fact instead (its own score, or the opponent's name without the margin)`
+          : ""
       }`
     : "";
   return `This is REGULAR SEASON content for week ${ctx.week} (week-scoped). Produce this exact JSON shape. Character budgets are HARD limits: a field over its budget gets that entire row discarded downstream (the response is not rejected, but that row is), so stay comfortably under, not right at, the number.

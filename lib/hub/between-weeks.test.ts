@@ -665,6 +665,64 @@ describe("gameOfWeekBlurb", () => {
   });
 });
 
+describe("formSentence: skips the hub hero's claim", () => {
+  // The live week-3 hero: "Taking Boutte lost by 64.2. It was not that close."
+  const blowout = { kind: "blowout" as const, franchiseIds: ["TB", "TTT"], numbers: ["64.2"] };
+  const ttt = {
+    franchiseId: "TTT",
+    name: "The Tokyo Thunderbirds",
+    record: "2-0",
+    lastWeek: { points: 204.94, opponentName: "Taking Boutte", margin: 64.2, won: true },
+  };
+  const tb = {
+    franchiseId: "TB",
+    name: "Taking Boutte",
+    record: "0-2",
+    winless: true,
+    lastWeek: { points: 140.78, opponentName: "The Tokyo Thunderbirds", margin: 64.2, won: false },
+  };
+
+  it("the winner of the claimed blowout gets its score instead of the margin", () => {
+    expect(formSentence(ttt, blowout)).toEqual({
+      text: "The Tokyo Thunderbirds just hung 204.9 on Taking Boutte.",
+      sharpness: 3,
+    });
+  });
+
+  it("the loser of the claimed blowout gets its score, still winless, no margin", () => {
+    const s = formSentence(tb, blowout)!.text;
+    expect(s).toBe(
+      "Taking Boutte scored 140.8 in a loss to The Tokyo Thunderbirds and is still looking for a first win."
+    );
+    expect(s).not.toContain("64.2");
+  });
+
+  it("a monster-score claim on the team keeps the margin and drops the score", () => {
+    const monster = { kind: "monster-score" as const, franchiseIds: ["TTT"], numbers: ["204.9"] };
+    expect(formSentence(ttt, monster)!.text).toBe(
+      "The Tokyo Thunderbirds just ran Taking Boutte off the field by 64.2."
+    );
+    // With the margin also printed by the hero, only the name is left.
+    const both = { ...monster, numbers: ["204.9", "64.2"] };
+    expect(formSentence(ttt, both)!.text).toBe(
+      "The Tokyo Thunderbirds beat Taking Boutte last week."
+    );
+  });
+
+  it("the number backstop works without a franchise id", () => {
+    const { franchiseId: _id, ...anon } = ttt;
+    void _id;
+    expect(formSentence(anon, blowout)!.text).toBe(
+      "The Tokyo Thunderbirds just hung 204.9 on Taking Boutte."
+    );
+  });
+
+  it("a claim about other teams changes nothing", () => {
+    const other = { kind: "blowout" as const, franchiseIds: ["OMM", "MCC"], numbers: ["49.4"] };
+    expect(formSentence(ttt, other)).toEqual(formSentence(ttt));
+  });
+});
+
 describe("formSentence", () => {
   const f = (points: number, margin: number, won: boolean, winless = false) =>
     formSentence({

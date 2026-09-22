@@ -15,6 +15,7 @@ function foopusGotw(reasons: GotwReason[] = ["pride"]): NonNullable<StatsContext
     reasons,
     namedRivalry: null,
     form: [],
+    heroNumbers: [],
     kicker: `Cross-Division · ${stakesFromReasons(reasons)}`,
     blurb: gameOfWeekBlurb({
       reasons,

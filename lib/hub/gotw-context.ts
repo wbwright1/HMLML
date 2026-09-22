@@ -22,6 +22,7 @@ import {
   stakesFromReasons,
   teamFormFrom,
   type DivisionRaceTeam,
+  type GotwBlurbInput,
   type GotwCandidate,
   type GotwH2H,
   type GotwLastMeeting,
@@ -143,6 +144,12 @@ export interface GotwResolution {
   stakes: string | null;
   /** The reason-derived blurb (template fallback + render-time fallback). */
   blurb: string | null;
+  /**
+   * What `blurb` was built from. The hub rebuilds the blurb with its hero
+   * claim (gameOfWeekBlurb's heroClaim) once the hero headline is known, so
+   * the form opener never restates the headline's fact.
+   */
+  blurbInput: GotwBlurbInput | null;
   isTitleRematch: boolean;
   bowlName: string | null;
   /**
@@ -305,6 +312,7 @@ export function resolveFromSource(source: GotwSource): GotwResolution {
     kicker: null,
     stakes: null,
     blurb: null,
+    blurbInput: null,
     isTitleRematch: false,
     bowlName: null,
     namedRivalry: null,
@@ -362,9 +370,10 @@ export function resolveFromSource(source: GotwSource): GotwResolution {
   };
   const winless = (s: GotwStandingRow | undefined) =>
     (s?.wins ?? 0) === 0 && (s?.ties ?? 0) === 0 && (s?.losses ?? 0) > 0;
-  const blurb = gameOfWeekBlurb({
+  const blurbInput: GotwBlurbInput = {
     reasons: pick.reasons,
     teamA: {
+      franchiseId: matchup.homeTeam.franchiseId,
       name: matchup.homeTeam.franchiseName,
       record: recordOf(home),
       raceTag: candidate.teamA.raceTag,
@@ -372,6 +381,7 @@ export function resolveFromSource(source: GotwSource): GotwResolution {
       winless: winless(home),
     },
     teamB: {
+      franchiseId: matchup.awayTeam.franchiseId,
       name: matchup.awayTeam.franchiseName,
       record: recordOf(away),
       raceTag: candidate.teamB.raceTag,
@@ -384,7 +394,8 @@ export function resolveFromSource(source: GotwSource): GotwResolution {
     playoffMeetingYears: candidate.playoffMeetingYears ?? [],
     namedRivalry: candidate.namedRivalry ?? null,
     bowlName,
-  });
+  };
+  const blurb = gameOfWeekBlurb(blurbInput);
 
   return {
     ...empty,
@@ -395,6 +406,7 @@ export function resolveFromSource(source: GotwSource): GotwResolution {
     kicker,
     stakes,
     blurb,
+    blurbInput,
     isTitleRematch,
     bowlName,
     namedRivalry,

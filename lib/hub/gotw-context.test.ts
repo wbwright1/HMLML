@@ -6,6 +6,8 @@ import {
   type GotwSource,
   type GotwStandingRow,
 } from "./gotw-context";
+import { gameOfWeekBlurb } from "./between-weeks";
+import { heroHeadline } from "./hero-headline";
 
 // The real 2026 standings after week 2 and the real week-3 slate (live DB,
 // 2026-09-22). Franchise ids are the abbreviations and slugs their
@@ -248,6 +250,32 @@ describe("resolveFromSource: last week's form", () => {
       "The Tokyo Thunderbirds just ran Taking Boutte off the field by 64.2. " +
         "Watson Love Diggs lost to Bucky's General Store by 24.8. "
     )).toBe(true);
+  });
+
+  it("hero = Taking Boutte lost by 64.2: the blurb states TTT's other true fact, never 64.2", () => {
+    const r = resolveFromSource(
+      source({
+        priorFinals: W2_FINALS,
+        priorFeaturedSlugs: new Set(["ldl", "vv", "mcc", "bgs"]),
+      })
+    );
+    const hero = heroHeadline({
+      recapShown: true,
+      priorFinals: W2_FINALS,
+      slate: [],
+      standings: [],
+    });
+    expect(hero.text).toBe("Taking Boutte lost by 64.2. It was not that close.");
+    const blurb = gameOfWeekBlurb({ ...r.blurbInput!, heroClaim: hero.claim });
+    expect(blurb.startsWith(
+      "The Tokyo Thunderbirds just hung 204.9 on Taking Boutte. " +
+        "Watson Love Diggs lost to Bucky's General Store by 24.8. "
+    )).toBe(true);
+    // Only the claimed sentence changed; the rest is the resolver's own copy.
+    expect(blurb.split(". ").slice(1)).toEqual(r.blurb!.split(". ").slice(1));
+    expect(blurb).not.toContain("64.2");
+    // Without the claim it is the resolver's own blurb, unchanged.
+    expect(gameOfWeekBlurb(r.blurbInput!)).toBe(r.blurb);
   });
 
   it("without finals there is no form and the blurb opens with the reason", () => {

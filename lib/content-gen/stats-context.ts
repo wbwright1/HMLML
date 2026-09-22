@@ -21,6 +21,7 @@ import { getWeekStandouts } from "@/lib/queries/week-standouts";
 import { getRecentTransactions } from "@/lib/queries/offseason";
 import { matchupPairKey } from "@/lib/content";
 import { namedRivalryLookupFrom, resolveGameOfTheWeek } from "@/lib/hub/gotw-context";
+import { heroHeadline } from "@/lib/hub/hero-headline";
 import { getNamedRivalries, type NamedRivalry } from "@/lib/queries/rivalries";
 import { rivalryPairKey } from "@/lib/queries/rivalry-week";
 import type { GotwReason } from "@/lib/hub/between-weeks";
@@ -261,6 +262,13 @@ export interface StatsContext {
       margin: number;
       result: "won" | "lost" | "tied";
     }[];
+    /**
+     * The numbers the hub's hero headline prints while the recap renders
+     * (lib/hub/hero-headline.ts, e.g. ["64.2"] for "Taking Boutte lost by
+     * 64.2"). The hero owns that fact, so the blurb must not print them; the
+     * hub drops a stored blurb that does. Empty when no finals rung fires.
+     */
+    heroNumbers: string[];
   } | null;
   weekInBooks: StatsWeekInBooks | null;
   recentTransactions: StatsTransaction[];
@@ -470,6 +478,14 @@ export async function buildStatsContext(
           blurb: gotw.blurb,
           namedRivalry: gotw.namedRivalry,
           form: gotwForm,
+          heroNumbers: [
+            ...heroHeadline({
+              recapShown: true,
+              priorFinals: gotw.priorFinals,
+              slate: [],
+              standings: [],
+            }).claim.numbers,
+          ],
         }
       : null;
   const titleRematchIds = new Set(

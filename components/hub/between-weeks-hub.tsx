@@ -54,12 +54,13 @@ import { HubSection, RailCard, RailRows } from "@/components/hub/rail-card";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { buildHubLineFooter } from "@/lib/book/shared";
-import { formatH2HLine, formatSlateH2H } from "@/lib/hub/between-weeks";
+import { formatH2HLine, formatSlateH2H, gameOfWeekBlurb } from "@/lib/hub/between-weeks";
 import {
   heroDekFromData,
   heroHeadline,
   heroKickerTail,
   numeralSegments,
+  repeatsHeroNumber,
   type HeroHeadlineInput,
   type HeroSlateTeam,
 } from "@/lib/hub/hero-headline";
@@ -396,28 +397,6 @@ export async function BetweenWeeksHub({
     }
   }
 
-  // The featured card's blurb. A stored (generated) blurb is used ONLY when
-  // its ref_key names the pair this card features: hub_content rows outlive
-  // the run that wrote them, and a blurb about a different game (or a legacy
-  // row with no ref_key) would put one matchup's words under another's names.
-  // Otherwise the resolver's reason-derived blurb renders, which is the same
-  // text the generator's template writes, so the fallback is never generic.
-  const gotwPairKey = gotw?.pairKey ?? null;
-  const gotwBlurb =
-    gotwPairKey && editorial.matchupAngles.gameOfWeekRefKey === gotwPairKey
-      ? editorial.matchupAngles.gameOfWeekBlurb
-      : (gotw?.blurb ?? editorial.matchupAngles.gameOfWeekBlurb);
-
-  // Last line of defense on the copy-echo fix (issue #274). The generator's
-  // diversity layer stops a dek that echoes the Game of the Week card from
-  // ever being WRITTEN, but hub_content rows persist: a dek generated before
-  // that gate existed keeps rendering until the next generate-content run
-  // replaces it. Rather than ship the echo for hours, fall back to the seeded
-  // dek, which is phrase-distinct from every line below it by construction.
-  //
-  // BOTH lines on the Game of the Week card are compared: the blurb that
-  // actually renders, and the kicker ("... on the line" / "... at stake" are
-  // signature phrases too).
   // The hero headline is a data-derived take (lib/hub/hero-headline.ts): last
   // week's finals while the recap renders under it, this week's slate
   // otherwise. The schedule fact lives in the kicker line instead.
@@ -457,6 +436,40 @@ export async function BetweenWeeksHub({
   const headline = heroHeadline(heroInput);
   const kickerTail = heroKickerTail(nextKickoff);
 
+  // The featured card's blurb. A stored (generated) blurb is used ONLY when
+  // its ref_key names the pair this card features: hub_content rows outlive
+  // the run that wrote them, and a blurb about a different game (or a legacy
+  // row with no ref_key) would put one matchup's words under another's names.
+  // Otherwise the resolver's reason-derived blurb renders, which is the same
+  // text the generator's template writes, so the fallback is never generic.
+  //
+  // The hero headline owns its fact (lib/hub/hero-claim.ts). A stored blurb
+  // that prints the hero's number is dropped, and the derived blurb is
+  // rebuilt with the claim so its form opener states each team's other true
+  // fact instead ("just hung 204.9 on Taking Boutte", not "by 64.2" again).
+  const gotwPairKey = gotw?.pairKey ?? null;
+  const storedGotwBlurb =
+    gotwPairKey && editorial.matchupAngles.gameOfWeekRefKey === gotwPairKey
+      ? editorial.matchupAngles.gameOfWeekBlurb
+      : null;
+  const gotwBlurb =
+    storedGotwBlurb && !repeatsHeroNumber(storedGotwBlurb, headline.claim)
+      ? storedGotwBlurb
+      : gotw?.blurbInput
+        ? gameOfWeekBlurb({ ...gotw.blurbInput, heroClaim: headline.claim })
+        : (gotw?.blurb ?? editorial.matchupAngles.gameOfWeekBlurb);
+
+  // Last line of defense on the copy-echo fix (issue #274). The generator's
+  // diversity layer stops a dek that echoes the Game of the Week card from
+  // ever being WRITTEN, but hub_content rows persist: a dek generated before
+  // that gate existed keeps rendering until the next generate-content run
+  // replaces it. Rather than ship the echo for hours, fall back to the seeded
+  // dek, which is phrase-distinct from every line below it by construction.
+  //
+  // BOTH lines on the Game of the Week card are compared: the blurb that
+  // actually renders, and the kicker ("... on the line" / "... at stake" are
+  // signature phrases too).
+  //
   // The headline is compared too: a stored dek written before the headline
   // became a take can restate the very fact it now leads with.
   const linesBelowHero = [gotwBlurb, gotw?.kicker ?? "", headline.text].filter(Boolean);
@@ -524,6 +537,7 @@ export async function BetweenWeeksHub({
               recap={weekRecap}
               superlatives={weeklySuperlatives}
               benchLeader={benchLeader}
+              heroClaim={headline.claim}
             />
           )}
 

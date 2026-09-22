@@ -6,6 +6,7 @@
 import { formatRecord } from "@/lib/format-record";
 import { LEAGUE_TIME_ZONE } from "@/lib/time-zone";
 import type { PlayoffRaceTag } from "@/lib/queries/playoff-race";
+import { repeatsHeroNumber, type HeroClaim } from "@/lib/hub/hero-claim";
 
 // ---------------------------------------------------------------------------
 // Game of the Week: inputs
@@ -630,6 +631,8 @@ export const FORM_ESCAPE_MARGIN = 3;
 export const FORM_DUD_SCORE = 90;
 
 interface BlurbTeam {
+  /** Needed only to match the hero claim's teams; the copy never prints it. */
+  franchiseId?: string;
   name: string;
   record: string;
   raceTag?: PlayoffRaceTag | null;
@@ -639,50 +642,76 @@ interface BlurbTeam {
   winless?: boolean;
 }
 
+/** Which of a final's facts a form sentence prints: its margin, its score,
+ * or neither (the opponent's name alone). */
+type FormFact = "margin" | "points" | "name";
+
+/** The hero claim kinds that own a margin or a score. */
+const CLAIM_FACT: Partial<Record<HeroClaim["kind"], FormFact>> = {
+  blowout: "margin",
+  "photo-finish": "margin",
+  "monster-score": "points",
+  dud: "points",
+};
+
 /**
  * One team's last week as a sentence, plus how sharp it is (a mercy-rule
  * result beats a routine one), so the blurb can open with the sharper side.
  * Every number is the team's own final.
+ *
+ * Candidates run sharpest first, and the first one that is true AND not the
+ * hero's claim wins. A candidate is the hero's claim when the hero is about
+ * this team and states the same fact (a margin or a score), or when it would
+ * print a number the hero already printed. The ladder always ends on a
+ * name-only sentence, so a team with a result always gets one.
  */
-export function formSentence(team: BlurbTeam): { text: string; sharpness: number } | null {
+export function formSentence(
+  team: BlurbTeam,
+  heroClaim?: HeroClaim | null
+): { text: string; sharpness: number } | null {
   const f = team.lastWeek;
   if (!f) return null;
   const pts = f.points.toFixed(1);
   const m = f.margin.toFixed(1);
-  if (f.margin === 0) {
-    return { text: `${team.name} tied ${f.opponentName} at ${pts} last week.`, sharpness: 1 };
+  const n = team.name;
+  const o = f.opponentName;
+  const cands: { head: string; fact: FormFact; sharpness: number; when: boolean }[] =
+    f.margin === 0
+      ? [
+          { head: `${n} tied ${o} at ${pts} last week`, fact: "points", sharpness: 1, when: true },
+          { head: `${n} tied ${o} last week`, fact: "name", sharpness: 1, when: true },
+        ]
+      : f.won
+        ? [
+            { head: `${n} just ran ${o} off the field by ${m}`, fact: "margin", sharpness: 4, when: f.margin >= FORM_MERCY_MARGIN },
+            { head: `${n} just hung ${pts} on ${o}`, fact: "points", sharpness: 3, when: f.points >= FORM_BIG_SCORE },
+            { head: `${n} just escaped ${o} by ${m}`, fact: "margin", sharpness: 2.5, when: f.margin <= FORM_ESCAPE_MARGIN },
+            { head: `${n} beat ${o} by ${m} last week`, fact: "margin", sharpness: 1, when: true },
+            { head: `${n} beat ${o} with ${pts} last week`, fact: "points", sharpness: 1, when: true },
+            { head: `${n} beat ${o} last week`, fact: "name", sharpness: 1, when: true },
+          ]
+        : [
+            { head: `${n} lost by ${m}`, fact: "margin", sharpness: 4, when: f.margin >= FORM_MERCY_MARGIN },
+            { head: `${n} managed ${pts} in a loss to ${o}`, fact: "points", sharpness: 3, when: f.points <= FORM_DUD_SCORE },
+            { head: `${n} lost to ${o} by ${m}`, fact: "margin", sharpness: f.margin <= FORM_ESCAPE_MARGIN ? 2.5 : 1, when: true },
+            { head: `${n} scored ${pts} in a loss to ${o}`, fact: "points", sharpness: 1, when: true },
+            { head: `${n} lost to ${o} last week`, fact: "name", sharpness: 1, when: true },
+          ];
+  const claimFact = heroClaim ? CLAIM_FACT[heroClaim.kind] : undefined;
+  const heroIsAboutTeam =
+    team.franchiseId != null && (heroClaim?.franchiseIds ?? []).includes(team.franchiseId);
+  const pick = cands.find(
+    (c) =>
+      c.when &&
+      !(heroIsAboutTeam && claimFact === c.fact) &&
+      !repeatsHeroNumber(c.head, heroClaim)
+  );
+  if (!pick) return null;
+  // A loss keeps its winless tail (true on any rung) and the sharpness bump.
+  if (!f.won && f.margin !== 0 && team.winless) {
+    return { text: `${pick.head} and is still looking for a first win.`, sharpness: pick.sharpness + 1 };
   }
-  if (f.won) {
-    if (f.margin >= FORM_MERCY_MARGIN) {
-      return { text: `${team.name} just ran ${f.opponentName} off the field by ${m}.`, sharpness: 4 };
-    }
-    if (f.points >= FORM_BIG_SCORE) {
-      return { text: `${team.name} just hung ${pts} on ${f.opponentName}.`, sharpness: 3 };
-    }
-    if (f.margin <= FORM_ESCAPE_MARGIN) {
-      return { text: `${team.name} just escaped ${f.opponentName} by ${m}.`, sharpness: 2.5 };
-    }
-    return { text: `${team.name} beat ${f.opponentName} by ${m} last week.`, sharpness: 1 };
-  }
-  let head: string;
-  let sharpness: number;
-  if (f.margin >= FORM_MERCY_MARGIN) {
-    head = `${team.name} lost by ${m}`;
-    sharpness = 4;
-  } else if (f.points <= FORM_DUD_SCORE) {
-    head = `${team.name} managed ${pts} in a loss to ${f.opponentName}`;
-    sharpness = 3;
-  } else if (f.margin <= FORM_ESCAPE_MARGIN) {
-    head = `${team.name} lost to ${f.opponentName} by ${m}`;
-    sharpness = 2.5;
-  } else {
-    head = `${team.name} lost to ${f.opponentName} by ${m}`;
-    sharpness = 1;
-  }
-  if (team.winless) {
-    return { text: `${head} and is still looking for a first win.`, sharpness: sharpness + 1 };
-  }
-  return { text: `${head}.`, sharpness };
+  return { text: `${pick.head}.`, sharpness: pick.sharpness };
 }
 
 const CHAPTER_WORDS = [
@@ -701,6 +730,11 @@ export interface GotwBlurbInput {
   playoffMeetingYears: number[];
   namedRivalry: GotwNamedRivalry | null;
   bowlName: string | null;
+  /**
+   * The hub hero's claim. The form opener skips it (lib/hub/hero-claim.ts):
+   * the headline above the card already said it, with that number.
+   */
+  heroClaim?: HeroClaim | null;
 }
 
 /** The series sentence: always true, reads the h2h from team A's side. */
@@ -734,7 +768,10 @@ export function gameOfWeekBlurb(input: GotwBlurbInput): string {
   // Last week's form leads, sharper side first (ties keep team A first).
   // With it in front, the reason sentence drops the names and records it
   // would otherwise repeat (the card prints both records above the blurb).
-  const forms = [formSentence(input.teamA), formSentence(input.teamB)]
+  const forms = [
+    formSentence(input.teamA, input.heroClaim),
+    formSentence(input.teamB, input.heroClaim),
+  ]
     .filter((f): f is { text: string; sharpness: number } => f != null)
     .sort((x, y) => y.sharpness - x.sharpness)
     .map((f) => f.text);
