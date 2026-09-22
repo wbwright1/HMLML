@@ -527,11 +527,12 @@ const MATCHUP_ANGLES_OPENER: MatchupTrashAngles = Object.freeze({
  *
  * It is also the copy that has to be MOST careful, because it is the one line
  * guaranteed to render beside the seeded Game of the Week blurb and kicker.
- * It must share no signature phrase with BOTH seeded blurbs above (which say
- * "Two teams, one slate ... receipts to settle" and "the first receipts of
- * the year") or with stakesClause's kickers ("Division lead at stake",
- * "Pride at stake", "Season openers"). See lib/content-gen/phrases.ts;
- * lib/content.test.ts asserts all of it.
+ * It must share no signature phrase with either seeded blurb above (the
+ * played-games "pick of this week's matchups" line and the week-1 opener) or
+ * with the Game of the Week kickers from stakesFromReasons in
+ * lib/hub/between-weeks.ts ("Division lead on the line", "Pride at stake",
+ * "Season openers"). See lib/content-gen/phrases.ts; lib/content.test.ts
+ * asserts the blurb half of it.
  */
 export const HERO_DEK_FALLBACK =
   'Lineups lock, excuses start Monday. Nobody in this league gets to sit this week out.';
@@ -589,10 +590,10 @@ function buildSmackPosts(now: number): readonly SmackPost[] {
 
 /** The seeded editorial defaults, stamped for `now`. Always the fallback. */
 /**
- * `anyGamesPlayed` picks which seeded gameOfWeekBlurb ships: the default
- * "first place on the line" line once the league has played a game, or the
- * opener-appropriate variant before any game has been played (true claims
- * only; see GAME_OF_WEEK_BLURB_OPENER). Defaults to true so callers that
+ * `anyGamesPlayed` picks which seeded gameOfWeekBlurb ships: the
+ * reason-neutral MATCHUP_ANGLES line once the league has played a game, or
+ * the opener variant before any game has been played (true claims only; see
+ * GAME_OF_WEEK_BLURB_OPENER). Defaults to true so callers that
  * omit it (there are none left in this codebase, but the type is exported)
  * keep the pre-existing behavior.
  */
@@ -745,10 +746,10 @@ export interface HubEditorialOptions {
   now?: number;
   /**
    * Whether the league has played at least one game this season. Picks the
-   * seeded GOTW blurb: the opener-appropriate variant when false (never
-   * claims "first place on the line" before any game exists), the default
-   * variant when true or omitted. A published DB blurb (game_of_week_blurb
-   * hub_content) still overrides either seed, same as before.
+   * seeded GOTW blurb: the opener variant when false (nobody has a record
+   * yet), the reason-neutral default when true or omitted. Neither seed
+   * claims first place or stakes. A published game_of_week_blurb row
+   * overrides either seed only when its ref_key matches the hub's pick.
    */
   anyGamesPlayed?: boolean;
 }
