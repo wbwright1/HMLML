@@ -26,9 +26,9 @@ import { phaseGuidance, resolveSeasonPhase } from "@/lib/content-gen/season-phas
 // The response is Zod-validated (one retry on failure); on any failure at all
 // (no API key, API error, invalid JSON twice) we fall back to the deterministic
 // templates. Per the claude-api skill: @anthropic-ai/sdk, model from
-// CONTENT_MODEL (default a current Sonnet-tier model), ANTHROPIC_API_KEY.
+// CONTENT_MODEL (default Opus 5.5), ANTHROPIC_API_KEY.
 
-const DEFAULT_MODEL = "claude-sonnet-5";
+const DEFAULT_MODEL = "claude-opus-5-5";
 
 // ---------------------------------------------------------------------------
 // LLM call budget (this route runs behind maxDuration = 300 on Vercel)
@@ -50,13 +50,16 @@ const LLM_DEADLINE_MS = 220_000;
 // (PreseasonSchema) worst-cases at roughly: 3 division_notes + 6
 // burning_questions + 6 bold_predictions + 6 offseason_receipts + 1 hero_dek +
 // 6 smack_posts, each body <= 400 chars. That is ~11K chars of JSON, on the
-// order of ~3.5K output tokens. Thinking is disabled below (constraint-
-// following generation; quality control happens in the downstream
-// validate/diversity layers), so the entire budget goes to the JSON text
-// itself. 8000 leaves comfortable headroom above the ~3.5K worst case while
-// still keeping generation fast (the old 16000 cap invited needlessly long,
-// budget-eating runs).
-const MAX_OUTPUT_TOKENS = 8000;
+// order of ~3.5K output tokens. Opus 5.5 cannot run with thinking disabled,
+// and thinking tokens count against max_tokens, so the cap has to cover the
+// JSON plus whatever the model thinks first. CONTENT_EFFORT keeps that
+// thinking short; 16000 leaves room for it without inviting a runaway run.
+const MAX_OUTPUT_TOKENS = 16000;
+
+// Opus 5.5 defaults to "medium". "low" keeps the thinking pass short so two
+// attempts still fit inside LLM_DEADLINE_MS; quality control happens in the
+// downstream validate/diversity layers, not in the model's reasoning.
+const CONTENT_EFFORT = "low" as const;
 
 const SYSTEM_PROMPT = `You are the Site Desk: the editorial voice of a 12-team dynasty fantasy football league history site. Your voice is confident and snarky, "the friend in the group chat who always has the receipts." You roast losses with the same care you celebrate wins.
 
@@ -772,24 +775,21 @@ export async function generateContent(ctx: StatsContext): Promise<GeneratedConte
         model,
         max_tokens: MAX_OUTPUT_TOKENS,
         system: SYSTEM_PROMPT,
-        // Constraint-following generation: structured outputs already enforce
-        // the shape, and quality control happens in the downstream
-        // validate/diversity layers, so thinking tokens would only eat into
-        // MAX_OUTPUT_TOKENS without buying anything.
-        thinking: { type: "disabled" as const },
+        // No `thinking` param: Opus 5.5 rejects { type: "disabled" } with a
+        // 400, and omitting it runs adaptive thinking. Effort is the dial.
         messages: [{ role: "user" as const, content: userPrompt }],
       };
 
       if (ctx.seasonType === "regular") {
         const response = await client.messages.parse(
-          { ...baseParams, output_config: { format: zodOutputFormat(RegularWireSchema) } },
+          { ...baseParams, output_config: { effort: CONTENT_EFFORT, format: zodOutputFormat(RegularWireSchema) } },
           requestOptions,
         );
         lastResponse = response;
         return toRowsRegular(checkParsedOutput(response), ctx);
       }
       const response = await client.messages.parse(
-        { ...baseParams, output_config: { format: zodOutputFormat(PreseasonWireSchema) } },
+        { ...baseParams, output_config: { effort: CONTENT_EFFORT, format: zodOutputFormat(PreseasonWireSchema) } },
         requestOptions,
       );
       lastResponse = response;
