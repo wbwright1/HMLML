@@ -73,6 +73,11 @@ export interface SlateAngleInput {
   recordB: string;
   /** League-wide gate: false before a single game of the season has been played. */
   anyGamesPlayed: boolean;
+  /**
+   * The commish-named rivalry this pair belongs to (lib/queries/rivalries.ts),
+   * or null/omitted. When present it is the top rung of the ladder.
+   */
+  namedRivalry?: { name: string; tagline: string | null } | null;
 }
 
 /**
@@ -141,6 +146,7 @@ export const SLATE_ANGLE_MAX_CHARS = 140;
 
 /** Rungs of the ladder, best hook first. Exported for tests and diagnostics. */
 export type SlateAngleRung =
+  | "namedRivalry"
   | "titleRematch"
   | "streak"
   | "lopsided"
@@ -226,7 +232,36 @@ type RungEntry = {
   build: (input: SlateAngleInput) => string | null;
 };
 
+/**
+ * The all-time series as one short sentence, for the named-rivalry rung's
+ * tail. Names the leader explicitly (a bare "3-1" would read as team A's lead
+ * half the time), says "dead even" for a tie, and says nothing at all when the
+ * pair has no series on file rather than inventing one.
+ */
+function seriesFact(input: SlateAngleInput): string | undefined {
+  const h2h = input.h2h;
+  if (!h2h || seriesTotal(h2h) < 1) return undefined;
+  if (h2h.wins === h2h.losses) return `Dead even at ${h2h.wins}-${h2h.losses} all time.`;
+  const leaderSide: SlateSide = h2h.wins > h2h.losses ? "A" : "B";
+  const lead = Math.max(h2h.wins, h2h.losses);
+  const trail = Math.min(h2h.wins, h2h.losses);
+  return `${nameOf(input, leaderSide)} leads it ${lead}-${trail} all time.`;
+}
+
 const RUNGS: RungEntry[] = [
+  {
+    // The league named this rivalry itself, so its name and tagline outrank
+    // every derived hook; the tail is the one number that settles arguments.
+    rung: "namedRivalry",
+    build: (input) => {
+      const r = input.namedRivalry;
+      if (!r) return null;
+      const lead = r.tagline
+        ? `${r.name}: ${r.tagline}`
+        : `${r.name}: ${input.teamA.name} and ${input.teamB.name}.`;
+      return fit(lead, seriesFact(input));
+    },
+  },
   {
     rung: "titleRematch",
     build: (input) => {

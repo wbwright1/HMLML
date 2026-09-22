@@ -43,6 +43,49 @@ describe("parseStreak", () => {
 });
 
 describe("buildSlateAngle ladder", () => {
+  it("rung 0: a named rivalry leads with its name and tagline, then the series", () => {
+    const result = buildSlateAngleResult(
+      base({
+        teamA: { name: "McCarthyism" },
+        teamB: { name: "Vanilla Vick" },
+        namedRivalry: {
+          name: "The Split Decision",
+          tagline: "They trade wins all season, then settle it in the playoffs.",
+        },
+        h2h: { wins: 4, losses: 4, ties: 0, streak: "2-game win streak" },
+        isTitleRematch: true,
+        bowlName: "HMLML Bowl VI",
+      })
+    );
+    // Outranks even the title rematch and the streak.
+    expect(result.rung).toBe("namedRivalry");
+    expect(result.text).toBe(
+      "The Split Decision: They trade wins all season, then settle it in the playoffs. Dead even at 4-4 all time."
+    );
+  });
+
+  it("rung 0 names the series leader, and drops the tail rather than inventing a series", () => {
+    const leading = buildSlateAngle(
+      base({
+        teamA: { name: "Of Mice and Mendoza" },
+        teamB: { name: "Real Olave Garden" },
+        namedRivalry: { name: "The Custody Battle", tagline: null },
+        h2h: { wins: 0, losses: 4, ties: 0, streak: "4-game losing streak" },
+      })
+    );
+    expect(leading).toBe(
+      "The Custody Battle: Of Mice and Mendoza and Real Olave Garden. Real Olave Garden leads it 4-0 all time."
+    );
+    const fresh = buildSlateAngle(
+      base({ namedRivalry: { name: "The Custody Battle", tagline: "Two owners, one split." } })
+    );
+    expect(fresh).toBe("The Custody Battle: Two owners, one split.");
+  });
+
+  it("without a named rivalry the ladder is unchanged", () => {
+    expect(buildSlateAngleResult(base({ namedRivalry: null })).rung).toBe("firstMeeting");
+  });
+
   it("rung 1: title rematch names the bowl and who won it", () => {
     const result = buildSlateAngleResult(
       base({
@@ -288,6 +331,10 @@ describe("copy rules", () => {
       },
     }),
     base({ anyGamesPlayed: true, recordA: "3-1", recordB: "1-3" }),
+    base({
+      namedRivalry: { name: "The Custody Battle", tagline: "They used to share a team. Now they share a grudge." },
+      h2h: { wins: 4, losses: 0, ties: 0, streak: "4-game win streak" },
+    }),
   ];
 
   it("uses no em-dashes or en-dashes", () => {
@@ -526,6 +573,13 @@ describe("length budget with the league's longest real names", () => {
           pointsB: 120.0,
           isPlayoff: false,
         },
+      }),
+      longBase({
+        namedRivalry: {
+          name: "The Split Decision",
+          tagline: "They trade wins all season, then settle it in the playoffs.",
+        },
+        h2h: { wins: 14, losses: 13, ties: 0, streak: null },
       }),
       longBase({
         isTitleRematch: true,

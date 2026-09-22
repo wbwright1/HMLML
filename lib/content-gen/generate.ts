@@ -315,6 +315,7 @@ export function promptStatsView(ctx: StatsContext): unknown {
       playoffMeetingYears: m.playoffMeetingYears,
       isTitleRematch: m.isTitleRematch,
       topProjected: m.topProjected,
+      namedRivalry: m.namedRivalry,
     })),
   };
 }
@@ -387,7 +388,11 @@ function regularSpec(ctx: StatsContext): string {
   // each one from the records); the card's kicker already states the top one,
   // so the blurb must not repeat its wording.
   const gotwFacts = ctx.gameOfWeek
-    ? ` It was picked for these reasons, the ONLY stakes you may claim for it: ${JSON.stringify(ctx.gameOfWeek.reasons)} (${GOTW_REASON_GLOSSARY}). The card's kicker above your blurb reads ${JSON.stringify(ctx.gameOfWeek.kicker)}; do not reuse its wording ("on the line", "at stake"). Never claim first place, a division lead, a playoff spot or any other stakes that are not in that list, never name a weekday, and never write "receipts to settle". Any superlative or ordinal ("only", "most", "1st") needs a claim object in "claims"`
+    ? ` It was picked for these reasons, the ONLY stakes you may claim for it: ${JSON.stringify(ctx.gameOfWeek.reasons)} (${GOTW_REASON_GLOSSARY}). The card's kicker above your blurb reads ${JSON.stringify(ctx.gameOfWeek.kicker)}; do not reuse its wording ("on the line", "at stake"). Never claim first place, a division lead, a playoff spot or any other stakes that are not in that list, never name a weekday, and never write "receipts to settle". Any superlative or ordinal ("only", "most", "1st") needs a claim object in "claims"${
+        ctx.gameOfWeek.namedRivalry
+          ? `. This game is the league's named rivalry ${JSON.stringify(ctx.gameOfWeek.namedRivalry.name)}: the kicker already leads with that name${ctx.gameOfWeek.namedRivalry.tagline ? ` and the card prints its tagline ${JSON.stringify(ctx.gameOfWeek.namedRivalry.tagline)} right under it, so do not quote the tagline` : ""}. You may call it by name; its "origin" in that matchup's STATS entry is background lore, never a source of years, scores or events`
+          : ""
+      }`
     : "";
   return `This is REGULAR SEASON content for week ${ctx.week} (week-scoped). Produce this exact JSON shape. Character budgets are HARD limits: a field over its budget gets that entire row discarded downstream (the response is not rejected, but that row is), so stay comfortably under, not right at, the number.
 {
@@ -395,7 +400,7 @@ function regularSpec(ctx: StatsContext): string {
     ctx.week === 1
       ? `. WEEK 1: no team has a current-season record, so NEVER write one (a "0-0" line is an automatic rejection) and never call anyone hot, cold, or slumping. Each angle must hang on a real receipt from that matchup's own JSON: h2h (including its streak, written from the HOME team's perspective), lastMeeting, playoffMeetingYears, isTitleRematch, or topProjected. When h2h is all zeros and lastMeeting is null, say plainly that it is their first meeting; do not invent a rivalry. Every angle must have its OWN hook, so two cards never read the same`
       : ""
-  }
+  }. A matchup whose "namedRivalry" is set is a rivalry the league named itself: you may use its name and quote its tagline verbatim as that matchup's hook; its "origin" is lore, not a source of numbers
   "game_of_week_blurb": { "body": "blurb for ${gotwClause}, under ${BODY_MAX} characters", "claims": [] }  //${gotwFacts}
   "hero_dek": "one-sentence hero subhead for the week, under ${BODY_MAX} characters. Do NOT mention a specific number of days until kickoff; the live day count is added at render time. It renders directly above the Game of the Week card, whose own blurb and whose kicker (a short stakes line such as 'Division lead on the line', 'Battle of unbeatens' or 'Pride at stake') are both visible on the same screen, so it must not reuse ANY phrase from either (no shared 'receipts to settle', 'on the line', 'at stake', 'headline the slate' style idioms): different sentences, different angles.",
   "smack_posts": [ { "text": "site desk post, under ${BODY_MAX} characters", "claims": [] }, ... ]  // 5 to 6, MORE than the ~5 that will ship: over-generate so a diverse subset can be picked

@@ -52,7 +52,7 @@ export interface GotwLastMeeting {
   isPlayoff: boolean;
 }
 
-/** A commish-named rivalry (Stream D wires the lookup; null until then). */
+/** A commish-named rivalry (lib/queries/rivalries.ts, via namedRivalryLookupFrom). */
 export interface GotwNamedRivalry {
   name: string;
   tagline: string | null;
@@ -540,6 +540,44 @@ export function stakesFromReasons(
   return "Pride at stake";
 }
 
+/** Reasons whose kicker copy is a real standings consequence, strong enough
+ * to sit beside a rivalry's name. The softer ones (series, line, playoff
+ * history, mutual rival) are left to the blurb, where there is room to say
+ * them properly. */
+const RIVALRY_KICKER_STAKES: ReadonlySet<GotwReason> = new Set<GotwReason>([
+  "division-lead-flip",
+  "playoff-clinch",
+  "unbeatens",
+  "top-of-table",
+]);
+
+/**
+ * The whole kicker for a named-rivalry pick: the rivalry's own name leads,
+ * then the one thing that is true about THIS meeting. That is the heaviest
+ * standings consequence when there is one ("Battle of unbeatens"), otherwise
+ * the two records as they stand ("2-0 meets 0-2"), which is a fact on any
+ * slate once a game has been played, otherwise the plain game type
+ * ("Cross-Division"). Never a claim the reasons do not carry.
+ */
+export function namedRivalryKicker(
+  rivalryName: string,
+  reasons: GotwReason[],
+  facts: {
+    anyGamesPlayed: boolean;
+    recordA: string;
+    recordB: string;
+    /** gotwKickerLead's output, for the pre-season fallback. */
+    gameType: string;
+  }
+): string {
+  const stake = reasons.find((r) => RIVALRY_KICKER_STAKES.has(r));
+  if (stake) return `${rivalryName} · ${stakesFromReasons([stake])}`;
+  if (facts.anyGamesPlayed) {
+    return `${rivalryName} · ${facts.recordA} meets ${facts.recordB}`;
+  }
+  return `${rivalryName} · ${facts.gameType}`;
+}
+
 export interface GotwBlurbInput {
   reasons: GotwReason[];
   teamA: { name: string; record: string; raceTag?: PlayoffRaceTag | null };
@@ -595,6 +633,8 @@ export function gameOfWeekBlurb(input: GotwBlurbInput): string {
     ) ?? "pride";
 
   let lead: string;
+  // A closing fact after the series sentence (only the rivalry case uses it).
+  let coda = "";
   switch (top) {
     case "title-rematch": {
       const game = input.bowlName ?? "last season's title game";
@@ -602,8 +642,14 @@ export function gameOfWeekBlurb(input: GotwBlurbInput): string {
       break;
     }
     case "named-rivalry": {
+      // The tagline is NOT repeated here: the card prints it as its own aside
+      // under the kicker, which already leads with the rivalry's name. What
+      // the blurb adds is this meeting's facts: records now, the series below,
+      // and a playoff meeting when there is one on file.
       const r = input.namedRivalry!;
-      lead = `${r.name}: ${a} against ${b}.${r.tagline ? ` ${r.tagline}` : ""}`;
+      const year = input.playoffMeetingYears[0];
+      lead = `${a} against ${b}, the latest chapter of ${r.name}.`;
+      if (year != null) coda = `They met in the ${year} playoffs too.`;
       break;
     }
     case "division-lead-flip":
@@ -648,7 +694,7 @@ export function gameOfWeekBlurb(input: GotwBlurbInput): string {
 
   const series = seriesSentence(input);
   // "series-on-the-line" already leans on the series; say the number there.
-  return series ? `${lead} ${series}` : lead;
+  return [lead, series, coda].filter(Boolean).join(" ");
 }
 
 // ---------------------------------------------------------------------------

@@ -17,6 +17,7 @@ import {
   gotwKickerLead,
   isRecentRematch,
   markTitleRematch,
+  namedRivalryKicker,
   selectGameOfTheWeek,
   stakesFromReasons,
   type DivisionRaceTeam,
@@ -38,6 +39,7 @@ import { computeStandingsRaceTags, type PlayoffRaceTag } from "@/lib/queries/pla
 import { getAllSeasons, getTitleGamePair } from "@/lib/queries/seasons";
 import { getHeadToHead, getHeadToHeadHistory } from "@/lib/queries/records";
 import { getRivalryWeek, rivalryPairKey } from "@/lib/queries/rivalry-week";
+import type { NamedRivalry } from "@/lib/queries/rivalries";
 import { getPublishedHubContent } from "@/lib/queries/hub-content";
 import {
   getWeekStarterPool,
@@ -75,6 +77,25 @@ export interface GotwMatchupRef {
 
 export type NamedRivalryLookup = (idA: string, idB: string) => GotwNamedRivalry | null;
 
+/**
+ * Adapts getNamedRivalries()'s rows into the resolver's lookup. Pure: the
+ * callers (the hub and content-gen) fetch the list once and hand this in, so
+ * both resolve the same rivalry for the same pair.
+ */
+export function namedRivalryLookupFrom(
+  list: readonly Pick<NamedRivalry, "franchiseAId" | "franchiseBId" | "name" | "tagline">[]
+): NamedRivalryLookup | null {
+  if (list.length === 0) return null;
+  const byPair = new Map<string, GotwNamedRivalry>();
+  for (const r of list) {
+    byPair.set(rivalryPairKey(r.franchiseAId, r.franchiseBId), {
+      name: r.name,
+      tagline: r.tagline,
+    });
+  }
+  return (idA, idB) => (idA === idB ? null : byPair.get(rivalryPairKey(idA, idB)) ?? null);
+}
+
 /** Everything the pure builder needs, already fetched. */
 export interface GotwSource {
   seasonYear: number;
@@ -94,7 +115,7 @@ export interface GotwSource {
   titlePair: { seasonYear: number; championFranchiseId: string; runnerUpFranchiseId: string } | null;
   /** rivalryPairKey()s of this week's mutual top rivals. */
   mutualRivalKeys: Set<string>;
-  /** Named-rivalry lookup (Stream D wires getNamedRivalries); null = none. */
+  /** Named-rivalry lookup (namedRivalryLookupFrom over getNamedRivalries); null = none. */
   namedRivalryOf: NamedRivalryLookup | null;
   /** The Book's home-perspective spread per matchupId, when it trades this week. */
   bookSpreadByMatchup: Map<number, number>;
@@ -118,6 +139,12 @@ export interface GotwResolution {
   blurb: string | null;
   isTitleRematch: boolean;
   bowlName: string | null;
+  /**
+   * The commish-named rivalry the pick belongs to, when that is one of the
+   * reasons it was picked. The card leads its kicker with the name and prints
+   * the tagline as a serif aside.
+   */
+  namedRivalry: GotwNamedRivalry | null;
   anyGamesPlayed: boolean;
   /**
    * "1st in {Division}" per franchise that leads its division by the seedTeams
@@ -267,6 +294,7 @@ export function resolveFromSource(source: GotwSource): GotwResolution {
     blurb: null,
     isTitleRematch: false,
     bowlName: null,
+    namedRivalry: null,
     anyGamesPlayed,
     divisionLeaderStatus,
     candidates,
@@ -296,6 +324,22 @@ export function resolveFromSource(source: GotwSource): GotwResolution {
     h2h: candidate.h2h,
     playoffMeetingYears: candidate.playoffMeetingYears,
   });
+  const namedRivalry =
+    pick.reasons.includes("named-rivalry") && candidate.namedRivalry
+      ? candidate.namedRivalry
+      : null;
+  // A named rivalry leads the kicker with its own name, except on the week-1
+  // title rematch, whose bowl name keeps the lead (the rivalry name is then
+  // the stakes clause, as stakesFromReasons already orders it).
+  const kicker =
+    namedRivalry && !isTitleRematch
+      ? namedRivalryKicker(namedRivalry.name, pick.reasons, {
+          anyGamesPlayed,
+          recordA: recordOf(home),
+          recordB: recordOf(away),
+          gameType: lead,
+        })
+      : `${lead} · ${stakes}`;
   const blurb = gameOfWeekBlurb({
     reasons: pick.reasons,
     teamA: {
@@ -322,11 +366,12 @@ export function resolveFromSource(source: GotwSource): GotwResolution {
     candidate,
     pairKey: matchupPairKey(matchup.homeTeam.franchiseSlug, matchup.awayTeam.franchiseSlug),
     reasons: pick.reasons,
-    kicker: `${lead} · ${stakes}`,
+    kicker,
     stakes,
     blurb,
     isTitleRematch,
     bowlName,
+    namedRivalry,
   };
 }
 
@@ -340,7 +385,7 @@ export interface GotwLoadInput {
   week: number;
   matchups: PairedMatchup[];
   standings: GotwStandingRow[];
-  /** Named-rivalry lookup; omitted until Stream D wires getNamedRivalries. */
+  /** Named-rivalry lookup (namedRivalryLookupFrom over getNamedRivalries). */
   namedRivalryOf?: NamedRivalryLookup | null;
   /** Pieces the caller already fetched, so nothing is queried twice. */
   prefetched?: {

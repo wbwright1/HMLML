@@ -36,6 +36,7 @@ function ctx(overrides: Partial<StatsContext> = {}): StatsContext {
         lastMeeting: null,
         playoffMeetingYears: [],
         isTitleRematch: false,
+        namedRivalry: null,
         topProjected: null,
       },
     ],
@@ -168,6 +169,28 @@ describe("findHallucinatedNames", () => {
 
   it("does not reject a sentence with no multi-word capitalized sequence at all", () => {
     expect(findHallucinatedNames("This team is going to disappoint everyone.", ctx())).toEqual([]);
+  });
+
+  it("knows a commish-named rivalry's name and tagline, and flags it without one", () => {
+    const body = "The Custody Battle resumes, and Foopus wants the house back.";
+    // No rivalry on the context: the title is an unknown proper noun.
+    expect(findHallucinatedNames(body, ctx())).toEqual(["The Custody Battle"]);
+    const base = ctx();
+    const withRivalry = ctx({
+      currentMatchups: [
+        {
+          ...base.currentMatchups[0],
+          namedRivalry: {
+            name: "The Custody Battle",
+            tagline: "They used to share a team. Now they share a grudge.",
+            origin: null,
+            trophyName: "The Deed",
+          },
+        },
+      ],
+    });
+    expect(findHallucinatedNames(body, withRivalry)).toEqual([]);
+    expect(findHallucinatedNames("Winner Keeps The Deed this year.", withRivalry)).toEqual([]);
   });
 
   it("flags a plausible-looking but unknown two-word capitalized name", () => {

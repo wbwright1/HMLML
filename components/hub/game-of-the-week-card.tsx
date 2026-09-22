@@ -37,8 +37,11 @@ export interface GameOfTheWeekTeam {
 }
 
 interface GameOfTheWeekCardProps {
-  /** Top-left kicker, e.g. "DIVISION 1 REMATCH · DIVISION LEAD ON THE LINE". */
+  /** Top-left kicker, e.g. "DIVISION 1 REMATCH · DIVISION LEAD ON THE LINE",
+   * or "THE CUSTODY BATTLE · 2-0 MEETS 0-2" when a named rivalry leads. */
   kicker: string;
+  /** A named rivalry's tagline, set as a serif italic aside under the kicker. */
+  rivalryTagline?: string | null;
   /** Top-right all-time series line, e.g. "All-time GW leads 14-9". */
   h2hLine: string;
   teamA: GameOfTheWeekTeam;
@@ -55,6 +58,7 @@ interface GameOfTheWeekCardProps {
  */
 export function GameOfTheWeekCard({
   kicker,
+  rivalryTagline,
   h2hLine,
   teamA,
   teamB,
@@ -70,6 +74,14 @@ export function GameOfTheWeekCard({
           </p>
           <p className="text-caption font-mono tabular-nums text-text-tertiary">{h2hLine}</p>
         </div>
+        {rivalryTagline && (
+          <p
+            className="mt-2 font-serif italic text-body text-text-secondary"
+            data-testid="gotw-rivalry-tagline"
+          >
+            <MonoDigits text={rivalryTagline} />
+          </p>
+        )}
 
         {/* Teams */}
         <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-[1fr_auto_1fr] sm:items-center sm:gap-4">

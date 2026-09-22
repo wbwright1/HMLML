@@ -679,6 +679,11 @@ function slateAngleInput(
     recordA: m.home.record,
     recordB: m.away.record,
     anyGamesPlayed,
+    // Same top rung the hub builds, so a stored template angle and the
+    // render-time one agree for a named rivalry.
+    namedRivalry: m.namedRivalry
+      ? { name: m.namedRivalry.name, tagline: m.namedRivalry.tagline }
+      : null,
   };
 }
 

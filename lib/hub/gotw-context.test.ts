@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   resolveFromSource,
   priorFeaturedSlugsFromRefKey,
+  namedRivalryLookupFrom,
   type GotwSource,
   type GotwStandingRow,
 } from "./gotw-context";
@@ -110,6 +111,31 @@ describe("resolveFromSource on the real 2026 week 3", () => {
     expect(r.pick!.matchupId).toBe(1);
     expect(r.stakes).toBe("The Custody Battle");
     expect(r.blurb).toContain("The Custody Battle");
+    // The name leads the kicker; the second clause is the true record clash,
+    // since ROG v OMM carries no standings stake this week.
+    expect(r.kicker).toBe("The Custody Battle · 2-0 meets 0-2");
+    expect(r.namedRivalry).toEqual({
+      name: "The Custody Battle",
+      tagline: "One team, two owners, one ugly split.",
+    });
+  });
+
+  it("namedRivalryLookupFrom finds a pair in either order and nothing else", () => {
+    const lookup = namedRivalryLookupFrom([
+      { franchiseAId: "OMM", franchiseBId: "ROG", name: "The Custody Battle", tagline: null },
+    ])!;
+    expect(lookup("ROG", "OMM")?.name).toBe("The Custody Battle");
+    expect(lookup("OMM", "ROG")?.name).toBe("The Custody Battle");
+    expect(lookup("ROG", "TTT")).toBeNull();
+    expect(lookup("ROG", "ROG")).toBeNull();
+    expect(namedRivalryLookupFrom([])).toBeNull();
+    const r = resolveFromSource(source({ namedRivalryOf: lookup }));
+    expect(r.pick!.matchupId).toBe(1);
+  });
+
+  it("carries no rivalry when the pick is not a named rivalry", () => {
+    const r = resolveFromSource(source());
+    expect(r.namedRivalry).toBeNull();
   });
 
   it("the 1st-in-division chip follows the seedTeams chain, not points-for", () => {

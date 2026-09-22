@@ -58,7 +58,12 @@ import {
   formatH2HLine,
   formatSlateH2H,
 } from "@/lib/hub/between-weeks";
-import { resolveGameOfTheWeek, type GotwResolution } from "@/lib/hub/gotw-context";
+import {
+  namedRivalryLookupFrom,
+  resolveGameOfTheWeek,
+  type GotwResolution,
+} from "@/lib/hub/gotw-context";
+import { getNamedRivalries } from "@/lib/queries/rivalries";
 
 type Standing = Awaited<ReturnType<typeof getSeasonStandings>>[number];
 
@@ -266,6 +271,16 @@ export async function BetweenWeeksHub({
   // explains and describes it, and the content generator calls the SAME one,
   // so the stored blurb and this card can never be about different games.
   // Pieces the batch above already fetched are handed in, not re-queried.
+  // Commish-named rivalries, fetched once for both the Game of the Week
+  // resolver and the slate ladder so the two can never disagree about a
+  // pair. Outside the batch's bare catch on purpose: getNamedRivalries
+  // rethrows a production DB error (rethrowUnlessTolerable) rather than
+  // letting ISR cache a hub that silently forgot the league's rivalries.
+  const namedRivalryOf =
+    seasonId != null && matchups.length > 0
+      ? namedRivalryLookupFrom(await getNamedRivalries())
+      : null;
+
   let gotw: GotwResolution | null = null;
   if (seasonId != null && matchups.length > 0) {
     try {
@@ -275,6 +290,7 @@ export async function BetweenWeeksHub({
         week,
         matchups,
         standings,
+        namedRivalryOf,
         prefetched: batchLanded
           ? {
               h2hByMatchup,
@@ -338,6 +354,7 @@ export async function BetweenWeeksHub({
       recordA: record(m.homeTeam.franchiseId),
       recordB: record(m.awayTeam.franchiseId),
       anyGamesPlayed,
+      namedRivalry: namedRivalryOf?.(m.homeTeam.franchiseId, m.awayTeam.franchiseId) ?? null,
     };
   });
   const builtAngles = buildSlateAngles(slateAngleInputs);
@@ -443,6 +460,7 @@ export async function BetweenWeeksHub({
               avatarOf={(id) => standingBy.get(id)?.avatarUrl ?? null}
               divisionLeaderStatus={gotw.divisionLeaderStatus}
               kicker={gotw.kicker}
+              rivalryTagline={gotw.namedRivalry?.tagline ?? null}
               blurb={gotwBlurb}
             />
           )}
@@ -549,6 +567,7 @@ function GameOfWeekSection({
   avatarOf,
   divisionLeaderStatus,
   kicker,
+  rivalryTagline,
   blurb,
 }: {
   matchup: PairedMatchup;
@@ -559,6 +578,8 @@ function GameOfWeekSection({
   divisionLeaderStatus: Map<string, string>;
   /** "{lead} · {stakes}", derived from the pick's reasons (gotw-context). */
   kicker: string;
+  /** The named rivalry's tagline when the pick is one, printed as a serif aside. */
+  rivalryTagline: string | null;
   blurb: string;
 }) {
   const home = matchup.homeTeam;
@@ -578,6 +599,7 @@ function GameOfWeekSection({
     <HubSection kicker="Game of the Week">
       <GameOfTheWeekCard
         kicker={kicker.toUpperCase()}
+        rivalryTagline={rivalryTagline}
         h2hLine={h2hLine}
         teamA={{
           name: home.franchiseName,

@@ -208,6 +208,7 @@ describe("applyDiversityLayer", () => {
           lastMeeting: null,
           playoffMeetingYears: [],
           isTitleRematch: false,
+          namedRivalry: null,
           topProjected: null,
         },
         {
@@ -218,6 +219,7 @@ describe("applyDiversityLayer", () => {
           lastMeeting: null,
           playoffMeetingYears: [],
           isTitleRematch: false,
+          namedRivalry: null,
           topProjected: null,
         },
       ],
@@ -607,6 +609,7 @@ describe("promptStatsView", () => {
             },
             playoffMeetingYears: [2025],
             isTitleRematch: true,
+            namedRivalry: null,
             topProjected: {
               playerName: "Bijan Robinson",
               position: "RB",
@@ -714,6 +717,7 @@ describe("LLM game_of_week_blurb", () => {
         lastMeeting: null,
         playoffMeetingYears: [],
         isTitleRematch: false,
+        namedRivalry: null,
         topProjected: null,
       },
     ],
@@ -723,6 +727,7 @@ describe("LLM game_of_week_blurb", () => {
       reasons: ["top-of-table"],
       kicker: "Cross-Division · Top-three clash",
       blurb: "template",
+      namedRivalry: null,
     },
   });
   const parse = (body: string, claims: unknown[] = []) =>
@@ -734,6 +739,23 @@ describe("LLM game_of_week_blurb", () => {
     });
   const blurbs = (rows: HubContentInsert[]) =>
     rows.filter((r) => r.kind === "game_of_week_blurb");
+
+  it("hands the model a named rivalry as a fact, and the matchup its lore", () => {
+    const rivalry = { name: "The Custody Battle", tagline: "They used to share a team." };
+    const prompt = buildUserPrompt({
+      ...ctx,
+      currentMatchups: ctx.currentMatchups.map((m) => ({
+        ...m,
+        namedRivalry: { ...rivalry, origin: "Two owners, one split.", trophyName: null },
+      })),
+      gameOfWeek: { ...ctx.gameOfWeek!, reasons: ["named-rivalry"], namedRivalry: rivalry },
+    });
+    expect(prompt).toContain(`named rivalry "The Custody Battle"`);
+    expect(prompt).toContain("do not quote the tagline");
+    expect(prompt).toContain('"origin": "Two owners, one split."');
+    // The plain context carries neither.
+    expect(buildUserPrompt(ctx)).not.toContain("The Custody Battle");
+  });
 
   it("keeps a clean blurb and keys it to the featured pair", () => {
     const rows = blurbs(toRowsRegular(parse("Foopus (2-0) against Olave Garden (1-1). Somebody leaves lighter."), ctx));

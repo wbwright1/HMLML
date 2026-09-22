@@ -6,6 +6,7 @@ import {
   formatH2HLine,
   formatSlateH2H,
   stakesFromReasons,
+  namedRivalryKicker,
   gotwReasons,
   gotwKickerLead,
   isRecentRematch,
@@ -94,6 +95,27 @@ describe("selectGameOfTheWeek", () => {
       canFlipDivisionLead: true,
     });
     expect(pickId([rivalry, clash])).toBe(2);
+  });
+
+  it("a named rivalry between two bad teams never beats a battle of unbeatens", () => {
+    // 0-2 v 0-2 (and 0-3 v 1-2 later on) with the name: quality 0 + 25. Two
+    // 2-0 teams from different divisions with nothing else going for them:
+    // quality 40 + unbeatens 10. The name is a tiebreaker-sized bonus between
+    // comparable games, not a trump card over a real marquee game.
+    const unbeatens = candidate(2, team(2, 0, 300, 1), team(2, 0, 290, 3));
+    for (const [a, b] of [
+      [team(0, 2, 180, 2), team(0, 2, 170, 2)],
+      [team(0, 3, 250, 2), team(1, 2, 260, 1)],
+      [team(1, 1, 250, 2), team(0, 2, 240, 2)],
+    ] as const) {
+      const rivalry = candidate(1, a, b, {
+        namedRivalry: { name: "The Custody Battle", tagline: null },
+        isMutualRival: true,
+        playoffMeetingYears: [2024],
+        h2h: { wins: 4, losses: 4, ties: 0 },
+      });
+      expect(pickId([rivalry, unbeatens], 3)).toBe(2);
+    }
   });
 
   it("penalizes a franchise featured last week", () => {
@@ -402,6 +424,38 @@ describe("gotwKickerLead + isRecentRematch", () => {
   });
 });
 
+describe("namedRivalryKicker", () => {
+  const facts = { anyGamesPlayed: true, recordA: "2-0", recordB: "0-2", gameType: "Division 2 Game" };
+
+  it("leads with the name, then the records when no real standings stake applies", () => {
+    expect(
+      namedRivalryKicker("The Custody Battle", ["named-rivalry", "playoff-history", "mutual-rival"], facts)
+    ).toBe("The Custody Battle · 2-0 meets 0-2");
+  });
+
+  it("uses a real standings stake over the records when the pick carries one", () => {
+    expect(
+      namedRivalryKicker("The Split Decision", ["named-rivalry", "division-lead-flip", "unbeatens"], {
+        ...facts,
+        recordB: "2-0",
+      })
+    ).toBe("The Split Decision · Division lead on the line");
+    expect(
+      namedRivalryKicker("The Split Decision", ["named-rivalry", "unbeatens"], { ...facts, recordB: "2-0" })
+    ).toBe("The Split Decision · Battle of unbeatens");
+  });
+
+  it("before any game is played it names the game type, never a 0-0 record", () => {
+    const text = namedRivalryKicker("The Custody Battle", ["named-rivalry", "season-opener"], {
+      ...facts,
+      anyGamesPlayed: false,
+      recordA: "0-0",
+      recordB: "0-0",
+    });
+    expect(text).toBe("The Custody Battle · Division 2 Game");
+  });
+});
+
 describe("gameOfWeekBlurb", () => {
   const base = {
     teamA: { name: "The Tokyo Thunderbirds", record: "2-0" },
@@ -443,6 +497,15 @@ describe("gameOfWeekBlurb", () => {
     expect(text).toBe(
       "The Tokyo Thunderbirds (2-0) and Latter Day Lamb Special (2-0) are both unbeaten, and by Monday night one of them will not be. Latter Day Lamb Special leads the all-time series 5-3."
     );
+  });
+
+  it("the named-rivalry blurb names the rivalry and this meeting's facts, not the tagline", () => {
+    const text = gameOfWeekBlurb({ ...base, reasons: ["named-rivalry", "playoff-history"] });
+    expect(text).toBe(
+      "The Tokyo Thunderbirds (2-0) against Latter Day Lamb Special (2-0), the latest chapter of The Split Decision. Latter Day Lamb Special leads the all-time series 5-3. They met in the 2024 playoffs too."
+    );
+    // The card prints the tagline as its own aside; the blurb must not echo it.
+    expect(text).not.toContain("They always split.");
   });
 
   it("says a first meeting plainly", () => {

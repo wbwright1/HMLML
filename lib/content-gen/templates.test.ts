@@ -13,6 +13,7 @@ function foopusGotw(reasons: GotwReason[] = ["pride"]): NonNullable<StatsContext
   return {
     pairKey: "foopus__olave-garden",
     reasons,
+    namedRivalry: null,
     kicker: `Cross-Division · ${stakesFromReasons(reasons)}`,
     blurb: gameOfWeekBlurb({
       reasons,
@@ -79,6 +80,7 @@ function baseContext(overrides: Partial<StatsContext> = {}): StatsContext {
         lastMeeting: null,
         playoffMeetingYears: [],
         isTitleRematch: false,
+        namedRivalry: null,
         topProjected: null,
       },
       {
@@ -89,6 +91,7 @@ function baseContext(overrides: Partial<StatsContext> = {}): StatsContext {
         lastMeeting: null,
         playoffMeetingYears: [],
         isTitleRematch: false,
+        namedRivalry: null,
         topProjected: null,
       },
     ],
@@ -260,6 +263,29 @@ describe("generateFromTemplates (regular season)", () => {
     expect(angles).toHaveLength(ctx.currentMatchups.length);
     const validPairs = new Set(ctx.currentMatchups.map((m) => m.pairKey));
     for (const a of angles) expect(validPairs.has(a.refKey ?? "")).toBe(true);
+  });
+
+  it("a named rivalry is the stored angle's top rung, same as the hub's", () => {
+    const named = baseContext({ seasonType: "regular" });
+    named.currentMatchups = named.currentMatchups.map((m, i) =>
+      i === 0
+        ? {
+            ...m,
+            namedRivalry: {
+              name: "The Custody Battle",
+              tagline: "They used to share a team. Now they share a grudge.",
+              origin: "Editorial lore.",
+              trophyName: null,
+            },
+          }
+        : m
+    );
+    const angle = generateFromTemplates(named).rows.find(
+      (r) => r.kind === "matchup_angle" && r.refKey === named.currentMatchups[0].pairKey
+    );
+    expect(angle?.body).toBe(
+      "The Custody Battle: They used to share a team. Now they share a grudge. Foopus leads it 3-1 all time."
+    );
   });
 
   it("emits one hero dek, and no blurb when the resolver featured no game", () => {
@@ -582,6 +608,7 @@ describe("generateFromTemplates (week 1 matchup angles)", () => {
         },
         playoffMeetingYears: [],
         isTitleRematch: false,
+        namedRivalry: null,
         topProjected: null,
       },
       {
@@ -593,6 +620,7 @@ describe("generateFromTemplates (week 1 matchup angles)", () => {
         lastMeeting: null,
         playoffMeetingYears: [],
         isTitleRematch: false,
+        namedRivalry: null,
         topProjected: null,
       },
       {
@@ -611,6 +639,7 @@ describe("generateFromTemplates (week 1 matchup angles)", () => {
         },
         playoffMeetingYears: [],
         isTitleRematch: false,
+        namedRivalry: null,
         topProjected: null,
       },
     ],

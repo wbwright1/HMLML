@@ -113,6 +113,20 @@ function knownNames(ctx: StatsContext): string[] {
   for (const m of ctx.currentMatchups) {
     names.add(m.home.name);
     names.add(m.away.name);
+    // A commish-named rivalry's own words ("The Custody Battle", a tagline, a
+    // trophy name) are league facts the prompt hands over, so copy that
+    // quotes them is not inventing a proper noun.
+    const r = m.namedRivalry;
+    if (r) {
+      names.add(r.name);
+      if (r.tagline) names.add(r.tagline);
+      if (r.origin) names.add(r.origin);
+      if (r.trophyName) names.add(r.trophyName);
+    }
+  }
+  if (ctx.gameOfWeek?.namedRivalry) {
+    names.add(ctx.gameOfWeek.namedRivalry.name);
+    if (ctx.gameOfWeek.namedRivalry.tagline) names.add(ctx.gameOfWeek.namedRivalry.tagline);
   }
   if (ctx.weekInBooks?.playerOfWeek) names.add(ctx.weekInBooks.playerOfWeek.name);
   if (ctx.weekInBooks?.dudStarter) names.add(ctx.weekInBooks.dudStarter.name);
