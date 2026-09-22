@@ -4,7 +4,7 @@ import { TeamLink } from "@/components/team-link";
 import { HubSection, RailCard, RailRows } from "@/components/hub/rail-card";
 import type { HubPowerPreview, PowerPreviewMover } from "@/lib/queries/power-preview";
 
-/** Trend vs. season standings: sage ▲ for climbers, rust ▼ for sliders. Never
+/** Spots moved since last week: sage ▲ for climbers, rust ▼ for sliders. Never
  * color alone; the glyph + value always ride together. Mirrors the FormIndicator
  * on app/records/power-rankings/page.tsx (kept local; that copy is coupled to
  * that page's markup, this one to the hub's compact row). */
@@ -22,7 +22,7 @@ function FormIndicator({ delta }: { delta: number }) {
       <span className="flex items-center gap-1 font-mono text-xs font-bold tabular-nums text-accent-green">
         <span aria-hidden>&#9650;</span>
         <span>{delta}</span>
-        <span className="sr-only">spots ahead of standings</span>
+        <span className="sr-only">up from last week</span>
       </span>
     );
   }
@@ -30,7 +30,7 @@ function FormIndicator({ delta }: { delta: number }) {
     <span className="flex items-center gap-1 font-mono text-xs font-bold tabular-nums text-accent-warm">
       <span aria-hidden>&#9660;</span>
       <span>{Math.abs(delta)}</span>
-      <span className="sr-only">spots behind standings</span>
+      <span className="sr-only">down from last week</span>
     </span>
   );
 }
@@ -121,7 +121,7 @@ export function PowerPulseCard({
                     <span className="font-mono text-xs tabular-nums text-text-tertiary whitespace-nowrap">
                       {row.record}
                     </span>
-                    {row.formDelta !== null && <FormIndicator delta={row.formDelta} />}
+                    {row.rankChange !== null && <FormIndicator delta={row.rankChange} />}
                   </div>
                 ) : (
                   <span className="font-mono text-sm font-bold tabular-nums text-accent-gold shrink-0">

@@ -122,7 +122,9 @@ export interface PowerRankingEntry {
   championships: number;
   // Recent-form model additions
   powerScore: number;
-  formDelta: number;
+  /** Spots moved since last week's edition (previous rank - rank; positive =
+   * climbed). Null until there are two completed weeks to compare. */
+  rankChange: number | null;
   standingsRank: number;
   windowGames: number;
   injuryCount: number;
@@ -807,9 +809,9 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
 //
 // v1 model: a rolling 4-week window of completed games, weighted so the most
 // recent game counts most (linear recency weighting). Opponent strength and
-// margin-of-victory are deliberately deferred (a win is a win, in v1); so are
-// week-over-week rank snapshots (the "vs standings" indicator below is
-// computed live from the current window/season, not stored history).
+// margin-of-victory are deliberately deferred (a win is a win, in v1).
+// Week-over-week movement is not a stored snapshot either: last week's edition
+// is recomputed by running the same model with the newest week peeled off.
 //
 //   powerScore = 0.50 * resultScore + 0.35 * scoringScore + 0.15 * (1 - injuryPenalty)
 //
@@ -955,6 +957,24 @@ export function computePowerScore(
   });
 }
 
+/**
+ * Spots each franchise moved between two editions of the rankings: previous
+ * rank minus current rank, so positive = climbed. Null for a franchise that is
+ * missing from either edition.
+ */
+export function computeRankChanges(
+  current: Pick<PowerScoreResult, "franchiseId" | "rank">[],
+  previous: Pick<PowerScoreResult, "franchiseId" | "rank">[]
+): Map<string, number | null> {
+  const previousRank = new Map(previous.map((p) => [p.franchiseId, p.rank]));
+  return new Map(
+    current.map((c) => {
+      const prev = previousRank.get(c.franchiseId);
+      return [c.franchiseId, prev === undefined ? null : prev - c.rank];
+    })
+  );
+}
+
 export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
   try {
     // Find the current/latest season
@@ -1026,9 +1046,14 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
       )
       .orderBy(desc(matchups.week));
 
-    const windowWeeks = new Set(
-      [...new Set(gameRows.map((g) => g.week))].slice(0, WINDOW_SIZE)
-    );
+    // Completed weeks, newest first. Last week's edition is the same window
+    // slid back one week, so it exists once two weeks are in the books.
+    const seasonWeeks = [...new Set(gameRows.map((g) => g.week))];
+    const windowWeeks = new Set(seasonWeeks.slice(0, WINDOW_SIZE));
+    const priorWindowWeeks =
+      seasonWeeks.length >= 2
+        ? new Set(seasonWeeks.slice(1, WINDOW_SIZE + 1))
+        : null;
 
     const seasonGamesByFranchise = new Map<string, PowerFormGame[]>();
     for (const g of gameRows) {
@@ -1096,6 +1121,22 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
     const scores = computePowerScore(inputs);
     const scoreByFranchise = new Map(scores.map((s) => [s.franchiseId, s]));
 
+    // Injuries are not snapshotted per week, so last week's edition reuses the
+    // current penalty: the move reflects what happened on the field.
+    const rankChanges = priorWindowWeeks
+      ? computeRankChanges(
+          scores,
+          computePowerScore(
+            inputs.map((input) => ({
+              ...input,
+              games: (seasonGamesByFranchise.get(input.franchiseId) ?? []).filter(
+                (g) => priorWindowWeeks.has(g.week)
+              ),
+            }))
+          )
+        )
+      : new Map<string, number | null>();
+
     const avatarUrls = await getLatestAvatarUrls(rows.map((r) => r.id));
 
     return rows
@@ -1123,7 +1164,7 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
           pointsAgainst: Number(r.pointsAgainst ?? 0),
           championships: champMap.get(r.id) ?? 0,
           powerScore: score?.powerScore ?? 0,
-          formDelta: score?.formDelta ?? 0,
+          rankChange: rankChanges.get(r.id) ?? null,
           standingsRank: score?.standingsRank ?? standingsRankMap.get(r.id) ?? 0,
           windowGames: score?.windowGames ?? 0,
           injuryCount: injuryCountByFranchise.get(r.id) ?? 0,

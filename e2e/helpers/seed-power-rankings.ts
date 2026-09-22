@@ -50,8 +50,8 @@ export const TEST_DATA = {
 
 /**
  * Seeds a throwaway "latest" season where the season-standings leader (best
- * wins/points) is cold over the last 4 weeks and banged up, while a
- * lower-standings franchise is red-hot and healthy over the same window.
+ * wins/points) is banged up and just got blown out, while a lower-standings
+ * franchise is healthy and just posted the biggest win of the window.
  * Recent-form power rankings should rank the riser above the leader, and the
  * standings-based rank (used elsewhere) should still favor the leader.
  * Returns the season ID for cleanup.
@@ -123,30 +123,36 @@ export async function seedPowerRankingsData(): Promise<number> {
     },
   ]);
 
-  // Last 4 weeks: leader loses every week with low scores; riser wins every
-  // week with high scores. Both sides share a matchupId per week.
-  const matchupRows = WINDOW_WEEKS.flatMap((week) => [
-    {
-      seasonId,
-      week,
-      matchupId: 900 + week,
-      franchiseId: TEST_DATA.leader.id,
-      rosterId: ROSTER_LEADER_ID,
-      points: 70,
-      isWinner: false,
-      status: "complete",
-    },
-    {
-      seasonId,
-      week,
-      matchupId: 900 + week,
-      franchiseId: TEST_DATA.riser.id,
-      rosterId: ROSTER_RISER_ID,
-      points: 150,
-      isWinner: true,
-      status: "complete",
-    },
-  ]);
+  // The 4-week window: leader won weeks 5-7 comfortably, then got blown out
+  // in week 8 by a riser that was losing until then. Last week's edition
+  // (weeks 5-7) had the leader on top; week 8 flips it, so the riser shows
+  // "moved ▲1" and the leader "▼1". Both sides share a matchupId per week.
+  const LATEST_WEEK = WINDOW_WEEKS[WINDOW_WEEKS.length - 1];
+  const matchupRows = WINDOW_WEEKS.flatMap((week) => {
+    const riserWon = week === LATEST_WEEK;
+    return [
+      {
+        seasonId,
+        week,
+        matchupId: 900 + week,
+        franchiseId: TEST_DATA.leader.id,
+        rosterId: ROSTER_LEADER_ID,
+        points: riserWon ? 40 : 150,
+        isWinner: !riserWon,
+        status: "complete",
+      },
+      {
+        seasonId,
+        week,
+        matchupId: 900 + week,
+        franchiseId: TEST_DATA.riser.id,
+        rosterId: ROSTER_RISER_ID,
+        points: riserWon ? 200 : 70,
+        isWinner: riserWon,
+        status: "complete",
+      },
+    ];
+  });
   await db.insert(matchups).values(matchupRows);
 
   // Injuries: leader's starters are banged up (2x "Out"); riser is healthy.

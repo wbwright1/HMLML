@@ -13,7 +13,7 @@ import {
 // franchise with a worse season record has been red-hot and healthy over the
 // same window. The recent-form power-rankings model should rank the riser
 // above the leader (the opposite of season-long standings order), and show a
-// visible rising/falling indicator (glyph + numeric delta) vs. standings.
+// a visible "Moved" indicator (glyph + numeric delta) vs. last week's edition.
 // ============================================================================
 
 test.describe("Recent-form power rankings", () => {
@@ -78,9 +78,19 @@ test.describe("Recent-form power rankings", () => {
     expect(leaderIndex).toBeGreaterThanOrEqual(0);
     expect(riserIndex).toBeLessThan(leaderIndex);
 
-    // A rising/falling glyph with a numeric delta is visible (not color-only).
-    await expect(page.locator("text=▲ >> visible=true").first()).toBeVisible();
-    await expect(page.locator("text=▼ >> visible=true").first()).toBeVisible();
+    // "Moved" is week over week, not vs standings: the seed's last week
+    // (weeks 5-7) had the leader on top, so the riser climbed one spot and
+    // the leader slid one. Glyph + number + label, never color alone.
+    const riserRow = page.locator("a").filter({ hasText: TEST_DATA.riser.name });
+    const leaderRow = page.locator("a").filter({ hasText: TEST_DATA.leader.name });
+    await expect(
+      riserRow.locator("span", { hasText: /^▲1spot up from last week$/ }).first()
+    ).toBeAttached();
+    await expect(
+      leaderRow.locator("span", { hasText: /^▼1spot down from last week$/ }).first()
+    ).toBeAttached();
+    await expect(page.locator("text=Moved >> visible=true").first()).toBeVisible();
+    await expect(page.getByText("Trend", { exact: true })).toHaveCount(0);
   });
 
   test("T02: records rail shows the hot-form team first, matching power-rankings order", async ({

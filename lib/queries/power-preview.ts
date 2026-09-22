@@ -21,8 +21,9 @@ export interface PowerPreviewRow {
   avatarUrl: string | null;
   /** Regular mode: "6-2" style record. Preseason: null. */
   record: string | null;
-  /** Regular: standingsRank - rank (positive = climbing). Preseason: null. */
-  formDelta: number | null;
+  /** Regular: spots moved since last week (positive = climbed); null until
+   * there is a prior week, and always null in preseason. */
+  rankChange: number | null;
   /** Preseason: powerScore * 100, one decimal. Regular: null. */
   powerIndex: string | null;
 }
@@ -67,7 +68,7 @@ export function buildPowerPreview(
       brandingColor: e.brandingColor,
       avatarUrl: e.avatarUrl,
       record: null,
-      formDelta: null,
+      rankChange: null,
       powerIndex: (e.powerScore * 100).toFixed(1),
     }));
     return {
@@ -95,11 +96,11 @@ export function buildPowerPreview(
     brandingColor: e.brandingColor,
     avatarUrl: e.avatarUrl,
     record: `${e.wins}-${e.losses}${e.ties > 0 ? `-${e.ties}` : ""}`,
-    formDelta: e.formDelta,
+    rankChange: e.rankChange,
     powerIndex: null,
   }));
 
-  // Riser = largest positive formDelta; faller = largest negative. Ties break
+  // Riser = biggest climb since last week; faller = biggest drop. Ties break
   // to the better (lower) power rank.
   let riser: PowerPreviewMover | null = null;
   let riserRank = Number.POSITIVE_INFINITY;
@@ -107,9 +108,10 @@ export function buildPowerPreview(
   let fallerRank = Number.POSITIVE_INFINITY;
 
   for (const e of sorted) {
-    if (e.formDelta > 0) {
+    const moved = e.rankChange ?? 0;
+    if (moved > 0) {
       const better =
-        !riser || e.formDelta > riser.delta || (e.formDelta === riser.delta && e.rank < riserRank);
+        !riser || moved > riser.delta || (moved === riser.delta && e.rank < riserRank);
       if (better) {
         riser = {
           slug: e.slug,
@@ -117,13 +119,13 @@ export function buildPowerPreview(
           abbreviation: e.abbreviation,
           brandingColor: e.brandingColor,
           avatarUrl: e.avatarUrl,
-          delta: e.formDelta,
+          delta: moved,
           standingsRank: e.standingsRank,
         };
         riserRank = e.rank;
       }
-    } else if (e.formDelta < 0) {
-      const absDelta = Math.abs(e.formDelta);
+    } else if (moved < 0) {
+      const absDelta = Math.abs(moved);
       const better =
         !faller || absDelta > faller.delta || (absDelta === faller.delta && e.rank < fallerRank);
       if (better) {
