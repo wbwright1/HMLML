@@ -45,9 +45,10 @@
 //       first receipt gets written {weekday}" asserted things nobody had
 //       checked. Each tail is now a data fact (the margin, the playoff
 //       meeting count) or a neutral line, and no rung names a weekday.
-//   * lib/hub/between-weeks.ts betweenWeeksHeadline
+//   * lib/hub/between-weeks.ts betweenWeeksHeadline (since retired)
 //       "{N} days until it matters again." sat above a recap of the week that
-//       just mattered. Every variant is now a plain, true count or weekday.
+//       just mattered. The day count then moved to the hero kicker, and the
+//       headline became a data-derived take (lib/hub/hero-headline.ts).
 //   * lib/content.ts MATCHUP_ANGLES.gameOfWeekBlurb + the hub dek fallback
 //       The seed path (no hub_content rows in the DB) reproduced the same
 //       collision: the seeded GotW blurb and the hardcoded dek fallback in

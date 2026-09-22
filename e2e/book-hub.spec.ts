@@ -44,7 +44,7 @@ test("the hub surfaces The Book's line when a game is priced for the hub's curre
   // independently guessing a week. The regular-season game-window hero uses
   // "Week N." as its h1; the between-weeks hero (the state NFL_STATE_OVERRIDE
   // =regular:next:force actually lands on pre-kickoff, since no game has started)
-  // states the week in its kicker instead ("... Week N ... The Slate Is Set").
+  // states the week in its kicker instead ("... Week N · Kickoff Thursday").
   const heroText = await page.locator("main section").first().innerText();
   const weekMatch = /Week\s+(\d+)/i.exec(heroText);
   expect(weekMatch, `could not parse a week number out of hero text "${heroText}"`).not.toBeNull();

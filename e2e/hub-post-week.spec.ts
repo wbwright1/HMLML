@@ -21,6 +21,10 @@ import { isRecapWindowOpen } from "../lib/hub/week-recap";
 // instant and absent after it. Both branches assert.
 // ============================================================================
 
+/** The hero kicker's schedule clause: the kickoff day, or the slate fallback. */
+const HERO_SCHEDULE_TAIL =
+  /KICKOFF (MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY|TODAY)|THE SLATE IS SET/i;
+
 /** The slate's first kickoff, stamped on the hero section as
  * data-kickoff-target, or null when the hub has no kickoff to point at. */
 async function kickoffTarget(page: import("@playwright/test").Page): Promise<Date | null> {
@@ -39,7 +43,7 @@ test.describe("Post-week recap (between weeks)", () => {
     if (!open) {
       // Thursday morning cron has passed: the plain slate hub, with the
       // rail fallbacks, and NO recap. Assert that state and stop.
-      await expect(page.locator("main")).toContainText(/THE SLATE IS SET/i);
+      await expect(page.getByTestId("hero-kicker")).toContainText(HERO_SCHEDULE_TAIL);
       await expect(page.getByTestId("week-recap")).toHaveCount(0);
       await expect(page.locator("main")).toContainText(/IN THE BOOKS/);
       test.skip(true, "recap window closed (post Thursday cron); slate-only state asserted");
@@ -48,7 +52,7 @@ test.describe("Post-week recap (between weeks)", () => {
 
   test("the recap block renders in the main column above the slate", async ({ page }) => {
     const main = page.locator("main");
-    await expect(main).toContainText(/THE SLATE IS SET/i);
+    await expect(page.getByTestId("hero-kicker")).toContainText(HERO_SCHEDULE_TAIL);
     const recap = page.getByTestId("week-recap");
     await expect(recap).toBeVisible();
     // Recap precedes Game of the Week in document order. Kickers render
@@ -68,6 +72,43 @@ test.describe("Post-week recap (between weeks)", () => {
     expect(txt).not.toContain("—");
     const fontStyle = await h.evaluate((el) => getComputedStyle(el).fontStyle);
     expect(fontStyle).toBe("italic");
+  });
+
+  // The hero headline leads with LAST week while the recap sits under it
+  // (lib/hub/hero-headline.ts). Every number it prints must be a number the
+  // recap's own finals print, so the take is provably about last week.
+  test("the hero headline is a take on last week's finals, backed by the recap", async ({ page }) => {
+    const h1 = page.getByTestId("hero-headline");
+    const text = (await h1.innerText()).trim();
+    const rung = await h1.getAttribute("data-hero-rung");
+    expect(text).not.toMatch(/days? (to|until) kickoff/i);
+    expect(text).not.toContain("—");
+    const finalsText = (await page.getByTestId("recap-result").allInnerTexts()).join(" ");
+    if (rung === "mercy" || rung === "monster" || rung === "photo-finish" || rung === "dud") {
+      const num = /(\d+\.\d)/.exec(text)?.[1];
+      expect(num, text).toBeTruthy();
+      if (rung === "mercy" || rung === "photo-finish") {
+        // A margin: some listed final's two scores differ by exactly it.
+        const scores = (await page.getByTestId("recap-result").allInnerTexts()).map((t) =>
+          (t.match(/\d+\.\d/g) ?? []).map(Number)
+        );
+        const margins = scores
+          .filter((s) => s.length >= 2)
+          .map((s) => Math.abs(s[0] - s[1]).toFixed(1));
+        // Scores print to one decimal, so allow the rounding of two roundings.
+        expect(
+          margins.some((m) => Math.abs(Number(m) - Number(num)) <= 0.1),
+          `${num} vs ${margins.join(", ")}`
+        ).toBe(true);
+      } else {
+        expect(finalsText).toContain(num!);
+      }
+      // The numeral renders in the mono face inside the serif headline.
+      await expect(h1.locator("span.font-mono").first()).toHaveText(num!);
+    } else {
+      // No finals rung fired: a slate rung or the fallback, never a day count.
+      expect(rung).toMatch(/^(unbeaten-clash|winless-clash|division-flip|named-rivalry|winless-watch|fallback)$/);
+    }
   });
 
   test("every completed pairing is listed with a W and an L and two scores", async ({ page }) => {

@@ -14,7 +14,9 @@ import { getSql } from "./helpers/sql";
 // silent-skip defect (a runtime isBetweenWeeks() guard letting every test
 // self-skip with zero assertions exercised).
 //
-// The distinctive marker is the hero kicker "... THE SLATE IS SET". The first
+// The distinctive marker is the hero kicker's schedule clause: "... KICKOFF
+// THURSDAY" (the slate's first kickoff day), "KICKOFF TODAY", or "THE SLATE IS
+// SET" when the kickoff is unknown. The first
 // test below asserts it unconditionally, making the state itself a hard claim
 // rather than an implicit one; every other test in the file also asserts
 // unconditionally now.
@@ -26,7 +28,8 @@ import { getSql } from "./helpers/sql";
 // playwright.config.ts rather than fought.
 // ============================================================================
 
-const SLATE_MARKER = /THE SLATE IS SET/i;
+const SLATE_MARKER =
+  /WEEK \d+ · (KICKOFF (MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY|TODAY)|THE SLATE IS SET)/i;
 
 /** The between-weeks hero is the first section in <main>. */
 function hero(page: Page): Locator {
@@ -36,9 +39,47 @@ function hero(page: Page): Locator {
 test.describe("Between-Weeks Hub (1d)", () => {
   test("T00: the between-weeks slate marker renders", async ({ page }) => {
     await page.goto("/");
-    const main = page.locator("main");
-    const text = await main.innerText();
-    expect(text).toMatch(SLATE_MARKER);
+    const kicker = (await page.getByTestId("hero-kicker").innerText()).trim();
+    expect(kicker).toMatch(SLATE_MARKER);
+  });
+
+  // Blake: "Two days to kickoff." was awful to read. The headline is now a
+  // take built from the league's own results (lib/hub/hero-headline.ts), and
+  // the day moved to the kicker. On this server the recap is not forced, so
+  // the slate rungs lead; each is checked against what the page itself shows.
+  test("T25: the hero headline is a data-derived take, never a day count", async ({ page }) => {
+    await page.goto("/");
+    const h1 = page.getByTestId("hero-headline");
+    const text = (await h1.innerText()).trim();
+    const rung = await h1.getAttribute("data-hero-rung");
+    expect(text).not.toMatch(/days? (to|until) kickoff|kickoff is (today|tomorrow)/i);
+    expect(text).not.toMatch(/[—–]/);
+    expect(rung).toMatch(
+      /^(mercy|monster|photo-finish|dud|unbeaten-clash|winless-clash|division-flip|named-rivalry|winless-watch|fallback)$/
+    );
+    if (rung === "fallback") expect(text).toBe("The slate is set.");
+
+    // Every numeral in the serif headline renders in the mono face.
+    const numerals = text.match(/\d+(?:[.,]\d+)*(?:-\d+)*/g) ?? [];
+    const monoTexts = (await h1.locator("span.font-mono").allInnerTexts()).map((x) => x.trim());
+    expect(monoTexts).toEqual(numerals);
+
+    // The claims are checkable against the page.
+    const main = (await page.locator("main").innerText()).toUpperCase();
+    if (rung === "named-rivalry") {
+      const name = /^(.+) is (the Game of the Week|back on the slate)\.$/.exec(text)?.[1];
+      expect(name, text).toBeTruthy();
+      // The rivalry's name renders on its card too (kicker or slate angle).
+      expect(main.split(name!.toUpperCase()).length - 1).toBeGreaterThanOrEqual(2);
+    }
+    if (rung === "winless-watch") {
+      const m = /^(.+) is (0-\d+) and gets (.+) \((\d+-\d+(?:-\d+)?)\) next\.$/.exec(text);
+      expect(m, text).not.toBeNull();
+    }
+    if (rung === "unbeaten-clash") {
+      const kicker = (await page.getByTestId("gotw-kicker").innerText()).trim();
+      expect(kicker).toMatch(/BATTLE OF UNBEATENS|DIVISION LEAD ON THE LINE|PLAYOFF SPOT|TOP-THREE/);
+    }
   });
 
   test("T01: hero renders the slate kicker and a serif headline", async ({

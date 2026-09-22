@@ -4,7 +4,6 @@
 // the two can never feature different games) and handed to these helpers.
 
 import { formatRecord } from "@/lib/format-record";
-import { daysUntil } from "@/lib/hub/live-pill-label";
 import { LEAGUE_TIME_ZONE } from "@/lib/time-zone";
 import type { PlayoffRaceTag } from "@/lib/queries/playoff-race";
 
@@ -698,66 +697,6 @@ export function gameOfWeekBlurb(input: GotwBlurbInput): string {
   const series = seriesSentence(input);
   // "series-on-the-line" already leans on the series; say the number there.
   return [lead, series, coda].filter(Boolean).join(" ");
-}
-
-// ---------------------------------------------------------------------------
-// Hero headline
-// ---------------------------------------------------------------------------
-
-const DAY_WORDS = [
-  "Zero",
-  "One",
-  "Two",
-  "Three",
-  "Four",
-  "Five",
-  "Six",
-  "Seven",
-  "Eight",
-  "Nine",
-  "Ten",
-] as const;
-
-/** Rotates a variant pool by the week so Tuesdays do not all read the same. */
-function pickByWeek(pool: readonly string[], week: number): string {
-  const i = ((Math.trunc(week) % pool.length) + pool.length) % pool.length;
-  return pool[i];
-}
-
-/**
- * Serif hero headline from the days-to-kickoff count and the kickoff weekday.
- * Every variant is literally true for its inputs: the day count is the same
- * calendar-day count the countdown pill uses, and the weekday is the actual
- * weekday of the slate's first kickoff in the league's home timezone. The
- * pool rotates by `week` so the line is not identical every week. Degrades to
- * "The slate is set." when the kickoff is unknown or already past.
- */
-export function betweenWeeksHeadline(
-  nextKickoff: Date | null,
-  now: Date = new Date(),
-  week = 0
-): string {
-  if (!nextKickoff) return "The slate is set.";
-  if (nextKickoff.getTime() - now.getTime() <= 0) return "The slate is set.";
-
-  const days = daysUntil(nextKickoff, now);
-  const weekday = kickoffWeekdayName(nextKickoff);
-
-  if (days === 0) {
-    return pickByWeek(["Kickoff is today.", `${weekday} kickoff. That is today.`], week);
-  }
-  if (days === 1) {
-    return pickByWeek(
-      ["Kickoff is tomorrow.", `${weekday} kickoff, one day out.`, "One day to kickoff."],
-      week
-    );
-  }
-
-  const word = DAY_WORDS[days] ?? String(days);
-  const pool = [`${word} days to kickoff.`, `${word} days until ${weekday} kickoff.`];
-  // "Kickoff is Thursday." only reads unambiguously inside the coming week.
-  if (days <= 6) pool.push(`Kickoff is ${weekday}.`);
-  return pickByWeek(pool, week);
 }
 
 // ---------------------------------------------------------------------------

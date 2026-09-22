@@ -787,4 +787,11 @@ describe("LLM game_of_week_blurb", () => {
     expect(prompt).toContain("Cross-Division · Top-three clash");
     expect(prompt).toContain("ONLY stakes you may claim");
   });
+
+  it("tells hero_dek the headline now states the week's biggest fact", () => {
+    const prompt = buildUserPrompt(ctx);
+    expect(prompt).toContain("states the single biggest fact");
+    expect(prompt).toContain("Do NOT restate any of those facts or their numbers");
+    expect(prompt).not.toContain("the live day count is added at render time. It renders");
+  });
 });

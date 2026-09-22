@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   selectGameOfTheWeek,
   markTitleRematch,
-  betweenWeeksHeadline,
   formatH2HLine,
   formatSlateH2H,
   stakesFromReasons,
@@ -608,60 +607,6 @@ describe("markTitleRematch", () => {
       runnerUpFranchiseId: "runner-id",
     });
     expect(marked[0].isTitleRematch).toBeUndefined();
-  });
-});
-
-describe("betweenWeeksHeadline", () => {
-  const now = new Date("2025-11-11T18:00:00Z"); // Tuesday, noon in Chicago
-
-  it("never says 'until it matters again'", () => {
-    for (let week = 1; week <= 18; week++) {
-      for (const k of ["2025-11-11T23:00:00Z", "2025-11-12T23:00:00Z", "2025-11-14T01:15:00Z"]) {
-        expect(betweenWeeksHeadline(new Date(k), now, week)).not.toMatch(/matters again/);
-      }
-    }
-  });
-
-  it("two days out: every variant states the true count or the true weekday", () => {
-    const kickoff = new Date("2025-11-14T01:15:00Z"); // Thursday 7:15pm Chicago
-    const seen = new Set<string>();
-    for (let week = 1; week <= 6; week++) seen.add(betweenWeeksHeadline(kickoff, now, week));
-    expect([...seen].sort()).toEqual(
-      ["Kickoff is Thursday.", "Two days to kickoff.", "Two days until Thursday kickoff."].sort()
-    );
-  });
-
-  it("varies by week, so consecutive weeks do not read identically", () => {
-    const kickoff = new Date("2025-11-14T01:15:00Z");
-    expect(betweenWeeksHeadline(kickoff, now, 3)).not.toBe(betweenWeeksHeadline(kickoff, now, 4));
-  });
-
-  it("one day out says tomorrow or one day, and names the right weekday", () => {
-    const kickoff = new Date("2025-11-13T01:15:00Z"); // Wednesday 7:15pm Chicago
-    const seen = new Set<string>();
-    for (let week = 1; week <= 6; week++) seen.add(betweenWeeksHeadline(kickoff, now, week));
-    expect([...seen].sort()).toEqual(
-      ["Kickoff is tomorrow.", "One day to kickoff.", "Wednesday kickoff, one day out."].sort()
-    );
-  });
-
-  it("same calendar day says today", () => {
-    const kickoff = new Date("2025-11-11T23:00:00Z");
-    for (let week = 1; week <= 4; week++) {
-      expect(betweenWeeksHeadline(kickoff, now, week)).toMatch(/today/);
-    }
-  });
-
-  it("does not name a bare weekday a week or more out", () => {
-    const kickoff = new Date("2025-11-19T01:15:00Z"); // eight days
-    for (let week = 1; week <= 6; week++) {
-      expect(betweenWeeksHeadline(kickoff, now, week)).not.toMatch(/^Kickoff is/);
-    }
-  });
-
-  it("degrades to a static line when kickoff is unknown or past", () => {
-    expect(betweenWeeksHeadline(null, now)).toBe("The slate is set.");
-    expect(betweenWeeksHeadline(new Date("2025-11-10T20:15:00Z"), now)).toBe("The slate is set.");
   });
 });
 

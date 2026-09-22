@@ -54,11 +54,15 @@ import { HubSection, RailCard, RailRows } from "@/components/hub/rail-card";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { buildHubLineFooter } from "@/lib/book/shared";
+import { formatH2HLine, formatSlateH2H } from "@/lib/hub/between-weeks";
 import {
-  betweenWeeksHeadline,
-  formatH2HLine,
-  formatSlateH2H,
-} from "@/lib/hub/between-weeks";
+  heroDekFromData,
+  heroHeadline,
+  heroKickerTail,
+  numeralSegments,
+  type HeroHeadlineInput,
+  type HeroSlateTeam,
+} from "@/lib/hub/hero-headline";
 import {
   namedRivalryLookupFrom,
   resolveGameOfTheWeek,
@@ -114,7 +118,6 @@ export async function BetweenWeeksHub({
     week,
     anyGamesPlayed,
   });
-  const headline = betweenWeeksHeadline(nextKickoff, new Date(), week);
 
   // Member smack feed: real posts win when present. Site Desk seeds only stand
   // in when the board is genuinely empty (no posts at all); when posts exist
@@ -403,11 +406,49 @@ export async function BetweenWeeksHub({
   // BOTH lines on the Game of the Week card are compared: the blurb that
   // actually renders, and the kicker ("... on the line" / "... at stake" are
   // signature phrases too).
-  const linesBelowHero = [gotwBlurb, gotw?.kicker ?? ""].filter(Boolean);
+  // The hero headline is a data-derived take (lib/hub/hero-headline.ts): last
+  // week's finals while the recap renders under it, this week's slate
+  // otherwise. The schedule fact lives in the kicker line instead.
+  const heroSlateTeam = (id: string, name: string): HeroSlateTeam => {
+    const s = standingBy.get(id);
+    return {
+      franchiseId: id,
+      name,
+      wins: s?.wins ?? 0,
+      losses: s?.losses ?? 0,
+      ties: s?.ties ?? 0,
+    };
+  };
+  const candidateById = new Map((gotw?.candidates ?? []).map((c) => [c.matchupId, c]));
+  const heroInput: HeroHeadlineInput = {
+    recapShown: weekRecap != null,
+    priorFinals: weekRecap?.results ?? [],
+    slate: matchups.map((m) => {
+      const home = standingBy.get(m.homeTeam.franchiseId);
+      const away = standingBy.get(m.awayTeam.franchiseId);
+      const sameDivision = home?.division != null && home.division === away?.division;
+      return {
+        a: heroSlateTeam(m.homeTeam.franchiseId, m.homeTeam.franchiseName),
+        b: heroSlateTeam(m.awayTeam.franchiseId, m.awayTeam.franchiseName),
+        divisionName: sameDivision ? (home?.divisionName ?? null) : null,
+        canFlipDivisionLead: candidateById.get(m.matchupId)?.canFlipDivisionLead === true,
+        namedRivalry:
+          namedRivalryOf?.(m.homeTeam.franchiseId, m.awayTeam.franchiseId) ?? null,
+        isGameOfWeek: m.matchupId === gotwId,
+      };
+    }),
+    standings: standings.map((s) => heroSlateTeam(s.franchiseId, s.franchiseName)),
+  };
+  const headline = heroHeadline(heroInput);
+  const kickerTail = heroKickerTail(nextKickoff);
+
+  // The headline is compared too: a stored dek written before the headline
+  // became a take can restate the very fact it now leads with.
+  const linesBelowHero = [gotwBlurb, gotw?.kicker ?? "", headline.text].filter(Boolean);
   const heroDek =
     editorial.heroDek && !sharesPhraseWithAny(editorial.heroDek, linesBelowHero)
       ? editorial.heroDek
-      : HERO_DEK_FALLBACK;
+      : (heroDekFromData(heroInput, headline) ?? HERO_DEK_FALLBACK);
 
   return (
     <>
@@ -422,18 +463,32 @@ export async function BetweenWeeksHub({
         data-recap-forced={recapForced ? "true" : undefined}
       >
         <div className="max-w-2xl">
-          <p className="text-kicker mb-3">
-            Harambe Memorial League &middot; Week {week} &middot; The Slate Is Set
+          <p className="text-kicker mb-3" data-testid="hero-kicker">
+            Harambe Memorial League &middot; Week {week} &middot; {kickerTail}
           </p>
-          <h1 className="text-display">{headline}</h1>
+          <h1
+            className="text-display"
+            data-testid="hero-headline"
+            data-hero-rung={headline.rung}
+          >
+            {numeralSegments(headline.text).map((seg, i) =>
+              seg.numeral ? (
+                <span key={i} className="font-mono not-italic tabular-nums text-[0.8em]">
+                  {seg.text}
+                </span>
+              ) : (
+                seg.text
+              )
+            )}
+          </h1>
           <p className="mt-3 text-body-lg text-text-secondary" data-testid="hero-dek">
             <EditorialBody body={heroDek} />
           </p>
         </div>
 
         {/* The countdown only runs on the slate-only hub. While the recap
-            leads (Tuesday roll to the Thursday morning cron) the headline
-            already says how far off kickoff is, and a ticking clock above
+            leads (Tuesday roll to the Thursday morning cron) the kicker
+            already names the kickoff day, and a ticking clock above
             last week's receipts pulled the eye away from them for nothing. */}
         {nextKickoff && !weekRecap && (
           <div className="mt-6 lg:mt-1 shrink-0">

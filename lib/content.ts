@@ -520,9 +520,12 @@ const MATCHUP_ANGLES_OPENER: MatchupTrashAngles = Object.freeze({
 });
 
 /**
- * The hero dek the between-weeks hub renders when nothing generated one (no
- * hub_content row, a generation run that has not landed yet, or a stored dek
- * the render guard rejected). It lives here rather than inline in the
+ * The LAST-resort hero dek on the between-weeks hub. When nothing generated a
+ * dek (no hub_content row, a run that has not landed yet, or a stored dek the
+ * render guard rejected), the hub first builds a second data sentence from a
+ * different rung than its headline (heroDekFromData in
+ * lib/hub/hero-headline.ts); this neutral line renders only when no other
+ * rung fires. It lives here rather than inline in the
  * component because copy belongs in the centralized content constants.
  *
  * It is also the copy that has to be MOST careful, because it is the one line
