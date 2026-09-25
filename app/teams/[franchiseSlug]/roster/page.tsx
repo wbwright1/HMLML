@@ -92,6 +92,15 @@ const TH_CLASS =
   "px-2.5 py-2.5 md:px-0 md:pr-4 md:py-3 text-caption text-text-tertiary text-left";
 const TD_CLASS = "px-2.5 py-2.5 md:px-0 md:pr-4 md:py-3";
 
+// The column immediately after the sticky "Player" divider needs its own
+// left gutter: the shared TH_CLASS/TD_CLASS scheme only pads on the right
+// (md:px-0), so without this the POS badge sits flush against the divider.
+// Written as whole class strings, not stacked on top of TH_CLASS/TD_CLASS,
+// so Tailwind v4 utility ordering can't let md:px-0 win over a later pl-*.
+const POS_TH_CLASS =
+  "pl-4 pr-2.5 py-2.5 md:pr-4 md:py-3 text-caption text-text-tertiary text-left";
+const POS_TD_CLASS = "pl-4 pr-2.5 py-2.5 md:pr-4 md:py-3";
+
 // Sticky-left "Player" column: no transform/will-change anywhere in this
 // subtree (see the ScrollReveal note in RosterPage below) so position:sticky
 // keeps working across the horizontal scroll container.
@@ -150,7 +159,7 @@ function RosterSection({
                   Player
                 </th>
                 <th
-                  className={TH_CLASS}
+                  className={POS_TH_CLASS}
                   title="Roster position"
                   aria-label="Roster position"
                 >
@@ -260,7 +269,7 @@ function RosterSection({
                         </div>
                       </PlayerLink>
                     </td>
-                    <td className={TD_CLASS}>
+                    <td className={POS_TD_CLASS}>
                       <PositionBadge position={player.position} />
                     </td>
                     {showProjColumn && (

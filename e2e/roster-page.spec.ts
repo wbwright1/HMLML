@@ -142,6 +142,55 @@ test.describe("Roster page", () => {
     expect(style.left).toBe("0px");
   });
 
+  for (const [name, viewport] of [
+    ["mobile", MOBILE_VIEWPORT],
+    ["desktop", DESKTOP_VIEWPORT],
+  ] as const) {
+    test(`${name}: POS badge has a clear gutter from the sticky Player divider (#313)`, async ({
+      page,
+    }) => {
+      await page.setViewportSize(viewport);
+      const rosterPath = await firstRosterPath(page);
+      if (!rosterPath) return;
+
+      await page.goto(rosterPath);
+
+      const scrollContainer = page.locator("div.overflow-x-auto").first();
+      if ((await scrollContainer.count()) === 0) return;
+      await scrollContainer.evaluate((el) => {
+        el.scrollLeft = 0;
+      });
+
+      const tables = page.locator("table");
+      const tableCount = await tables.count();
+      if (tableCount === 0) return;
+
+      for (let i = 0; i < tableCount; i++) {
+        const table = tables.nth(i);
+        const firstRow = table.locator("tbody tr").first();
+        if ((await firstRow.count()) === 0) continue;
+
+        const playerCell = firstRow.locator("td").first();
+        const badge = firstRow.locator("td").nth(1).locator("span").first();
+        if ((await badge.count()) === 0) continue;
+
+        const playerBox = await playerCell.boundingBox();
+        const badgeBox = await badge.boundingBox();
+        if (!playerBox || !badgeBox) continue;
+
+        const gutter = badgeBox.x - (playerBox.x + playerBox.width);
+        expect(gutter).toBeGreaterThanOrEqual(15);
+
+        const style = await playerCell.evaluate((el) => {
+          const computed = window.getComputedStyle(el);
+          return { position: computed.position, borderRightWidth: computed.borderRightWidth };
+        });
+        expect(style.position).toBe("sticky");
+        expect(style.borderRightWidth).toBe("1px");
+      }
+    });
+  }
+
   test("mobile: TM cell renders an image with non-empty alt text", async ({
     page,
   }) => {
