@@ -7,7 +7,12 @@ import { getLatestSuccessfulSync } from "@/lib/queries/sync-log";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { isPlausibleGameWindow } from "@/lib/game-window";
 import { resolveCurrentWeek } from "@/lib/queries/matchups";
-import { deriveLiveStatus, hasLiveScoreChanges, type LiveScoreRow } from "@/lib/live-scores";
+import {
+  decideLiveRevalidation,
+  deriveLiveStatus,
+  hasLiveScoreChanges,
+  type LiveScoreRow,
+} from "@/lib/live-scores";
 import { revalidateLiveSurfaces } from "@/lib/revalidate";
 import { LIVE_REVALIDATE_MIN_MS } from "@/lib/cache";
 
@@ -57,6 +62,32 @@ let lastRefreshTimestamp = 0;
  * which is harmless.
  */
 let lastLiveRevalidateTimestamp = 0;
+
+/** A score change the throttle suppressed, still owed a revalidation. */
+let liveRevalidatePending = false;
+
+/**
+ * Revalidates the live surfaces when a change is due and the throttle allows,
+ * including a trailing change suppressed by an earlier call (see
+ * decideLiveRevalidation). Called with `changed: false` on every poll, so a
+ * pending change fires even when this poll's refresh was gated off or the
+ * game window has just closed.
+ */
+function maybeRevalidateLiveSurfaces(changed: boolean): void {
+  const now = Date.now();
+  const decision = decideLiveRevalidation({
+    changed,
+    pending: liveRevalidatePending,
+    now,
+    lastRevalidateAt: lastLiveRevalidateTimestamp,
+    minIntervalMs: LIVE_REVALIDATE_MIN_MS,
+  });
+  liveRevalidatePending = decision.pending;
+  if (decision.revalidate) {
+    lastLiveRevalidateTimestamp = now;
+    revalidateLiveSurfaces("live-scores");
+  }
+}
 
 /**
  * During game windows, fetch fresh scores from Sleeper if our cached
@@ -154,14 +185,9 @@ async function refreshScoresIfStale(
 
     // The hub's live cards, and whether the hub mounts its ScorePoller at all,
     // are baked into ISR HTML; without this they wait for the next hourly
-    // sync. Throttled so a 30s poll cadence re-renders at most every 2 min.
-    if (
-      hasLiveScoreChanges(existing, incoming) &&
-      Date.now() - lastLiveRevalidateTimestamp >= LIVE_REVALIDATE_MIN_MS
-    ) {
-      lastLiveRevalidateTimestamp = Date.now();
-      revalidateLiveSurfaces("live-scores");
-    }
+    // sync. Throttled so a 30s poll cadence re-renders at most every 2 min;
+    // a change inside the window stays pending until a later poll.
+    maybeRevalidateLiveSurfaces(hasLiveScoreChanges(existing, incoming));
   } catch (e) {
     console.error("[live-scores] Background refresh error:", e);
   }
@@ -220,6 +246,10 @@ export async function GET() {
         currentWeek
       );
     }
+
+    // Flush a trailing change the throttle held back, even when this poll's
+    // refresh was gated off (25s gate, fresh sync) or the window just closed.
+    maybeRevalidateLiveSurfaces(false);
 
     // Read current scores from DB
     const rows = await db

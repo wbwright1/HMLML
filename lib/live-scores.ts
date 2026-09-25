@@ -37,6 +37,29 @@ export interface LiveScoreRow {
 }
 
 /**
+ * Throttle decision for the live-surface revalidation, with a trailing edge.
+ *
+ * A change inside the throttle window is already written to the DB, so the
+ * next poll's diff sees nothing new; without `pending` that last change (say,
+ * Monday night's final points) would never reach the ISR pages until the next
+ * hourly sync. So a suppressed change sets `pending`, and any later call past
+ * the window fires it even when that call saw no change of its own.
+ */
+export function decideLiveRevalidation(input: {
+  changed: boolean;
+  pending: boolean;
+  now: number;
+  lastRevalidateAt: number;
+  minIntervalMs: number;
+}): { revalidate: boolean; pending: boolean } {
+  const { changed, pending, now, lastRevalidateAt, minIntervalMs } = input;
+  const due = changed || pending;
+  if (!due) return { revalidate: false, pending: false };
+  if (now - lastRevalidateAt >= minIntervalMs) return { revalidate: true, pending: false };
+  return { revalidate: false, pending: true };
+}
+
+/**
  * Whether a live refresh's incoming rows change anything already stored.
  *
  * Rows already `complete` are skipped because the upsert never touches them
