@@ -24,7 +24,7 @@ const POST_WEEK_PORT = process.env.PLAYWRIGHT_POST_WEEK_PORT ?? "3103";
 // Specs pinned to a forced NFL_STATE_OVERRIDE run against the two dev servers
 // above, not the shared default server, and are excluded from the
 // chromium/firefox/webkit projects that follow the real calendar.
-const STATE_FORCED = /(hub-preseason|hub-between-weeks|hub-post-week|book-hub)\.spec\.ts/;
+const STATE_FORCED = /(hub-preseason|hub-between-weeks|hub-post-week|book-hub|live-scores-week)\.spec\.ts/;
 
 export default defineConfig({
   testDir: "./e2e",
@@ -61,7 +61,7 @@ export default defineConfig({
     },
     {
       name: "hub-in-season",
-      testMatch: /(hub-between-weeks|book-hub)\.spec\.ts/,
+      testMatch: /(hub-between-weeks|book-hub|live-scores-week)\.spec\.ts/,
       use: { ...devices["Desktop Chrome"], baseURL: `http://localhost:${IN_SEASON_PORT}` },
     },
     {

@@ -29,3 +29,33 @@ export function revalidateSite(source: string): void {
     console.error(`[${source}] revalidation failed (data still synced):`, message);
   }
 }
+
+/**
+ * Paths whose ISR HTML carries live matchup scores. Page-scoped (not the
+ * layout), so a live refresh re-renders only these, never the whole site.
+ */
+export const LIVE_SURFACE_PATHS = [
+  "/",
+  "/matchups",
+  "/matchups/[seasonYear]/[week]/[matchupId]",
+] as const;
+
+/**
+ * Invalidates only the pages that show live matchup scores, after a live
+ * refresh in /api/live-scores wrote changed scores. Deliberately narrower than
+ * revalidateSite(): the poller runs every 30s during game windows, and
+ * re-rendering every page (and clearing every cachedQuery entry) that often
+ * would burn the Neon transfer quota ISR exists to protect. Callers throttle
+ * it with LIVE_REVALIDATE_MIN_MS.
+ *
+ * Never throws, same contract as revalidateSite(): a revalidation failure must
+ * not fail the poll that triggered it.
+ */
+export function revalidateLiveSurfaces(source: string): void {
+  try {
+    for (const path of LIVE_SURFACE_PATHS) revalidatePath(path, "page");
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Unknown error";
+    console.error(`[${source}] live revalidation failed (scores still written):`, message);
+  }
+}
