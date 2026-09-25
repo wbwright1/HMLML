@@ -61,6 +61,27 @@ export interface DraftBoard {
   slots: Map<number, number>; // pickNumber -> 1-based slot within its round
 }
 
+// ---------------------------------------------------------------------------
+// isTradedPick — the render-side "was this pick traded away from its
+// original owner" check. `original_franchise_id` is now always populated for
+// Sleeper-synced drafts (see lib/sync/daily.ts syncDrafts), including on
+// untraded picks where it simply equals the drafting franchise. A pick is
+// only "via" someone else when the original owner and the drafter differ.
+//
+// Completed picks compare stable franchise ids (originalId vs currentId).
+// Upcoming (projected) picks never carry an id (normalizeUpcomingPick sets
+// originalId: null), only a name when Sleeper's owner_id !== roster_id, so
+// they fall back to the name-presence check for that shape.
+// ---------------------------------------------------------------------------
+export function isTradedPick(
+  pick: Pick<NormalizedPick, "originalId" | "originalName" | "currentId">
+): boolean {
+  if (pick.originalId != null) {
+    return pick.originalId !== pick.currentId;
+  }
+  return pick.originalName != null;
+}
+
 export function buildDraftBoard(picks: NormalizedPick[]): DraftBoard {
   const rounds = Array.from(new Set(picks.map((p) => p.round))).sort((a, b) => a - b);
   if (rounds.length === 0) {

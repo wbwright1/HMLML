@@ -11,6 +11,7 @@ import {
 import { eq, and, desc } from "drizzle-orm";
 import { getNflState } from "@/lib/queries/nfl-state";
 import { getLatestAvatarUrls } from "@/lib/queries/franchise-avatars";
+import { pickCurrentWeek } from "@/lib/live-scores";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -195,6 +196,47 @@ export async function getMatchupsByWeek(
 }
 
 /**
+ * Resolves the week that is "now" for a season. Shared by the hub
+ * (getCurrentWeekMatchups) and the live poller (/api/live-scores) so both land
+ * on the same week, including under NFL_STATE_OVERRIDE; the matchup-detail
+ * island stops polling when the two disagree.
+ *
+ * Since the hourly sync writes the full regular-season schedule ahead of time
+ * (Path A: future weeks land as "scheduled" rows), the highest synced week is
+ * no longer a reliable stand-in for "now": it's usually the last regular-season
+ * week (#312). Prefer the real NFL week from Sleeper's state endpoint (see
+ * pickCurrentWeek), falling back to the highest synced week only if that lookup
+ * fails or doesn't match this season.
+ *
+ * getNflState throws on a DB failure (#254), which is what we want: callers
+ * rethrow rather than quietly guessing a week. A Sleeper outage still returns
+ * null (fetchSleeper resolves an { error } result instead of rejecting), so the
+ * "highest synced week" fallback still covers the API-outage case. getNflState
+ * reads Sleeper through the 1h page fetch window, so a Tuesday week rollover can
+ * lag up to an hour; no games run then, so that is acceptable.
+ */
+export async function resolveCurrentWeek(season: {
+  id: number;
+  seasonYear: number;
+}): Promise<number> {
+  const nflState = await getNflState();
+  if (nflState && nflState.season === String(season.seasonYear)) {
+    return pickCurrentWeek({ nflState, seasonYear: season.seasonYear, maxSyncedWeek: null });
+  }
+  const [latestMatchup] = await db
+    .select({ week: matchups.week })
+    .from(matchups)
+    .where(eq(matchups.seasonId, season.id))
+    .orderBy(desc(matchups.week))
+    .limit(1);
+  return pickCurrentWeek({
+    nflState,
+    seasonYear: season.seasonYear,
+    maxSyncedWeek: latestMatchup?.week ?? null,
+  });
+}
+
+/**
  * Returns the current week's matchups by finding the latest season
  * and determining the current week.
  * Returns null if no active season is found.
@@ -219,34 +261,7 @@ export const getCurrentWeekMatchups = cache(async function getCurrentWeekMatchup
     // without throwing. Only a rejected query reaches the catch below.
     if (!latestSeason) return null;
 
-    // Determine current week. Since the hourly sync now writes the full
-    // regular-season schedule ahead of time (Path A: future weeks land as
-    // "scheduled" rows), the highest synced week is no longer a reliable
-    // stand-in for "now" — it's usually the last regular-season week. Prefer
-    // the real NFL week from Sleeper's state endpoint, falling back to the
-    // old "highest week with matchup data" heuristic only if that lookup
-    // fails or doesn't match this season.
-    // getNflState now throws on a DB failure (#254), which is what we want:
-    // it means the catch below rethrows rather than quietly guessing a week.
-    // A Sleeper outage still returns null (fetchSleeper resolves an { error }
-    // result instead of rejecting), so the "highest synced week" fallback
-    // underneath still covers the API-outage case it was written for.
-    let currentWeek: number | null = null;
-    const nflState = await getNflState();
-    if (nflState && String(latestSeason.seasonYear) === nflState.season) {
-      currentWeek = nflState.week;
-    }
-
-    if (currentWeek == null) {
-      const [latestMatchup] = await db
-        .select({ week: matchups.week })
-        .from(matchups)
-        .where(eq(matchups.seasonId, latestSeason.id))
-        .orderBy(desc(matchups.week))
-        .limit(1);
-
-      currentWeek = latestMatchup?.week ?? 1;
-    }
+    const currentWeek = await resolveCurrentWeek(latestSeason);
 
     const weekMatchups = await getMatchupsByWeek(latestSeason.id, currentWeek);
 

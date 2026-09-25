@@ -28,6 +28,15 @@ export const SITE_REVALIDATE_PATH = "/";
 export const LEAGUE_DATA_TAG = "league-data";
 
 /**
+ * Minimum gap between the targeted revalidations `/api/live-scores` fires when
+ * a live refresh changes scores (lib/revalidate.ts revalidateLiveSurfaces).
+ * The 30s client islands cover the cadence in between; this only keeps the
+ * ISR-cached hub and matchup pages (and whether the hub mounts its poller at
+ * all) from lagging until the next hourly sync.
+ */
+export const LIVE_REVALIDATE_MIN_MS = 120_000;
+
+/**
  * Resolves to `never` at any position unstable_cache cannot round-trip through
  * JSON: Date (comes back a string), Map/Set (become {} and lose everything),
  * undefined and functions (dropped).

@@ -215,6 +215,15 @@ function TrendingSignal({ count }: { count: number | null }) {
 const TH_PADDING = "px-2.5 py-2.5 md:px-0 md:pr-4 md:py-3";
 const TD_PADDING = "px-2.5 py-2.5 md:px-0 md:pr-4 md:py-3";
 
+// The column immediately after the sticky "Player" divider needs its own
+// left gutter: TH_PADDING/TD_PADDING only pad on the right (md:px-0), so
+// without this the first non-sticky column sits flush against the divider.
+// Which column is first is conditional (PROJ, then WK, else PTS), so this
+// is applied to whichever one actually renders first, not to a fixed column.
+const FIRST_TH_PADDING =
+  "pl-4 pr-2.5 py-2.5 md:pr-4 md:py-3 text-caption text-text-tertiary";
+const FIRST_TD_PADDING = "pl-4 pr-2.5 py-2.5 md:pr-4 md:py-3";
+
 interface SortHeaderProps {
   label: string;
   sortKey: SortKey;
@@ -224,6 +233,8 @@ interface SortHeaderProps {
   align?: "left" | "right";
   /** Full text for the acronym label, exposed via aria-label + title. */
   fullText: string;
+  /** True when this is the first non-sticky column; adds the left gutter. */
+  firstCol?: boolean;
 }
 
 function SortHeader({
@@ -234,6 +245,7 @@ function SortHeader({
   onSort,
   align = "left",
   fullText,
+  firstCol = false,
 }: SortHeaderProps) {
   const isActive = activeKey === sortKey;
 
@@ -252,7 +264,7 @@ function SortHeader({
       onKeyDown={handleKeyDown}
       aria-label={fullText}
       title={fullText}
-      className={`${TH_PADDING} text-caption text-text-tertiary cursor-pointer select-none hover:text-text-primary transition-colors ${align === "right" ? "text-right" : "text-left"}`}
+      className={`${firstCol ? FIRST_TH_PADDING : TH_PADDING} text-caption text-text-tertiary cursor-pointer select-none hover:text-text-primary transition-colors ${align === "right" ? "text-right" : "text-left"}`}
       aria-sort={
         isActive ? (activeDir === "asc" ? "ascending" : "descending") : "none"
       }
@@ -516,6 +528,7 @@ export function PlayerTable({
                   activeDir={sortDir}
                   onSort={handleSort}
                   align="right"
+                  firstCol
                 />
               )}
               {showWkColumn && (
@@ -531,6 +544,7 @@ export function PlayerTable({
                   activeDir={sortDir}
                   onSort={handleSort}
                   align="right"
+                  firstCol={!projLeads}
                 />
               )}
               <SortHeader
@@ -541,6 +555,7 @@ export function PlayerTable({
                 activeDir={sortDir}
                 onSort={handleSort}
                 align="right"
+                firstCol={!projLeads && !showWkColumn}
               />
               <SortHeader
                 label="AGE"
@@ -621,7 +636,7 @@ export function PlayerTable({
                   </PlayerLink>
                 </td>
                 {projLeads && (
-                  <td className={`${TD_PADDING} text-right`}>
+                  <td className={`${FIRST_TD_PADDING} text-right`}>
                     <span className="text-stat text-text-primary">
                       {player.projPointsPpr != null
                         ? player.projPointsPpr.toFixed(1)
@@ -630,7 +645,9 @@ export function PlayerTable({
                   </td>
                 )}
                 {showWkColumn && (
-                  <td className={`${TD_PADDING} text-right`}>
+                  <td
+                    className={`${projLeads ? TD_PADDING : FIRST_TD_PADDING} text-right`}
+                  >
                     {player.weekValue == null ? (
                       <span className="text-stat text-text-tertiary">-</span>
                     ) : player.weekIsProjected ? (
@@ -648,7 +665,9 @@ export function PlayerTable({
                     )}
                   </td>
                 )}
-                <td className={`${TD_PADDING} text-right`}>
+                <td
+                  className={`${!projLeads && !showWkColumn ? FIRST_TD_PADDING : TD_PADDING} text-right`}
+                >
                   <span
                     className={cn(
                       "text-stat",

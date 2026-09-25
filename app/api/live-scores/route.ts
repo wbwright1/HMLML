@@ -6,6 +6,15 @@ import { getLeagueMatchups, getNFLState } from "@/lib/sleeper";
 import { getLatestSuccessfulSync } from "@/lib/queries/sync-log";
 import { logSyncStart, logSyncComplete } from "@/lib/queries/sync-log";
 import { isPlausibleGameWindow } from "@/lib/game-window";
+import { resolveCurrentWeek } from "@/lib/queries/matchups";
+import {
+  decideLiveRevalidation,
+  deriveLiveStatus,
+  hasLiveScoreChanges,
+  type LiveScoreRow,
+} from "@/lib/live-scores";
+import { revalidateLiveSurfaces } from "@/lib/revalidate";
+import { LIVE_REVALIDATE_MIN_MS } from "@/lib/cache";
 
 const NFL_STATE_CACHE_MS = 25_000; // Cache NFL state fetches in-memory
 
@@ -46,6 +55,39 @@ const STALE_THRESHOLD_MS = 25_000; // 25 seconds: sync if older
 
 /** In-memory timestamp of the last refresh to rate-limit DB writes. */
 let lastRefreshTimestamp = 0;
+
+/**
+ * In-memory timestamp of the last live-surface revalidation. Same per-instance
+ * pattern as lastRefreshTimestamp: a cold instance may revalidate once early,
+ * which is harmless.
+ */
+let lastLiveRevalidateTimestamp = 0;
+
+/** A score change the throttle suppressed, still owed a revalidation. */
+let liveRevalidatePending = false;
+
+/**
+ * Revalidates the live surfaces when a change is due and the throttle allows,
+ * including a trailing change suppressed by an earlier call (see
+ * decideLiveRevalidation). Called with `changed: false` on every poll, so a
+ * pending change fires even when this poll's refresh was gated off or the
+ * game window has just closed.
+ */
+function maybeRevalidateLiveSurfaces(changed: boolean): void {
+  const now = Date.now();
+  const decision = decideLiveRevalidation({
+    changed,
+    pending: liveRevalidatePending,
+    now,
+    lastRevalidateAt: lastLiveRevalidateTimestamp,
+    minIntervalMs: LIVE_REVALIDATE_MIN_MS,
+  });
+  liveRevalidatePending = decision.pending;
+  if (decision.revalidate) {
+    lastLiveRevalidateTimestamp = now;
+    revalidateLiveSurfaces("live-scores");
+  }
+}
 
 /**
  * During game windows, fetch fresh scores from Sleeper if our cached
@@ -93,11 +135,26 @@ async function refreshScoresIfStale(
       rosterToFranchise.set(fs.rosterId, fs.franchiseId);
     }
 
+    // Snapshot the week before writing, so we only revalidate the ISR-cached
+    // live surfaces when this refresh actually moved a score or status.
+    const existing: LiveScoreRow[] = await db
+      .select({
+        rosterId: matchups.rosterId,
+        points: matchups.points,
+        status: matchups.status,
+      })
+      .from(matchups)
+      .where(and(eq(matchups.seasonId, seasonId), eq(matchups.week, week)));
+    const incoming: LiveScoreRow[] = [];
+
     let rowCount = 0;
     for (const m of result.data) {
       const rosterIdStr = String(m.roster_id);
       const franchiseId = rosterToFranchise.get(rosterIdStr);
       if (!franchiseId || m.matchup_id == null) continue;
+      const points = m.points ?? 0;
+      const status = deriveLiveStatus(points);
+      incoming.push({ rosterId: rosterIdStr, points, status });
 
       await db
         .insert(matchups)
@@ -107,14 +164,14 @@ async function refreshScoresIfStale(
           matchupId: m.matchup_id,
           franchiseId,
           rosterId: rosterIdStr,
-          points: m.points ?? 0,
-          status: (m.points ?? 0) > 0 ? "in_progress" : "scheduled",
+          points,
+          status,
         })
         .onConflictDoUpdate({
           target: [matchups.seasonId, matchups.week, matchups.rosterId],
           set: {
-            points: m.points ?? 0,
-            status: (m.points ?? 0) > 0 ? "in_progress" : "scheduled",
+            points,
+            status,
             updatedAt: new Date(),
           },
           // Never downgrade a finished matchup: leave "complete" rows (and
@@ -125,6 +182,12 @@ async function refreshScoresIfStale(
     }
 
     await logSyncComplete(logId, "success", rowCount);
+
+    // The hub's live cards, and whether the hub mounts its ScorePoller at all,
+    // are baked into ISR HTML; without this they wait for the next hourly
+    // sync. Throttled so a 30s poll cadence re-renders at most every 2 min;
+    // a change inside the window stays pending until a later poll.
+    maybeRevalidateLiveSurfaces(hasLiveScoreChanges(existing, incoming));
   } catch (e) {
     console.error("[live-scores] Background refresh error:", e);
   }
@@ -145,21 +208,24 @@ export async function GET() {
       });
     }
 
-    const [latestMatchup] = await db
+    const [anyMatchup] = await db
       .select({ week: matchups.week })
       .from(matchups)
       .where(eq(matchups.seasonId, latestSeason.id))
-      .orderBy(desc(matchups.week))
       .limit(1);
 
-    if (!latestMatchup) {
+    if (!anyMatchup) {
       return NextResponse.json({
         data: { scores: [], isGameWindow: false },
         syncedAt: new Date().toISOString(),
       });
     }
 
-    const currentWeek = latestMatchup.week;
+    // The same week the hub renders (#312). Not max(week): the hourly sync
+    // pre-writes the whole regular-season schedule, so the highest synced
+    // week is the last one, and polling it refreshed week 14 all through
+    // week 3 while the detail island saw a week mismatch and stopped.
+    const currentWeek = await resolveCurrentWeek(latestSeason);
     // Gate the game window on BOTH the day/hour heuristic AND the NFL season
     // phase. The cheap day/hour check short-circuits first, so we only fetch
     // NFL state (cached in-memory) when a poll actually lands in a window.
@@ -180,6 +246,10 @@ export async function GET() {
         currentWeek
       );
     }
+
+    // Flush a trailing change the throttle held back, even when this poll's
+    // refresh was gated off (25s gate, fresh sync) or the window just closed.
+    maybeRevalidateLiveSurfaces(false);
 
     // Read current scores from DB
     const rows = await db
