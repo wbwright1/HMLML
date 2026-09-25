@@ -106,6 +106,11 @@ test.describe("Roster page", () => {
 
     const scrollContainer = page.locator("div.overflow-x-auto").first();
     if ((await scrollContainer.count()) === 0) return;
+    // Wait for the container (and its table) to actually paint before
+    // measuring: evaluate() right after goto() can run before first paint,
+    // when scrollWidth/clientWidth both read 0 and the assertion below is
+    // vacuously true regardless of whether the table overflows.
+    await scrollContainer.waitFor({ state: "visible" });
 
     const { scrollWidth, clientWidth } = await scrollContainer.evaluate((el) => ({
       scrollWidth: el.scrollWidth,
@@ -165,6 +170,8 @@ test.describe("Roster page", () => {
       const tableCount = await tables.count();
       if (tableCount === 0) return;
 
+      let measuredRows = 0;
+
       for (let i = 0; i < tableCount; i++) {
         const table = tables.nth(i);
         const firstRow = table.locator("tbody tr").first();
@@ -174,9 +181,21 @@ test.describe("Roster page", () => {
         const badge = firstRow.locator("td").nth(1).locator("span").first();
         if ((await badge.count()) === 0) continue;
 
+        // Wait for both cells to actually paint before measuring:
+        // boundingBox() returns null pre-paint, which previously let a
+        // `continue` silently skip the assertions below on every row.
+        await playerCell.waitFor({ state: "visible" });
+        await badge.waitFor({ state: "visible" });
+
         const playerBox = await playerCell.boundingBox();
         const badgeBox = await badge.boundingBox();
-        if (!playerBox || !badgeBox) continue;
+        if (!playerBox || !badgeBox) {
+          throw new Error(
+            `Expected a measurable bounding box for the Player cell and POS badge in table ${i}, row 0, but got null.`
+          );
+        }
+
+        measuredRows++;
 
         const gutter = badgeBox.x - (playerBox.x + playerBox.width);
         expect(gutter).toBeGreaterThanOrEqual(15);
@@ -188,6 +207,10 @@ test.describe("Roster page", () => {
         expect(style.position).toBe("sticky");
         expect(style.borderRightWidth).toBe("1px");
       }
+
+      // Guard against every table's row/badge lookup silently no-op'ing
+      // (e.g. a selector drifting) and the test passing on zero assertions.
+      expect(measuredRows).toBeGreaterThan(0);
     });
   }
 
