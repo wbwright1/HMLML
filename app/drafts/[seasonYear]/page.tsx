@@ -19,6 +19,7 @@ import {
 } from "@/lib/queries/drafts";
 import {
   buildDraftBoard,
+  isTradedPick,
   type DraftBoard,
   type NormalizedPick,
   type PositionCounts,
@@ -260,58 +261,20 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
           </div>
         )}
 
-        {pick.originalName && (
+        {isTradedPick(pick) && pick.originalName && (
           <div
             className="mt-0.5 flex min-w-0 items-center justify-center gap-1 text-[10px] text-text-tertiary"
             data-testid="via-note"
             title={`via ${pick.originalName}`}
+            aria-label={`via ${pick.originalName}`}
           >
-            <ViaCrest pick={pick} />
-            <span className="truncate">via {teamAcronym(pick.originalName)}</span>
+            <span className="truncate" aria-hidden="true">
+              via {pick.originalAbbreviation ?? teamAcronym(pick.originalName)}
+            </span>
           </div>
         )}
       </div>
     </div>
-  );
-}
-
-/**
- * The crest on a traded pick's "via" note, matching the precedent in
- * app/teams/[franchiseSlug]/drafts/page.tsx. Slug-guarded: upcoming (projected)
- * picks normalize originalSlug to null, and there is no crest to draw for a
- * franchise the board only knows by name. Decorative, since the origin's name
- * or code is the very next thing on the line.
- */
-function ViaCrest({
-  pick,
-  linked = true,
-}: {
-  pick: NormalizedPick;
-  /** False where the crest already sits inside an outer anchor (the completed
-   * pick row wraps headshot, name and via note in one PlayerLink), since a
-   * nested anchor is invalid HTML and will not hydrate. */
-  linked?: boolean;
-}) {
-  if (!pick.originalSlug || !pick.originalName) return null;
-  const crest = (
-    <FranchiseLogo
-      slug={pick.originalSlug}
-      name={pick.originalName}
-      abbreviation={pick.originalAbbreviation ?? undefined}
-      brandingColor={pick.originalBrandingColor ?? undefined}
-      size={14}
-      decorative
-    />
-  );
-  if (!linked) return crest;
-  return (
-    <TeamLink
-      slug={pick.originalSlug}
-      aria-label={pick.originalName}
-      className="inline-flex"
-    >
-      {crest}
-    </TeamLink>
   );
 }
 
@@ -386,10 +349,16 @@ function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
           />
           <div className="min-w-0 flex-1">
             <p className="truncate text-body font-semibold text-text-primary">{pick.playerName}</p>
-            {pick.originalName && (
-              <div className="flex min-w-0 items-center gap-1 text-body-sm text-text-tertiary" data-testid="via-note">
-                <ViaCrest pick={pick} linked={false} />
-                <span className="truncate">via {pick.originalName}</span>
+            {isTradedPick(pick) && pick.originalName && (
+              <div
+                className="flex min-w-0 items-center gap-1 text-body-sm text-text-tertiary"
+                data-testid="via-note"
+                title={`via ${pick.originalName}`}
+                aria-label={`via ${pick.originalName}`}
+              >
+                <span className="truncate" aria-hidden="true">
+                  via {pick.originalAbbreviation ?? teamAcronym(pick.originalName)}
+                </span>
               </div>
             )}
           </div>
@@ -409,10 +378,16 @@ function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
                 {pick.roster.QB} QB, {pick.roster.RB} RB, {pick.roster.WR} WR, {pick.roster.TE} TE
               </p>
             )}
-            {pick.originalName && (
-              <div className="flex min-w-0 items-center gap-1 text-body-sm text-text-tertiary" data-testid="via-note">
-                <ViaCrest pick={pick} />
-                <span className="truncate">via {pick.originalName}</span>
+            {isTradedPick(pick) && pick.originalName && (
+              <div
+                className="flex min-w-0 items-center gap-1 text-body-sm text-text-tertiary"
+                data-testid="via-note"
+                title={`via ${pick.originalName}`}
+                aria-label={`via ${pick.originalName}`}
+              >
+                <span className="truncate" aria-hidden="true">
+                  via {pick.originalAbbreviation ?? teamAcronym(pick.originalName)}
+                </span>
               </div>
             )}
           </div>

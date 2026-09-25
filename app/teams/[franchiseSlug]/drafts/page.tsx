@@ -8,11 +8,11 @@ import { FranchiseIdentity } from "@/components/franchise-identity";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { PositionBadge } from "@/components/position-badge";
 import { PlayerHeadshot } from "@/components/player-headshot";
-import { FranchiseLogo } from "@/components/franchise-logo";
-import { TeamLink } from "@/components/team-link";
 import { PlayerLink } from "@/components/player-link";
 import { getFranchiseBySlug } from "@/lib/queries/franchises";
 import { getFranchiseDraftHistory, type DraftPickWithFranchise } from "@/lib/queries/drafts";
+import { isTradedPick } from "@/lib/draft-board";
+import { teamAcronym } from "@/lib/team-acronym";
 import { EmptyState } from "@/components/empty-state";
 
 // ISR: rendered once, then served from cache until a successful sync calls
@@ -305,30 +305,34 @@ function DraftPicksList({
   );
 }
 
-// A subtle "via {origin}" note for picks this franchise acquired by trade.
-// originalFranchiseName is only populated for traded picks (null on own picks),
-// so its presence is the acquired-by-trade signal.
+// A subtle "via {code}" note for picks this franchise acquired by trade.
+// original_franchise_id is now always populated for Sleeper-synced drafts,
+// including on untraded picks where it equals franchiseId, so "traded" means
+// originalFranchiseId differs from franchiseId (lib/draft-board's
+// isTradedPick), not merely that an original franchise is on record. Plain
+// text, no crest: the code is all Blake asked for, and a monogram fallback
+// with no avatar reads as a redundant repeat of the code.
 function ViaNote({ pick }: { pick: DraftPickWithFranchise }) {
-  if (!pick.originalFranchiseName) return null;
+  if (
+    !isTradedPick({
+      originalId: pick.originalFranchiseId,
+      originalName: pick.originalFranchiseName,
+      currentId: pick.franchiseId ?? pick.rosterId ?? `pick-${pick.id}`,
+    }) ||
+    !pick.originalFranchiseName
+  ) {
+    return null;
+  }
+  const code = pick.originalFranchiseAbbreviation ?? teamAcronym(pick.originalFranchiseName);
   return (
-    <span className="flex min-w-0 items-center gap-1 text-caption text-text-tertiary">
-      {pick.originalFranchiseSlug && (
-        <TeamLink
-          slug={pick.originalFranchiseSlug}
-          aria-label={pick.originalFranchiseName}
-          className="inline-flex"
-        >
-          <FranchiseLogo
-            slug={pick.originalFranchiseSlug}
-            name={pick.originalFranchiseName}
-            abbreviation={pick.originalFranchiseAbbreviation ?? undefined}
-            brandingColor={pick.originalFranchiseBrandingColor ?? undefined}
-            size={14}
-            decorative
-          />
-        </TeamLink>
-      )}
-      <span className="truncate">via {pick.originalFranchiseName}</span>
+    <span
+      className="flex min-w-0 items-center gap-1 text-caption text-text-tertiary"
+      title={`via ${pick.originalFranchiseName}`}
+      aria-label={`via ${pick.originalFranchiseName}`}
+    >
+      <span className="truncate" aria-hidden="true">
+        via {code}
+      </span>
     </span>
   );
 }

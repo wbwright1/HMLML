@@ -342,7 +342,7 @@ export const draftPicks = pgTable(
     franchiseId: text("franchise_id").references(() => franchises.id),
     playerId: text("player_id").references(() => players.id),
     playerName: text("player_name"), // snapshot at draft time
-    originalFranchiseId: text("original_franchise_id").references(() => franchises.id), // franchise that originally held the pick slot (null = same as franchiseId, or unknown)
+    originalFranchiseId: text("original_franchise_id").references(() => franchises.id), // franchise that originally held the pick slot; always populated for Sleeper-synced drafts (including untraded picks, where it equals franchiseId) via syncDrafts in lib/sync/daily.ts. "Traded" means original_franchise_id <> franchise_id, not merely that this column is non-null; see isTradedPick in lib/draft-board.ts. Null only for legacy pre-#124 rows that were never backfilled as traded.
     isLegacyEra: boolean("is_legacy_era").default(false),
     createdAt: timestamp("created_at").defaultNow(),
   },

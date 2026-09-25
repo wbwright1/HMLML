@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildDraftBoard, type NormalizedPick } from "./draft-board";
+import { buildDraftBoard, isTradedPick, type NormalizedPick } from "./draft-board";
 
 // ---------------------------------------------------------------------------
 // Test helpers — build NormalizedPicks with sensible defaults so each test
@@ -180,5 +180,37 @@ describe("buildDraftBoard", () => {
     expect(placedCount(board)).toBe(6);
     const r2Players = board.grid.get(2)!.filter(Boolean).map((c) => c!.playerName).sort();
     expect(r2Players).toEqual(["A", "B", "C"]);
+  });
+});
+
+describe("isTradedPick", () => {
+  it("returns false for an untraded completed pick (originalId === currentId)", () => {
+    expect(
+      isTradedPick({ originalId: "f0", originalName: "Team 0", currentId: "f0" })
+    ).toBe(false);
+  });
+
+  it("returns true for a traded completed pick (originalId !== currentId)", () => {
+    expect(
+      isTradedPick({ originalId: "f0", originalName: "Team 0", currentId: "f5" })
+    ).toBe(true);
+  });
+
+  it("returns false for a legacy pick with no original franchise on record", () => {
+    expect(
+      isTradedPick({ originalId: null, originalName: null, currentId: "f0" })
+    ).toBe(false);
+  });
+
+  it("returns true for an upcoming (name-only) pick that names a different original owner", () => {
+    expect(
+      isTradedPick({ originalId: null, originalName: "Team 0", currentId: "f5" })
+    ).toBe(true);
+  });
+
+  it("returns false for an upcoming pick with no original-owner name", () => {
+    expect(
+      isTradedPick({ originalId: null, originalName: null, currentId: "f5" })
+    ).toBe(false);
   });
 });
