@@ -144,12 +144,42 @@ describe("selectGameOfTheWeek", () => {
     }
   });
 
-  it("penalizes a franchise featured last week", () => {
-    const repeat = candidate(1, team(1, 0, 150, 1), team(1, 0, 150, 2), {
-      featuredLastWeek: 1,
+  it("drops a game with a cooldown franchise, however strong it is", () => {
+    // 3-1 v 3-1 (quality 30) plus a named rivalry and top-of-table would
+    // crush a 2-2 v 2-2 game; neither reason overrides the cooldown.
+    const repeat = candidate(1, team(3, 1, 500, 1), team(3, 1, 480, 2), {
+      onCooldown: 1,
+      namedRivalry: { name: "The Custody Battle", tagline: null },
     });
-    const fresh = candidate(2, team(1, 0, 140, 3), team(1, 0, 140, 1));
-    expect(pickId([repeat, fresh], 2)).toBe(2);
+    const fresh = candidate(2, team(2, 2, 400, 3), team(2, 2, 390, 1));
+    expect(pickId([repeat, fresh], 5)).toBe(2);
+  });
+
+  it.each(["unbeatens", "division-lead-flip", "playoff-clinch"] as const)(
+    "a cooldown game carrying %s stays in the running",
+    (reason) => {
+      const big = candidate(
+        1,
+        { ...team(4, 0, 600, 1, "A"), raceTag: reason === "playoff-clinch" ? "win-and-in" : null },
+        team(reason === "unbeatens" ? 4 : 3, reason === "unbeatens" ? 0 : 1, 580, 1, "B"),
+        { onCooldown: 2, canFlipDivisionLead: reason === "division-lead-flip" }
+      );
+      const fresh = candidate(2, team(2, 2, 400, 3), team(2, 2, 390, 2));
+      expect(gotwReasons(big, { week: 5, anyGamesPlayed: true })).toContain(reason);
+      expect(pickId([big, fresh], 5)).toBe(1);
+    }
+  );
+
+  it("scores the whole slate when the cooldown would empty it", () => {
+    const a = candidate(1, team(3, 1, 500, 1), team(3, 1, 480, 2), { onCooldown: 1 });
+    const b = candidate(2, team(2, 2, 400, 3), team(2, 2, 390, 1), { onCooldown: 1 });
+    expect(pickId([a, b], 5)).toBe(1);
+  });
+
+  it("goes easy on franchises already featured this season", () => {
+    const veteran = candidate(1, team(2, 1, 400, 1), team(2, 1, 400, 2), { priorFeatures: 2 });
+    const fresh = candidate(2, team(2, 1, 390, 3), team(2, 1, 390, 1));
+    expect(pickId([veteran, fresh], 4)).toBe(2);
   });
 
   it("penalizes eliminated teams", () => {
@@ -277,10 +307,10 @@ describe("the real 2026 week 3 slate", () => {
     expect(stakesFromReasons(pick!.reasons)).not.toMatch(/division lead/i);
   });
 
-  it("moves off a team featured last week to a comparable game", () => {
+  it("moves off a team on cooldown to a comparable game", () => {
     const first = selectGameOfTheWeek(slate, { week: 3 })!.matchupId;
     const withRepeat = slate.map((c) =>
-      c.matchupId === first ? { ...c, featuredLastWeek: 1 } : c
+      c.matchupId === first ? { ...c, onCooldown: 1 } : c
     );
     const second = selectGameOfTheWeek(withRepeat, { week: 3 })!.matchupId;
     expect(second).not.toBe(first);
