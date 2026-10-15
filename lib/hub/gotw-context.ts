@@ -14,6 +14,7 @@
 import {
   canFlipDivisionLead,
   gameOfWeekBlurb,
+  GOTW_COOLDOWN_WEEKS,
   gotwKickerLead,
   isRecentRematch,
   markTitleRematch,
@@ -45,7 +46,7 @@ import { getAllSeasons, getTitleGamePair } from "@/lib/queries/seasons";
 import { getHeadToHead, getHeadToHeadHistory } from "@/lib/queries/records";
 import { getRivalryWeek, rivalryPairKey } from "@/lib/queries/rivalry-week";
 import type { NamedRivalry } from "@/lib/queries/rivalries";
-import { getPublishedHubContent } from "@/lib/queries/hub-content";
+import { getPublishedGotwHistory } from "@/lib/queries/hub-content";
 import {
   getWeekStarterPool,
   sumProjectedByFranchise,
@@ -124,8 +125,8 @@ export interface GotwSource {
   namedRivalryOf: NamedRivalryLookup | null;
   /** The Book's home-perspective spread per matchupId, when it trades this week. */
   bookSpreadByMatchup: Map<number, number>;
-  /** Franchise slugs of last week's featured game (from its stored ref_key). */
-  priorFeaturedSlugs: Set<string>;
+  /** This season's earlier Game of the Week picks (from their stored ref_keys). */
+  featureHistory: GotwFeature[];
   raceTags: Map<string, PlayoffRaceTag>;
   /** The prior week's finals; empty at week 1 or while it is incomplete. */
   priorFinals?: readonly WeekFinalLike[];
@@ -254,13 +255,12 @@ export function buildGotwCandidates(source: GotwSource): GotwCandidate[] {
     };
   };
 
+  const ledger = featureLedger(source.featureHistory, source.week);
   const candidates: GotwCandidate[] = source.matchups.map((m) => {
     const homeId = m.homeTeam.franchiseId;
     const awayId = m.awayTeam.franchiseId;
     const history = source.historyByMatchup.get(m.matchupId);
-    const featured = [m.homeTeam.franchiseSlug, m.awayTeam.franchiseSlug].filter((slug) =>
-      source.priorFeaturedSlugs.has(slug)
-    ).length;
+    const slugs = [m.homeTeam.franchiseSlug, m.awayTeam.franchiseSlug];
     return {
       matchupId: m.matchupId,
       teamA: team(homeId),
@@ -272,7 +272,8 @@ export function buildGotwCandidates(source: GotwSource): GotwCandidate[] {
       isMutualRival: source.mutualRivalKeys.has(rivalryPairKey(homeId, awayId)),
       namedRivalry: source.namedRivalryOf ? source.namedRivalryOf(homeId, awayId) : null,
       bookSpread: source.bookSpreadByMatchup.get(m.matchupId) ?? null,
-      featuredLastWeek: featured,
+      onCooldown: slugs.filter((slug) => ledger.cooldown.has(slug)).length,
+      priorFeatures: slugs.reduce((n, slug) => n + (ledger.counts.get(slug) ?? 0), 0),
     };
   });
 
@@ -442,19 +443,63 @@ export interface GotwLoadInput {
   };
 }
 
+/** One earlier week's featured pair. */
+export interface GotwFeature {
+  week: number;
+  slugs: string[];
+}
+
 /**
- * Last week's featured pair, from the stored game_of_week_blurb's ref_key
+ * A week's featured pair, from the stored game_of_week_blurb's ref_key
  * (matchupPairKey: sorted slugs joined "__"). Rows written before ref_key was
- * populated carry null, and then there is simply no repeat penalty: guessing
- * by recomputing last week's pick would score it on this week's records.
+ * populated carry null, and then that week simply counts for nothing: guessing
+ * by recomputing its pick would score it on this week's records.
  */
 export function priorFeaturedSlugsFromRefKey(refKey: string | null | undefined): Set<string> {
   if (!refKey) return new Set();
   return new Set(refKey.split("__").filter(Boolean));
 }
 
+/**
+ * Stored blurb rows (week + ref_key, oldest first) as a feature history, one
+ * pick per week: should a week ever hold two published rows, the later one
+ * wins, so a regenerated week is never counted twice. Pure.
+ */
+export function featureHistoryFromRows(
+  rows: readonly { week: number | null; refKey: string | null }[]
+): GotwFeature[] {
+  const byWeek = new Map<number, string[]>();
+  for (const r of rows) {
+    if (r.week == null || !r.refKey) continue;
+    byWeek.set(r.week, [...priorFeaturedSlugsFromRefKey(r.refKey)]);
+  }
+  return [...byWeek].map(([week, slugs]) => ({ week, slugs }));
+}
+
+/**
+ * Who is on cooldown for `week` (featured in either of the last
+ * GOTW_COOLDOWN_WEEKS weeks) and how often each franchise was featured
+ * earlier this season. Weeks at or after `week` are ignored, so a
+ * regenerated week never counts its own pick. Pure.
+ */
+export function featureLedger(
+  history: readonly GotwFeature[],
+  week: number
+): { cooldown: Set<string>; counts: Map<string, number> } {
+  const cooldown = new Set<string>();
+  const counts = new Map<string, number>();
+  for (const f of history) {
+    if (f.week >= week) continue;
+    for (const slug of f.slugs) {
+      counts.set(slug, (counts.get(slug) ?? 0) + 1);
+      if (f.week >= week - GOTW_COOLDOWN_WEEKS) cooldown.add(slug);
+    }
+  }
+  return { cooldown, counts };
+}
+
 async function orEmpty<T>(p: Promise<T>, fallback: T): Promise<T> {
-  // Genuinely optional enrichment (mutual rivals, race tags, last week's
+  // Genuinely optional enrichment (mutual rivals, race tags, earlier GotW
   // pick, Book lines): absence drops a reason, it never fabricates one, so an
   // empty fallback is a real non-error outcome, not a swallowed failure.
   try {
@@ -518,8 +563,8 @@ export async function resolveGameOfTheWeek(input: GotwLoadInput): Promise<GotwRe
     week === 1 ? getTitleGamePair() : Promise.resolve(null),
     getRivalryWeek(matchups),
     week > 1
-      ? orEmpty(getPublishedHubContent(seasonId, week - 1), {})
-      : Promise.resolve({}),
+      ? orEmpty(getPublishedGotwHistory(seasonId, week), [])
+      : Promise.resolve([]),
     orEmpty(getAllSeasons(), []),
     // Last week's form for the blurb: optional enrichment like the rest
     // (without it the blurb simply opens with the reason sentence).
@@ -551,7 +596,6 @@ export async function resolveGameOfTheWeek(input: GotwLoadInput): Promise<GotwRe
     { week, playoffWeekStart }
   );
 
-  const priorRow = (prior as Record<string, { refKey: string | null }[]>).game_of_week_blurb?.[0];
 
   return resolveFromSource({
     seasonYear,
@@ -566,7 +610,7 @@ export async function resolveGameOfTheWeek(input: GotwLoadInput): Promise<GotwRe
     mutualRivalKeys: mutual,
     namedRivalryOf: input.namedRivalryOf ?? null,
     bookSpreadByMatchup: new Map(bookGames.map((g) => [g.matchupId, g.spread])),
-    priorFeaturedSlugs: priorFeaturedSlugsFromRefKey(priorRow?.refKey),
+    featureHistory: featureHistoryFromRows(prior),
     raceTags,
     priorFinals,
   });

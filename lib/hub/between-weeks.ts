@@ -79,8 +79,13 @@ export interface GotwCandidate {
   namedRivalry?: GotwNamedRivalry | null;
   /** The Book's spread for this game when The Book is trading this week. */
   bookSpread?: number | null;
-  /** How many of the two franchises were featured as last week's GotW (0-2). */
-  featuredLastWeek?: number;
+  /**
+   * How many of the two franchises are on Game of the Week cooldown (0-2):
+   * featured in either of the last GOTW_COOLDOWN_WEEKS weeks.
+   */
+  onCooldown?: number;
+  /** Prior Game of the Week features this season, summed over both franchises. */
+  priorFeatures?: number;
 }
 
 export interface GotwSelectContext {
@@ -160,8 +165,25 @@ const QUALITY_MIN_SHARE = 0.65;
 export const GOTW_BOTH_ELIMINATED_PENALTY = 25;
 /** Deducted when one team is mathematically eliminated. */
 export const GOTW_ONE_ELIMINATED_PENALTY = 8;
-/** Deducted per franchise that was last week's Game of the Week. */
-export const GOTW_REPEAT_PENALTY = 10;
+/**
+ * A franchise featured in either of the last N weeks is on cooldown: its game
+ * is out of the running unless it carries a GOTW_COOLDOWN_OVERRIDES reason
+ * (Blake, 2026-10-15). The old one-week -10 let a strong team come straight
+ * back every other week, so the same franchise kept headlining the hub.
+ */
+export const GOTW_COOLDOWN_WEEKS = 2;
+/**
+ * Stakes big enough to feature a cooldown team anyway. Named rivalries and
+ * top-of-table are deliberately absent: they are what kept re-featuring the
+ * same good teams.
+ */
+export const GOTW_COOLDOWN_OVERRIDES: readonly GotwReason[] = Object.freeze([
+  "unbeatens",
+  "division-lead-flip",
+  "playoff-clinch",
+]);
+/** Deducted per prior feature this season (both franchises), to spread the card around. */
+export const GOTW_SEASON_REPEAT_PENALTY = 3;
 /** A Book spread this tight (points, either way) reads as a coin flip. */
 export const GOTW_COIN_FLIP_SPREAD = 3;
 /** An all-time series needs this many games before "within a game" means anything. */
@@ -396,7 +418,7 @@ export function scoreGotwCandidate(
   if (elim === 2) score -= GOTW_BOTH_ELIMINATED_PENALTY;
   else if (elim === 1) score -= GOTW_ONE_ELIMINATED_PENALTY;
 
-  score -= GOTW_REPEAT_PENALTY * (c.featuredLastWeek ?? 0);
+  score -= GOTW_SEASON_REPEAT_PENALTY * (c.priorFeatures ?? 0);
   return score;
 }
 
@@ -407,10 +429,15 @@ export function scoreGotwCandidate(
  * title game. At week 1, exactly one flagged candidate wins outright; zero or
  * two flagged candidates fall through to the scoring below.
  *
- * Otherwise every candidate is scored: a record-quality base (projections
+ * Cooldown: a game with a franchise featured in either of the last
+ * GOTW_COOLDOWN_WEEKS weeks is dropped unless it carries a
+ * GOTW_COOLDOWN_OVERRIDES reason. A slate the cooldown would empty (never at
+ * six games, which it can trim to two at most) is scored whole instead.
+ *
+ * Every remaining candidate is scored: a record-quality base (projections
  * before any game is played) that leans on the weaker team, plus the weight of
- * each reason it carries, minus penalties for eliminated teams and for a
- * franchise that was featured last week. Ties break toward the better weaker
+ * each reason it carries, minus penalties for eliminated teams and for prior
+ * features this season. Ties break toward the better weaker
  * team (higher minimum points-for, or projection before week 1's games), then
  * the lower matchupId, so the pick is deterministic.
  */
@@ -435,10 +462,17 @@ export function selectGameOfTheWeek(
     0,
     ...candidates.flatMap((c) => [c.teamA.projected ?? 0, c.teamB.projected ?? 0])
   );
-  const scored = candidates.map((c) => {
+  const all = candidates.map((c) => {
     // A second flagged rematch (the degenerate case) must not claim the
     // rematch reason it did not win on.
     const reasons = gotwReasons({ ...c, isTitleRematch: false }, reasonCtx);
+    return { c, reasons };
+  });
+  const eligible = all.filter(
+    ({ c, reasons }) =>
+      (c.onCooldown ?? 0) === 0 || reasons.some((r) => GOTW_COOLDOWN_OVERRIDES.includes(r))
+  );
+  const scored = (eligible.length > 0 ? eligible : all).map(({ c, reasons }) => {
     return {
       c,
       reasons,

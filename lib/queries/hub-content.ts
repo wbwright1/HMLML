@@ -1,6 +1,6 @@
 import { db, getDbDriver } from "@/lib/db";
 import { hubContent } from "@/lib/db/schema";
-import { and, eq, isNull, inArray } from "drizzle-orm";
+import { and, asc, eq, isNull, inArray, lt } from "drizzle-orm";
 
 // ---------------------------------------------------------------------------
 // Kinds
@@ -118,6 +118,37 @@ export async function getPublishedHubContent(
       console.error("[hub-content] getPublishedHubContent error:", e);
     }
     return {};
+  }
+}
+
+/**
+ * Every published Game of the Week pick this season before `beforeWeek`, as
+ * (week, ref_key) pairs, oldest first. Feeds the GotW cooldown and the
+ * season repeat penalty (lib/hub/gotw-context.ts). Same failure handling as
+ * getPublishedHubContent: a missing table reads as no history.
+ */
+export async function getPublishedGotwHistory(
+  seasonId: number,
+  beforeWeek: number,
+): Promise<{ week: number | null; refKey: string | null }[]> {
+  try {
+    return await db
+      .select({ week: hubContent.week, refKey: hubContent.refKey })
+      .from(hubContent)
+      .where(
+        and(
+          eq(hubContent.seasonId, seasonId),
+          eq(hubContent.kind, "game_of_week_blurb"),
+          eq(hubContent.status, "published"),
+          lt(hubContent.week, beforeWeek),
+        ),
+      )
+      .orderBy(asc(hubContent.week), asc(hubContent.id));
+  } catch (e) {
+    if (!isMissingRelationError(e)) {
+      console.error("[hub-content] getPublishedGotwHistory error:", e);
+    }
+    return [];
   }
 }
 

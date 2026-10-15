@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import {
   resolveFromSource,
   priorFeaturedSlugsFromRefKey,
+  featureHistoryFromRows,
+  featureLedger,
   namedRivalryLookupFrom,
   type GotwSource,
   type GotwStandingRow,
@@ -68,7 +70,7 @@ function source(overrides: Partial<GotwSource> = {}): GotwSource {
     mutualRivalKeys: new Set(),
     namedRivalryOf: null,
     bookSpreadByMatchup: new Map(),
-    priorFeaturedSlugs: new Set(),
+    featureHistory: [],
     raceTags: new Map(),
     ...overrides,
   };
@@ -93,12 +95,23 @@ describe("resolveFromSource on the real 2026 week 3", () => {
     expect(r.kicker!.startsWith("Cross-Division · ")).toBe(true);
   });
 
-  it("goes easy on a franchise featured last week (from the stored ref_key)", () => {
+  it("puts a franchise featured in either of the last two weeks on cooldown", () => {
     const first = resolveFromSource(source()).pick!.matchupId;
     const [, a, b] = WEEK3.find(([id]) => id === first)!;
-    const prior = priorFeaturedSlugsFromRefKey(`${a.toLowerCase()}__${b.toLowerCase()}`);
-    const second = resolveFromSource(source({ priorFeaturedSlugs: prior })).pick!.matchupId;
-    expect(second).not.toBe(first);
+    const refKey = `${a.toLowerCase()}__${b.toLowerCase()}`;
+    for (const week of [1, 2]) {
+      const featureHistory = featureHistoryFromRows([{ week, refKey }]);
+      const second = resolveFromSource(source({ featureHistory })).pick!.matchupId;
+      expect(second).not.toBe(first);
+    }
+  });
+
+  it("a feature three weeks back is off cooldown", () => {
+    const first = resolveFromSource(source()).pick!.matchupId;
+    const [, a, b] = WEEK3.find(([id]) => id === first)!;
+    const featureHistory = [{ week: 0, slugs: [a.toLowerCase(), b.toLowerCase()] }];
+    const r = resolveFromSource(source({ featureHistory }));
+    expect(r.candidate!.onCooldown ?? 0).toBe(0);
   });
 
   const custodyOf = (x: string, y: string) =>
@@ -242,7 +255,7 @@ describe("resolveFromSource: last week's form", () => {
     const r = resolveFromSource(
       source({
         priorFinals: W2_FINALS,
-        priorFeaturedSlugs: new Set(["ldl", "vv", "mcc", "bgs"]),
+        featureHistory: [{ week: 2, slugs: ["ldl", "vv", "mcc", "bgs"] }],
       })
     );
     expect(r.pick!.matchupId).toBe(3);
@@ -256,7 +269,7 @@ describe("resolveFromSource: last week's form", () => {
     const r = resolveFromSource(
       source({
         priorFinals: W2_FINALS,
-        priorFeaturedSlugs: new Set(["ldl", "vv", "mcc", "bgs"]),
+        featureHistory: [{ week: 2, slugs: ["ldl", "vv", "mcc", "bgs"] }],
       })
     );
     const hero = heroHeadline({
@@ -283,6 +296,47 @@ describe("resolveFromSource: last week's form", () => {
     expect(r.form).toEqual({ a: null, b: null });
     expect(r.priorFinals).toEqual([]);
     expect(r.blurb).not.toMatch(/last week|just (ran|hung|escaped)|lost by/);
+  });
+});
+
+describe("featureLedger", () => {
+  // The every-other-week pattern the one-week penalty allowed: ROG featured
+  // in weeks 2, 4 and 6 (and a stray row for the current week).
+  const history = featureHistoryFromRows([
+    { week: 2, refKey: "omm__rog" },
+    { week: 3, refKey: "ldl__ttt" },
+    { week: 4, refKey: "mcc__rog" },
+    { week: 5, refKey: "bgs__vv" },
+    { week: 6, refKey: "rog__ttt" },
+    { week: 7, refKey: "bch__wld" },
+  ]);
+
+  it("cools down only the last two weeks' franchises", () => {
+    const { cooldown } = featureLedger(history, 7);
+    expect([...cooldown].sort()).toEqual(["bgs", "rog", "ttt", "vv"]);
+  });
+
+  it("counts every earlier feature, never the current week's own", () => {
+    const { counts } = featureLedger(history, 7);
+    expect(counts.get("rog")).toBe(3);
+    expect(counts.get("ttt")).toBe(2);
+    expect(counts.has("wld")).toBe(false);
+  });
+
+  it("ROG, featured in week 5, sits out weeks 6 and 7", () => {
+    const h = featureHistoryFromRows([{ week: 5, refKey: "omm__rog" }]);
+    expect(featureLedger(h, 6).cooldown.has("rog")).toBe(true);
+    expect(featureLedger(h, 7).cooldown.has("rog")).toBe(true);
+    expect(featureLedger(h, 8).cooldown.has("rog")).toBe(false);
+  });
+
+  it("keeps one pick per week, the later row winning", () => {
+    const h = featureHistoryFromRows([
+      { week: 4, refKey: "omm__rog" },
+      { week: 4, refKey: "bgs__vv" },
+      { week: 5, refKey: null },
+    ]);
+    expect(h).toEqual([{ week: 4, slugs: ["bgs", "vv"] }]);
   });
 });
 
