@@ -22,6 +22,9 @@ import {
 import { getToiletBowlChampion } from "@/lib/queries/playoff-bracket";
 import { SNARKY_LABELS } from "@/lib/content";
 import { getMaxWeekForSeason } from "@/lib/queries/matchups";
+import { getSeasonArc } from "@/lib/queries/season-arc";
+import type { SeasonArc } from "@/lib/season-arc";
+import { SeasonArcChart } from "@/components/season-arc-chart";
 import { SeasonDetailNav } from "./season-detail-nav";
 
 // ISR: rendered once, then served from cache until a successful sync calls
@@ -81,6 +84,19 @@ export default async function SeasonDetailPage({
     maxWeek = await getMaxWeekForSeason(season.id);
   } catch {
     // Matchup data may not be available
+  }
+
+  // Week-by-week rank lines. Season data like the standings above, so a DB
+  // error at request time throws rather than caching a page without it.
+  let arc: SeasonArc | null = null;
+  try {
+    arc = await getSeasonArc(
+      season.id,
+      season.playoffWeekStart,
+      standings.map((s) => s.franchiseId)
+    );
+  } catch (e) {
+    rethrowUnlessTolerable(e);
   }
 
   // Read, never re-derive: the champion of the inverted consolation bracket
@@ -191,6 +207,26 @@ export default async function SeasonDetailPage({
           </div>
         )}
       </PageSection>
+
+      {arc && (
+        <PageSection label="Season Arc" title="How it played out.">
+          <SeasonArcChart
+            arc={arc}
+            year={year}
+            championId={
+              standings.find((s) => s.playoffResult === "champion")?.franchiseId ?? null
+            }
+            teams={standings.map((s) => ({
+              franchiseId: s.franchiseId,
+              slug: s.franchiseSlug,
+              name: s.franchiseName,
+              abbreviation: s.franchiseAbbreviation ?? undefined,
+              brandingColor: s.franchiseBrandingColor ?? undefined,
+              avatarUrl: s.avatarUrl,
+            }))}
+          />
+        </PageSection>
+      )}
 
       {/* Final Standings */}
       <PageSection label="Final Standings" title="Standings">

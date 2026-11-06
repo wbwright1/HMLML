@@ -824,7 +824,7 @@ export async function getRivalries(): Promise<RivalrySummary[]> {
 // injuryPenalty: severity of CURRENT starters' injury statuses, capped/
 //   normalized to [0,1].
 
-const WINDOW_SIZE = 4;
+export const POWER_WINDOW_SIZE = 4;
 
 // Keys are Sleeper's raw `injury_status` enum values (passed through untouched
 // by lib/sync/daily.ts). Note the suspension value is "Sus", NOT "Suspended";
@@ -1052,10 +1052,10 @@ export async function getPowerRankings(): Promise<PowerRankingEntry[]> {
     // Completed weeks, newest first. Last week's edition is the same window
     // slid back one week, so it exists once two weeks are in the books.
     const seasonWeeks = [...new Set(gameRows.map((g) => g.week))];
-    const windowWeeks = new Set(seasonWeeks.slice(0, WINDOW_SIZE));
+    const windowWeeks = new Set(seasonWeeks.slice(0, POWER_WINDOW_SIZE));
     const priorWindowWeeks =
       seasonWeeks.length >= 2
-        ? new Set(seasonWeeks.slice(1, WINDOW_SIZE + 1))
+        ? new Set(seasonWeeks.slice(1, POWER_WINDOW_SIZE + 1))
         : null;
 
     const seasonGamesByFranchise = new Map<string, PowerFormGame[]>();

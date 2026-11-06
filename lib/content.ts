@@ -300,6 +300,26 @@ export const SNARKY_LABELS: Readonly<Record<string, SnarkyLabel>> = Object.freez
     description: 'A near-even trade where neither side realized much production',
     tone: 'sting',
   },
+  // Season Arc callouts (lib/season-arc.ts): the biggest moves between any two
+  // weeks of one regular season, in whichever lens (power or standings) is on.
+  GLOW_UP: {
+    key: 'GLOW_UP',
+    displayText: 'Glow Up',
+    description: 'Biggest climb in the rankings between any two weeks of the season',
+    tone: 'positive',
+  },
+  FREEFALL: {
+    key: 'FREEFALL',
+    displayText: 'Freefall',
+    description: 'Biggest drop in the rankings between any two weeks of the season',
+    tone: 'sting',
+  },
+  WIRE_TO_WIRE: {
+    key: 'WIRE_TO_WIRE',
+    displayText: 'Wire to Wire',
+    description: 'Ranked #1 in every week of the regular season',
+    tone: 'positive',
+  },
 } as const);
 
 // ===========================================================================
