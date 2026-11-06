@@ -1,310 +1,103 @@
 # Project Guidelines
 
 ## Project Overview
-Harambe Memorial League Memorial League (HMLML) Website: a public-facing Next.js web app serving as the permanent home for a 12-team dynasty fantasy football league. The site is a trash talk arsenal disguised as a league history archive: it centralizes league history, performance data, draft records, power rankings, and near-live matchup scoring in one always-available destination with a confident, snarky editorial voice. All data sourced and synced automatically from the Sleeper API via a 3-tier sync pipeline. No login required (Phase 1). Carries forward history from the league's predecessor (a 10-team league).
+Harambe Memorial League Memorial League (HMLML): a public Next.js site that is the permanent home of a 12-team dynasty fantasy football league (history carried forward from a 10-team predecessor). It is a trash talk arsenal disguised as a league history archive: history, stats, drafts, power rankings, The Book (a league sportsbook), and near-live matchup scoring, in a confident, snarky voice. All league data syncs from the Sleeper API. Pages are public; members sign in with claim codes (`lib/auth.ts`, session cookie) to post smack and make picks, and the commish has a console at `/commish`.
 
-**Note:** The abbreviation is HMLML (the double "Memorial League" is intentional). Use "HMLML" in code, nav branding, and UI.
+The double "Memorial League" is intentional. Use "HMLML" in code, nav branding, and UI.
 
 ## Tech Stack
-- **Framework:** Next.js 16+ (App Router), TypeScript (strict mode)
-- **Database:** Vercel Postgres (Neon-backed) via Drizzle ORM v0.45.x
-- **Validation:** Zod (with drizzle-zod) for all Sleeper API response validation
-- **Styling:** Tailwind CSS v4
-- **UI Primitives:** shadcn/ui (Radix UI + Tailwind), copied into project, not installed as dependency
-- **Hosting:** Vercel (free/hobby tier)
-- **Data Source:** Sleeper API (read-only, no auth required)
-- **Testing:** Playwright for E2E
-- **Fonts:** three typefaces via next/font — Instrument Serif (italic) for display/titles/wordmark, Geist for all UI/body, JetBrains Mono (tabular) for every numeral
-- **Build:** Turbopack (dev), Next.js production bundling
+- Next.js 16 (App Router), TypeScript strict, Turbopack in dev
+- Vercel Postgres (Neon) via Drizzle ORM 0.45.x; Zod (with drizzle-zod) validates every Sleeper response
+- Tailwind CSS v4; shadcn/ui primitives copied into `components/ui/`
+- Vercel hosting (hobby tier), Vercel crons
+- Playwright for E2E, Vitest for unit and DB tests
+- Fonts via next/font: Instrument Serif (italic display), Geist (UI/body), JetBrains Mono (every numeral)
+
+## Commands
+- `npm run dev`, `npm run build`, `npm run lint` (ESLint 9 flat config `eslint.config.mjs`; `next lint` no longer exists; warnings do not fail it, errors do; `docs/**` is excluded)
+- `npx tsc --noEmit` for type checking
+- `npm run test:unit` (Vitest, `*.test.ts`); `npx vitest run --config vitest.db.config.ts` for `*.dbtest.ts` against the real DB
+- `npx playwright test <spec> --project=chromium` for E2E; run targeted specs only (see Testing)
+- `npm run db:generate` / `db:migrate` / `db:push` / `db:studio` (drizzle-kit)
+- One-off backfills, reprices, and seeds live in `scripts/`
 
 ## Writing Style
-- Never use em-dashes (--) in output. Use commas, semicolons, colons, parentheses, or separate sentences instead.
+- Never use em-dashes in output. Use commas, semicolons, colons, parentheses, or separate sentences.
 
-## Key Architecture Decisions
-- Full-stack in one Next.js project; API routes handle sync endpoints, React Server Components handle all pages
-- **Server components by default, small enumerated set of client islands** -- pages/layouts stay RSC; `"use client"` is limited to this list: the live score poller, the search command (⌘K / mobile dock search), the nav pills active-state, the season/franchise pickers, the player table (filter/sort), the draft countdown, the kickoff countdown, the smack composer, the commish claim-code reveal, the player-profile modal shell, the trades page deep-link scroll-focus island, the mobile nav scroll-chrome wrapper, the nav crest island, the smack composer slot, the nav live-pill island, the matchup-detail live score island, the book tab pill, the book board island, the book futures island, the book tracking island, the book rail island, and the book props island. The board, futures, tracking, rail, and props islands are on the list for the same reason the smack composer slot is: `/book` and `/` are both ISR-cached HTML served to the whole league, so the member's own slip (board), their own season-long tickets (futures, via `/api/book/future-picks`), their own "YOU" chip on every picker rail, their own Week Pulse stats and lock row, and their own not-yet-kicked-off picks (tracking), their own live slip record (the hub rail card), and their own prop picks (props, via `/api/book/prop-picks`) all resolve client-side (session via `use-session-member.ts`, picks via `/api/book/picks`); the board, tracking, futures and props islands' picks are all re-enforced by their own server actions, while the rail island is read-only. The tracking island books the league pick'ems through the SAME `togglePick` action the board uses (a Board wager and a pick'ems pick are one `book_picks` row), so the two islands both fire and subscribe to `lib/book/pick-events.ts` to stay in sync. Streak Watch has no session dependency and stays a plain server component. The last four before those exist because the page HTML is ISR-cached: the first two resolve the session client-side so the server tree stays cacheable (sharing one `/api/session` fetch via `components/use-session-member.ts`), and the last two keep live scores and the live-game count honest inside cached HTML. Everything else ships zero client JS.
-- **Sync-driven ISR, not per-request queries** -- every public page declares `export const revalidate = 3600` and is served from the ISR cache; each successful sync run (sync-daily, sync-hourly, generate-content) calls `revalidatePath("/", "layout")` via `lib/revalidate.ts`, so pages refresh when data lands rather than on a timer. League data only changes when a sync runs, so this is exactly as correct as querying per request and far cheaper (the previous `force-dynamic` everywhere was exhausting Neon's transfer quota on crawler traffic). Time windows and the revalidate constant live in `lib/cache.ts`. The one non-sync revalidation: when a live refresh in `/api/live-scores` changes scores, it calls `revalidateLiveSurfaces()` (only `/`, `/matchups`, and the matchup detail pages, page-scoped), throttled to once per `LIVE_REVALIDATE_MIN_MS`. That route resolves its week through `resolveCurrentWeek()` (`lib/queries/matchups.ts`), the same resolver as the hub, never `max(matchups.week)`: the full schedule is pre-synced, so the max is the last regular-season week. Deliberately still dynamic: `/claim` and `/commish` (authenticated), `/api/live-scores` (the poller), `/api/session`, `/api/book/picks` (the member's own pick slip), `/api/book/prop-picks` (the member's own prop picks), `/api/book/future-picks` (the member's own futures), `app/test/error-trigger`, the intercepted player modal route, and the six pages whose `searchParams` drive a server query (`/trades`, `/schedule`, `/teams/[slug]/schedule`, `/records/head-to-head`, `/drafts/[year]`, `/players/[id]`); those carry no `revalidate` export, since awaiting `searchParams` would make it inert.
-- **Dynamic pages cache at the query layer instead** -- the queries behind those six pages and `/api/search` are wrapped in `cachedQuery()` (`lib/cache.ts`), which is `unstable_cache` tagged `LEAGUE_DATA_TAG`. `revalidateSite()` clears both: `revalidatePath` for the route cache and `revalidateTag` for the Data Cache, since **`revalidatePath` does not touch `unstable_cache` entries**. Wrap by renaming the implementation to `…Uncached` and exporting the cached binding under the original name, so pages need no changes.
-- **`unstable_cache` serializes through JSON, and `cachedQuery` makes that a compile error** -- `Date` returns as a string, and `Map`/`Set` become `{}` and lose everything, all behind types that still claim otherwise. The `JsonSafe<T>` constraint rejects those return types outright (it caught a real `Map` in `getSeasonSchedule` that would have silently emptied `/schedule`, and a real one in `getTradeVerdicts`). When it fires, write an explicit adapter at the boundary (cache entries and rebuild the `Map`; drop unused `Date` columns) rather than casting past it. Anything genuinely live inside a cached page is a client island, not a reason to drop the cache.
-- **A DB error at request time must throw, never fall through to an empty state** -- ISR will happily cache a "successful" hollow render and serve it until the next sync. Every page's data-fetch catch calls `rethrowUnlessTolerable(e)` (`lib/db-guard.ts`), which re-throws everywhere except local dev and the `next build` prerender pass, so Next serves the error boundary and keeps the last good cache entry. New pages must use it rather than a bare `catch {}`. Genuinely optional data (avatars, rivalry flags, lineups, live asides) keeps its empty-state catch: those are real non-error outcomes, not swallowed failures.
-- **Builds stay tolerant of a DB outage on purpose** -- failing `next build` when Postgres is down was considered and rejected: Vercel builds every push, so it would convert a data problem into "nobody can ship", and it blocks the very deploy that might carry the fix. The cost is that a build during an outage can prerender empty HTML, which `.github/workflows/post-deploy-revalidate.yml` covers by calling `/api/revalidate` as soon as a production deploy succeeds.
-- **Never read `cookies()`/`headers()` in a layout or in anything a layout renders** -- a dynamic API anywhere in the render tree opts the WHOLE route out of static generation, and from the root layout that silently defeats ISR on every page of the site. Session-dependent chrome is a client island fed by `/api/session` instead (`components/nav/nav-crest-island.tsx`, `components/smack-composer-slot.tsx`). For the same reason, a page's effective revalidate window is capped by the shortest `next: { revalidate }` fetch inside its render, so keep page-path Sleeper fetches at the page window (see `lib/queries/nfl-state.ts`).
-- **Correctness over performance** -- at 12 users, correct data matters more than speed
-- **Forward-compatible schema, not overbuilt code** -- schema accommodates Phase 2+ without gymnastics; application code only builds Phase 1
-- No authentication in Phase 1; fully public; Phase 2 adds commish admin login (likely Auth.js)
-- 3-tier Sleeper sync: daily cron (players, settings), hourly cron (transactions, rosters), client-side 30s poller (live matchup scores during game windows)
-- Cron endpoint security via Vercel native `CRON_SECRET` header verification
-- All data served from local Postgres cache; no page load triggers a live Sleeper API call (one deliberate exception: the players-page trending-adds rail calls Sleeper's trending endpoint through `lib/sleeper.ts` with a 1-hour fetch cache. The between-weeks hub's "Trending" module was the second; it is now the Postgres-only "League Moves" card, `lib/queries/league-moves.ts`)
-- Single Sleeper API client module (`lib/sleeper.ts`) with one typed function per endpoint, Zod validated
-- Sync writes are atomic per data type; a failed transaction sync does not corrupt roster data
-- Each data type tracks its own "last successful sync" timestamp
-- `sync_log` table records every sync run with status, row counts, duration, and errors
+## Reference Docs (read on demand)
+- `docs/agent/rendering-and-caching.md`: before adding a page, a client component, a page query, or anything that revalidates.
+- `docs/agent/design-system.md`: before UI work (tokens, typography, cards, FranchiseLogo sizing, nav, hub states, animation).
+- `docs/agent/testing.md`: before writing or running tests (worktree env, state-forced hub projects).
+- `_bmad-output/planning-artifacts/`: original PRD, architecture, UX spec, epics (historical; the code wins where they differ).
 
 ## Project Structure
 ```
-app/                    -> Routes, layouts, pages (App Router)
-  api/                  -> API route handlers
-    sync-daily/         -> Daily sync cron endpoint
-    sync-hourly/        -> Hourly sync cron endpoint
-    live-scores/        -> Client poller endpoint
-  (hub)/                -> Homepage / seasonally-aware hub (page.tsx in app root)
-  teams/                -> Franchise pages, rosters, draft history
-  records/              -> Leaderboard, H2H, rivalries, power rankings, trophies
-  history/              -> League history timeline, season detail
-  drafts/               -> Draft history index and per-season views
-  players/              -> Player search + status (reached via search/footer, not the nav)
-  book/                 -> The Book: the sportsbook (The Board, Futures, Tracking, Props)
-  matchups/             -> Matchup detail pages (linked from hub, not in nav)
-  playoffs/             -> Playoff bracket results
-components/             -> Shared UI components (nav, footer, tables, timestamp)
-  ui/                   -> shadcn/ui primitives
-lib/                    -> Shared logic
-  db/                   -> Drizzle schema, migrations, connection config
-  sleeper.ts            -> Sleeper API client (one function per endpoint, Zod validated)
-  sleeper-schemas.ts    -> Zod schemas for all Sleeper API response shapes
-  sync/                 -> Sync logic (daily.ts, hourly.ts, book-lines.ts, book-futures.ts, legacy-import.ts)
-  book/                 -> The Book: pricing.ts and futures.ts (pure odds engines) + shared.ts (shapes/copy)
-  queries/              -> DB query modules by domain (franchises, matchups, seasons, etc.)
-e2e/                    -> Playwright E2E tests
-_agents/                -> Agent personas and pipeline definition
-_work/                  -> Pipeline working directory
-_bmad-output/           -> Planning artifacts (PRD, architecture, UX spec, epics)
+app/                 Routes (App Router); app/page.tsx is the seasonal hub
+  api/               sync-daily, sync-hourly, generate-content, live-scores, session, book/*, search, revalidate, backfill-*, legacy-*
+  book/              The Book: Board, Futures, Tracking, Props
+  claim/, commish/   Member sign-in and commish console (dynamic, authenticated)
+components/          Shared UI; hub/ (one component per hub state), nav/, book/, ui/ (shadcn)
+lib/
+  db/                Drizzle schema, migrations, connection
+  sleeper.ts         The only Sleeper API client (one Zod-validated function per endpoint)
+  sync/              Sync logic (daily, hourly, book lines/futures, legacy import)
+  book/              Pure odds engines (pricing.ts, futures.ts) + shared shapes/copy
+  queries/           DB query modules by domain
+  content.ts         Centralized snarky labels and copy
+e2e/                 Playwright specs
+scripts/             One-off maintenance scripts
+_agents/, _work/     Agent personas/pipeline and its working directory
 ```
 
-## Naming Conventions
+## Architecture Invariants
+- **RSC by default.** Never put `"use client"` on a page or layout. Client code is limited to small leaf islands for interactivity, live data, or per-member session state inside cached HTML. Book pick islands are never the authority: every pick is re-enforced by a server action. Details in `docs/agent/rendering-and-caching.md`.
+- **Sync-driven ISR.** Public pages export `revalidate = 3600` and refresh when a sync calls `revalidateSite()` (`lib/revalidate.ts`), not per request. Pages whose `searchParams` drive a query stay dynamic and cache at the query layer with `cachedQuery()` (`lib/cache.ts`) instead.
+- **`revalidatePath` does not clear `unstable_cache`.** That is why `revalidateSite()` also calls `revalidateTag(LEAGUE_DATA_TAG)`. When `cachedQuery`'s `JsonSafe<T>` constraint rejects a `Map`, `Set`, or `Date` return, write an explicit adapter; never cast past it.
+- **DB errors must throw at request time.** Every page data-fetch catch calls `rethrowUnlessTolerable(e)` (`lib/db-guard.ts`), never a bare `catch {}`, or ISR caches a hollow page until the next sync. Only genuinely optional data (avatars, rivalry flags, lineups, live asides) may fall back to an empty state.
+- **Never read `cookies()`/`headers()` in a layout or anything a layout renders.** It silently opts every route out of ISR. Session chrome is a client island fed by `/api/session`. A page's revalidate window is capped by the shortest `next: { revalidate }` fetch in its render.
+- **Builds tolerate a DB outage on purpose** (a failed build would block the fix deploy); `.github/workflows/post-deploy-revalidate.yml` re-revalidates after each production deploy.
+- **Current week comes from `resolveCurrentWeek()`** (`lib/queries/matchups.ts`), never `max(matchups.week)`: the full schedule is pre-synced.
+- **No page triggers a live Sleeper call**; everything is served from Postgres. Sole exception: the players-page trending rail (1-hour fetch cache through `lib/sleeper.ts`).
+- Correctness over performance (12 users). Schema is forward-compatible; code builds only what is needed now.
 
-**Database (Postgres/Drizzle):**
-- Tables: `snake_case` plural (`franchises`, `matchups`, `draft_picks`, `sync_log`)
-- Columns: `snake_case` (`roster_id`, `points_scored`, `season_year`)
-- Foreign keys: `{referenced_table_singular}_id` (`franchise_id`, `season_id`)
-- Indexes: `idx_{table}_{columns}` (`idx_matchups_season_id`)
+## Sync
+- Three tiers: daily cron (players, settings), hourly cron (transactions, rosters), and a client 30s poller hitting `/api/live-scores` during game windows.
+- Every sync endpoint: verify the Vercel `CRON_SECRET` header; call Sleeper only via `lib/sleeper.ts`; Zod-validate; write in a transaction (atomic per data type, so a failed transaction sync cannot corrupt rosters); log to `sync_log` (status, row counts, duration, errors); on success or partial success call `revalidateSite()` and never let a revalidation failure fail the sync; return an HTTP status.
+- Each data type tracks its own last-successful-sync timestamp.
+- The hourly sync throttles in the offseason (`shouldSkipHourlySync`, `lib/sync/hourly.ts`): under 6 hours since the last success logs a `skipped` row and returns 200. It throttles rather than stops because dynasty trades happen year-round; the cron stays hourly.
 
-**Code (TypeScript/React):**
-- Files: `kebab-case` (`matchup-card.tsx`, `sync-daily.ts`, `sleeper.ts`)
-- React components: `PascalCase` (`MatchupCard`, `FranchisePage`, `ScorePoller`)
-- Functions/variables: `camelCase` (`getMatchups`, `seasonId`, `franchiseMapping`)
-- Types/interfaces: `PascalCase` (`Franchise`, `MatchupWeek`, `SleeperRoster`)
-- Constants: `UPPER_SNAKE_CASE` (`SLEEPER_BASE_URL`, `MAX_POLL_DURATION`)
-- Drizzle schema table variables: `camelCase`
+## Domain Rules
+- **Franchise identity:** the `roster_id -> user_id -> franchise` mapping is versioned per season and used almost everywhere. Franchise identity (name, branding) persists across ownership changes; franchise pages attribute the owner per season.
+- **Legacy chaining:** Sleeper's `previous_league_id` chains seasons; sync traverses it for history. Transactions require iterating all weeks of all seasons. Pre-Sleeper seasons come from the legacy import.
+- **Sleeper discipline:** `lib/sleeper.ts` is the ONLY code that touches the API. Stay under 1,000 calls/minute across all jobs. The ~5MB players endpoint is fetched once daily, never on demand. Store `user_id` as the stable identifier; resolve display names at render time.
 
-**API Routes:**
-- Route paths: `kebab-case` (`/api/sync-daily`, `/api/live-scores`)
-- Query parameters: `camelCase` (`?seasonId=2025&week=9`)
+## Conventions
+- DB: tables `snake_case` plural; columns `snake_case`; FKs `{table_singular}_id`; indexes `idx_{table}_{columns}`. Drizzle table variables `camelCase`.
+- Code: files `kebab-case`; components and types `PascalCase`; functions/variables `camelCase`; constants `UPPER_SNAKE_CASE`.
+- API: route paths `kebab-case`, query params `camelCase`. Responses are `{ data: T, syncedAt: string }` or `{ error: { message: string, code: string } }`; ISO 8601 dates, `camelCase` fields, explicit `null` (never `undefined`), Sleeper IDs as strings.
+- Drizzle for all DB access; no raw SQL outside migrations.
+- No `utils/` or `helpers/` grab-bags; put logic in `lib/` with descriptive filenames.
 
-## API Response Patterns
-```typescript
-// Success
-{ data: T, syncedAt: string }
+## Design Non-Negotiables
+Full reference: `docs/agent/design-system.md`. Tokens live in `app/globals.css`.
+- Dark-only "Command Center" theme: warm charcoal canvas, single gold accent. Use the tokens, never shadcn default colors, and install no other UI library.
+- No red/purple pairings anywhere (a league member has red/purple color blindness). Negative is warm rust `--accent-warm`, never red; positive is sage green.
+- Never convey information by color alone: every win/loss/up/down/live signal carries a W/L letter, a number beside the arrow, or a "LIVE" label.
+- Body text meets WCAG AA 4.5:1. `--text-muted` (~3.2:1) is decorative, disabled, or 24px+ only, never body copy.
+- Every numeral (scores, records, stats, ranks) is JetBrains Mono tabular; the only exception is a numeral inside a serif display sentence.
+- Every franchise identity renders through `FranchiseLogo` (`components/franchise-logo.tsx`): never hand-roll an initials chip, never derive codes with `.slice()`, and never put it inside a `<p>` (it renders a `div` and breaks hydration).
+- Snarky labels come from `lib/content.ts`, not hardcoded strings. Errors read calm ("We're showing the last available data"), never "Oops!"
+- The nav stays at five items [Hub, Teams, Records, Drafts, The Book]; The Book took the Players slot. Do not add a pill without removing one.
+- Cards over tables on mobile; no horizontal-scroll tables as the primary mobile pattern. Curate per view rather than dumping data.
+- No page transitions, scroll-triggered animation, or spinners on server-rendered pages; motion is for live data, and `prefers-reduced-motion` neutralizes it.
 
-// Error
-{ error: { message: string, code: string } }
-```
-- Dates in JSON: ISO 8601 strings
-- JSON field naming: `camelCase` (Drizzle handles snake_case <-> camelCase at DB boundary)
-- Nulls: explicit `null` (never `undefined`)
-- IDs: string type for Sleeper IDs (`user_id`, `roster_id`), matching Sleeper's format
+## Testing
+Full reference: `docs/agent/testing.md`.
+- No mocks. Features are proven against the running stack and real Postgres: Playwright for UI, real HTTP for APIs, `*.dbtest.ts` for DB logic. Unit tests only for pure functions, co-located as `*.test.ts`. A test that would pass with the feature deleted is worthless.
+- `POSTGRES_URL` points at the live Neon DB and the transfer quota is real: run targeted chromium-only specs, never the full suite.
+- A fresh worktree has no `.env.local`; copy it from the main checkout before running E2E.
 
-## Sync Job Pattern
-All sync functions follow this pattern:
-1. Verify `CRON_SECRET` header
-2. Call Sleeper API via `lib/sleeper.ts`
-3. Validate response with Zod schema
-4. Write to Postgres in a transaction (atomic per data type)
-5. Log result to `sync_log` (success/failure, row count, duration, errors)
-6. On success (including partial success), call `revalidateSite()` from `lib/revalidate.ts` so the ISR cache picks up the new data; never let a revalidation failure fail the sync
-7. Return HTTP status code
-
-The hourly sync throttles itself in the offseason (`shouldSkipHourlySync` in `lib/sync/hourly.ts`): out of season, a run whose last successful hourly sync is under 6 hours old logs a `skipped` row to `sync_log` and returns 200 without syncing. It throttles rather than stopping, because this is a dynasty league and trades, waivers and roster moves happen year-round. The cron itself stays hourly.
-
-## Domain-Specific Rules
-
-### Franchise Identity
-The `roster_id -> user_id -> franchise` mapping is versioned per season and used by nearly every feature. Franchise identity (team name, branding) persists across ownership changes. Each franchise page displays the owner attributed to each season year.
-
-### Legacy League Chaining
-Sleeper's `previous_league_id` field chains seasons. The sync layer traverses this chain to pull all historical data. Transactions require iterating all weeks across all seasons. Any seasons pre-dating Sleeper require manual data entry via the legacy import script.
-
-### Sleeper API Discipline
-- `lib/sleeper.ts` is the ONLY code that touches the external API
-- Stay under 1,000 API calls/minute across all sync jobs
-- Players endpoint (~5MB) fetched once daily; stored locally, never on demand
-- Store `user_id` as stable identifier; resolve display names at render time
-
-## Visual Design (Non-Negotiable)
-
-### Theme: "Command Center" -- Warm Charcoal & Gold (dark-only)
-The whole site renders on a warm charcoal canvas. There is no light theme in Phase 1; tokens are centralized so a future light mode is a re-point, not a rewrite. Mock vocabulary maps to tokens as: **ink** -> `--text-primary`, **muted** -> `--text-tertiary`, **dim** -> `--text-muted`, **accent** -> `--accent-gold`.
-
-| Token | Value | Role |
-|---|---|---|
-| `--canvas` | `#1A1613` | App / page / card background ("bg") |
-| `--surface` | `rgba(255,255,255,.045)` | Chips, search fields, tab bar (translucent) |
-| `--surface-muted` | `rgba(255,255,255,.07)` | Slightly raised surfaces, hover rows |
-| `--border` | `rgba(255,255,255,.08)` | Hairline borders |
-| `--border-strong` | `rgba(255,255,255,.14)` | Emphasized borders, active outlines |
-| `--divider` | `rgba(255,255,255,.05)` | Row separators (`border-divider`/`divide-divider`) |
-| `--text-primary` | `#F2EADC` | Primary text ("ink"): titles, key numbers |
-| `--text-secondary` | `#B8B0A0` | Body text (AA-safe on canvas) |
-| `--text-tertiary` | `#98917F` | Labels, kickers, metadata ("muted") |
-| `--text-muted` | `#6E6759` | "dim": DECORATIVE / disabled / large-text (24px+) ONLY -- fails AA (3.2:1) for body |
-| `--accent-green` | `#8FBF7F` | Positive: win, live dot, up-arrow ("positive") |
-| `--accent-green-light` | `rgba(143,191,127,.14)` | Green tint backgrounds |
-| `--accent-gold` | `#E2B858` | Brand: active nav, links, key numbers ("accent") |
-| `--accent-gold-light` | `rgba(226,184,88,.13)` | Accent-tint: active pill/row background |
-| `--accent-warm` | `#C97C6A` | Negative: loss, mercy-rule, down-arrow, doormat (rust, NOT red) |
-| `--accent-warm-light` | `rgba(201,124,106,.14)` | Warm tint backgrounds |
-
-Card gradient fill: `linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02))`. Card inner glows: gold blob top-left `rgba(226,184,88,.09)`, sage blob top-right `rgba(120,150,110,.06)`, both `pointer-events:none`.
-
-### Typography (three-font rule)
-- **Instrument Serif, italic (400)** -- display, page titles, wordmark, editorial asides. Classes: `.text-display` (40-56px), `.text-h1` (36-44px), `.text-h2` (28-32px). Bound to `font-serif` / `var(--font-serif)`. Minimal negative tracking (serif needs less than Geist did).
-- **Geist** -- all UI, labels, body, buttons. Weights 400/500/600/700/900. Classes: `.text-h3` (20-24px, 500), `.text-body-lg` (18px), `.text-body` (16px), `.text-body-sm` (14px), `.text-caption` (12px, 500, .06em, uppercase). This is the default `font-sans`.
-- **JetBrains Mono, tabular** -- EVERY numeral: scores, records, stats, ranks. Class `.text-stat` (700, `tabular-nums`) / `font-mono` / `var(--font-mono)`. Never render a score or stat in the serif or in Geist. One exception: a numeral inside a serif italic display sentence (the hub hero headline, the recap headline) stays in the serif; an upright mono figure dropped mid-sentence breaks the line.
-- **Kicker** (`.text-kicker`): 10-11px, weight 600, `letter-spacing:.18em`, uppercase, `--text-tertiary` -- the small eyebrow label above titles and card groups.
-- Tabular figures (`font-variant-numeric: tabular-nums`) on all `td`/`th` and every score/stat number.
-
-### Card & Surface Language
-- `.card-surface` -- the gradient fill + hairline `--border` + inset top highlight + drop shadow (`0 24px 60px rgba(0,0,0,.30)`), radius **14px** (`--radius`). This is the primary card.
-- `.card-glows` -- optional ambient gold + sage radial blobs; requires a positioned, clipped host (applied together with `.card-surface` on signature cards).
-- Radius scale: cards 14px; pills 999px; chips/fields ~10-11px. Derived tokens `--radius-sm..-4xl` scale off `--radius`.
-
-### Franchise Identity Display
-- Wherever a franchise is identified, render `FranchiseLogo` from `components/franchise-logo.tsx`. A bare letter code is never the primary identifier.
-- Never hand-roll a crest chip (a `brandingColor` square with the team's initials in it). That is `FranchiseLogo`'s monogram fallback, and it must come from the component so the fallback lives in exactly one place.
-- Sizes: `size={28}` in Book rows and list rows; **24px in compact grid columns**, which is both the floor (below 28px the monogram is pinned at 9px) and effectively the ceiling (the mobile pick'ems column is 40px wide); 20px in slip rails, hero stat chips and slate cards; 14px in "via" notes, decorative only.
-- `FranchiseLogo` renders a `div`, so it can never sit inside a `<p>`: the parser closes the paragraph early and React refuses to hydrate it. Wrap crest-plus-name lines in a `div` or a `span`. On the hub, use `components/hub/team-flag.tsx` (`TeamFlag` plus the `FlagTeam` shape) rather than writing that pairing again.
-- Pair every logo with visible text. Pass `decorative` (alt `""`) only when the franchise's full name is visible immediately adjacent; otherwise pass the name so the identity is announced. Both render paths announce the name when non-decorative: `alt` on the avatar `<img>`, `role="img"` plus `aria-label` on the monogram fallback, matching `PlayerHeadshot`'s monogram branch. The "pair every logo with visible text" rule still stands for sighted users; it is not a substitute for the accessible name.
-- The codes from `lib/team-acronym.ts` and the persisted `franchises.abbreviation` are a fallback and a compact secondary label, not a primary identifier. Do not derive a franchise code any other way; `.slice(0, n)` on a team name is not an abbreviation scheme.
-- Accepted exceptions, which stay letter codes or plain text: native `<option>` labels (an option cannot host an element), prose sentences, and cells whose value is a *pick* or an event rather than an identity (the pick'ems grid cell names the team a member picked, not the member).
-- Use `components/franchise-identity.tsx` when championship stars and owner attribution are wanted; it has no size below 32px, so compact sites use `FranchiseLogo` directly. Its `CREST_PX` map duplicates `franchise-logo.tsx`'s `sizeMap` by convention: any sizing work touches both.
-
-### Spacing (8px base unit)
-- All spacing from 8px multiples: 8, 16, 24, 32, 48, 64, 96, 128
-- Content max-width: 1200px centered on desktop
-- Mobile: single column, 16px horizontal padding
-- Generous whitespace: Apple-level breathing room
-
-### Semantic Indicators
-- **Positive (win, up, live):** sage green `#8FBF7F`, ALWAYS paired with a text label or glyph -- "W", the number beside a ▲, or the "LIVE" label.
-- **Negative (loss, down, mercy-rule, doormat):** warm rust `#C97C6A`, ALWAYS paired with a text label or glyph -- "L", the number beside a ▼.
-- **Wins:** bold type weight + "W" label; **Losses:** regular/light weight + "L" label.
-- **Streaks/Records:** gold accent for positive superlatives; bold type for all record callouts.
-- **Live/Active:** green dot with an expanding pulse ring (`@keyframes live-pulse`: scale 1→2.4, opacity .75→0, 1.6s) + "LIVE" text label.
-- **Achievements/Awards:** `--accent-gold` + gold-tint (`--accent-gold-light`) card background.
-- **Negative Superlatives ("Sting"):** `--accent-warm` + warm-tint (`--accent-warm-light`) card background + snarky label.
-- **Snarky Labels:** Defined in a centralized content system (TypeScript constant), not hardcoded per component. Examples: "Point Machine", "Iron Curtain", "League Doormat", "Glass Cannon", "Coaching Malpractice"
-
-### Accessibility (Non-Negotiable)
-- No information conveyed by color alone; every color signal has a text label, glyph, or typographic treatment (positive/negative are green/rust but ALWAYS carry a W/L letter or a number beside the arrow)
-- No red/purple pairings anywhere (a league member has red/purple color blindness); the negative signal is warm **rust**, never red, and the positive is sage green
-- All body text meets WCAG 2.1 AA contrast (4.5:1); large text (24px+) meets 3:1. `--text-primary`/`-secondary`/`-tertiary` all clear 4.5:1 on canvas
-- `--text-muted` (dim `#6E6759`) is ~3.2:1 on canvas: DECORATIVE, disabled, or large-text (24px+) use ONLY -- never body copy
-- All color-coded badges include text labels ("W", "L", "CHAMP", "STREAK")
-- Cards over tables on mobile when >3-4 columns
-
-### Site Voice & Personality
-- The site has a confident, snarky editorial voice; think "the friend in the group chat who always has the receipts"
-- Superlative labels poke fun: "League Doormat", "Glass Cannon", "Coaching Malpractice"
-- Bad stats and losses are highlighted with the same design care as wins; the emotional range is part of the experience
-- Error messages are calm and confident, never panicked: "Something went wrong. We're showing the last available data." NOT "Oops!"
-- 404 page can be snarky: "This page doesn't exist. Maybe it was traded away."
-
-### Design Principles
-- **Trash talk first:** every design decision filters through "does this give someone something to brag about or roast someone with?"
-- **Speed-to-stat:** minimize taps/clicks between question and answer; never more than two taps from any stat
-- **Screenshot-worthy by default:** cards, awards, and stat callouts are self-contained visual moments; a screenshot should make sense in a group chat with no explanation
-- **The site knows what season it is:** hub content shifts automatically based on the football calendar (preseason, regular season, playoffs, offseason)
-- **Cards over tables, always on mobile:** data lives in cards on hub and mobile; tables reserved for deep-dive pages on larger screens
-- **Bold typography as the hero:** large, confident type for key stats and records
-- **Curated over comprehensive:** the hub surfaces 4-6 compelling things, not a data dump
-- Do NOT use shadcn/ui default theme colors; everything redefined to match HMLML brand
-- Do NOT install additional UI libraries alongside shadcn/ui
-
-### Navigation Structure
-- **Desktop topbar (64px):** serif "HMLML" wordmark (left) · centered pill nav [Hub, Teams, Records, Drafts, The Book] (active = accent-tint background + gold text) · right cluster: inline search field (~230px, ⌘K hint), a live-games pill (pulsing green dot + "N GAMES LIVE"), and the current user's dynasty crest.
-- **Mobile:** slim top header (56px: wordmark · right cluster of compact live pill, search icon trigger, and dynasty crest) plus a **fixed bottom dock** for thumb reach: a tab-bar-only 5-icon nav [Hub, Teams, Records, Drafts, The Book] (icon + 9px label, active = accent-tint + gold), ~80px + safe-area. The dock labels The Book "Book" (`dockLabel` in `components/nav/nav-pills.tsx`); "The Book" does not fit at 9px in a fifth of the screen, and the full name stays as the link's aria-label.
-- **The nav stays at five items; The Book took the Players slot** (Blake's call, 2026-08-29). `/players` is fully live and reachable by search (its primary door), the footer's Players link (`components/site-footer.tsx`), every PlayerLink on the site, and the "All players in the league" entry on team roster pages. Do not re-add a Players pill without removing something else. No hamburger; search opens a full-screen dialog from the header icon (same shared search UI Sleeper-backed as desktop, just a different trigger). The header stays pinned at all times; only the bottom dock hides on scroll-down and reveals on scroll-up (`components/nav/scroll-chrome.tsx`), always shown within 8px of the top to absorb iOS rubber-band. Bottom clearance for scrollable content lives on the footer (`pb-[calc(env(safe-area-inset-bottom)+96px)] lg:pb-8` on `SiteFooter`), not on `app/layout.tsx`'s `<main>`.
-- **Live Pill** (replaces the old Seasonal Pill Badge): shows live-game count during game windows, otherwise the seasonal state ("Preseason", "Week 9", "Playoffs", "Offseason").
-- **Matchups are NOT a nav item;** live matchup cards surface on the hub during game windows; tapping goes to matchup detail pages.
-
-### Seasonally-Aware Hub
-The homepage automatically renders different content based on the football calendar. State determined by the NFL state endpoint (`/v1/state/nfl`).
-
-| State | Top Banner | Content Below |
-|---|---|---|
-| **Preseason** | Champion Banner (green gradient, trophy) | Draft Countdown > Team Awards (2-col) > Player Awards (2-col) > Wall of Shame (full-width) > Draft Order |
-| **Regular Season** | Week Banner (week number, game status) | Live Matchups (game windows) OR Standings Snapshot > Weekly Superlatives ("This Week's Damage") > Power Rankings |
-| **Between Weeks** (Tue week roll to Thu kickoff) | Slate hero + kickoff countdown | **Post-week recap first, until the Thursday morning cron** (06:00 UTC daily sync, `isRecapWindowOpen` in `lib/hub/week-recap.ts`; Thursday daytime is the slate-only view) (`components/hub/week-recap-section.tsx`, data from `lib/queries/week-recap.ts`: finals, four team superlatives, league-wide Team of the Week optimal lineup, top started performers, dud, Left On The Bench) > Game of the Week > Rest of the Slate > Power Pulse > Smack Feed. The recap sits in the main column so phones see it; it renders only when every prior-week matchup is `complete`. |
-| **Playoffs** | Week Banner (round name variant) | Playoff Bracket > Matchup Cards > Elimination Alerts |
-| **Offseason** | Champion Banner (new champion) | Offseason Recap > Transaction Activity > All-Time Records Updates |
-
-### Component Tiers
-- **Tier 1 (Signature, built from scratch):** Champion Banner, Week Banner, Draft Countdown, Player Award Card, Team Award Card, Sting Card, Live Matchup Card, Weekly Superlative Card, Playoff Bracket Card
-- **Tier 2 (Page-level):** Franchise Header, Rivalry Card, Season Timeline Card, Player Search Result, Roster Row
-- **Tier 3 (Utility, shadcn/ui restyled):** Table, Card, Tabs, Badge, Nav (topbar pills + mobile dock), Select, Input, Search Command, Section Header (kicker), Sync Timestamp, Live Pill, Stat Callout
-
-### Animation Philosophy
-- No page transitions, no scroll-triggered animations, no loading spinners on server-rendered pages
-- **Allowed:** live score pulse (`@keyframes live-pulse`, CSS), draft countdown tick (opacity transition), card hover border (150ms), tab content fade (100ms), scroll-reveal on first paint, hide-on-scroll mobile bottom dock (`components/nav/scroll-chrome.tsx`, CSS transform; the top header stays pinned). The `prefers-reduced-motion` block neutralizes all of these.
-- Movement is reserved for live data where it conveys real information
-
-## Acceptance Testing Patterns
-
-### Core Rule: No Mocks, Prove It Works
-No feature is complete until tested against real running code. Not mocked. Not stubbed. Actually running.
-
-### API Acceptance Tests
-- Every API endpoint tested via real HTTP requests against the running Next.js dev server connected to a real Postgres database
-- Seed test data, make the request, assert on actual database state afterward
-
-### UI Acceptance Tests
-- Every user-facing feature tested via Playwright against the full running stack
-- Browser clicks real buttons, fills real forms, submits, verifies result on screen AND in database
-
-### What Is Explicitly Banned
-- Tests where every dependency is mocked
-- Frontend component tests that mock the API client
-- "Integration" tests that use in-memory databases
-- Test suites that test mock wiring instead of behavior
-- Any test that would still pass if the feature was completely broken
-
-### Where Real Unit Tests Are Allowed
-Pure utility functions with no dependencies to mock. Co-located as `*.test.ts` next to source.
-
-### Running E2E Locally or in a Worktree
-`.env.local` is gitignored and does not follow a `git worktree`: a fresh worktree has no `POSTGRES_URL`. Copy it in before running Playwright there, e.g. `cp /path/to/main/checkout/.env.local .`. `e2e/global-setup.ts` (`lib/e2e-preflight.ts`) fails the whole run fast with that exact fix if you forget, rather than letting specs silently pass or skip against a broken environment. Set `POSTGRES_DRIVER=pg` for a local Postgres; the live Neon database (the default `.env.local` target) works either way. Run targeted, chromium-only specs, never the full suite: `POSTGRES_URL` points at the live database and the transfer quota is real.
-
-Four specs run against dedicated dev servers pinned to a forced `NFL_STATE_OVERRIDE` instead of the shared default server, via three extra Playwright projects (`hub-preseason`, `hub-in-season`, `hub-post-week`) declared in `playwright.config.ts`: `e2e/hub-preseason.spec.ts` (`NFL_STATE_OVERRIDE=pre:1`), `e2e/hub-between-weeks.spec.ts` and `e2e/book-hub.spec.ts` (`NFL_STATE_OVERRIDE=regular:next:force`), and `e2e/hub-post-week.spec.ts` (`NFL_STATE_OVERRIDE=regular:next:recap`, the post-week recap leading the between-weeks hub). The `next` week token resolves per request to the earliest week whose matchups are all still `scheduled` (`lib/queries/nfl-state.ts`), so the pinned servers track the live season instead of drifting when a hard-coded week goes final; `:recap` holds the recap window open on any weekday, though the recap still needs every prior-week matchup complete, so run the post-week project between weeks (not Thursday night through Monday night). Every extra dev server needs its `NEXT_DIST_DIR` listed in `.gitignore` and `eslint.config.mjs`: Tailwind v4 scans every non-ignored file for class candidates, and an un-ignored dist dir feeds it garbled bytes from compiled chunks, which surfaces as a "Parsing CSS source code failed" 500 on every page. They must be `next dev`, not `next build && next start`: the hub pages declare `revalidate = 3600`, so their HTML is prerendered at build time with whatever env the build saw, and a start-time override would be ignored until that ISR entry expired. `next dev` re-renders per request, so the override takes effect immediately, still against the real Postgres. Run them with `npx playwright test e2e/hub-preseason.spec.ts --project=hub-preseason` (etc.).
-
-### Agent Review Protocol (Adversarial)
-After tests are written and run, a separate agent team reviews with extreme prejudice:
-1. Do the tests actually exercise the acceptance criteria, line by line?
-2. Could these tests pass if the feature was deleted? (If yes, they are worthless)
-3. Are there mocks hiding anywhere? (If yes, reject)
-4. Do the tests prove data actually persisted/changed/flowed through the real system?
-
-### Pre-Completion Checklist
-Before any task is complete, all AI agents MUST:
-1. Run linting and type checking
-2. Co-locate unit tests with source; E2E tests in `e2e/`
-3. Test every feature against real running code (no mocks)
-4. Use Drizzle ORM for all database access (no raw SQL outside migrations)
-5. Validate all Sleeper API responses with Zod before writing to the database
-6. Follow the sync job pattern for all sync endpoints
-7. Log every sync execution to `sync_log`
-8. Use React Server Components by default; `"use client"` only for live score poller
-9. Return structured API responses using the defined success/error formats
-
-`npm run lint` runs `eslint .` against the flat config at `eslint.config.mjs` (ESLint 9; `next lint` was removed in Next.js 16). `docs/**` is excluded from linting since it holds vendored design-handoff bundles, not project source. Warnings are reported but do not fail the command today; only errors do.
-
-## Anti-Patterns to Avoid
-- Creating a `utils/` or `helpers/` grab-bag directory; put logic in `lib/` with descriptive filenames
-- Using `"use client"` on pages or layouts
-- Calling Sleeper API directly from page components; always go through `lib/sleeper.ts`
-- Mixing naming conventions
-- Installing additional UI component libraries alongside shadcn/ui
-- Writing sync functions that don't log to `sync_log`
-- Generic sports-template aesthetics: neon accents, harsh saturated colors, aggressive/rainbow gradients, chrome/glossy effects. (The warm-charcoal dark canvas with a single gold accent and serif display type is the intended look; the ban is on the loud "gamer" sports skin, not on dark backgrounds.)
-- Showing all data at once instead of curating what matters per view
-- Horizontal scroll tables as primary mobile pattern; prefer card layouts
-- Hand-rolling a franchise crest chip (a `brandingColor` square with initials) instead of using `FranchiseLogo`; see Franchise Identity Display
+## Before Calling a Task Done
+1. `npm run lint` and `npx tsc --noEmit` pass.
+2. Behavior is tested against real running code, unit tests co-located, E2E in `e2e/`.
+3. New pages follow the ISR and `rethrowUnlessTolerable` rules; new sync endpoints follow the sync pattern and log to `sync_log`.
