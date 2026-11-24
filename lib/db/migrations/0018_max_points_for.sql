@@ -1,0 +1,1 @@
+ALTER TABLE "franchise_seasons" ADD COLUMN "max_points_for" real;

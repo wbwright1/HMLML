@@ -2,9 +2,11 @@ import { db } from "@/lib/db";
 import {
   franchises,
   franchiseSeasons,
+  playoffBracketMatches,
   seasons,
 } from "@/lib/db/schema";
-import { eq, desc, sql } from "drizzle-orm";
+import { and, eq, desc, sql } from "drizzle-orm";
+import { finishFromWinnersBracket, rookieDraftOrder } from "@/lib/rookie-draft-order";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -70,6 +72,7 @@ export async function getPreseasonAwards(
         ties: franchiseSeasons.ties,
         pointsScored: franchiseSeasons.pointsScored,
         pointsAgainst: franchiseSeasons.pointsAgainst,
+        maxPointsFor: franchiseSeasons.maxPointsFor,
         standingsFinish: franchiseSeasons.standingsFinish,
         playoffResult: franchiseSeasons.playoffResult,
       })
@@ -326,20 +329,51 @@ export async function getPreseasonAwards(
       // Sleeper API may be unavailable
     }
 
-    // Fallback: derive from standings if Sleeper draft order not available
+    // Fallback when Sleeper has no draft order yet: the league rule
+    // (lib/rookie-draft-order.ts). Non-playoff teams by lowest regular-season
+    // Max PF, then the 5th/6th-place finishers by lowest Max PF, then 4th,
+    // 3rd, 2nd, and the champion last. Results the bracket does not have yet
+    // show as TBD.
     if (draftOrder.length === 0) {
-      draftOrder = [...seasonStandings]
-        .sort((a, b) => {
-          const aPlayoff = a.playoffResult != null && a.playoffResult !== "consolation" && a.playoffResult !== "toilet_bowl";
-          const bPlayoff = b.playoffResult != null && b.playoffResult !== "consolation" && b.playoffResult !== "toilet_bowl";
-          if (aPlayoff !== bPlayoff) return aPlayoff ? 1 : -1;
-          return (b.standingsFinish ?? 99) - (a.standingsFinish ?? 99);
+      const bracket = await db
+        .select({
+          round: playoffBracketMatches.round,
+          placement: playoffBracketMatches.placement,
+          team1RosterId: playoffBracketMatches.team1RosterId,
+          team2RosterId: playoffBracketMatches.team2RosterId,
+          advancingRosterId: playoffBracketMatches.advancingRosterId,
+          eliminatedRosterId: playoffBracketMatches.eliminatedRosterId,
         })
-        .map((t, i) => ({
-          rank: i + 1,
-          franchiseName: t.franchiseName,
-          record: `${t.wins ?? 0}-${t.losses ?? 0}${(t.ties ?? 0) > 0 ? `-${t.ties}` : ""}`,
-        }));
+        .from(playoffBracketMatches)
+        .where(
+          and(
+            eq(playoffBracketMatches.seasonId, seasonId),
+            eq(playoffBracketMatches.bracketType, "winners"),
+          ),
+        );
+      const rosterToId = new Map(seasonStandings.map((t) => [Number(t.rosterId), t.franchiseId]));
+      const byId = new Map(seasonStandings.map((t) => [t.franchiseId, t]));
+      const finish = finishFromWinnersBracket(bracket, rosterToId);
+      const slots = rookieDraftOrder(
+        seasonStandings.map((t) => ({
+          franchiseId: t.franchiseId,
+          wins: t.wins ?? 0,
+          losses: t.losses ?? 0,
+          ties: t.ties ?? 0,
+          maxPointsFor: t.maxPointsFor ?? null,
+        })),
+        finish,
+      );
+      draftOrder = slots.map((slot) => {
+        const t = slot.franchiseId ? byId.get(slot.franchiseId) : undefined;
+        return t
+          ? {
+              rank: slot.pick,
+              franchiseName: t.franchiseName,
+              record: `${t.wins ?? 0}-${t.losses ?? 0}${(t.ties ?? 0) > 0 ? `-${t.ties}` : ""}`,
+            }
+          : { rank: slot.pick, franchiseName: "TBD", record: "" };
+      });
     }
 
     return {

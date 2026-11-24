@@ -49,6 +49,7 @@ import { repriceBookLines } from "@/lib/sync/book-lines";
 import { generateOrRepriceBookProps } from "@/lib/sync/book-props";
 import { bookWeekFor } from "@/lib/queries/book";
 import { isNflSeasonUnderway } from "@/lib/season-segment";
+import { maxPointsForOf } from "@/lib/sync/max-points-for";
 
 // Shape of the per-season settings blob stored in seasons.settings_json.
 interface SeasonSettingsJson {
@@ -260,6 +261,7 @@ async function syncRostersAndPicks(
         const fptsAgainst = roster.settings.fpts_against ?? 0;
         const fptsAgainstDecimal = roster.settings.fpts_against_decimal ?? 0;
         const pointsAgainst = fptsAgainst + fptsAgainstDecimal / 100;
+        const maxPointsFor = maxPointsForOf(roster.settings);
 
         const divisionNumber = roster.settings.division ?? null;
         const divisionName =
@@ -299,6 +301,7 @@ async function syncRostersAndPicks(
               ties: roster.settings.ties ?? 0,
               pointsScored,
               pointsAgainst,
+              maxPointsFor,
               updatedAt: new Date(),
             })
             .where(

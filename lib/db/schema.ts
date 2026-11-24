@@ -97,6 +97,9 @@ export const franchiseSeasons = pgTable(
     ties: integer("ties").default(0),
     pointsScored: real("points_scored").default(0),
     pointsAgainst: real("points_against").default(0),
+    // Sleeper max potential points for (`ppts`), regular season only. Drives
+    // the rookie draft order (lib/rookie-draft-order.ts). Null until synced.
+    maxPointsFor: real("max_points_for"),
     standingsFinish: integer("standings_finish"),
     playoffResult: text("playoff_result"), // 'champion' | 'runner_up' | 'made_playoffs' | 'consolation' | 'toilet_bowl' | null. 'toilet_bowl' = either participant of the losers-bracket final (both finalists carry it; not unique per season); 'consolation' = any other losers-bracket team.
     isLegacyEra: boolean("is_legacy_era").default(false),
