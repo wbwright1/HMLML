@@ -28,10 +28,28 @@ function Row({
   return (
     <div className="flex items-center justify-between gap-4 py-2">
       <span className="text-body-sm text-text-tertiary">{label}</span>
-      <span className={`font-mono tabular-nums font-medium ${valueClass}`}>
-        {value}
-      </span>
+      <span className={`text-body-sm font-medium ${valueClass}`}>{value}</span>
     </div>
+  );
+}
+
+/** "52.3 · 2024 Wk 5": numerals in mono, the "Wk" letters in Geist. */
+function WeekValue({
+  points,
+  seasonYear,
+  week,
+}: {
+  points: number;
+  seasonYear: number;
+  week: number;
+}) {
+  return (
+    <>
+      <span className="font-mono tabular-nums">{points.toFixed(1)}</span>
+      {" · "}
+      <span className="font-mono tabular-nums">{seasonYear}</span> Wk{" "}
+      <span className="font-mono tabular-nums">{week}</span>
+    </>
   );
 }
 
@@ -45,7 +63,7 @@ export function OwnershipFacts({ facts, franchiseHistory }: OwnershipFactsProps)
 
   return (
     <div className="card-surface p-4 sm:p-5">
-      <p className="text-kicker text-text-tertiary mb-1">Ownership Ledger</p>
+      <p className="text-kicker text-text-tertiary mb-1">Ownership ledger</p>
       {franchiseHistory.length > 0 && (
         <ul className="flex flex-wrap gap-3 py-2">
           {franchiseHistory.map((stint) => {
@@ -57,7 +75,7 @@ export function OwnershipFacts({ facts, franchiseHistory }: OwnershipFactsProps)
               <li key={`${stint.franchiseId}-${stint.firstSeasonYear}`}>
                 <Link
                   href={`/teams/${stint.slug}`}
-                  className="flex items-center gap-2 rounded-full border border-border bg-surface py-1 pl-1 pr-3 transition-colors hover:border-border-strong"
+                  className="flex min-h-11 items-center gap-2 rounded-full border border-border bg-surface py-1 pl-1.5 pr-3 transition-[scale,border-color] duration-150 hover:border-border-strong active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
                   title={`${stint.name} (${yearRange})`}
                 >
                   <FranchiseLogo
@@ -82,15 +100,15 @@ export function OwnershipFacts({ facts, franchiseHistory }: OwnershipFactsProps)
       <div className="divide-y divide-divider">
         {facts.careerBestWeek && (
           <Row
-            label="Best Week"
-            value={`${facts.careerBestWeek.points.toFixed(1)} · ${facts.careerBestWeek.seasonYear} Wk ${facts.careerBestWeek.week}`}
+            label="Best week"
+            value={<WeekValue {...facts.careerBestWeek} />}
             tone="green"
           />
         )}
         {facts.careerWorstStartedWeek && (
           <Row
-            label="Worst Started Week"
-            value={`${facts.careerWorstStartedWeek.points.toFixed(1)} · ${facts.careerWorstStartedWeek.seasonYear} Wk ${facts.careerWorstStartedWeek.week}`}
+            label="Worst started week"
+            value={<WeekValue {...facts.careerWorstStartedWeek} />}
             tone="warm"
           />
         )}

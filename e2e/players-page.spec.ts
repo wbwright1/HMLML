@@ -247,6 +247,93 @@ test.describe("Players page", () => {
     }
   });
 
+  test("position chips are 44px Geist targets and the search field carries a Search icon", async ({
+    page,
+  }) => {
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    await page.goto("/players");
+
+    const chips = page.getByRole("tablist", { name: "Position filter" }).getByRole("tab");
+    await expect(chips).toHaveCount(5);
+    await expect(chips.first()).toHaveText("All");
+    for (let i = 0; i < 5; i++) {
+      const box = await chips.nth(i).boundingBox();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+      const family = await chips.nth(i).evaluate((el) => getComputedStyle(el).fontFamily);
+      expect(family.toLowerCase()).not.toContain("mono");
+    }
+
+    const search = page.getByRole("searchbox");
+    const searchBox = await search.boundingBox();
+    expect(searchBox!.height).toBeGreaterThanOrEqual(44);
+    await expect(search.locator("xpath=..").locator("svg.lucide-search")).toHaveCount(1);
+  });
+
+  test("renders 50 rows at a time and 'Load 50 more' reveals the next page", async ({
+    page,
+  }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await page.goto("/players");
+
+    const rows = page.locator("table tbody tr");
+    await expect(rows.first()).toBeVisible();
+
+    // Widen to every player so there is more than one page to show.
+    await page.getByLabel("Roster").click();
+    await page.getByRole("option", { name: "All players" }).click();
+
+    const total = Number(
+      (await page.getByText(/^Showing \d+ of \d+/).textContent())!.match(/of (\d+)/)![1]
+    );
+    test.skip(total <= 50, `only ${total} players in this environment; nothing to page`);
+
+    await expect(rows).toHaveCount(50);
+    const more = page.getByRole("button", { name: /^Load \d+ more$/ });
+    await expect(more).toBeVisible();
+    await more.click();
+    await expect(rows).toHaveCount(Math.min(100, total));
+
+    // Changing a filter starts back at page one.
+    await page.getByRole("tab", { name: "All", exact: true }).click();
+    await page.getByRole("tab", { name: "WR", exact: true }).click();
+    expect(await rows.count()).toBeLessThanOrEqual(50);
+  });
+
+  test("a filter with no results shows the empty state, and it clears back to rows", async ({
+    page,
+  }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await page.goto("/players");
+    const rows = page.locator("table tbody tr");
+    await expect(rows.first()).toBeVisible();
+
+    await page.getByRole("searchbox").fill("zzqxnotaplayer");
+    await expect(page.getByText("No players found")).toBeVisible();
+    await expect(page.locator("table")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Show all players" }).click();
+    await expect(page.getByRole("searchbox")).toHaveValue("");
+    await expect(rows.first()).toBeVisible();
+  });
+
+  test("page head is the upright title, a count, and a sentence-case 'Last updated' line", async ({
+    page,
+  }) => {
+    await page.setViewportSize(DESKTOP_VIEWPORT);
+    await page.goto("/players");
+
+    const h1 = page.getByRole("heading", { level: 1 });
+    await expect(h1).toHaveText("Players");
+    expect(await h1.evaluate((el) => getComputedStyle(el).fontStyle)).toBe("normal");
+
+    const updated = page.locator("main").getByText(/Last updated|Data may be outdated/).first();
+    await expect(updated).toBeVisible();
+    expect(await updated.evaluate((el) => getComputedStyle(el).textTransform)).toBe("none");
+    await expect(
+      page.locator("main").locator("svg.lucide-clock").first()
+    ).toBeVisible();
+  });
+
   test.describe("mobile (390px): horizontally-scrolling table, no card fallback", () => {
     test("the table is visible and there is no separate mobile card stack", async ({
       page,

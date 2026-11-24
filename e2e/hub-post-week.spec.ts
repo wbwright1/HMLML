@@ -6,8 +6,8 @@ import { isRecapWindowOpen } from "../lib/hub/week-recap";
 //
 // The Tuesday-morning week roll through Thursday kickoff: the prior week is
 // fully complete, the next slate is set, nothing has kicked off. The hub must
-// LEAD with last week's recap (finals, superlatives, Team of the Week, top
-// performers, dud, bench blunder) in the main column, so a phone sees it
+// LEAD with last week's recap (the Week N wrap tiles, including the dud and
+// the bench blunder, then Final scores and Team of the week) in the main column, so a phone sees it
 // rather than jumping straight to next week's slate.
 //
 // Runs under the "hub-post-week" Playwright project (playwright.config.ts),
@@ -21,7 +21,7 @@ import { isRecapWindowOpen } from "../lib/hub/week-recap";
 // instant and absent after it. Both branches assert.
 // ============================================================================
 
-/** The hero kicker's schedule clause: the kickoff day, or the slate fallback. */
+/** The slate meta's schedule clause: the kickoff day, or the slate fallback. */
 const HERO_SCHEDULE_TAIL =
   /KICKOFF (MONDAY|TUESDAY|WEDNESDAY|THURSDAY|FRIDAY|SATURDAY|SUNDAY|TODAY)|THE SLATE IS SET/i;
 
@@ -43,35 +43,41 @@ test.describe("Post-week recap (between weeks)", () => {
     if (!open) {
       // Thursday morning cron has passed: the plain slate hub, with the
       // rail fallbacks, and NO recap. Assert that state and stop.
-      await expect(page.getByTestId("hero-kicker")).toContainText(HERO_SCHEDULE_TAIL);
+      await expect(page.getByTestId("slate-meta")).toContainText(HERO_SCHEDULE_TAIL);
       await expect(page.getByTestId("week-recap")).toHaveCount(0);
-      await expect(page.locator("main")).toContainText(/IN THE BOOKS/);
+      await expect(page.locator("main")).toContainText(/Week \d+ wrap/);
       test.skip(true, "recap window closed (post Thursday cron); slate-only state asserted");
     }
   });
 
   test("the recap block renders in the main column above the slate", async ({ page }) => {
     const main = page.locator("main");
-    await expect(page.getByTestId("hero-kicker")).toContainText(HERO_SCHEDULE_TAIL);
+    await expect(page.getByTestId("slate-meta")).toContainText(HERO_SCHEDULE_TAIL);
     const recap = page.getByTestId("week-recap");
     await expect(recap).toBeVisible();
-    // Recap precedes Game of the Week in document order. Kickers render
-    // through CSS `uppercase`, so innerText carries the rendered casing.
-    const text = (await main.innerText()).toUpperCase();
-    const recapAt = text.indexOf("IN THE BOOKS");
+    // Recap precedes Game of the week in document order (labels are
+    // sentence case now, no CSS uppercase).
+    const text = await main.innerText();
+    const recapAt = text.search(/Week \d+ wrap/);
     expect(recapAt).toBeGreaterThan(-1);
-    expect(recapAt).toBeLessThan(text.indexOf("GAME OF THE WEEK"));
+    expect(recapAt).toBeLessThan(text.indexOf("Game of the week"));
   });
 
-  test("the headline is a serif, number-backed claim with no em-dash", async ({ page }) => {
-    const h = page.getByTestId("recap-headline");
-    await expect(h).toBeVisible();
-    const txt = (await h.innerText()).trim();
-    expect(txt.length).toBeGreaterThan(10);
-    expect(txt).toMatch(/\d+\.\d/);
-    expect(txt).not.toContain("—");
-    const fontStyle = await h.evaluate((el) => getComputedStyle(el).fontStyle);
-    expect(fontStyle).toBe("italic");
+  test("the wrap is nickname stat tiles only: no serif headline, no No-show tile", async ({ page }) => {
+    // The serif sentence headline restated the hero, and the hero owns the
+    // week's low score, so both are gone (UI/UX pass, 2026-11-24).
+    await expect(page.getByTestId("recap-headline")).toHaveCount(0);
+    const tiles = page.getByTestId("recap-tile");
+    expect(await tiles.count()).toBeGreaterThanOrEqual(3);
+    const labels = (await tiles.locator("p.text-kicker").allInnerTexts()).map((t) => t.trim());
+    expect(labels).not.toContain("No-show");
+    for (const l of labels) {
+      expect(l).toMatch(/^(Boom game|Mercy rule|Photo finish|Dud of the week|Coaching malpractice)$/);
+    }
+    for (const tile of await tiles.all()) {
+      const value = tile.locator("p.text-stat");
+      await expect(value).toHaveText(/^\+?\d+\.\d$/);
+    }
   });
 
   // The hero headline leads with LAST week while the recap sits under it
@@ -114,26 +120,28 @@ test.describe("Post-week recap (between weeks)", () => {
     }
   });
 
-  test("the recap headline and the Game of the Week blurb never restate the hero's number", async ({ page }) => {
-    // The hero owns its fact (lib/hub/hero-claim.ts): the two lines right
-    // under it state a different true fact instead of echoing its figure.
+  test("the hero's fact line and the Game of the week blurb never restate the headline's number", async ({ page }) => {
+    // The hero owns its fact (lib/hub/hero-claim.ts): the line under it is
+    // one plain companion fact, and the blurb states a different true fact.
     const hero = (await page.getByTestId("hero-headline").innerText()).trim();
     const heroNumbers = hero.match(/\d+\.\d/g) ?? [];
-    const recapHeadline = (await page.getByTestId("recap-headline").innerText()).trim();
-    expect(recapHeadline.length).toBeGreaterThan(0);
+    const dek = (await page.getByTestId("hero-dek").innerText()).trim();
+    expect(dek.length).toBeGreaterThan(0);
     const blurb = page.getByTestId("gotw-blurb");
     const blurbText = (await blurb.count()) > 0 ? (await blurb.innerText()).trim() : "";
     for (const n of heroNumbers) {
       const printed = new RegExp(`(^|[^\\d.])${n.replace(".", "\\.")}(?![\\d])`);
-      expect(recapHeadline, `recap headline repeats ${n}`).not.toMatch(printed);
-      expect(blurbText, `Game of the Week blurb repeats ${n}`).not.toMatch(printed);
+      expect(dek, `hero fact line repeats ${n}`).not.toMatch(printed);
+      expect(blurbText, `Game of the week blurb repeats ${n}`).not.toMatch(printed);
     }
   });
 
-  test("every completed pairing is listed with a W and an L and two scores", async ({ page }) => {
+  test("every completed pairing is one 44px link row with a W, an L and two scores", async ({ page }) => {
     const rows = page.getByTestId("recap-result");
     await expect(rows).toHaveCount(6);
     for (const row of await rows.all()) {
+      await expect(row).toHaveAttribute("href", /^\/matchups\/\d{4}\/\d+\/\d+$/);
+      expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       const t = await row.innerText();
       expect(t).toMatch(/\bW\b/);
       expect(t).toMatch(/\bL\b/);
@@ -153,44 +161,41 @@ test.describe("Post-week recap (between weeks)", () => {
       const pts = t.match(/(\d+\.\d)\s*$/);
       expect(pts).not.toBeNull();
       sum += Number(pts![1]);
-      // The player link's href (/players/<id>) is the identity; link text is
-      // not, since a headshot monogram or franchise name can share a line.
-      hrefs.push((await slot.locator('a[href^="/players/"]').first().getAttribute("href")) ?? "");
+      // The row IS the player link; its href (/players/<id>) is the
+      // identity, since a franchise name can share a line.
+      hrefs.push(
+        (await slot.locator("xpath=ancestor::a[1]").getAttribute("href")) ?? ""
+      );
     }
-    expect(hrefs.every((h) => h.length > 0)).toBe(true);
+    expect(hrefs.every((h) => /^\/players\//.test(h))).toBe(true);
     expect(new Set(hrefs).size).toBe(10);
-    const total = await page
-      .getByText("Best Possible Lineup")
-      .locator("xpath=following-sibling::p")
-      .innerText();
+    const total = await page.getByTestId("totw-total").locator("span.text-stat").innerText();
     expect(Math.abs(Number(total) - sum)).toBeLessThan(0.15);
   });
 
-  test("top performers are started players in descending order", async ({ page }) => {
-    const rows = page.getByTestId("recap-top");
-    await expect(rows).toHaveCount(6);
-    const pts: number[] = [];
-    for (const row of await rows.all()) {
-      const m = (await row.innerText()).match(/(\d+\.\d)\s*$/);
-      expect(m).not.toBeNull();
-      pts.push(Number(m![1]));
-    }
-    for (let i = 1; i < pts.length; i++) expect(pts[i]).toBeLessThanOrEqual(pts[i - 1]);
+  test("Top performers is folded into Team of the week, not listed twice", async ({ page }) => {
+    await expect(page.getByTestId("recap-top")).toHaveCount(0);
+    await expect(page.locator("main")).not.toContainText(/Top performers/i);
   });
 
-  test("the dud and the bench blunder both render with real numbers", async ({ page }) => {
-    const main = page.locator("main");
-    await expect(main).toContainText("Dud of the Week");
-    await expect(main).toContainText("Left On The Bench");
-    await expect(main).toContainText(/left on the bench\. Optimal was \d+\.\d, they started \d+\.\d\./);
+  test("the dud and the bench blunder render as wrap tiles with real numbers", async ({ page }) => {
+    const tiles = page.getByTestId("recap-tile");
+    const dud = tiles.filter({ has: page.getByText("Dud of the week", { exact: true }) });
+    await expect(dud).toHaveCount(1);
+    await expect(dud.locator("p.text-stat")).toHaveText(/^\d+\.\d$/);
+    await expect(dud.locator('a[href^="/players/"]')).toHaveCount(1);
+    const bench = tiles.filter({ has: page.getByText("Coaching malpractice", { exact: true }) });
+    await expect(bench).toHaveCount(1);
+    await expect(bench.locator("p.text-stat")).toHaveText(/^\d+\.\d$/);
+    await expect(bench).toContainText(/left on the bench/);
+    await expect(bench.locator('a[href^="/teams/"]')).toHaveCount(1);
   });
 
   test("the recap is not duplicated in the desktop rail", async ({ page }) => {
-    // Kickers render uppercase; the sentence "left on the bench." in the
-    // callout body is lowercase, so a case-sensitive match counts kickers only.
     const text = await page.locator("main").innerText();
-    expect(text.match(/IN THE BOOKS/g)?.length ?? 0).toBe(1);
-    expect(text.match(/LEFT ON THE BENCH/g)?.length ?? 0).toBe(1);
+    expect(text.match(/Week \d+ wrap/g)?.length ?? 0).toBe(1);
+    // The rail's bench fallback stays off while the recap carries the tile.
+    await expect(page.getByText("Left on the bench", { exact: true })).toHaveCount(0);
   });
 
   test("the recap is visible at phone width", async ({ page }) => {

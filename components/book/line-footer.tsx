@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
+import { MonoNumerals } from "@/components/book/mono-numerals";
 import type { BookLineFooter } from "@/lib/book/shared";
 
 export type { BookLineFooter };
@@ -14,26 +16,28 @@ export function BookLineFooterRow({ footer }: { footer: BookLineFooter }) {
   return (
     <>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
-        <span className="font-mono text-caption font-semibold normal-case tracking-normal tabular-nums text-text-secondary whitespace-nowrap">
-          {footer.lineText}
+        <span className="text-caption font-semibold text-text-secondary whitespace-nowrap">
+          {/* Letters in Geist, numbers in mono: "VV -20.5 · ML -245/+200". */}
+          <MonoNumerals text={footer.lineText} />
         </span>
         <span className="flex items-center gap-3">
           {footer.consensusText && (
-            <span className="text-caption normal-case tracking-normal text-text-tertiary whitespace-nowrap">
-              {footer.consensusText}
+            <span className="text-caption text-text-tertiary whitespace-nowrap">
+              <MonoNumerals text={footer.consensusText} />
             </span>
           )}
           <Link
             href="/book"
-            className="text-caption font-semibold text-accent-gold hover:brightness-110 normal-case tracking-normal"
+            className="-my-3 inline-flex min-h-11 items-center gap-0.5 rounded-md text-caption font-semibold text-accent-gold hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
           >
             {footer.ctaLabel}
+            <ChevronRight className="size-4" strokeWidth={2} aria-hidden="true" />
           </Link>
         </span>
       </div>
       {footer.dogPayoutLine && (
-        <p className="mt-2 font-serif text-body-sm italic text-text-tertiary">
-          {footer.dogPayoutLine}
+        <p className="mt-2 text-body-sm text-text-secondary">
+          <MonoNumerals text={footer.dogPayoutLine} />
         </p>
       )}
     </>

@@ -7,9 +7,10 @@ import {
 
 /**
  * Trade history page (/trades): completed trades render as cards with
- * franchise names, players/picks received, and a "Trade" badge; season and
- * team filters push query params and update the visible list; a franchise
- * page's "Trade History" link lands on the filtered, team-scoped view.
+ * franchise names, players/picks received, and the trade date; the page opens
+ * on the current season with labeled season and team filters that push query
+ * params; a franchise page's "Trade History" link lands on the team-scoped
+ * (all seasons) view.
  *
  * Runs against a real dev server + real Postgres (no mocks). The first
  * describe block SEEDS a known completed trade (fixed franchises, players and
@@ -52,7 +53,7 @@ test.describe("Trade history page (seeded fixture)", () => {
     // Two trades are seeded (original + pick flip); player 2 only moves in
     // the original, so it uniquely identifies that card.
     const card = page
-      .locator(".card-surface", { hasText: "Trade" })
+      .getByTestId("trade-card")
       .filter({ hasText: t.player2.fullName });
     await expect(card).toHaveCount(1);
 
@@ -78,8 +79,10 @@ test.describe("Trade history page (seeded fixture)", () => {
     await expect(card).toContainText(t.pick.season);
     await expect(card).toContainText(`Round ${t.pick.round} pick`);
 
-    // The "Trade" badge is present.
-    await expect(card.getByText("Trade", { exact: true }).first()).toBeVisible();
+    // The card leads with its trade date (no filler "Trade" badge).
+    await expect(card.locator("p").first()).toHaveText(
+      /^([A-Z][a-z]{2} \d{1,2}, \d{4}|Date unknown, \d{4})$/
+    );
   });
 
   test("team filter scopes to the seeded franchise and keeps its resolved trade", async ({
@@ -95,7 +98,7 @@ test.describe("Trade history page (seeded fixture)", () => {
 
     // The seeded trade survives franchise-level filtering with full resolution.
     const card = page
-      .locator(".card-surface", { hasText: "Trade" })
+      .getByTestId("trade-card")
       .filter({ hasText: t.player2.fullName });
     await expect(card).toHaveCount(1);
     await expect(card).toContainText(t.franchiseB.name);
@@ -112,7 +115,7 @@ test.describe("Trade history page (seeded fixture)", () => {
     // The ORIGINAL trade (identified by player 2) shows the flip link on its
     // received pick instead of a "became" line.
     const originalCard = page
-      .locator(".card-surface", { hasText: "Trade" })
+      .getByTestId("trade-card")
       .filter({ hasText: t.player2.fullName });
     const flipLink = originalCard.getByRole("link", {
       name: /flipped in a later trade/,
@@ -151,7 +154,7 @@ test.describe("Trade history page (seeded fixture)", () => {
     // Discover the flip target id from the flip link's href first.
     await page.goto(`/trades?season=${t.seasonYear}`);
     const originalCard = page
-      .locator(".card-surface", { hasText: "Trade" })
+      .getByTestId("trade-card")
       .filter({ hasText: t.player2.fullName });
     const flipLink = originalCard.getByRole("link", {
       name: /flipped in a later trade/,
@@ -226,9 +229,9 @@ test.describe("Trade history page (seeded fixture)", () => {
     // blended-share letter curve -> A/D; winnerShare .7895 still clears the
     // Highway Robbery threshold of .72.
     const card = page
-      .locator(".card-surface", { hasText: "Trade" })
+      .getByTestId("trade-card")
       .filter({ hasText: t.player2.fullName });
-    await expect(card.getByText("Hindsight Report")).toBeVisible();
+    await expect(card.getByText("Hindsight report")).toBeVisible();
     await expect(card.getByText("Highway Robbery")).toBeVisible();
     await expect(card.getByText("A", { exact: true })).toBeVisible();
     await expect(card.getByText("D", { exact: true })).toBeVisible();
@@ -236,7 +239,7 @@ test.describe("Trade history page (seeded fixture)", () => {
     await expect(card.getByText(/40\.0 pts realized/)).toBeVisible();
   });
 
-  test("a trade holding an unplayed rookie-class pick shows Hindsight Pending", async ({
+  test("a trade holding an unplayed rookie-class pick shows Hindsight pending", async ({
     page,
   }) => {
     const t = TRADE_TEST_DATA;
@@ -248,29 +251,35 @@ test.describe("Trade history page (seeded fixture)", () => {
     // which blocks grading outright. (The flip trade is also ungraded, via
     // the low-points "jury" message, so scope to the rookie-class copy.)
     const card = page
-      .locator(".card-surface", { hasText: "Trade" })
+      .getByTestId("trade-card")
       .filter({ hasText: "waiting on a rookie class" });
     await expect(card).toHaveCount(1);
-    await expect(card).toContainText("Hindsight Pending");
+    await expect(card).toContainText("Hindsight pending");
     await expect(card.getByText(/^(A\+|A|B\+|B|C|D|F)$/)).toHaveCount(0);
   });
 });
 
 test.describe("Trade history page", () => {
-  test("renders trade cards with two franchise names, a player or pick, and a Trade badge", async ({
+  test("renders trade cards with two franchise names, a player or pick, and no Trade badge", async ({
     page,
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto("/trades");
 
-    await expect(page.getByRole("heading", { name: "Trade History." })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Trades", exact: true })
+    ).toBeVisible();
+    await expect(
+      page.getByText("Every trade, graded once the results are in.")
+    ).toBeVisible();
 
-    const cards = page.locator(".card-surface", { hasText: "Trade" });
+    const cards = page.getByTestId("trade-card");
     const count = await cards.count();
     if (count === 0) return; // No completed trades seeded in this environment.
 
     const firstCard = cards.first();
-    await expect(firstCard.getByText("Trade", { exact: true }).first()).toBeVisible();
+    // The repeated "Trade" badge is gone: the card leads with its date.
+    await expect(firstCard.getByText("Trade", { exact: true })).toHaveCount(0);
 
     // Both sides of a standard 2-team trade should resolve to franchise links,
     // so a broken/unresolved side is caught rather than passing on one link.
@@ -286,37 +295,90 @@ test.describe("Trade history page", () => {
     expect(hasPickText + hasPositionBadge).toBeGreaterThan(0);
   });
 
-  test("formula nugget renders alongside the intro with its kicker and lens weights", async ({
+  test("'How grades work' is a closed disclosure that opens to the lens weights", async ({
     page,
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto("/trades");
 
-    const nugget = page.locator('aside[aria-label="How grades are computed"]');
-    await expect(nugget).toBeVisible();
-    await expect(nugget.getByText("The Formula")).toBeVisible();
-    await expect(nugget.getByText("45%")).toBeVisible();
+    const formula = page.getByTestId("grade-formula");
+    await expect(formula).toBeVisible();
+    const toggle = formula.getByRole("button", { name: /How grades work/ });
+    await expect(toggle).toBeVisible();
+
+    // Collapsed by default: the page opens on trades, not the formula.
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    await expect(formula.getByText("45%")).toBeHidden();
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(formula.getByText("45%")).toBeVisible();
+    await expect(formula.getByText("Points scored")).toBeVisible();
+  });
+
+  test("a bare /trades opens on the current season, with labeled 44px filters", async ({
+    page,
+  }) => {
+    await page.setViewportSize(MOBILE_VIEWPORT);
+    await page.goto("/trades");
+
+    const seasonSelect = page.getByLabel("Season", { exact: true });
+    const teamSelect = page.getByLabel("Team", { exact: true });
+    await expect(seasonSelect).toBeVisible();
+    await expect(teamSelect).toBeVisible();
+    for (const select of [seasonSelect, teamSelect]) {
+      const box = await select.boundingBox();
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
+
+    // "All seasons" stays an option, but is not the default.
+    await expect(
+      seasonSelect.locator("option", { hasText: "All seasons" })
+    ).toHaveCount(1);
+    const value = await seasonSelect.inputValue();
+    const label = page.getByTestId("trade-list-label");
+    if ((await label.count()) === 0) return; // No trades in this environment.
+    expect(value).toMatch(/^\d{4}$/);
+    await expect(label).toHaveText(new RegExp(`^${value} · \\d+ trades?$`));
   });
 
   test("changing the season select updates the URL and the list", async ({ page }) => {
+    // Two filtered navigations of a page that grades every trade server-side.
+    test.setTimeout(90_000);
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto("/trades");
+    // The filters are a client island: interact only once it has hydrated,
+    // or the change event fires before React's handler is attached.
+    await page.waitForLoadState("networkidle");
 
     const seasonSelect = page.locator("#trade-season");
     if ((await seasonSelect.count()) === 0) return;
 
-    const options = await seasonSelect.locator("option").allTextContents();
-    const realSeasonOption = options.find((o) => o !== "All seasons");
-    if (!realSeasonOption) return; // No seasons in this environment.
+    // Pick a season other than the one already selected by default.
+    const current = await seasonSelect.inputValue();
+    const values = await seasonSelect
+      .locator("option")
+      .evaluateAll((els) => els.map((e) => (e as HTMLOptionElement).value));
+    const other = values.find((v) => v !== current && v !== "all");
+    if (other) {
+      await seasonSelect.selectOption(other);
+      await page.waitForURL(new RegExp(`[?&]season=${other}`));
+      expect(page.url()).toContain(`season=${other}`);
+    }
 
-    await seasonSelect.selectOption({ label: realSeasonOption });
-    await page.waitForURL(/[?&]season=/);
-    expect(page.url()).toContain(`season=${realSeasonOption}`);
+    // "All seasons" widens the list via ?season=all.
+    await page.waitForLoadState("networkidle");
+    await seasonSelect.selectOption("all");
+    await page.waitForURL(/[?&]season=all/);
+    await expect(page.getByTestId("trade-list-label")).toHaveText(
+      /^All seasons · \d+ trades?$/
+    );
   });
 
   test("changing the team select updates the URL and scopes visible cards", async ({ page }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto("/trades");
+    await page.waitForLoadState("networkidle");
 
     const teamSelect = page.locator("#trade-team");
     if ((await teamSelect.count()) === 0) return;
@@ -334,7 +396,7 @@ test.describe("Trade history page", () => {
     await page.waitForURL(/[?&]team=/);
     expect(page.url()).toContain(`team=${teamValue}`);
 
-    const cards = page.locator(".card-surface", { hasText: "Trade" });
+    const cards = page.getByTestId("trade-card");
     const cardCount = await cards.count();
     for (let i = 0; i < cardCount; i++) {
       await expect(cards.nth(i)).toContainText(teamName.trim());
@@ -371,14 +433,14 @@ test.describe("Trade history page", () => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto("/trades");
 
-    const cards = page.locator(".card-surface", { hasText: "Trade" });
+    const cards = page.getByTestId("trade-card");
     const cardCount = await cards.count();
     if (cardCount === 0) return; // No completed trades seeded in this environment.
 
     const kickerCount = await page.getByText("Dynasty Value", { exact: false }).count();
     if (kickerCount === 0) return; // No player_values coverage in this environment.
 
-    // Every value row is an <li> inside a "Dynasty Value" section; scan them
+    // Every value row is an <li> inside a "Dynasty value" section; scan them
     // all across the page rather than trying to scope per-card (the section
     // container isn't uniquely selectable from the kicker text alone).
     const rowItems = page.locator("li").filter({
@@ -424,21 +486,21 @@ test.describe("Trade history page", () => {
     expect(foundFull || foundDegraded).toBe(true);
   });
 
-  test("dynasty value block sits after the Hindsight block and before the Site Desk Verdict", async ({
+  test("dynasty value block sits after the Hindsight block and before the Site Desk verdict", async ({
     page,
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto("/trades");
 
-    const cards = page.locator(".card-surface", { hasText: "Trade" });
+    const cards = page.getByTestId("trade-card");
     const cardCount = await cards.count();
     for (let i = 0; i < cardCount; i++) {
       const card = cards.nth(i);
       const html = await card.innerHTML();
-      const hindsightIdx = html.indexOf("Hindsight Report");
-      const hindsightPendingIdx = html.indexOf("Hindsight Pending");
-      const valueIdx = html.indexOf("Dynasty Value");
-      const verdictIdx = html.indexOf("Site Desk Verdict");
+      const hindsightIdx = html.indexOf("Hindsight report");
+      const hindsightPendingIdx = html.indexOf("Hindsight pending");
+      const valueIdx = html.indexOf("Dynasty value");
+      const verdictIdx = html.indexOf("Site Desk verdict");
 
       if (valueIdx === -1) continue;
 
@@ -469,7 +531,7 @@ test.describe("Trade history page", () => {
     await page.setViewportSize(MOBILE_VIEWPORT);
     await page.goto("/trades");
 
-    const cards = page.locator(".card-surface", { hasText: "Trade" });
+    const cards = page.getByTestId("trade-card");
     if ((await cards.count()) === 0) return;
 
     // The flex row wrapping sides should switch to column at mobile width

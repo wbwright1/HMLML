@@ -29,12 +29,12 @@ import {
 import { daysUntil } from "@/lib/hub/live-pill-label";
 import type { getLatestSeason } from "@/lib/queries/matchups";
 
-// Small uppercase eyebrow above each hub module (matches the mock's kicker
-// labels; distinct from PageSection's large serif titles).
+// The module's one label: 12px sentence case, the section's h2 (distinct
+// from PageSection's large serif titles).
 function ModuleLabel({ children, meta }: { children: React.ReactNode; meta?: string }) {
   return (
     <div className="mb-4 flex items-baseline justify-between gap-3">
-      <p className="text-kicker">{children}</p>
+      <h2 className="text-kicker">{children}</h2>
       {meta && <span className="text-caption text-text-tertiary">{meta}</span>}
     </div>
   );
@@ -173,10 +173,9 @@ export async function PreseasonHub({
       {/* Countdown hero */}
       <section className="grid grid-cols-1 gap-6 pt-2 pb-8 lg:grid-cols-[1fr_auto] lg:items-center lg:gap-10">
         <div className="min-w-0">
-          <p className="text-kicker">
-            {`Harambe Memorial League · ${displayYear} · Title Defense Loading`}
-          </p>
-          <h1 className="text-display mt-3">
+          {/* No kicker above the headline (UI/UX pass): the live pill names
+              the season state. */}
+          <h1 className="text-display">
             The season&rsquo;s on the clock<span className="text-accent-gold">.</span>
           </h1>
           <p className="text-body-lg text-text-secondary mt-4 max-w-xl">
@@ -193,8 +192,8 @@ export async function PreseasonHub({
             // the league doesn't yet store a draft's start_time in the DB)
             // and no Week 1 schedule synced yet: say so instead of nothing.
             <div className="rounded-lg border border-border bg-surface p-6 text-center">
-              <p className="text-caption uppercase text-text-tertiary mb-2">
-                ROOKIE DRAFT
+              <p className="text-caption text-text-tertiary mb-2">
+                Rookie draft
               </p>
               <p className="text-h2 text-text-primary">Draft date TBD</p>
             </div>
@@ -209,11 +208,11 @@ export async function PreseasonHub({
           {hasField && (
             <section>
               <ModuleLabel>
-                {field.hasDivisions ? "The Field · Grouped by Division" : "The Field"}
+                {field.hasDivisions ? "The field, by division" : "The field"}
               </ModuleLabel>
               {field.hasDivisions && (
                 <p className="lg:hidden text-caption text-text-tertiary -mt-2 mb-4">
-                  Swipe for all {field.divisions.length} divisions →
+                  Swipe for all <span className="font-mono tabular-nums">{field.divisions.length}</span> divisions
                 </p>
               )}
               <div
@@ -253,7 +252,7 @@ export async function PreseasonHub({
             return (
               boldPredictions.length > 0 && (
                 <section>
-                  <ModuleLabel>Bold Predictions · Site Desk</ModuleLabel>
+                  <ModuleLabel>Bold predictions</ModuleLabel>
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {boldPredictions.map((prediction) => (
                       <BoldPredictionCard key={prediction.kicker} prediction={prediction} />
@@ -267,7 +266,7 @@ export async function PreseasonHub({
           {/* Offseason Receipts */}
           {editorial.offseasonReceipts.length > 0 && (
             <section>
-              <ModuleLabel>Offseason Receipts</ModuleLabel>
+              <ModuleLabel>Offseason receipts</ModuleLabel>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {editorial.offseasonReceipts.map((receipt, i) => (
                   <OffseasonReceiptCard
@@ -286,15 +285,15 @@ export async function PreseasonHub({
           {/* Burning Questions */}
           {editorial.burningQuestions.length > 0 && (
             <section>
-              <ModuleLabel>Burning Questions</ModuleLabel>
+              <ModuleLabel>Burning questions</ModuleLabel>
               <BurningQuestionsCard questions={editorial.burningQuestions} />
             </section>
           )}
 
           {/* The Smack Feed */}
           <section>
-            <ModuleLabel meta={smackFromDesk ? "site desk" : "the league"}>
-              The Smack Feed
+            <ModuleLabel meta={smackFromDesk ? "From the site desk" : undefined}>
+              Smack feed
             </ModuleLabel>
             <div className="space-y-4">
               <SmackComposerSlot />
@@ -317,7 +316,7 @@ export async function PreseasonHub({
         <ReigningHonors
           seasonId={lastCompletedSeasonId}
           seasonYear={lastCompletedSeasonYear}
-          kicker="Player Awards · Last Season"
+          kicker="Last season's player awards"
         />
       )}
 
@@ -326,10 +325,14 @@ export async function PreseasonHub({
           award simply is not here. */}
       {seasonSuperlatives.length > 0 && (
         <section className="pt-2 pb-8">
-          <ModuleLabel
-            meta={lastCompletedSeasonYear ? `${lastCompletedSeasonYear} · top 6` : "top 6"}
-          >
-            Season Superlatives
+          <ModuleLabel>
+            {lastCompletedSeasonYear ? (
+              <>
+                <span className="font-mono tabular-nums">{lastCompletedSeasonYear}</span> superlatives
+              </>
+            ) : (
+              "Season superlatives"
+            )}
           </ModuleLabel>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {seasonSuperlatives.map((s) => (

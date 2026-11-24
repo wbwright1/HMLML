@@ -91,7 +91,7 @@ export function SmackFeed({ items, className = "space-y-4" }: SmackFeedProps) {
                   the same link. */}
               <TeamLink
                 slug={item.franchiseSlug}
-                className="flex min-w-0 items-center gap-3 text-text-primary"
+                className="flex min-h-11 min-w-0 items-center gap-3 rounded-[10px] text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <FranchiseLogo
                   slug={item.franchiseSlug}

@@ -1,6 +1,8 @@
 "use client";
 
+import { useOptimistic, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { ChevronDown } from "lucide-react";
 
 interface SeasonOption {
   seasonYear: number;
@@ -14,9 +16,13 @@ interface TeamOption {
 interface TradeFiltersProps {
   seasons: SeasonOption[];
   teams: TeamOption[];
+  /** The effective season scope: a year string, or "all" for every season. */
   selectedSeason?: string;
   selectedTeam?: string;
 }
+
+const SELECT_CLASS =
+  "h-11 w-full cursor-pointer appearance-none rounded-[10px] border border-border-control bg-transparent pl-3 pr-9 text-body-sm font-semibold text-text-primary transition-colors hover:bg-surface-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas";
 
 export function TradeFilters({
   seasons,
@@ -25,71 +31,68 @@ export function TradeFilters({
   selectedTeam,
 }: TradeFiltersProps) {
   const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  // Optimistic copies so a pick shows at once while the filtered list loads
+  // (a select pinned to the server prop would snap back until the navigation
+  // commits); they settle back onto the new server props when it does.
+  const [filters, setFilters] = useOptimistic({
+    season: selectedSeason ?? "all",
+    team: selectedTeam ?? "",
+  });
+  const { season, team } = filters;
 
   function handleChange(kind: "season" | "team", value: string) {
     const params = new URLSearchParams();
-    const season = kind === "season" ? value : selectedSeason;
-    const team = kind === "team" ? value : selectedTeam;
+    const nextSeason = kind === "season" ? value : season;
+    const nextTeam = kind === "team" ? value : team;
 
-    if (season) params.set("season", season);
-    if (team) params.set("team", team);
+    if (nextSeason) params.set("season", nextSeason);
+    if (nextTeam) params.set("team", nextTeam);
 
     const qs = params.toString();
-    router.push(`/trades${qs ? `?${qs}` : ""}`);
+    startTransition(() => {
+      setFilters({ season: nextSeason, team: nextTeam });
+      router.push(`/trades${qs ? `?${qs}` : ""}`);
+    });
   }
 
-  const selectStyle: React.CSSProperties = {
-    WebkitAppearance: "none",
-    MozAppearance: "none",
-    appearance: "none",
-    width: "100%",
-    borderRadius: "0.625rem",
-    backgroundColor: "var(--surface-muted)",
-    paddingLeft: "1rem",
-    paddingRight: "2.5rem",
-    paddingTop: "0.625rem",
-    paddingBottom: "0.625rem",
-    fontSize: "0.875rem",
-    fontWeight: 600,
-    color: "var(--text-primary)",
-    border: "1px solid var(--border)",
-    cursor: "pointer",
-  };
-
   return (
-    <div className="flex flex-col sm:flex-row gap-4">
-      <div className="flex-1">
-        <label htmlFor="trade-season" className="text-kicker block mb-1.5">
+    <div
+      className={`grid grid-cols-2 gap-2 sm:max-w-xl sm:gap-4 transition-opacity duration-150 ${isPending ? "opacity-70" : ""}`}
+      aria-busy={isPending}
+    >
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <label htmlFor="trade-season" className="text-kicker">
           Season
         </label>
-        <div style={{ position: "relative", display: "inline-block", width: "100%" }}>
+        <div className="relative">
           <select
             id="trade-season"
-            value={selectedSeason ?? ""}
+            value={season}
             onChange={(e) => handleChange("season", e.target.value)}
-            style={selectStyle}
+            className={SELECT_CLASS}
           >
-            <option value="">All seasons</option>
             {seasons.map((s) => (
               <option key={s.seasonYear} value={String(s.seasonYear)}>
                 {s.seasonYear}
               </option>
             ))}
+            <option value="all">All seasons</option>
           </select>
-          <Chevron />
+          <SelectChevron />
         </div>
       </div>
 
-      <div className="flex-1">
-        <label htmlFor="trade-team" className="text-kicker block mb-1.5">
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <label htmlFor="trade-team" className="text-kicker">
           Team
         </label>
-        <div style={{ position: "relative", display: "inline-block", width: "100%" }}>
+        <div className="relative">
           <select
             id="trade-team"
-            value={selectedTeam ?? ""}
+            value={team}
             onChange={(e) => handleChange("team", e.target.value)}
-            style={selectStyle}
+            className={SELECT_CLASS}
           >
             <option value="">All teams</option>
             {teams.map((t) => (
@@ -98,35 +101,19 @@ export function TradeFilters({
               </option>
             ))}
           </select>
-          <Chevron />
+          <SelectChevron />
         </div>
       </div>
     </div>
   );
 }
 
-function Chevron() {
+function SelectChevron() {
   return (
-    <svg
-      style={{
-        position: "absolute",
-        right: "0.75rem",
-        top: "50%",
-        transform: "translateY(-50%)",
-        width: "1rem",
-        height: "1rem",
-        color: "var(--text-tertiary)",
-        pointerEvents: "none",
-      }}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="m6 9 6 6 6-6" />
-    </svg>
+    <ChevronDown
+      className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-text-tertiary"
+      strokeWidth={2}
+      aria-hidden
+    />
   );
 }

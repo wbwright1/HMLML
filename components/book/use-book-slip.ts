@@ -11,6 +11,7 @@ import {
 import { useRouter } from "next/navigation";
 import { useSessionMember } from "@/components/use-session-member";
 import { togglePick, lockSlip, unlockSlip } from "@/app/actions/book";
+import { formatSpread } from "@/lib/book/pricing";
 import {
   notifyBookPicksChanged,
   subscribeToBookPicksChanged,
@@ -69,9 +70,31 @@ export interface BookSlip {
   canPick: boolean;
   /** There is a locked pick on a game that has not kicked off, so it can be given back. */
   canUnlock: boolean;
+  /**
+   * The confirmation for the last pick the server accepted, or null. Set only
+   * AFTER togglePick resolves ok, so the toast never claims a bet the book
+   * has not taken.
+   */
+  saved: SavedPick | null;
+  /** Reverses `saved` through the same togglePick path; the server decides. */
+  undo: () => void;
+  dismissSaved: () => void;
   pick: (game: BookGame, side: BookSideKey) => void;
   lock: () => void;
   unlock: () => void;
+}
+
+export interface SavedPick {
+  /** Bumped per save, so a second save restarts the toast's timer. */
+  id: number;
+  game: BookGame;
+  side: BookSideKey;
+  /** What the slip held on this game before the save, for Undo. */
+  previousSide: BookSideKey | null;
+  /** "Kenneth Walker and Others", kept apart from the number so it renders in Geist. */
+  teamName: string;
+  /** "+20.5", rendered in the mono face. */
+  line: string;
 }
 
 /**
@@ -92,6 +115,8 @@ export function useBookSlip(week: number, games: BookGame[]): BookSlip {
   const [picks, setPicks] = useState<Map<number, MemberBookPick>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [pendingMatchup, setPendingMatchup] = useState<number | null>(null);
+  const [saved, setSaved] = useState<SavedPick | null>(null);
+  const savedIdRef = useRef(0);
   const [, startTransition] = useTransition();
 
   // Bumped by every fetch AND every mutation. A fetch applies its payload only
@@ -160,10 +185,13 @@ export function useBookSlip(week: number, games: BookGame[]): BookSlip {
   const canPick = signedIn && !standingLock;
   const canUnlock = signedIn && standingLock;
 
-  const pick = useCallback(
-    (game: BookGame, side: BookSideKey) => {
+  // `announce` is false for an Undo: reversing a save is not itself a save,
+  // and a toast offering to undo the undo would be a loop.
+  const applyPick = useCallback(
+    (game: BookGame, side: BookSideKey, announce: boolean) => {
       if (!canPick || game.status !== "open") return;
       setError(null);
+      setSaved(null);
       setPendingMatchup(game.matchupId);
       sequenceRef.current++;
 
@@ -207,6 +235,18 @@ export function useBookSlip(week: number, games: BookGame[]): BookSlip {
           // Consensus counts live in the cached server tree; pull the new ones.
           router.refresh();
           notifyBookPicksChanged();
+          // A toggle that CLEARED the pick has nothing to confirm.
+          if (announce && previous?.side !== side) {
+            const team = side === "home" ? game.home : game.away;
+            setSaved({
+              id: ++savedIdRef.current,
+              game,
+              side,
+              previousSide: previous?.side ?? null,
+              teamName: team.name,
+              line: formatSpread(team.spread),
+            });
+          }
         } catch {
           // Offline, a 500, an aborted navigation: the pick never landed, so
           // the UI must stop claiming it did.
@@ -219,6 +259,21 @@ export function useBookSlip(week: number, games: BookGame[]): BookSlip {
     },
     [canPick, picks, router, week],
   );
+
+  const pick = useCallback(
+    (game: BookGame, side: BookSideKey) => applyPick(game, side, true),
+    [applyPick],
+  );
+
+  // Undo is just another toggle: re-pressing the saved side clears it, and
+  // pressing the side it replaced switches back. togglePick re-checks kickoff
+  // and the slip lock, so an Undo after kickoff fails calmly like any pick.
+  const undo = useCallback(() => {
+    if (!saved) return;
+    applyPick(saved.game, saved.previousSide ?? saved.side, false);
+  }, [applyPick, saved]);
+
+  const dismissSaved = useCallback(() => setSaved(null), []);
 
   const lock = useCallback(() => {
     if (!canPick) return;
@@ -297,6 +352,9 @@ export function useBookSlip(week: number, games: BookGame[]): BookSlip {
     pendingMatchup,
     canPick,
     canUnlock,
+    saved,
+    undo,
+    dismissSaved,
     pick,
     lock,
     unlock,

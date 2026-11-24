@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight, Clock } from "lucide-react";
 import { TeamLink } from "@/components/team-link";
 import { PlayerLink } from "@/components/player-link";
 import { EditorialBody } from "@/components/editorial-emphasis";
@@ -14,6 +15,10 @@ import { PlayerHeadshot } from "@/components/player-headshot";
 import { GameOfTheWeekCard } from "@/components/hub/game-of-the-week-card";
 import { SlateCard } from "@/components/hub/slate-card";
 import { teamAcronym } from "@/lib/team-acronym";
+import { formatSpread } from "@/lib/book/pricing";
+import { HeroClaimCta } from "@/components/hub/hero-claim-cta";
+import { MonoNums } from "@/components/hub/mono-nums";
+import { buttonVariants } from "@/components/ui/button-variants";
 import type { PairedMatchup } from "@/lib/queries/matchups";
 import type { getSeasonStandings } from "@/lib/queries/seasons";
 import {
@@ -45,18 +50,27 @@ import { FranchiseLogo } from "@/components/franchise-logo";
 import {
   getHubEditorial,
   HERO_DEK_FALLBACK,
+  HUB_CLAIM_CTA,
+  HUB_LABELS,
+  sentenceCaseLabel,
   matchupPairKey,
 } from "@/lib/content";
 import { sharesPhraseWithAny } from "@/lib/content-gen/phrases";
 import { getHubPowerPreview, type HubPowerPreview } from "@/lib/queries/power-preview";
 import { PowerPulseCard } from "@/components/hub/power-pulse-card";
-import { HubSection, RailCard, RailRows } from "@/components/hub/rail-card";
+import {
+  HubSection,
+  RailCard,
+  RailRows,
+  HUB_ROW_LINK,
+} from "@/components/hub/rail-card";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
-import { buildHubLineFooter } from "@/lib/book/shared";
-import { formatH2HLine, formatSlateH2H, gameOfWeekBlurb } from "@/lib/hub/between-weeks";
+import { bookLineText } from "@/lib/book/shared";
+import { formatH2HLine, gameOfWeekBlurb } from "@/lib/hub/between-weeks";
 import {
   heroDekFromData,
+  heroFactLine,
   heroHeadline,
   heroKickerTail,
   repeatsHeroNumber,
@@ -82,10 +96,14 @@ interface BetweenWeeksHubProps {
 }
 
 /**
- * State 1d: the Tue/Wed between-weeks hub. Anticipation-forward — the week
- * ahead leads (Game of the Week + the rest of the slate + the member smack
- * feed), with last week's receipts compressed into the right rail. Async RSC;
- * does its own data fetching so page.tsx stays lean.
+ * State 1d: the Tue/Wed between-weeks hub. Curated to about seven modules
+ * (UI/UX pass, 2026-11-24): the hero headline; while the recap window is open
+ * the Week N wrap, Final scores and Team of the week; then Game of the week,
+ * Rest of the slate, Power rankings, and a "More this week" list that folds
+ * Players to watch, League moves and This week in history behind disclosure
+ * rows instead of rendering them inline. The member smack feed closes the
+ * page. On desktop the rail carries Players to watch beside the headliner.
+ * Async RSC; does its own data fetching so page.tsx stays lean.
  */
 export async function BetweenWeeksHub({
   matchups,
@@ -398,7 +416,7 @@ export async function BetweenWeeksHub({
 
   // The hero headline is a data-derived take (lib/hub/hero-headline.ts): last
   // week's finals while the recap renders under it, this week's slate
-  // otherwise. The schedule fact lives in the kicker line instead.
+  // otherwise. The schedule fact lives on the Game of the week label row.
   const heroSlateTeam = (id: string, name: string): HeroSlateTeam => {
     const s = standingBy.get(id);
     return {
@@ -433,7 +451,7 @@ export async function BetweenWeeksHub({
     standings: standings.map((s) => heroSlateTeam(s.franchiseId, s.franchiseName)),
   };
   const headline = heroHeadline(heroInput);
-  const kickerTail = heroKickerTail(nextKickoff);
+  const slateMeta = `Week ${week} · ${heroKickerTail(nextKickoff)}`;
 
   // The featured card's blurb. A stored (generated) blurb is used ONLY when
   // its ref_key names the pair this card features: hub_content rows outlive
@@ -458,189 +476,227 @@ export async function BetweenWeeksHub({
         ? gameOfWeekBlurb({ ...gotw.blurbInput, heroClaim: headline.claim })
         : (gotw?.blurb ?? editorial.matchupAngles.gameOfWeekBlurb);
 
-  // Last line of defense on the copy-echo fix (issue #274). The generator's
-  // diversity layer stops a dek that echoes the Game of the Week card from
-  // ever being WRITTEN, but hub_content rows persist: a dek generated before
-  // that gate existed keeps rendering until the next generate-content run
-  // replaces it. Rather than ship the echo for hours, fall back to the seeded
-  // dek, which is phrase-distinct from every line below it by construction.
-  //
-  // BOTH lines on the Game of the Week card are compared: the blurb that
-  // actually renders, and the kicker ("... on the line" / "... at stake" are
-  // signature phrases too).
-  //
-  // The headline is compared too: a stored dek written before the headline
-  // became a take can restate the very fact it now leads with.
+  // The line under the headline is ONE plain fact about the headline's
+  // subject (heroFactLine), never a second punchline: the headline owns the
+  // snark. Only when the rung has no clean companion fact does the older dek
+  // chain run, with its copy-echo guard (issue #274): a stored dek that shares
+  // a signature phrase with the Game of the Week card or the headline falls
+  // back to a data sentence from another rung, then the seeded constant.
+  const heroFact = heroFactLine(heroInput, headline, priorWeek);
   const linesBelowHero = [gotwBlurb, gotw?.kicker ?? "", headline.text].filter(Boolean);
   const heroDek =
     editorial.heroDek && !sharesPhraseWithAny(editorial.heroDek, linesBelowHero)
       ? editorial.heroDek
       : (heroDekFromData(heroInput, headline) ?? HERO_DEK_FALLBACK);
 
+  const boxScoresHref = week > 1 ? `/seasons/${seasonYear}/week/${priorWeek}` : null;
+
+  // The rail beside the headliner. While the recap renders it carries only
+  // Players to watch; otherwise last week's superlatives and bench blunder
+  // fall back here. When it would be empty the main column takes the full
+  // width rather than leaving a gap beside the hero.
+  const railFallbacks = !weekRecap;
+  const railHasContent =
+    playersToWatch.length > 0 ||
+    (railFallbacks && (weeklySuperlatives != null || benchLeader != null));
+
+  const slateMetaNode = (
+    <p
+      className="flex items-center gap-1.5 text-caption text-text-tertiary"
+      data-testid="slate-meta"
+    >
+      <Clock aria-hidden="true" strokeWidth={2} className="size-4" />
+      <span><MonoNums text={slateMeta} /></span>
+    </p>
+  );
+  const showGotw = gameOfWeek != null && gotw?.kicker != null;
+
   return (
-    <>
-      {/* Hero + countdown */}
-      {/* data-kickoff-target: the slate's first kickoff, read by
-          e2e/hub-post-week.spec.ts to decide which recap-window state to
-          assert. On the server section, not the client island, so it is
-          present whether or not the countdown renders. */}
-      <section
-        className="pt-2 pb-6 lg:flex lg:items-start lg:justify-between lg:gap-8"
-        data-kickoff-target={nextKickoff?.toISOString()}
-        data-recap-forced={recapForced ? "true" : undefined}
-      >
-        <div className="max-w-2xl">
-          <p className="text-kicker mb-3" data-testid="hero-kicker">
-            Harambe Memorial League &middot; Week {week} &middot; {kickerTail}
-          </p>
-          {/* One serif run, numerals included. The three-font rule's
-              "every numeral in mono" clause is for stats set in Geist; an
-              upright mono figure dropped into an italic serif sentence
-              breaks the line (Blake, 2026-09-22: "64.2" in the hero looked
-              really bad). The recap headline below sets its numbers the
-              same way. */}
-          <h1
-            className="text-display"
-            data-testid="hero-headline"
-            data-hero-rung={headline.rung}
-          >
-            {headline.text}
-          </h1>
-          <p className="mt-3 text-body-lg text-text-secondary" data-testid="hero-dek">
-            <EditorialBody body={heroDek} />
-          </p>
-        </div>
-
-        {/* The countdown only runs on the slate-only hub. While the recap
-            leads (Tuesday roll to the Thursday morning cron) the kicker
-            already names the kickoff day, and a ticking clock above
-            last week's receipts pulled the eye away from them for nothing. */}
-        {nextKickoff && !weekRecap && (
-          <div className="mt-6 lg:mt-1 shrink-0">
-            <KickoffCountdown target={nextKickoff.toISOString()} />
+    <div
+      className={`grid grid-cols-[minmax(0,1fr)] gap-8 ${
+        railHasContent ? "lg:grid-cols-[minmax(0,1fr)_340px]" : ""
+      }`.trim()}
+    >
+      {/* Main column: the hero, then last week's receipts, then the week ahead */}
+      <div className="space-y-8">
+        {/* data-kickoff-target: the slate's first kickoff, read by
+            e2e/hub-post-week.spec.ts to decide which recap-window state to
+            assert. On the server section, not the client island, so it is
+            present whether or not the countdown renders. */}
+        <section
+          className="pt-2"
+          data-kickoff-target={nextKickoff?.toISOString()}
+          data-recap-forced={recapForced ? "true" : undefined}
+        >
+          <div className="max-w-2xl">
+            {/* No kicker above the headline: the live pill names the week.
+                One serif run, numerals included: an upright mono figure
+                dropped into a serif display sentence breaks the line
+                (Blake, 2026-09-22). */}
+            <h1
+              className="text-display"
+              data-testid="hero-headline"
+              data-hero-rung={headline.rung}
+            >
+              {headline.text}
+            </h1>
+            <p className="mt-3 text-body-lg text-text-secondary" data-testid="hero-dek">
+              {heroFact ? <MonoNums text={heroFact} /> : <EditorialBody body={heroDek} />}
+            </p>
           </div>
-        )}
-      </section>
 
-      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        {/* Left column: last week's receipts, then the week ahead */}
-        <div className="space-y-8">
-          {/* Post-week recap: leads the hub from the Tuesday week roll until
-              Thursday kickoff, on every screen size (it used to live in the
-              desktop-only rail, so phones jumped straight to next week). */}
-          {weekRecap && (
-            <WeekRecapSection
-              seasonYear={seasonYear}
-              recap={weekRecap}
-              superlatives={weeklySuperlatives}
-              benchLeader={benchLeader}
-              heroClaim={headline.claim}
-            />
-          )}
-
-          {/* Game of the Week */}
-          {gameOfWeek && gotw?.kicker && (
-            <GameOfWeekSection
-              matchup={gameOfWeek}
-              h2h={h2hByMatchup.get(gameOfWeek.matchupId) ?? null}
-              record={record}
-              avatarOf={(id) => standingBy.get(id)?.avatarUrl ?? null}
-              divisionLeaderStatus={gotw.divisionLeaderStatus}
-              kicker={gotw.kicker}
-              rivalryName={gotw.namedRivalry?.name ?? null}
-              rivalryTagline={gotw.namedRivalry?.tagline ?? null}
-              blurb={gotwBlurb}
-            />
-          )}
-
-          {/* The Rest of the Slate */}
-          {restOfSlate.length > 0 && (
-            <HubSection kicker="The Rest of the Slate">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {restOfSlate.map((m) => {
-                  const h2h = h2hByMatchup.get(m.matchupId);
-                  const angle =
-                    angleOverrideOf(m) ?? angleByMatchup.get(m.matchupId) ?? "";
-                  const bookGame = bookGameByMatchup.get(m.matchupId);
-                  return (
-                    <SlateCard
-                      key={m.matchupId}
-                      teamA={{
-                        name: m.homeTeam.franchiseName,
-                        slug: m.homeTeam.franchiseSlug,
-                        abbreviation: m.homeTeam.franchiseAbbreviation,
-                        brandingColor: m.homeTeam.franchiseBrandingColor,
-                        avatarUrl: standingBy.get(m.homeTeam.franchiseId)?.avatarUrl ?? null,
-                      }}
-                      teamB={{
-                        name: m.awayTeam.franchiseName,
-                        slug: m.awayTeam.franchiseSlug,
-                        abbreviation: m.awayTeam.franchiseAbbreviation,
-                        brandingColor: m.awayTeam.franchiseBrandingColor,
-                        avatarUrl: standingBy.get(m.awayTeam.franchiseId)?.avatarUrl ?? null,
-                      }}
-                      h2hRecord={
-                        h2h ? formatSlateH2H(h2h) : record(m.homeTeam.franchiseId)
-                      }
-                      angle={angle}
-                      bookFooter={bookGame ? buildHubLineFooter(bookGame) : undefined}
-                    />
-                  );
-                })}
-              </div>
-            </HubSection>
-          )}
-
-          {/* Power Rankings preview */}
-          {powerPreview && <PowerPulseCard preview={powerPreview} week={week} />}
-
-          {/* The Smack Feed */}
-          <HubSection
-            kicker={<>The Smack Feed &middot; Week {week}</>}
-            action={
-              <p className="text-caption text-text-tertiary">
-                {smackFromDesk
-                  ? `site desk · ${smackItems.length} new`
-                  : smackItems.length > 0
-                    ? `the league · ${smackItems.length} new`
-                    : "the league"}
-              </p>
-            }
-          >
-            <SmackComposerSlot />
-            {smackItems.length > 0 ? (
-              <SmackFeed
-                items={smackItems}
-                className="grid grid-cols-1 sm:grid-cols-2 gap-4"
-              />
-            ) : (
-              <p className="card-surface block p-4 text-body-sm text-text-tertiary">
-                Nothing on the board right now.
-              </p>
+          {/* Phone action row: the signed-out visitor's one primary action
+              (a session island that renders nothing for members) plus a
+              quiet way to the box scores. Desktop's topbar already carries
+              the claim pill, and its Box scores link sits on the wrap. */}
+          <div className="mt-6 flex flex-wrap items-center gap-2 lg:hidden">
+            <HeroClaimCta label={HUB_CLAIM_CTA} />
+            {boxScoresHref && (
+              <Link
+                href={boxScoresHref}
+                className={buttonVariants({ variant: "quiet", size: "lg" })}
+              >
+                {HUB_LABELS.boxScores}
+              </Link>
             )}
-          </HubSection>
-        </div>
+          </div>
 
-        {/* Right rail: the week ahead's supporting cards. Last week's
-            superlatives and bench blunder moved into WeekRecapSection above
-            so they reach phones too; the rail falls back to them only when
-            the recap is not rendering (window closed, or prior week not
-            fully complete). */}
-        <aside className="hidden lg:flex lg:flex-col gap-8">
-          {!weekRecap && weeklySuperlatives && (
+          {/* The countdown only runs on the slate-only hub. While the recap
+              leads (Tuesday roll to the Thursday morning cron) a ticking
+              clock above last week's receipts pulled the eye away from them
+              for nothing. */}
+          {nextKickoff && !weekRecap && (
+            <div className="mt-6">
+              <KickoffCountdown target={nextKickoff.toISOString()} />
+            </div>
+          )}
+        </section>
+
+        {/* Post-week recap: Week N wrap, Final scores, Team of the week.
+            Leads the hub from the Tuesday week roll until the Thursday
+            morning cron, on every screen size. */}
+        {weekRecap && (
+          <WeekRecapSection
+            seasonYear={seasonYear}
+            recap={weekRecap}
+            superlatives={weeklySuperlatives}
+            benchLeader={benchLeader}
+          />
+        )}
+
+        {/* Game of the week */}
+        {showGotw && gameOfWeek && gotw?.kicker && (
+          <GameOfWeekSection
+            matchup={gameOfWeek}
+            h2h={h2hByMatchup.get(gameOfWeek.matchupId) ?? null}
+            record={record}
+            avatarOf={(id) => standingBy.get(id)?.avatarUrl ?? null}
+            divisionLeaderStatus={gotw.divisionLeaderStatus}
+            kicker={gotw.kicker}
+            rivalryName={gotw.namedRivalry?.name ?? null}
+            rivalryTagline={gotw.namedRivalry?.tagline ?? null}
+            blurb={gotwBlurb}
+            bookGame={bookGameByMatchup.get(gameOfWeek.matchupId) ?? null}
+            meta={slateMetaNode}
+          />
+        )}
+
+        {/* Rest of the slate: compact rows, each one link into The Book */}
+        {restOfSlate.length > 0 && (
+          <HubSection
+            kicker={HUB_LABELS.restOfTheSlate}
+            action={showGotw ? undefined : slateMetaNode}
+          >
+            <div className="card-surface divide-y divide-divider">
+              {restOfSlate.map((m) => {
+                const angle =
+                  angleOverrideOf(m) ?? angleByMatchup.get(m.matchupId) ?? "";
+                const bookGame = bookGameByMatchup.get(m.matchupId);
+                const lineOf = (franchiseId: string): string | null => {
+                  if (!bookGame) return null;
+                  const side =
+                    bookGame.home.franchiseId === franchiseId
+                      ? bookGame.home
+                      : bookGame.away.franchiseId === franchiseId
+                        ? bookGame.away
+                        : null;
+                  return side ? formatSpread(side.spread) : null;
+                };
+                return (
+                  <SlateCard
+                    key={m.matchupId}
+                    teamA={{
+                      name: m.homeTeam.franchiseName,
+                      slug: m.homeTeam.franchiseSlug,
+                      abbreviation: m.homeTeam.franchiseAbbreviation,
+                      brandingColor: m.homeTeam.franchiseBrandingColor,
+                      avatarUrl: standingBy.get(m.homeTeam.franchiseId)?.avatarUrl ?? null,
+                      line: lineOf(m.homeTeam.franchiseId),
+                    }}
+                    teamB={{
+                      name: m.awayTeam.franchiseName,
+                      slug: m.awayTeam.franchiseSlug,
+                      abbreviation: m.awayTeam.franchiseAbbreviation,
+                      brandingColor: m.awayTeam.franchiseBrandingColor,
+                      avatarUrl: standingBy.get(m.awayTeam.franchiseId)?.avatarUrl ?? null,
+                      line: lineOf(m.awayTeam.franchiseId),
+                    }}
+                    angle={angle}
+                  />
+                );
+              })}
+            </div>
+          </HubSection>
+        )}
+
+        {/* Power rankings preview */}
+        {powerPreview && <PowerPulseCard preview={powerPreview} />}
+
+        {/* More this week: the three secondary modules behind disclosure rows */}
+        <MoreThisWeek
+          week={week}
+          playersToWatch={playersToWatch}
+          leagueMoves={leagueMoves}
+          weekReceipts={weekReceipts}
+        />
+
+        {/* The smack feed: where members post (the composer is a session
+            island), so it stays on the hub, last. */}
+        <HubSection
+          kicker={HUB_LABELS.smackFeed}
+          action={
+            smackFromDesk ? (
+              <p className="text-caption text-text-tertiary">From the site desk</p>
+            ) : undefined
+          }
+        >
+          <SmackComposerSlot />
+          {smackItems.length > 0 ? (
+            <SmackFeed
+              items={smackItems}
+              className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+            />
+          ) : (
+            <p className="card-surface block p-4 text-body-sm text-text-tertiary">
+              Nothing on the board right now.
+            </p>
+          )}
+        </HubSection>
+      </div>
+
+      {/* Right rail (desktop only): Players to watch beside the headliner,
+          plus last week's superlatives and bench blunder when the recap is
+          not rendering (window closed, or prior week not fully complete). */}
+      {railHasContent && (
+        <aside className="hidden lg:flex lg:flex-col gap-8 lg:pt-2">
+          {playersToWatch.length > 0 && <PlayersToWatchCard players={playersToWatch} />}
+          {railFallbacks && weeklySuperlatives && (
             <WeekInBooksCard week={priorWeek} superlatives={weeklySuperlatives} />
           )}
-          {!weekRecap && benchLeader && <BenchCallout leader={benchLeader} />}
-          {playersToWatch.length > 0 && (
-            <PlayersToWatchCard week={week} players={playersToWatch} />
-          )}
-          {leagueMoves.length > 0 && <LeagueMovesCard moves={leagueMoves} />}
-          {weekReceipts.length > 0 && (
-            <WeekInHistoryCard week={week} receipts={weekReceipts} />
-          )}
+          {railFallbacks && benchLeader && <BenchCallout leader={benchLeader} />}
         </aside>
-      </div>
-    </>
+      )}
+    </div>
   );
 }
 
@@ -658,6 +714,8 @@ function GameOfWeekSection({
   rivalryName,
   rivalryTagline,
   blurb,
+  bookGame,
+  meta,
 }: {
   matchup: PairedMatchup;
   h2h: { wins: number; losses: number; ties: number } | null;
@@ -669,9 +727,13 @@ function GameOfWeekSection({
   kicker: string;
   /** The named rivalry leading the kicker, when the pick is one. */
   rivalryName: string | null;
-  /** The named rivalry's tagline when the pick is one, printed as a serif aside. */
+  /** The named rivalry's tagline when the pick is one. */
   rivalryTagline: string | null;
   blurb: string;
+  /** The Book's priced line for this game, when one exists. */
+  bookGame: BookGame | null;
+  /** The schedule meta on the label row ("Week 12 · Kickoff Thursday"). */
+  meta: React.ReactNode;
 }) {
   const home = matchup.homeTeam;
   const away = matchup.awayTeam;
@@ -687,9 +749,9 @@ function GameOfWeekSection({
     : "First-ever meeting";
 
   return (
-    <HubSection kicker="Game of the Week">
+    <HubSection kicker={HUB_LABELS.gameOfTheWeek} action={meta}>
       <GameOfTheWeekCard
-        kicker={kicker.toUpperCase()}
+        kicker={kicker}
         rivalryName={rivalryName}
         rivalryTagline={rivalryTagline}
         h2hLine={h2hLine}
@@ -712,13 +774,120 @@ function GameOfWeekSection({
           status: divisionLeaderStatus.get(away.franchiseId) ?? null,
         }}
         blurb={blurb}
+        bookLine={bookGame ? bookLineText(bookGame) : null}
       />
     </HubSection>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Right-rail cards (shell + row rhythm live in components/hub/rail-card.tsx)
+// More this week: disclosure rows (no client JS) in place of three inline
+// modules. Each row looks like a link row (title, one-line summary,
+// ChevronRight) and opens in place; there is no standalone page for these
+// lists, so a real link would have had nowhere true to go.
+// ---------------------------------------------------------------------------
+
+const NAME_SUFFIX = /^(jr\.?|sr\.?|ii|iii|iv|v)$/i;
+
+/** "Jahmyr Gibbs" -> "Gibbs", "Marvin Harrison Jr." -> "Harrison". */
+function lastName(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  while (parts.length > 1 && NAME_SUFFIX.test(parts[parts.length - 1])) parts.pop();
+  return parts[parts.length - 1] ?? name;
+}
+
+function MoreRow({
+  title,
+  summary,
+  testId,
+  className = "",
+  children,
+}: {
+  title: string;
+  summary: string;
+  testId: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <details data-testid={testId} className={`group ${className}`.trim()}>
+      <summary
+        className={`${HUB_ROW_LINK} cursor-pointer list-none [&::-webkit-details-marker]:hidden`}
+      >
+        <span className="min-w-0 flex-1">
+          <span className="block text-body-sm font-semibold text-text-primary">{title}</span>
+          <span className="block truncate text-caption text-text-tertiary">
+            <MonoNums text={summary} />
+          </span>
+        </span>
+        <ChevronRight
+          aria-hidden="true"
+          strokeWidth={2}
+          className="size-4 shrink-0 text-text-tertiary transition-transform duration-150 group-open:rotate-90"
+        />
+      </summary>
+      <div className="px-4 pt-2 pb-6">{children}</div>
+    </details>
+  );
+}
+
+function MoreThisWeek({
+  week,
+  playersToWatch,
+  leagueMoves,
+  weekReceipts,
+}: {
+  week: number;
+  playersToWatch: PlayerToWatch[];
+  leagueMoves: LeagueMove[];
+  weekReceipts: WeekReceipt[];
+}) {
+  const hasPlayers = playersToWatch.length > 0;
+  const hasMoves = leagueMoves.length > 0;
+  const hasHistory = weekReceipts.length > 0;
+  if (!hasPlayers && !hasMoves && !hasHistory) return null;
+  // On desktop the rail shows Players to watch beside the headliner, so its
+  // row here is phone-only. When it is the ONLY row, the whole module is.
+  const phoneOnly = !hasMoves && !hasHistory;
+  return (
+    <HubSection kicker={HUB_LABELS.moreThisWeek} className={phoneOnly ? "lg:hidden" : ""}>
+      <div className="card-surface divide-y divide-divider">
+        {hasPlayers && (
+          <MoreRow
+            testId="more-players-to-watch"
+            title={HUB_LABELS.playersToWatch}
+            summary={playersToWatch.slice(0, 3).map((p) => lastName(p.name)).join(", ")}
+            className="lg:hidden"
+          >
+            <PlayersToWatchRows players={playersToWatch} />
+          </MoreRow>
+        )}
+        {hasMoves && (
+          <MoreRow
+            testId="more-league-moves"
+            title={HUB_LABELS.leagueMoves}
+            summary="Recent adds, drops and trades"
+          >
+            <LeagueMovesRows moves={leagueMoves} />
+          </MoreRow>
+        )}
+        {hasHistory && (
+          <MoreRow
+            testId="more-week-history"
+            title={HUB_LABELS.weekInHistory}
+            summary={`Past Week ${week} results`}
+          >
+            <WeekInHistoryRows week={week} receipts={weekReceipts} />
+          </MoreRow>
+        )}
+      </div>
+    </HubSection>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Rail cards and the rows they share with "More this week"
+// (shell + row rhythm live in components/hub/rail-card.tsx)
 // ---------------------------------------------------------------------------
 
 function RecapRow({
@@ -744,7 +913,7 @@ function RecapRow({
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <p className={`text-kicker ${labelClass}`}>{label}</p>
+        <p className={`text-caption ${labelClass}`}>{label}</p>
         <div className="text-body-sm text-text-secondary truncate">{desc}</div>
       </div>
       <span className={`text-stat tabular-nums text-body ${valueClass} shrink-0`}>
@@ -754,6 +923,7 @@ function RecapRow({
   );
 }
 
+/** The rail's stand-in for the recap when the recap is not rendering. */
 function WeekInBooksCard({
   week,
   superlatives,
@@ -767,13 +937,14 @@ function WeekInBooksCard({
   }
   return (
     <HubSection
-      kicker={<>Week {week}, In The Books</>}
+      kicker={`Week ${week} wrap`}
       action={
         <Link
           href="/matchups"
-          className="text-caption text-accent-gold hover:brightness-110 normal-case tracking-normal"
+          className={`${buttonVariants({ variant: "quiet", size: "sm" })} -mr-3`}
         >
-          Full recap &rarr;
+          Full recap
+          <ChevronRight aria-hidden="true" strokeWidth={2} data-icon="inline-end" />
         </Link>
       }
     >
@@ -831,18 +1002,18 @@ function PlayerToWatchRow({
   showProjected,
 }: {
   player: PlayerToWatch;
-  /** True when any player in the card carries a story detail, so the rows
-   * without one reserve the same two lines instead of shrinking. */
+  /** True when any player in the card carries a story detail. Rows render
+   * only the lines they have (UI/UX pass 2026-11-24: reserved empty lines
+   * left a visible gap beside the headliner). */
   showStory: boolean;
-  /** True when any player in the card renders a projected line, so the rows
-   * that suppress it reserve the same one line instead of shrinking. */
+  /** True when any player in the card renders a projected line. */
   showProjected: boolean;
 }) {
   return (
     <div>
       <PlayerLink
         playerId={player.playerId}
-        className="flex items-center gap-3"
+        className="flex min-h-11 items-center gap-3"
       >
         <PlayerHeadshot
           playerId={player.playerId}
@@ -851,7 +1022,7 @@ function PlayerToWatchRow({
           nflTeam={player.team}
         />
         <span className="min-w-0 flex-1">
-          <span className="text-kicker text-accent-gold block">{player.storyLabel}</span>
+          <span className="text-caption text-text-tertiary block">{sentenceCaseLabel(player.storyLabel)}</span>
           <span className="text-body-sm font-semibold text-text-primary truncate block">
             {player.name}
           </span>
@@ -866,39 +1037,30 @@ function PlayerToWatchRow({
             one. Tightening it to 2 would newly clip a long story detail, and
             silently dropping the end of a real claim is worse than a row that
             runs one line taller than its neighbour. */}
-        {showStory && (
+        {showStory && player.storyDetail && (
           <p
             data-testid="ptw-story"
-            className="text-body-sm text-text-secondary line-clamp-3 min-h-[2lh]"
+            className="text-body-sm text-text-secondary line-clamp-3"
           >
-            {player.storyDetail && <MonoNumerals text={player.storyDetail} />}
+            {player.storyDetail && <MonoNums text={player.storyDetail} />}
           </p>
         )}
         {/* The Leap's storyDetail already states the projection and the
-            baseline ppg ("Projected 20.8 off 15.3 ppg in 2025"), so a second
-            line repeating the same two numbers is redundant, not a new fact.
-            The row still reserves that line (empty) when a sibling renders one,
-            so the rows stay the same height instead of jittering. */}
-        {/* Not clamped. The rail narrowed to 24px padding, and a mid-season
-            baseline label ("Projected 20.8 · 15.3 ppg through Week 12") sits
-            right at the wrap boundary at this width, so a one-line clamp would
-            silently drop "Week 12" off a real number. min-h reserves the line
-            for the rows that suppress it; a rare wrap costs one line rather
-            than a fact. */}
-        {showProjected && (
+            baseline ppg, so a second line repeating the same two numbers is
+            redundant. The row still reserves that line (empty) when a sibling
+            renders one, so the rows stay the same height. Not clamped: a
+            mid-season baseline label sits right at the wrap boundary, and a
+            one-line clamp would silently drop "Week 12" off a real number. */}
+        {showProjected && player.storyKey !== "leap" && (
           <p
             data-testid="ptw-projected"
-            className="text-body-sm text-text-tertiary min-h-[1lh]"
+            className="text-body-sm text-text-tertiary"
           >
-            {player.storyKey !== "leap" && (
-              <>
-                Projected{" "}
-                <span className="text-stat tabular-nums text-text-secondary">
-                  {player.projectedPoints.toFixed(1)}
-                </span>{" "}
-                &middot; {player.baselineLabel}
-              </>
-            )}
+            Projected{" "}
+            <span className="text-stat tabular-nums text-text-secondary">
+              {player.projectedPoints.toFixed(1)}
+            </span>{" "}
+            &middot; <MonoNums text={player.baselineLabel} />
           </p>
         )}
       </div>
@@ -907,151 +1069,125 @@ function PlayerToWatchRow({
 }
 
 /**
- * Pre-kickoff replacement for the retrospective "Standouts" rail. Every card
- * is a true claim built from the current week's starter pool: this week's
- * projection plus an honest prior-production baseline (never "Standouts"
- * before a game has been played). Renders nothing when the list is empty.
+ * Every Players to watch row is a true claim built from the current week's
+ * starter pool: this week's projection plus an honest prior-production
+ * baseline (never "Standouts" before a game has been played).
  */
-function PlayersToWatchCard({
-  week,
-  players,
-}: {
-  week: number;
-  players: PlayerToWatch[];
-}) {
-  if (players.length === 0) return null;
+function PlayersToWatchRows({ players }: { players: PlayerToWatch[] }) {
   // Fixed structural regions: when any row carries a story detail (two lines)
   // or a projected line (one), EVERY row reserves the same space. It reserves
-  // space, it never invents copy, so the rows stop jittering between three and
-  // six lines depending on which stories the week happened to produce.
+  // space, it never invents copy.
   const showStory = players.some((p) => Boolean(p.storyDetail));
   const showProjected = players.some((p) => p.storyKey !== "leap");
   return (
-    <HubSection kicker={<>Players to Watch &middot; Week {week}</>}>
+    <RailRows>
+      {players.map((p) => (
+        <PlayerToWatchRow
+          key={p.playerId}
+          player={p}
+          showStory={showStory}
+          showProjected={showProjected}
+        />
+      ))}
+    </RailRows>
+  );
+}
+
+/** The desktop rail's Players to watch card. Renders nothing when empty. */
+function PlayersToWatchCard({ players }: { players: PlayerToWatch[] }) {
+  if (players.length === 0) return null;
+  return (
+    <HubSection kicker={HUB_LABELS.playersToWatch}>
       <RailCard>
-        <RailRows>
-          {players.map((p) => (
-            <PlayerToWatchRow
-              key={p.playerId}
-              player={p}
-              showStory={showStory}
-              showProjected={showProjected}
-            />
-          ))}
-        </RailRows>
+        <PlayersToWatchRows players={players} />
       </RailCard>
     </HubSection>
   );
 }
 
-/**
- * Prints a sentence with every numeral in the mono/tabular face, so a story
- * line like "Started 12 games for X in 2025" still obeys the three-font rule
- * without the query layer having to hand back pre-split fragments.
- */
-function MonoNumerals({ text }: { text: string }) {
-  const parts = text.split(/(\d[\d.,]*)/g);
-  return (
-    <>
-      {parts.map((part, i) =>
-        /^\d/.test(part) ? (
-          <span key={i} className="text-stat tabular-nums">
-            {part}
-          </span>
-        ) : (
-          part
-        )
-      )}
-    </>
-  );
+/** "ADD" -> "Add": a text label beside the crest, never color alone. */
+function moveKindLabel(kind: LeagueMove["kind"]): string {
+  return kind.charAt(0) + kind.slice(1).toLowerCase();
 }
 
 /**
  * What the league actually did, straight from our own synced transactions
- * table. Replaced the Sleeper-backed Trending module: this rail is about
- * these twelve teams, not the waiver wire at large, and it costs no live API
- * call on a page path. Renders nothing when there is nothing to show.
+ * table (no live Sleeper call on a page path).
  */
-function LeagueMovesCard({ moves }: { moves: LeagueMove[] }) {
-  if (moves.length === 0) return null;
+function LeagueMovesRows({ moves }: { moves: LeagueMove[] }) {
   // Fixed structural region for the optional support line: when any move has
-  // one, every row reserves exactly one line for it, so all four rows are the
-  // same height. When no move has support, no row renders it at all.
+  // one, every row reserves exactly one line for it.
   const showSupport = moves.some((m) => m.support);
   return (
-    <HubSection kicker="League Moves">
-      <RailCard>
-        <RailRows>
-          {moves.map((move) => (
-            <div key={move.transactionId} className="flex items-start gap-3">
-              <PlayerLink playerId={move.headline.id} className="shrink-0">
-                <PlayerHeadshot
-                  playerId={move.headline.id}
-                  name={move.headline.name}
-                  size={40}
-                  nflTeam={move.headline.nflTeam}
-                  decorative
-                />
-              </PlayerLink>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-baseline justify-between gap-2">
-                  <PlayerLink playerId={move.headline.id} className="min-w-0">
-                    <p className="text-body-sm font-semibold text-text-primary truncate">
-                      {move.headline.name}
-                    </p>
-                  </PlayerLink>
-                  {move.age && (
-                    <span className="text-caption text-text-tertiary shrink-0">
-                      <MonoNumerals text={move.age} />
-                    </span>
-                  )}
-                </div>
-                <p className="text-caption text-text-tertiary truncate">
-                  {move.headline.position ?? "?"} &middot; {move.headline.nflTeam ?? "FA"}
+    <RailRows>
+      {moves.map((move) => (
+        <div key={move.transactionId} className="flex items-start gap-3">
+          <PlayerLink playerId={move.headline.id} className="shrink-0">
+            <PlayerHeadshot
+              playerId={move.headline.id}
+              name={move.headline.name}
+              size={44}
+              nflTeam={move.headline.nflTeam}
+              decorative
+            />
+          </PlayerLink>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-baseline justify-between gap-2">
+              <PlayerLink playerId={move.headline.id} className="min-w-0">
+                <p className="text-body-sm font-semibold text-text-primary truncate">
+                  {move.headline.name}
                 </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="text-caption text-accent-gold shrink-0">
-                    {move.kind}
-                  </span>
-                  <div className="flex shrink-0 -space-x-1.5">
-                    {move.franchises.map((f) => (
-                      <FranchiseLogo
-                        key={f.id}
-                        slug={f.slug}
-                        name={f.name}
-                        abbreviation={f.abbreviation ?? undefined}
-                        brandingColor={f.brandingColor ?? undefined}
-                        avatarUrl={f.avatarUrl}
-                        size={20}
-                        decorative
-                      />
-                    ))}
-                  </div>
-                  {/* Secondary attribution, clickable like every other
-                      franchise identity on the site. The crests above stay
-                      decorative because these names sit right beside them. */}
-                  <span className="text-caption text-text-tertiary truncate">
-                    {move.franchises.map((f, i) => (
-                      <span key={f.id}>
-                        {i > 0 && " / "}
-                        <TeamLink slug={f.slug} className="text-text-tertiary">
-                          {f.name}
-                        </TeamLink>
-                      </span>
-                    ))}
-                  </span>
-                </div>
-                {showSupport && (
-                  <p className="mt-2 min-h-[1lh] text-body-sm text-text-secondary truncate">
-                    {move.support}
-                  </p>
-                )}
-              </div>
+              </PlayerLink>
+              {move.age && (
+                <span className="text-caption text-text-tertiary shrink-0">
+                  <MonoNums text={move.age} />
+                </span>
+              )}
             </div>
-          ))}
-        </RailRows>
-      </RailCard>
-    </HubSection>
+            <p className="text-caption text-text-tertiary truncate">
+              {move.headline.position ?? "?"} &middot; {move.headline.nflTeam ?? "FA"}
+            </p>
+            <div className="mt-2 flex items-center gap-2" data-testid="move-kind-row">
+              <span className="text-caption text-accent-gold shrink-0" data-testid="move-kind">
+                {moveKindLabel(move.kind)}
+              </span>
+              <div className="flex shrink-0 -space-x-1.5">
+                {move.franchises.map((f) => (
+                  <FranchiseLogo
+                    key={f.id}
+                    slug={f.slug}
+                    name={f.name}
+                    abbreviation={f.abbreviation ?? undefined}
+                    brandingColor={f.brandingColor ?? undefined}
+                    avatarUrl={f.avatarUrl}
+                    size={20}
+                    decorative
+                  />
+                ))}
+              </div>
+              {/* Secondary attribution, clickable like every other franchise
+                  identity on the site. The crests stay decorative because
+                  these names sit right beside them. */}
+              <span className="text-caption text-text-tertiary truncate">
+                {move.franchises.map((f, i) => (
+                  <span key={f.id}>
+                    {i > 0 && " / "}
+                    <TeamLink slug={f.slug} className="text-text-tertiary">
+                      {f.name}
+                    </TeamLink>
+                  </span>
+                ))}
+              </span>
+            </div>
+            {showSupport && (
+              <p className="mt-2 min-h-[1lh] text-body-sm text-text-secondary truncate">
+                {move.support}
+              </p>
+            )}
+          </div>
+        </div>
+      ))}
+    </RailRows>
   );
 }
 
@@ -1060,40 +1196,35 @@ function LeagueMovesCard({ moves }: { moves: LeagueMove[] }) {
  * beating, and the closest call this league has ever produced in this week
  * number. Every line is a real completed game (see lib/queries/week-history).
  */
-function WeekInHistoryCard({
+function WeekInHistoryRows({
   week,
   receipts,
 }: {
   week: number;
   receipts: WeekReceipt[];
 }) {
-  if (receipts.length === 0) return null;
   return (
-    <HubSection kicker="This Week in HMLML History">
-      <RailCard>
-        <RailRows>
-          {receipts.map((r) => (
-            <div key={`${r.kind}-${r.seasonYear}`}>
-              <div className="flex items-baseline justify-between gap-3">
-                <p className="text-kicker text-accent-gold">
-                  {r.label} &middot;{" "}
-                  <span className="text-stat tabular-nums">{r.seasonYear}</span>{" "}
-                  Week <span className="text-stat tabular-nums">{week}</span>
-                </p>
-                <span className="text-stat tabular-nums text-body text-text-primary shrink-0">
-                  {r.value}
-                </span>
-              </div>
-              <p
-                data-testid="week-history-claim"
-                className="mt-2 text-body-sm text-text-secondary"
-              >
-                {r.claim}
-              </p>
-            </div>
-          ))}
-        </RailRows>
-      </RailCard>
-    </HubSection>
+    <RailRows>
+      {receipts.map((r) => (
+        <div key={`${r.kind}-${r.seasonYear}`}>
+          <div className="flex items-baseline justify-between gap-3">
+            <p className="text-caption text-accent-gold">
+              {r.label} &middot;{" "}
+              <span className="font-mono tabular-nums">{r.seasonYear}</span> Week{" "}
+              <span className="font-mono tabular-nums">{week}</span>
+            </p>
+            <span className="text-stat tabular-nums text-body text-text-primary shrink-0">
+              {r.value}
+            </span>
+          </div>
+          <p
+            data-testid="week-history-claim"
+            className="mt-2 text-body-sm text-text-secondary"
+          >
+            <MonoNums text={r.claim} />
+          </p>
+        </div>
+      ))}
+    </RailRows>
   );
 }

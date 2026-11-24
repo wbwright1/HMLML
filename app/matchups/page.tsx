@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronLeft } from "lucide-react";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { PageSection } from "@/components/page-section";
 import { EmptyState } from "@/components/empty-state";
@@ -12,6 +13,11 @@ import { findNamedRivalry } from "@/lib/queries/rivalries";
 
 // ISR: rendered once, then served from cache until a successful sync calls
 // revalidatePath("/", "layout"). Time window is only a backstop (lib/cache.ts).
+
+/** 44px text link with a padded hit area and the standard focus ring. */
+const NAV_LINK =
+  "inline-flex min-h-11 items-center gap-1 rounded-md px-2 -mx-2 text-body-sm font-medium transition-[color,scale] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas";
+
 export const revalidate = 3600;
 
 export const metadata = {
@@ -32,7 +38,7 @@ export default async function MatchupsPage() {
 
   if (!data || data.matchups.length === 0) {
     return (
-      <PageSection label="Head to Head" title="Matchups.">
+      <PageSection as="h1" title="Matchups">
         <EmptyState
           icon="calendar"
           title="No Matchups Available"
@@ -63,9 +69,11 @@ export default async function MatchupsPage() {
 
   return (
     <>
-      <PageSection label={`${seasonYear} Season`} title={`Week ${week}.`}>
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="text-body-lg text-text-secondary">
+      <PageSection
+        as="h1"
+        title={`Week ${week}`}
+        intro={
+          <>
             {allComplete
               ? "Final results"
               : hasLiveMatchups
@@ -73,34 +81,38 @@ export default async function MatchupsPage() {
                 : allScheduled
                   ? "Upcoming matchups"
                   : "Matchups in progress"}
-          </p>
-          {hasLiveMatchups && <SuperlativeBadge text="Live" variant="green" />}
-          {allComplete && <SuperlativeBadge text="Final" variant="neutral" />}
-        </div>
-
+            {hasLiveMatchups && (
+              <span className="ml-2 align-middle">
+                <SuperlativeBadge text="Live" variant="green" />
+              </span>
+            )}
+          </>
+        }
+      >
         {/* Week navigation links */}
-        <div className="flex flex-wrap items-center gap-4 mt-2">
+        <nav aria-label="Week navigation" className="flex flex-wrap items-center gap-x-2">
           {week > 1 && (
             <Link
               href={`/seasons/${seasonYear}/week/${week - 1}`}
-              className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
+              className={`${NAV_LINK} text-text-tertiary hover:text-text-primary`}
             >
-              &larr; Week {week - 1}
+              <ChevronLeft className="size-4" strokeWidth={2} aria-hidden />
+              Week <span className="font-mono tabular-nums">{week - 1}</span>
             </Link>
           )}
           <Link
             href={`/seasons/${seasonYear}`}
-            className="text-body-sm text-accent-gold hover:brightness-110 transition-colors"
+            className={`${NAV_LINK} text-accent-gold hover:brightness-110`}
           >
-            Full {seasonYear} Season
+            Full <span className="font-mono tabular-nums">{seasonYear}</span> season
           </Link>
           <Link
             href={`/schedule?season=${seasonYear}`}
-            className="text-body-sm text-accent-gold hover:brightness-110 transition-colors"
+            className={`${NAV_LINK} text-accent-gold hover:brightness-110`}
           >
-            Full Season Schedule
+            Full season schedule
           </Link>
-        </div>
+        </nav>
       </PageSection>
 
       <section className="pb-8 md:pb-12 space-y-4">
@@ -115,7 +127,7 @@ export default async function MatchupsPage() {
           <ScrollReveal key={matchup.matchupId} delay={index * 40}>
             <Link
               href={`/matchups/${seasonYear}/${week}/${matchup.matchupId}`}
-              className="block rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+              className="block rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
               aria-label={`${matchup.homeTeam.franchiseName} versus ${matchup.awayTeam.franchiseName}${rivalryName ? `, ${rivalryName}` : ""}, view detail`}
             >
               <MatchupRow

@@ -95,7 +95,7 @@ function OptionRow({
       aria-selected={active}
       onClick={onSelect}
       onMouseEnter={() => onHover(id)}
-      className={`flex items-center gap-3 rounded-[10px] px-3 py-2 text-body-sm outline-none ${
+      className={`flex min-h-11 items-center gap-3 rounded-[10px] px-3 py-2 text-body-sm outline-none focus-visible:ring-2 focus-visible:ring-ring ${
         active
           ? "bg-accent-gold-light text-text-primary"
           : "text-text-secondary hover:bg-surface"

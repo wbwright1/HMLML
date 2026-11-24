@@ -212,7 +212,7 @@ export function LeaderboardTable({
       {data.length === 0 ? (
         <EmptyState
           icon="trophy"
-          title="No Leaderboard Data"
+          title="No leaderboard data"
           description={`No leaderboard data available${activeSeason !== "all-time" ? ` for ${activeSeason}` : ""}.`}
         />
       ) : (
@@ -331,7 +331,7 @@ function DivisionHeader({ group }: { group: DivisionGroupData }) {
   return (
     <p className="flex items-center justify-between px-1 pt-2 text-kicker text-accent-gold">
       <span>{group.divisionName}</span>
-      <span className="font-mono tabular-nums text-text-tertiary normal-case tracking-normal">
+      <span className="font-mono tabular-nums text-text-tertiary">
         {wins}-{losses}
         {ties > 0 ? `-${ties}` : ""}
       </span>
@@ -396,11 +396,15 @@ function DesktopRow({
   gamesBack: (entry: LeaderboardEntry) => string;
   record: (entry: LeaderboardEntry) => string;
 }) {
+  // Figures on the gold-tinted leader row stay at secondary or above:
+  // tertiary on the gold tint fails AA (4.43:1).
   const statText = !berthsActive
     ? "text-text-secondary"
     : isBerth
       ? "text-text-primary"
-      : "text-text-tertiary";
+      : isLeader
+        ? "text-text-secondary"
+        : "text-text-tertiary";
 
   return (
     <tr
@@ -465,16 +469,20 @@ function MobileCard({
   berthsActive: boolean;
   record: (entry: LeaderboardEntry) => string;
 }) {
+  // Figures on the gold-tinted leader row stay at secondary or above:
+  // tertiary on the gold tint fails AA (4.43:1).
   const statText = !berthsActive
     ? "text-text-secondary"
     : isBerth
       ? "text-text-primary"
-      : "text-text-tertiary";
+      : isLeader
+        ? "text-text-secondary"
+        : "text-text-tertiary";
 
   return (
     <Link
       href={`/teams/${entry.slug}`}
-      className={`flex items-center gap-3 rounded-[14px] border border-border p-3 transition-colors hover:border-border-strong ${
+      className={`flex min-h-14 items-center gap-3 rounded-[14px] border border-border p-3 transition-[border-color,scale] duration-150 hover:border-border-strong active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${
         isLeader ? "bg-accent-gold-light" : "bg-surface"
       }${isBerth && berthsActive && !isLeader ? " border-l-2 border-l-accent-gold/60" : ""}`}
     >
@@ -502,8 +510,15 @@ function MobileCard({
         <span className={`font-mono text-sm tabular-nums font-bold ${statText}`}>
           {record(entry)}
         </span>
-        <span className="font-mono text-xs tabular-nums text-text-tertiary">
-          {entry.pointsScored.toFixed(1)} PF
+        <span
+          className={`text-caption ${
+            isLeader ? "text-text-secondary" : "text-text-tertiary"
+          }`}
+        >
+          <span className="font-mono tabular-nums">
+            {entry.pointsScored.toFixed(1)}
+          </span>{" "}
+          PF
         </span>
       </div>
     </Link>

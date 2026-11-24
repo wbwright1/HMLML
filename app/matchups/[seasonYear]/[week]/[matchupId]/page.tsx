@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
+import { BackLink } from "@/components/back-link";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { TeamLink } from "@/components/team-link";
 import { MatchupLiveScore } from "@/components/matchup-live-score";
@@ -143,12 +144,9 @@ export default async function MatchupDetailPage({
   return (
     <div className="py-4 md:py-6">
       {/* Back link */}
-      <Link
-        href="/matchups"
-        className="inline-flex items-center gap-1.5 text-body-sm text-text-tertiary hover:text-text-primary transition-colors mb-6"
-      >
-        <span aria-hidden="true">&larr;</span> Hub &middot; Week {week}
-      </Link>
+      <div className="mb-4">
+        <BackLink href="/matchups" label={`Week ${week} matchups`} />
+      </div>
 
       {/* Hero card */}
       <section
@@ -169,12 +167,12 @@ export default async function MatchupDetailPage({
               >
                 <Link
                   href={`/records/head-to-head?a=${homeTeam.franchiseSlug}&b=${awayTeam.franchiseSlug}`}
-                  className="text-kicker text-accent-gold transition-colors hover:text-text-primary"
+                  className="inline-flex min-h-11 items-center rounded-md px-2 text-body-sm font-semibold text-accent-gold transition-colors hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {namedRivalry.name}
                 </Link>
                 {namedRivalry.tagline && (
-                  <span className="max-w-xs font-serif text-body-sm italic text-text-secondary">
+                  <span className="max-w-xs text-body-sm text-text-secondary">
                     {namedRivalry.tagline}
                   </span>
                 )}
@@ -184,7 +182,7 @@ export default async function MatchupDetailPage({
                 className="text-kicker text-accent-gold"
                 title="Mutual top rivals"
               >
-                Rivalry Week
+                Rivalry week
               </span>
             )}
             {/* Score + live chrome are a client island so an in-progress game
@@ -203,7 +201,7 @@ export default async function MatchupDetailPage({
               awayIsWinner={awayTeam.isWinner === true}
             />
             {aside && (
-              <span className="font-serif italic text-body-sm text-accent-warm">
+              <span className="text-body-sm text-accent-warm">
                 {aside}
               </span>
             )}
@@ -241,7 +239,7 @@ function TeamBlock({
     // the hover affordance dead.
     <TeamLink
       slug={team.franchiseSlug}
-      className={`flex min-w-0 items-center gap-3 ${
+      className={`flex min-h-11 min-w-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${
         winner ? "text-text-primary" : "text-text-secondary"
       } ${isEnd ? "md:flex-row-reverse md:text-right" : ""}`}
     >

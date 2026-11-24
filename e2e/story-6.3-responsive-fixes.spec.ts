@@ -54,8 +54,10 @@ test.describe("Story 6.3: Responsive Edge-Case Fixes", () => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/");
 
-    // Look for grid containers with grid-cols-2 class
-    const grids = page.locator(".grid.grid-cols-2");
+    // The superlative grid is the 2-up / 4-up grid (grid-cols-2
+    // md:grid-cols-4). Other 2-column grids on the hub (e.g. the week-recap
+    // stat tiles, which go to 3 columns) are deliberately different.
+    const grids = page.locator(".grid.grid-cols-2.md\\:grid-cols-4");
     const count = await grids.count();
 
     if (count > 0) {
@@ -77,7 +79,7 @@ test.describe("Story 6.3: Responsive Edge-Case Fixes", () => {
     await page.goto("/");
 
     // At 1280px (md+), the grid-cols-2 md:grid-cols-4 should resolve to 4 columns
-    const grids = page.locator(".grid.grid-cols-2");
+    const grids = page.locator(".grid.grid-cols-2.md\\:grid-cols-4");
     const count = await grids.count();
 
     if (count > 0) {

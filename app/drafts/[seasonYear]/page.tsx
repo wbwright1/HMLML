@@ -90,21 +90,21 @@ export default async function DraftDetailPage({
     Number.isFinite(requestedRound) && requestedRound > 0 ? requestedRound : 1;
 
   const primaryDraft = !isUpcoming && draftData ? draftData.drafts[0] : null;
-  const kicker = isUpcoming
-    ? `${year} Rookie Draft · Upcoming`
+  const intro = isUpcoming
+    ? `The ${year} rookie draft, still to come.`
     : draftData!.drafts.length === 1
-      ? `${year} ${primaryDraft!.draftType === "startup" ? "Startup" : "Rookie"} Draft · Completed`
-      : `${year} Draft · Completed`;
+      ? `The ${year} ${primaryDraft!.draftType === "startup" ? "startup" : "rookie"} draft, pick by pick.`
+      : `The ${year} drafts, pick by pick.`;
 
   return (
     <>
       <section className="pt-8 pb-6 md:pt-12 md:pb-8 space-y-4">
-        <BackLink href="/drafts" label="All Drafts" />
+        <BackLink href="/drafts" label="All drafts" />
 
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div className="space-y-2">
-            <p className="text-kicker">{kicker}</p>
-            <h1 className="text-h1">Draft Board.</h1>
+            <h1 className="text-h1">Draft Board</h1>
+            <p className="text-body text-text-secondary">{intro}</p>
           </div>
           {isUpcoming && <SuperlativeBadge text="Upcoming" variant="gold" />}
         </div>
@@ -196,12 +196,12 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
   return (
     <div className="flex min-h-[128px] min-w-0 flex-col rounded-lg border border-divider bg-surface px-2 py-2">
       <div className="flex items-center justify-between gap-1">
-        <span className="font-mono text-[10px] tabular-nums text-text-tertiary">
+        <span className="font-mono text-caption tabular-nums text-text-tertiary">
           {pick.round}.{slot ?? "-"}
         </span>
         {pick.playerPosition && (
           <span
-            className="text-[10px] font-bold uppercase tracking-[0.02em]"
+            className="text-caption font-bold"
             style={{ color: getPositionColor(pick.playerPosition).badge.text }}
           >
             {pick.playerPosition}
@@ -242,7 +242,7 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
         {pick.playerName && (
           <PlayerLink playerId={pick.playerId} className="block">
             <p
-              className="line-clamp-2 text-center text-[12px] font-semibold leading-[1.15] text-text-primary"
+              className="line-clamp-2 text-center text-caption font-semibold leading-[1.15] text-text-primary"
               title={pick.playerName}
             >
               {pick.playerName}
@@ -251,7 +251,7 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
         )}
 
         {pick.roster && (
-          <div className="flex flex-wrap justify-center gap-x-1.5 font-mono text-[10px] tabular-nums">
+          <div className="flex flex-wrap justify-center gap-x-1.5 font-mono text-caption tabular-nums">
             {(["QB", "RB", "WR", "TE"] as const).map((pos) => (
               <span key={pos} style={{ color: getPositionColor(pos).badge.text }}>
                 {pick.roster![pos]}
@@ -263,7 +263,7 @@ function BoardCell({ pick, slot }: { pick: NormalizedPick | null; slot?: number 
 
         {isTradedPick(pick) && pick.originalName && (
           <div
-            className="mt-0.5 flex min-w-0 items-center justify-center gap-1 text-[10px] text-text-tertiary"
+            className="mt-0.5 flex min-w-0 items-center justify-center gap-1 text-caption text-text-tertiary"
             data-testid="via-note"
             title={`via ${pick.originalName}`}
             aria-label={`via ${pick.originalName}`}
@@ -299,7 +299,11 @@ function TeamCrest({
 }) {
   if (slug) {
     return (
-      <TeamLink slug={linked ? slug : null} aria-label={name} className="inline-flex">
+      // No aria-label on the link: when linked, the crest itself carries the
+      // franchise name (img alt or the monogram's role="img" label), so the
+      // accessible name always matches what is shown (WCAG 2.5.3). Unlinked,
+      // the caller's own link names the team beside it.
+      <TeamLink slug={linked ? slug : null} className="inline-flex">
         <FranchiseLogo
           slug={slug}
           name={name}
@@ -307,7 +311,7 @@ function TeamCrest({
           brandingColor={brandingColor ?? undefined}
           avatarUrl={avatarUrl}
           size={size}
-          decorative
+          decorative={!linked}
         />
       </TeamLink>
     );
@@ -319,7 +323,7 @@ function TeamCrest({
   const px = size === "sm" ? "h-8 w-8" : "h-12 w-12";
   return (
     <div
-      className={`flex ${px} shrink-0 items-center justify-center rounded-md bg-surface-muted text-[10px] font-bold text-text-primary`}
+      className={`flex ${px} shrink-0 items-center justify-center rounded-md bg-surface-muted text-caption font-bold text-text-primary`}
     >
       <span>{(abbreviation ?? name).slice(0, 2).toUpperCase()}</span>
     </div>
@@ -395,7 +399,7 @@ function PickRow({ pick, slot }: { pick: NormalizedPick; slot: number }) {
       )}
       {pick.playerPosition && (
         <span
-          className="shrink-0 rounded-full px-2 py-0.5 text-[12px] font-medium uppercase tracking-[0.06em]"
+          className="shrink-0 rounded-full px-2 py-0.5 text-caption font-medium"
           style={{
             backgroundColor: getPositionColor(pick.playerPosition).badge.bg,
             color: getPositionColor(pick.playerPosition).badge.text,
@@ -462,7 +466,7 @@ function DesktopBoard({ board }: { board: DraftBoard }) {
                   size="sm"
                   linked={false}
                 />
-                <span className="max-w-full truncate text-[9px] font-bold text-text-tertiary">
+                <span className="max-w-full truncate text-caption font-bold text-text-tertiary">
                   {code}
                 </span>
               </TeamLink>
@@ -508,13 +512,13 @@ function MobileBoard({
               href={`${basePath}?round=${r}`}
               scroll={false}
               aria-current={isActive ? "page" : undefined}
-              className={`shrink-0 rounded-full border px-4 py-2 text-body-sm font-medium transition-colors ${
+              className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-4 text-body-sm font-semibold transition-[scale,background-color,color] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${
                 isActive
-                  ? "border-accent-gold/30 bg-accent-gold-light text-accent-gold"
-                  : "border-border bg-surface text-text-tertiary"
+                  ? "border-text-primary bg-text-primary text-canvas"
+                  : "border-border-strong text-text-secondary hover:bg-surface-muted"
               }`}
             >
-              Round {r}
+              Round <span className="ml-1 font-mono tabular-nums">{r}</span>
             </Link>
           );
         })}
@@ -557,11 +561,12 @@ function CompletedDraftSection({
           />
           {draft.isLegacyEra && (
             <span className="text-caption text-text-tertiary bg-surface-muted px-2 py-0.5 rounded-full">
-              Legacy Era
+              Legacy era
             </span>
           )}
           <span className="text-body-sm text-text-tertiary">
-            {draft.picks.length} picks &middot; {board.rounds.length} rounds
+            <span className="font-mono tabular-nums">{draft.picks.length}</span> picks &middot;{" "}
+            <span className="font-mono tabular-nums">{board.rounds.length}</span> rounds
           </span>
         </div>
         <PositionLegend positions={orderedPositions} />

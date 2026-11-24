@@ -88,7 +88,7 @@ test.describe("The Board, signed out", () => {
     await page.goto("/book");
 
     await expect(
-      page.getByRole("heading", { level: 1, name: "The Book." }),
+      page.getByRole("heading", { level: 1, name: "The Book", exact: true }),
     ).toBeVisible();
 
     // Every board line renders a signed spread chip. Assert on the real
@@ -109,23 +109,27 @@ test.describe("The Board, signed out", () => {
         .getByText("Claim your team to get a slip."),
     ).toBeVisible();
 
-    // One payout vocabulary sitewide: "returns" (total) plus a labeled
-    // "profit" figure, not the old ambiguous "wins $X.XX". The mobile-only
-    // inline payout and the desktop column both match the text; at this
-    // (desktop) viewport only the desktop one is actually visible, so check
-    // all matches rather than assuming DOM order puts the visible one first.
-    const payoutMatches = page.getByText(
-      /returns \$\d+\.\d\d \(\$\d+\.\d\d profit\)/,
-    );
-    const payoutCount = await payoutMatches.count();
-    let sawVisiblePayout = false;
-    for (let i = 0; i < payoutCount; i++) {
-      if (await payoutMatches.nth(i).isVisible()) {
-        sawVisiblePayout = true;
-        break;
-      }
+    // The lock day is said ONCE, in the alert above the board, built from the
+    // real kickoff data, not repeated as a kicker on every card.
+    const board = page.locator("#book-pane-board");
+    // (No alert at all once every game has kicked off.)
+    const anyOpen = (await board.locator('[data-testid="book-lock-alert"]').count()) > 0;
+    if (anyOpen) {
+      await expect(board.locator('[data-testid="book-lock-alert"]')).toHaveCount(1);
+      await expect(board.locator('[data-testid="book-lock-alert"]')).toContainText(
+        /(Most lines|Lines) lock /,
+      );
     }
-    expect(sawVisiblePayout).toBe(true);
+
+    // Column heads once above the cards, not per row.
+    await expect(board.getByText("Spread", { exact: true })).toHaveCount(1);
+    await expect(board.getByText("Moneyline", { exact: true })).toHaveCount(1);
+
+    // The "$10 returns $X ($Y profit)" sentence belongs to a member's own
+    // pick only; a visitor has none, so no game card carries one.
+    await expect(
+      board.locator("section").getByText(/returns \$\d+\.\d\d \(\$\d+\.\d\d profit\)/),
+    ).toHaveCount(0);
 
     // The three-chip showcase row (On the Board / Biggest Line / Coin Flip)
     // is gone from the header entirely. Exact match: getByText's default
@@ -170,8 +174,24 @@ test.describe("The Board, signed in", () => {
     await firstPick.click();
 
     // The slip and the card both reflect it in the browser...
-    await expect(page.getByText("Your pick ·")).toBeVisible();
+    await expect(page.getByText("Your pick:")).toBeVisible();
     await expect(firstPick).toHaveAttribute("aria-pressed", "true");
+
+    // ...the save is confirmed in a toast naming the team and its line...
+    const pickedName = label.replace(/^Pick /, "").replace(/\s+\S+$/, "");
+    const toast = page
+      .locator("#book-pane-board")
+      .getByRole("status")
+      .filter({ hasText: "Pick saved:" });
+    await expect(toast).toBeVisible();
+    await expect(toast).toContainText(pickedName);
+
+    // ...and the payout sentence appears for the picked side only, once.
+    await expect(
+      page
+        .locator("#book-pane-board section")
+        .getByText(/returns \$\d+\.\d\d \(\$\d+\.\d\d profit\)/),
+    ).toHaveCount(1);
 
     // ...and the row is really in Postgres, with the line snapshotted onto it.
     await expect
@@ -210,9 +230,39 @@ test.describe("The Board, signed in", () => {
       )
       .toBe("booked");
 
-    // Clicking the same side again clears it, in the UI and in the database.
+    // Undo in the toast reverses the pick through the same server action:
+    // gone from the card AND from Postgres.
+    await toast.getByRole("button", { name: "Undo" }).click();
+    await expect(firstPick).toHaveAttribute("aria-pressed", "false");
+    await expect
+      .poll(
+        async () => {
+          const rows = (await sql`
+            SELECT COUNT(*)::int AS n FROM "book_picks"
+            WHERE "member_id" = ${seededMemberId}`) as { n: number }[];
+          return rows[0]?.n ?? -1;
+        },
+        { timeout: 15000 },
+      )
+      .toBe(0);
+
+    // Book it again, then clear it by clicking the same side a second time,
+    // in the UI and in the database.
     await firstPick.click();
-    await expect(page.getByText("Your pick ·")).toHaveCount(0);
+    await expect(firstPick).toHaveAttribute("aria-pressed", "true");
+    await expect
+      .poll(
+        async () => {
+          const rows = (await sql`
+            SELECT COUNT(*)::int AS n FROM "book_picks"
+            WHERE "member_id" = ${seededMemberId}`) as { n: number }[];
+          return rows[0]?.n ?? -1;
+        },
+        { timeout: 15000 },
+      )
+      .toBe(1);
+    await firstPick.click();
+    await expect(page.getByText("Your pick:")).toHaveCount(0);
 
     await expect
       .poll(
@@ -278,6 +328,11 @@ test.describe("The Board, signed in", () => {
       await expect.poll(bookedPicks, { timeout: 15000 }).toBe(i / 2 + 1);
     }
 
+    // Let the last "Pick saved" toast time out first: it floats over the
+    // bottom of the screen, where the slip's lock button can sit.
+    await expect(
+      page.locator("#book-pane-board").getByText("Pick saved:"),
+    ).toHaveCount(0, { timeout: 15000 });
     await page.getByRole("button", { name: "Lock in picks" }).click();
 
     // Locked in the browser: the CTA becomes the commitment and every pick

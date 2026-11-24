@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { Users } from "lucide-react";
+import { MonoNumerals } from "@/components/book/mono-numerals";
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { FranchiseLogo } from "@/components/franchise-logo";
@@ -226,7 +228,7 @@ function MarketCard({
       </div>
 
       {copy.snark && (
-        <p className="mb-3.5 font-serif text-body-sm italic text-text-tertiary">
+        <p className="mb-3.5 text-body-sm text-text-secondary">
           {copy.snark}
         </p>
       )}
@@ -244,7 +246,7 @@ function MarketCard({
         ))}
       </div>
 
-      <p className="mt-4 rounded-[10px] border border-dashed border-border-strong px-3 py-2 text-[11px] leading-relaxed text-text-tertiary">
+      <p className="mt-4 rounded-[10px] border border-dashed border-border-strong px-3 py-2 text-caption leading-relaxed text-text-tertiary">
         <Copy segments={futuresRulesFor(board.market, finalRegularWeek)} />
       </p>
     </div>
@@ -289,10 +291,10 @@ function EntryRow({
     <>
       <EntryMark entry={entry} />
       <span className="min-w-0 flex-1 text-left">
-        <span className="block truncate text-body-sm font-semibold text-text-primary">
+        <span className="block text-body-sm font-semibold text-pretty break-words text-text-primary">
           {entry.name}
         </span>
-        <span className="block truncate text-[11px] text-text-tertiary">
+        <span className="block truncate text-caption text-text-tertiary">
           {entry.position && (
             <>
               {entry.position}
@@ -313,7 +315,7 @@ function EntryRow({
       </span>
 
       {entry.pickCount >= MIN_PICKS_FOR_CONSENSUS && (
-        <span className="hidden shrink-0 text-[11px] text-text-tertiary sm:block">
+        <span className="hidden shrink-0 text-caption text-text-tertiary sm:block">
           <span className="font-mono tabular-nums">{entry.pickCount}</span> in
         </span>
       )}
@@ -321,27 +323,25 @@ function EntryRow({
       <span className="shrink-0 rounded-lg bg-surface-muted px-2.5 py-1 font-mono text-body-sm font-bold tabular-nums text-text-primary">
         {formatMoneyline(entry.odds)}
       </span>
-      <span className="hidden w-[168px] shrink-0 text-right text-caption normal-case leading-tight tracking-normal text-text-tertiary sm:block">
-        <span className="font-mono tabular-nums">
-          {payoutLabel(entry.odds, DEFAULT_STAKE)}
-        </span>
+      <span className="hidden w-[168px] shrink-0 text-right text-caption leading-tight text-text-tertiary sm:block">
+        <MonoNumerals text={payoutLabel(entry.odds, DEFAULT_STAKE)} />
       </span>
 
       {entry.gradedResult === "win" && (
         <span className="shrink-0 text-caption font-semibold text-accent-green">
-          Won ✓
+          Won
         </span>
       )}
       {entry.gradedResult === "loss" && (
         <span className="shrink-0 text-caption font-semibold text-accent-warm">
-          Lost ✗
+          Lost
         </span>
       )}
     </>
   );
 
   const base =
-    "flex w-full items-center gap-3 rounded-[11px] border p-2.5 text-left transition-colors duration-150";
+    "flex min-h-11 w-full items-center gap-3 rounded-[11px] border p-2.5 text-left";
   const skin = picked
     ? "border-accent-gold/45 bg-accent-gold-light"
     : "border-border bg-white/[.03]";
@@ -360,7 +360,7 @@ function EntryRow({
       disabled={pending}
       aria-pressed={picked}
       aria-label={`Pick ${entry.name} ${formatMoneyline(entry.odds)}`}
-      className={`${base} ${skin} cursor-pointer hover:border-border-strong disabled:cursor-wait`}
+      className={`${base} ${skin} cursor-pointer transition-[scale,border-color] duration-150 ease-out hover:border-border-control active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-wait`}
     >
       {content}
     </button>
@@ -417,10 +417,12 @@ function EntryMark({ entry, size = 28 }: { entry: FuturesEntry; size?: number })
   return (
     <span
       aria-hidden="true"
-      className="flex shrink-0 items-center justify-center rounded-full bg-surface-muted font-mono font-bold text-text-tertiary"
-      style={{ width: size, height: size, fontSize: size < 28 ? 9 : 11 }}
+      className="flex shrink-0 items-center justify-center rounded-full bg-surface-muted text-text-tertiary"
+      style={{ width: size, height: size }}
     >
-      ALL
+      {/* An icon, not a 9px "ALL": the mark is decorative (the row names
+          The Field in words) and nothing on the site goes under 12px. */}
+      <Users className={size < 28 ? "size-3.5" : "size-4"} strokeWidth={2} />
     </span>
   );
 }
@@ -440,12 +442,15 @@ function FuturesSlip({
 }) {
   return (
     <div className="card-surface p-5">
-      <p className="text-kicker mb-3.5">Your Futures</p>
+      <p className="text-kicker mb-3.5">Your futures</p>
 
       {!signedIn ? (
         <p className="text-body-sm text-text-secondary">
           {FUTURES_COPY.signedOut}{" "}
-          <Link href="/claim" className="font-semibold text-accent-gold">
+          <Link
+            href="/claim"
+            className="-my-3 inline-block rounded-md py-3 font-semibold text-accent-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+          >
             Claim your team.
           </Link>
         </p>
@@ -496,10 +501,10 @@ function SlipRow({
   let tag: string;
   let tone: string;
   if (entry?.gradedResult === "win") {
-    tag = "Won ✓";
+    tag = "Won";
     tone = "text-accent-green";
   } else if (entry?.gradedResult === "loss") {
-    tag = "Lost ✗";
+    tag = "Lost";
     tone = "text-accent-warm";
   } else if (board.locked) {
     tag = "Locked";
@@ -531,11 +536,9 @@ function SlipRow({
             {formatMoneyline(pick.oddsAtPick)}
           </span>
         </span>
-        <span className="block text-[11px] leading-tight text-text-tertiary">
+        <span className="block text-caption leading-tight text-text-tertiary">
           {label} ·{" "}
-          <span className="font-mono tabular-nums">
-            {payoutLabel(pick.oddsAtPick, DEFAULT_STAKE)}
-          </span>
+          <MonoNumerals text={payoutLabel(pick.oddsAtPick, DEFAULT_STAKE)} />
         </span>
       </span>
       <span className={`shrink-0 text-caption font-semibold ${tone}`}>

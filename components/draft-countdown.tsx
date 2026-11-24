@@ -61,7 +61,7 @@ export function DraftCountdown({ draftDate }: DraftCountdownProps) {
   if (isPast || timeRemaining === null) {
     return (
       <div className="rounded-lg border border-accent-green bg-accent-green-light p-6 text-center">
-        <p className="text-caption uppercase text-accent-green mb-2">
+        <p className="text-caption text-accent-green mb-2">
           ROOKIE DRAFT
         </p>
         <p className="text-h1 text-accent-green">Draft Day!</p>
@@ -78,7 +78,7 @@ export function DraftCountdown({ draftDate }: DraftCountdownProps) {
 
   return (
     <div className="rounded-lg border border-border bg-surface p-6 text-center">
-      <p className="text-caption uppercase text-accent-green mb-4">
+      <p className="text-caption text-accent-green mb-4">
         ROOKIE DRAFT COUNTDOWN
       </p>
       <div className="flex items-center justify-center gap-3 sm:gap-6">
@@ -88,7 +88,7 @@ export function DraftCountdown({ draftDate }: DraftCountdownProps) {
               <span className="text-display tabular-nums text-text-primary">
                 {String(seg.value).padStart(2, "0")}
               </span>
-              <span className="text-caption uppercase text-text-tertiary mt-1">
+              <span className="text-caption text-text-tertiary mt-1">
                 {seg.label}
               </span>
             </div>

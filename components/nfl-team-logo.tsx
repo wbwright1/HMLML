@@ -13,7 +13,7 @@ export interface NflTeamLogoProps {
 /**
  * Small NFL team logo badge, keyed by team abbreviation. Falls back to a
  * text monogram (the abbreviation itself, or "FA" for free agents) on load
- * error or when no team is given — never color alone.
+ * error or when no team is given (never color alone).
  */
 export function NflTeamLogo({ teamAbbrev, size, className = "" }: NflTeamLogoProps) {
   const [failed, setFailed] = useState(false);
@@ -27,13 +27,18 @@ export function NflTeamLogo({ teamAbbrev, size, className = "" }: NflTeamLogoPro
       style={{ width: size, height: size }}
     >
       {showFallback ? (
-        <span
-          className="font-bold text-text-tertiary select-none"
-          style={{ fontSize: Math.max(7, Math.round(size * (abbrev.length > 2 ? 0.28 : 0.36))) }}
-          aria-hidden="true"
-        >
-          {abbrev}
-        </span>
+        // Below 28px the code cannot clear the 12px type floor, so a tiny
+        // badge falls back to the plain neutral disc (it is decorative there:
+        // the team is always named in adjacent text).
+        size >= 28 ? (
+          <span
+            className="font-bold text-text-tertiary select-none"
+            style={{ fontSize: Math.max(12, Math.round(size * (abbrev.length > 2 ? 0.28 : 0.36))) }}
+            aria-hidden="true"
+          >
+            {abbrev}
+          </span>
+        ) : null
       ) : (
         <Image
           src={`https://sleepercdn.com/images/team_logos/nfl/${abbrev.toLowerCase()}.png`}

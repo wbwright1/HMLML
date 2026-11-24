@@ -5,21 +5,22 @@ test.describe("Story 4.2: Franchise Card Top Borders", () => {
   // AC-1: Franchise cards exist in a grid layout
   // -------------------------------------------------------------------------
 
-  test("AC-1a: Teams page renders franchise cards in a grid", async ({
+  test("AC-1a: Teams page renders franchises as rows in one list card", async ({
     page,
   }) => {
     await page.goto("/teams");
 
-    // The grid container should exist
-    const grid = page.locator(
-      "div.grid.grid-cols-1.sm\\:grid-cols-2.md\\:grid-cols-3.lg\\:grid-cols-4"
-    );
-    await expect(grid).toBeVisible();
+    // UI/UX pass 2026-11-24: two-line rows inside a single card-surface list
+    // replaced the tall card grid.
+    const list = page.getByTestId("franchise-list");
+    await expect(list).toBeVisible();
+    await expect(list).toHaveClass(/card-surface/);
 
-    // Should have at least one franchise card (Link elements inside the grid)
-    const cards = grid.locator("a[href^='/teams/']");
-    const count = await cards.count();
+    // Every row is a whole-row link to its franchise page.
+    const rows = list.locator("li > a[href^='/teams/']");
+    const count = await rows.count();
     expect(count).toBeGreaterThanOrEqual(1);
+    expect(await list.locator("li").count()).toBe(count);
   });
 
   // -------------------------------------------------------------------------
@@ -71,22 +72,24 @@ test.describe("Story 4.2: Franchise Card Top Borders", () => {
     }
   });
 
-  test("AC-2b: every card uses the uniform card-surface hairline border", async ({
+  test("AC-2b: every row is a 44px+ tap target with no accent border", async ({
     page,
   }) => {
     await page.goto("/teams");
 
-    const cards = page.locator("a[href^='/teams/']");
-    const count = await cards.count();
+    const rows = page.getByTestId("franchise-list").locator("a[href^='/teams/']");
+    const count = await rows.count();
     expect(count).toBeGreaterThanOrEqual(1);
 
     for (let i = 0; i < count; i++) {
-      const card = cards.nth(i);
-      const borderTopWidth = await card.evaluate(
+      const row = rows.nth(i);
+      const box = await row.boundingBox();
+      expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+      // No old 3px accent top border on the row.
+      const borderTopWidth = await row.evaluate(
         (el) => window.getComputedStyle(el).borderTopWidth
       );
-      // card-surface's border is a 1px hairline, not the old 3px accent.
-      expect(borderTopWidth).toBe("1px");
+      expect(borderTopWidth).not.toBe("3px");
     }
   });
 
@@ -111,7 +114,7 @@ test.describe("Story 4.2: Franchise Card Top Borders", () => {
     }
   });
 
-  test("AC-3b: each card displays win/loss record as text identifiers", async ({
+  test("AC-3b: each row displays the all-time record", async ({
     page,
   }) => {
     await page.goto("/teams");
@@ -123,9 +126,8 @@ test.describe("Story 4.2: Franchise Card Top Borders", () => {
     for (let i = 0; i < count; i++) {
       const card = cards.nth(i);
       const text = await card.innerText();
-      // Every card should contain "W" and "L" labels for wins and losses
-      expect(text).toContain("W");
-      expect(text).toContain("L");
+      // Every row shows the all-time W-L record as a mono figure pair.
+      expect(text).toMatch(/\b\d+-\d+\b/);
     }
   });
 

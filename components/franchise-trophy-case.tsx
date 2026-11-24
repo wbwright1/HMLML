@@ -24,7 +24,7 @@ function ToiletBowlPlate({ trophy }: { trophy: ToiletBowlTrophy }) {
       <span className="whitespace-nowrap font-mono text-[17px] font-bold text-accent-warm">
         {trophy.seasonYear}
       </span>
-      <span className="whitespace-nowrap text-[10.5px] text-text-tertiary">
+      <span className="whitespace-nowrap text-caption text-text-tertiary">
         Finished dead last
       </span>
     </div>
@@ -42,7 +42,7 @@ function ChampionshipPlate({ trophy }: { trophy: ChampionshipTrophy }) {
         {trophy.seasonYear}
       </span>
       {subline && (
-        <span className="whitespace-nowrap text-[10.5px] text-text-tertiary">
+        <span className="whitespace-nowrap text-caption text-text-tertiary">
           {subline}
         </span>
       )}

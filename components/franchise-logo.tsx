@@ -47,10 +47,15 @@ export function FranchiseLogo({
   avatarUrl,
 }: FranchiseLogoProps) {
   const px = typeof size === "number" ? size : sizeMap[size];
+  // 12px type floor: 24-27px crests get 12px initials; below 24px the
+  // initials can't fit at a legible size, so the fallback is a plain tile
+  // (the accessible name still comes from role="img" + aria-label, and every
+  // logo sits beside the visible franchise name).
+  const showInitials = px >= 24;
   const initialsClass =
     typeof size === "number"
       ? px < 28
-        ? "text-[9px]"
+        ? "text-caption"
         : "text-sm"
       : textSizeMap[size];
   const altText = decorative ? "" : name;
@@ -79,12 +84,14 @@ export function FranchiseLogo({
         }}
         aria-hidden="true"
       >
-        <span
-          className={`font-bold select-none ${initialsClass}`}
-          style={{ color: "#1A1613" }}
-        >
-          {getInitials(name, abbreviation)}
-        </span>
+        {showInitials && (
+          <span
+            className={`font-bold select-none ${initialsClass}`}
+            style={{ color: "#1A1613" }}
+          >
+            {getInitials(name, abbreviation)}
+          </span>
+        )}
       </div>
       {/*
         Remote avatar overlays the monogram fallback; if it fails to load the

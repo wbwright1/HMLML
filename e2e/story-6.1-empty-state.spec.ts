@@ -124,7 +124,7 @@ test.describe("Story 6.1: EmptyState Component", () => {
     ).toBeTruthy();
   });
 
-  test("AC4: Description uses muted foreground color", async ({ page }) => {
+  test("AC4: Description uses the AA-safe secondary text color", async ({ page }) => {
     await page.goto("/records/head-to-head");
 
     const emptyState = page.locator(
@@ -135,8 +135,10 @@ test.describe("Story 6.1: EmptyState Component", () => {
     const description = emptyState.first().locator("p");
     await expect(description).toBeVisible();
 
-    // Verify text-muted-foreground class
-    await expect(description).toHaveClass(/text-muted-foreground/);
+    // Readable copy uses --text-secondary (AA on canvas), never the
+    // decorative muted token.
+    await expect(description).toHaveClass(/\btext-text-secondary\b/);
+    await expect(description).not.toHaveClass(/text-text-muted|text-muted-foreground/);
 
     // Description text should be non-empty
     const text = await description.textContent();
@@ -218,15 +220,19 @@ test.describe("Story 6.1: EmptyState Component", () => {
     if (searchVisible) {
       await searchInput.fill("zzzznonexistentplayer99999");
 
-      // Wait for the EmptyState to appear
-      const emptyState = page.locator(
-        "div.flex.flex-col.items-center.justify-center.text-center"
-      );
+      // Wait for the empty-state card to appear (UI/UX pass: a card with a
+      // sentence-case title and a "Show all players" reset, not EmptyState).
+      const emptyState = page
+        .locator("div.card-surface")
+        .filter({ has: page.getByRole("heading", { name: "No players found" }) });
       await expect(emptyState).toBeVisible({ timeout: 5000 });
 
       // Verify title
       const h3 = emptyState.locator("h3");
-      await expect(h3).toHaveText("No Players Found");
+      await expect(h3).toHaveText("No players found");
+      await expect(
+        emptyState.getByRole("button", { name: "Show all players" })
+      ).toBeVisible();
 
       // Verify description mentions the search term
       const description = emptyState.locator("p");

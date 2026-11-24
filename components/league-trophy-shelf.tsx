@@ -32,7 +32,7 @@ function LeagueChampionPlate({ trophy }: { trophy: TrophyEntry }) {
         <span className="block truncate text-[13px] font-bold text-text-primary">
           {trophy.championName}
         </span>
-        <span className="block whitespace-nowrap text-[10px] text-text-tertiary">
+        <span className="block whitespace-nowrap text-caption text-text-tertiary">
           <span className="font-mono text-accent-gold">{trophy.seasonYear}</span>
         </span>
       </span>
@@ -66,7 +66,7 @@ function AwardPlate({ award }: { award: AwardEntry }) {
             size={14}
             decorative
           />
-          <span className="truncate text-[9px] text-text-tertiary">
+          <span className="truncate text-caption text-text-tertiary">
             {award.franchise.name}
           </span>
         </div>
@@ -182,7 +182,7 @@ function ToiletBowlPlate({ champion }: { champion: ToiletBowlChampion }) {
         <span className="block truncate text-[13px] font-bold text-text-primary">
           {champion.franchiseName}
         </span>
-        <span className="block whitespace-nowrap text-[10px] text-text-tertiary">
+        <span className="block whitespace-nowrap text-caption text-text-tertiary">
           <span className="font-mono text-accent-warm">
             {champion.seasonYear}
           </span>

@@ -65,8 +65,8 @@ export function RecordsSeasonView({
               <PageSection
                 label={
                   activeSeason === "all-time"
-                    ? "All-Time Awards"
-                    : `Season Awards · ${activeSeason}`
+                    ? "All-time awards"
+                    : `${activeSeason} awards`
                 }
                 title="The Superlatives"
               >

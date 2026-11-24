@@ -8,7 +8,7 @@ const TABS = [
   { label: "Teams", href: "/teams" },
   { label: "Records", href: "/records" },
   { label: "Drafts", href: "/drafts" },
-  // The dock shortens "The Book" to fit at 9px (nav-pills dockLabel).
+  // The dock shortens "The Book" to fit a fifth of the screen (nav-pills dockLabel).
   { label: "Book", href: "/book" },
 ];
 
@@ -72,6 +72,34 @@ test.describe("Mobile dock", () => {
       await page.waitForURL((url) => url.pathname === href);
       expect(new URL(page.url()).pathname).toBe(href);
     }
+  });
+
+  test("tabs are 44px+ targets with 12px sentence-case labels and stroke-2 icons", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const links = page.locator('nav[aria-label="Mobile navigation"] a');
+    await expect(links).toHaveCount(5);
+    for (let i = 0; i < 5; i++) {
+      const link = links.nth(i);
+      const box = await link.boundingBox();
+      expect(box!.height).toBeGreaterThanOrEqual(44);
+
+      const label = link.locator("span").last();
+      const style = await label.evaluate((el) => {
+        const cs = getComputedStyle(el);
+        return { fontSize: cs.fontSize, textTransform: cs.textTransform };
+      });
+      expect(style.fontSize).toBe("12px");
+      expect(style.textTransform).toBe("none");
+
+      expect(await link.locator("svg").getAttribute("stroke-width")).toBe("2");
+    }
+
+    // Drafts is a list (draft order), not the trophy that reads as "champions".
+    const drafts = links.filter({ hasText: "Drafts" }).locator("svg");
+    await expect(drafts).toHaveClass(/lucide-list-ordered/);
+    await expect(drafts).not.toHaveClass(/lucide-trophy/);
   });
 
   test("active tab carries aria-current=page", async ({ page }) => {

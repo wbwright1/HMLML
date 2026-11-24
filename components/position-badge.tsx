@@ -3,7 +3,7 @@ import { getPositionColor } from "@/lib/position-colors";
 export function PositionBadge({ position }: { position: string | null }) {
   if (!position)
     return (
-      <span className="text-sm" style={{ color: "var(--text-muted)" }}>
+      <span className="text-sm text-text-tertiary">
         -
       </span>
     );
@@ -12,7 +12,7 @@ export function PositionBadge({ position }: { position: string | null }) {
 
   return (
     <span
-      className="inline-block text-[12px] font-medium uppercase tracking-[0.06em] px-2 py-0.5 rounded-full"
+      className="inline-block text-caption font-semibold px-2 py-0.5 rounded-full"
       style={{
         backgroundColor: color.badge.bg,
         color: color.badge.text,

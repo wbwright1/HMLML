@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { TeamLink } from "@/components/team-link";
 import { EditorialBody } from "@/components/editorial-emphasis";
 import { PageSection } from "@/components/page-section";
@@ -145,9 +147,8 @@ export async function OffseasonHub({
     <>
       {/* Hero */}
       <section className="pt-2 pb-4">
-        <p className="text-kicker mb-3">
-          Harambe Memorial League &middot; {championSeasonYear ?? new Date().getFullYear()}
-        </p>
+        {/* No kicker above the headline (UI/UX pass): the live pill names
+            the season state. */}
         <h1 className="text-display">The Offseason.</h1>
         {editorial.heroDek && (
           <p className="mt-4 text-body-lg text-text-secondary max-w-xl">
@@ -170,7 +171,7 @@ export async function OffseasonHub({
       {/* League at a Glance */}
       {leagueGlance && leagueGlance.reigningChampion && (
         <ScrollReveal>
-          <PageSection label="Offseason" title="League at a Glance">
+          <PageSection label="Offseason" title="League at a glance">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
               <StatHero
                 value={
@@ -183,18 +184,18 @@ export async function OffseasonHub({
                     )}
                   </span>
                 }
-                label={`${leagueGlance.reigningChampion.seasonYear} Champion`}
-                badge="Reigning Champ"
+                label={`${leagueGlance.reigningChampion.seasonYear} champion`}
+                badge="Reigning champ"
                 variant="md"
               />
               <StatHero
                 value={leagueGlance.totalSeasons}
-                label="Seasons Played"
+                label="Seasons played"
                 variant="md"
               />
               <StatHero
                 value={leagueGlance.totalMatchups}
-                label="Total Matchups"
+                label="Total matchups"
                 variant="md"
               />
               {leagueGlance.mostChampionships && (
@@ -205,7 +206,7 @@ export async function OffseasonHub({
                       {leagueGlance.mostChampionships.franchiseName}
                     </TeamLink>
                   }
-                  badge="Most Championships"
+                  badge="Most championships"
                   variant="md"
                 />
               )}
@@ -217,7 +218,7 @@ export async function OffseasonHub({
       {/* Offseason Recap */}
       {offseasonRecap && (
         <ScrollReveal>
-          <PageSection label="Season Wrap" title="Recap">
+          <PageSection label="Season wrap" title="Recap">
             <OffseasonRecapCard
               seasonYear={offseasonRecap.seasonYear}
               items={[
@@ -232,20 +233,20 @@ export async function OffseasonHub({
                   : []),
                 ...(offseasonRecap.mostPF
                   ? [{
-                      label: "Most Points",
+                      label: "Most points",
                       value: `${offseasonRecap.mostPF.franchiseName} (${offseasonRecap.mostPF.points.toFixed(1)})`,
                       href: `/teams/${offseasonRecap.mostPF.franchiseSlug}`,
                     }]
                   : []),
                 ...(offseasonRecap.biggestBlowout
                   ? [{
-                      label: "Biggest Blowout",
+                      label: "Biggest blowout",
                       value: `${offseasonRecap.biggestBlowout.winner} by ${offseasonRecap.biggestBlowout.margin.toFixed(1)}`,
                     }]
                   : []),
                 ...(offseasonRecap.longestStreak
                   ? [{
-                      label: "Longest Win Streak",
+                      label: "Longest win streak",
                       value: `${offseasonRecap.longestStreak.franchiseName} (${offseasonRecap.longestStreak.streak}W)`,
                       href: offseasonRecap.longestStreak.franchiseSlug
                         ? `/teams/${offseasonRecap.longestStreak.franchiseSlug}`
@@ -265,14 +266,14 @@ export async function OffseasonHub({
         <ReigningHonors
           seasonId={completedSeason.id}
           seasonYear={completedSeason.seasonYear}
-          kicker="Reigning Honors"
+          kicker="Reigning honors"
         />
       )}
 
       {/* Offseason Receipts (generated Site Desk content; hidden when none) */}
       {hasGeneratedReceipts && editorial.offseasonReceipts.length > 0 && (
         <ScrollReveal>
-          <PageSection label="Site Desk" title="Offseason Receipts">
+          <PageSection label="Site desk" title="Offseason receipts">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {editorial.offseasonReceipts.map((receipt, i) => (
                 <OffseasonReceiptCard
@@ -290,8 +291,8 @@ export async function OffseasonHub({
       {showSmack && (
         <ScrollReveal>
           <PageSection
-            label={smackFromDesk ? "Site Desk" : "The League"}
-            title="The Smack Feed"
+            label={smackFromDesk ? "Site desk" : "The league"}
+            title="Smack feed"
           >
             <div className="space-y-4">
               <SmackComposerSlot />
@@ -313,7 +314,7 @@ export async function OffseasonHub({
       {/* Transaction Activity */}
       {recentTransactions.length > 0 && (
         <ScrollReveal>
-          <PageSection label="Activity" title="Recent Moves">
+          <PageSection label="Activity" title="Recent moves">
             <TransactionActivityCard transactions={recentTransactions} />
           </PageSection>
         </ScrollReveal>
@@ -324,9 +325,10 @@ export async function OffseasonHub({
         <div className="text-center py-8">
           <Link
             href="/records"
-            className="inline-flex items-center gap-2 text-body-sm text-accent-gold hover:brightness-110 font-medium"
+            className={buttonVariants({ variant: "quiet", size: "default" })}
           >
-            View All-Time Records &rarr;
+            All-time records
+            <ChevronRight aria-hidden="true" strokeWidth={2} data-icon="inline-end" />
           </Link>
         </div>
       </ScrollReveal>

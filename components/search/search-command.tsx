@@ -45,6 +45,9 @@ export function SearchCommand({
   const [query, setQuery] = useState("");
   const [data, setData] = useState<SearchData | null>(null);
   const [activeIndex, setActiveIndex] = useState(-1);
+  // Desktop below xl (1024-1279px): the field collapses to a 36px icon button
+  // so the topbar pills never wrap; clicking it (or ⌘K) expands the field.
+  const [expanded, setExpanded] = useState(false);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -100,6 +103,7 @@ export function SearchCommand({
     setActiveIndex(-1);
     if (variant === "desktop") {
       inputRef.current?.blur();
+      setExpanded(false);
     } else {
       setQuery("");
       setData(null);
@@ -152,6 +156,7 @@ export function SearchCommand({
     function onKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
+        setExpanded(true);
         setOpen(true);
         inputRef.current?.focus();
       }
@@ -161,19 +166,25 @@ export function SearchCommand({
   }, [variant]);
 
   useEffect(() => {
-    if (variant !== "desktop" || !open) return;
+    if (variant !== "desktop" || (!open && !expanded)) return;
     function onMouseDown(e: MouseEvent) {
       if (
         containerRef.current &&
         !containerRef.current.contains(e.target as Node)
       ) {
         setOpen(false);
+        setExpanded(false);
         setActiveIndex(-1);
       }
     }
     document.addEventListener("mousedown", onMouseDown);
     return () => document.removeEventListener("mousedown", onMouseDown);
-  }, [variant, open]);
+  }, [variant, open, expanded]);
+
+  // The collapsed (<xl) field only exists once expanded; focus it on expand.
+  useEffect(() => {
+    if (variant === "desktop" && expanded) inputRef.current?.focus();
+  }, [variant, expanded]);
 
   // ── Mobile: autofocus, body scroll-lock, focus trap ───────────────────────
   useEffect(() => {
@@ -225,10 +236,30 @@ export function SearchCommand({
   if (variant === "desktop") {
     return (
       <div ref={containerRef} className={`relative ${className}`}>
-        <div className="relative">
+        {/* Below xl: a 36px icon button. Once expanded it stays in place
+            (invisible) to hold its slot, and the field overlays leftward. */}
+        <button
+          type="button"
+          onClick={() => {
+            setExpanded(true);
+            setOpen(true);
+          }}
+          aria-label="Search league, Command K"
+          aria-expanded={expanded}
+          className={`${expanded ? "invisible" : ""} flex size-9 items-center justify-center rounded-full border border-border-strong text-text-secondary transition-[scale,background-color] duration-150 hover:bg-surface-muted active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas xl:hidden`}
+        >
+          <Search className="size-[18px]" strokeWidth={2} aria-hidden="true" />
+        </button>
+        <div
+          className={`relative ${
+            expanded
+              ? "block max-xl:absolute max-xl:right-0 max-xl:top-1/2 max-xl:z-(--z-dropdown) max-xl:-translate-y-1/2"
+              : "hidden xl:block"
+          }`}
+        >
           <Search
             className="pointer-events-none absolute left-3 top-1/2 size-[17px] -translate-y-1/2 text-text-tertiary"
-            strokeWidth={1.7}
+            strokeWidth={2}
             aria-hidden="true"
           />
           <input
@@ -240,9 +271,9 @@ export function SearchCommand({
             onFocus={() => setOpen(true)}
             onKeyDown={handleKeyNav}
             {...inputAria}
-            className="h-9 w-[150px] rounded-[10px] border border-border bg-surface pl-9 pr-12 text-body-sm text-text-primary outline-none placeholder:text-text-tertiary focus-visible:border-border-strong xl:w-[230px]"
+            className="h-9 w-[260px] rounded-[10px] border border-border-control bg-canvas pl-9 pr-12 text-body-sm text-text-primary outline-none placeholder:text-text-tertiary focus-visible:ring-2 focus-visible:ring-ring xl:w-[230px] xl:bg-surface"
           />
-          <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[5px] border border-border px-1.5 py-0.5 text-[9.5px] font-bold text-text-tertiary">
+          <kbd className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rounded-[5px] border border-border px-1.5 py-0.5 text-caption font-semibold text-text-tertiary">
             ⌘K
           </kbd>
         </div>
@@ -251,7 +282,7 @@ export function SearchCommand({
             id={listboxId}
             role="listbox"
             aria-label="Search results"
-            className="absolute right-0 top-[calc(100%+8px)] z-50 max-h-[70vh] w-[360px] overflow-y-auto rounded-[14px] border border-border bg-popover shadow-[0_24px_60px_rgba(0,0,0,.4)]"
+            className="absolute right-0 top-[calc(100%+8px)] z-(--z-dropdown) max-h-[70vh] w-[360px] overflow-y-auto rounded-[14px] border border-border bg-popover shadow-[0_24px_60px_rgba(0,0,0,.4)]"
           >
             <SearchResults
               data={data}
@@ -276,9 +307,9 @@ export function SearchCommand({
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-label="Search teams, players, records"
-          className={`flex size-10 shrink-0 items-center justify-center rounded-full text-text-tertiary ${className}`}
+          className={`flex size-11 shrink-0 items-center justify-center rounded-full text-text-secondary transition-[scale] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${className}`}
         >
-          <Search className="size-5" strokeWidth={1.7} aria-hidden="true" />
+          <Search className="size-5" strokeWidth={2} aria-hidden="true" />
         </button>
       ) : (
         <button
@@ -292,7 +323,7 @@ export function SearchCommand({
         >
           <Search
             className="size-5 shrink-0 text-text-tertiary"
-            strokeWidth={1.7}
+            strokeWidth={2}
             aria-hidden="true"
           />
           <span className="flex-1 truncate text-body-sm text-text-tertiary">
@@ -308,7 +339,7 @@ export function SearchCommand({
             role="dialog"
             aria-modal="true"
             aria-label="Search"
-            className="fixed inset-0 z-[60] flex flex-col bg-canvas"
+            className="fixed inset-0 z-(--z-modal) flex flex-col bg-canvas"
             style={{
               paddingTop: "env(safe-area-inset-top)",
               paddingBottom: "env(safe-area-inset-bottom)",
@@ -318,7 +349,7 @@ export function SearchCommand({
               <div className="relative flex-1">
                 <Search
                   className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-text-tertiary"
-                  strokeWidth={1.7}
+                  strokeWidth={2}
                   aria-hidden="true"
                 />
                 <input
@@ -329,16 +360,16 @@ export function SearchCommand({
                   onChange={(e) => setQuery(e.target.value)}
                   onKeyDown={handleKeyNav}
                   {...inputAria}
-                  className="h-11 w-full rounded-[10px] border border-border bg-surface pl-10 pr-3 text-body text-text-primary outline-none placeholder:text-text-tertiary focus-visible:border-border-strong"
+                  className="h-11 w-full rounded-[10px] border border-border-control bg-transparent pl-10 pr-3 text-body text-text-primary outline-none placeholder:text-text-tertiary focus-visible:ring-2 focus-visible:ring-ring"
                 />
               </div>
               <button
                 type="button"
                 onClick={close}
                 aria-label="Close search"
-                className="flex size-11 shrink-0 items-center justify-center rounded-[10px] text-text-tertiary"
+                className="flex size-11 shrink-0 items-center justify-center rounded-full text-text-secondary transition-[scale] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                <X className="size-5" strokeWidth={1.7} aria-hidden="true" />
+                <X className="size-5" strokeWidth={2} aria-hidden="true" />
               </button>
             </div>
             <div

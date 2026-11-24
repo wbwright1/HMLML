@@ -29,7 +29,7 @@ function crestRingRadius(size: CrestSize): string {
 
 /** Wraps FranchiseLogo with a subtle brandingColor ring — the sole surviving use
  * of a franchise's brandingColor now that the full-bleed hero gradient is gone. */
-function BrandedCrest({
+export function BrandedCrest({
   franchise,
   size,
 }: {
@@ -118,7 +118,7 @@ export function FranchiseIdentity({
       <BrandedCrest franchise={franchise} size="md" />
       <div className="min-w-0">
         <div className="flex items-center gap-1.5 min-w-0">
-          <span className="font-serif italic text-lg text-text-primary truncate min-w-0 flex-1">
+          <span className="text-body font-semibold text-text-primary truncate min-w-0 flex-1">
             {franchise.name}
           </span>
           <span className="shrink-0">

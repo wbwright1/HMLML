@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, type KeyboardEvent, type ReactNode } from "react";
 
 type TabKey = "board" | "futures" | "tracking" | "props";
 
 const TABS: { key: TabKey; label: string }[] = [
-  { key: "board", label: "The Board" },
+  { key: "board", label: "Board" },
   { key: "futures", label: "Futures" },
   { key: "tracking", label: "Tracking" },
   { key: "props", label: "Props" },
@@ -36,12 +36,29 @@ export function BookTabs({
 
   const panes: Record<TabKey, ReactNode> = { board, futures, tracking, props };
 
+  // Standard tablist keys: arrows move (and select) along the one row, Home
+  // and End jump to the ends. Only the selected tab sits in the tab order.
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const index = TABS.findIndex((t) => t.key === active);
+    let next = index;
+    if (e.key === "ArrowRight") next = (index + 1) % TABS.length;
+    else if (e.key === "ArrowLeft") next = (index - 1 + TABS.length) % TABS.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = TABS.length - 1;
+    else return;
+    e.preventDefault();
+    const key = TABS[next].key;
+    setActive(key);
+    document.getElementById(`book-tab-${key}`)?.focus();
+  }
+
   return (
     <div>
       <div
         role="tablist"
         aria-label="The Book sections"
-        className="mb-6 inline-flex max-w-full flex-wrap items-center gap-1 rounded-full border border-border bg-surface p-1"
+        onKeyDown={onKeyDown}
+        className="mb-6 grid w-full grid-cols-4 gap-0.5 rounded-full border border-border-strong bg-surface p-1 sm:max-w-[480px]"
       >
         {TABS.map(({ key, label }) => (
           <button
@@ -51,11 +68,12 @@ export function BookTabs({
             id={`book-tab-${key}`}
             aria-selected={active === key}
             aria-controls={`book-pane-${key}`}
+            tabIndex={active === key ? 0 : -1}
             onClick={() => setActive(key)}
-            className={`cursor-pointer rounded-full px-4 py-1.5 text-body-sm font-medium transition-colors duration-150 ${
+            className={`min-h-11 min-w-0 cursor-pointer whitespace-nowrap rounded-full px-1 text-body-sm font-semibold transition-[scale,background-color,color] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${
               active === key
-                ? "bg-accent-gold-light text-accent-gold"
-                : "text-text-tertiary hover:text-text-primary"
+                ? "bg-text-primary text-canvas"
+                : "text-text-secondary hover:text-text-primary"
             }`}
           >
             {label}

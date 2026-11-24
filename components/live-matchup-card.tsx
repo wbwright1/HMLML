@@ -111,8 +111,9 @@ export function LiveMatchupCard({
           </span>
         )}
         {showPlayersLeft && (
-          <span className="ml-auto shrink-0 whitespace-nowrap font-mono text-[10px] font-semibold uppercase tracking-[0.08em] tabular-nums text-text-tertiary">
-            {playersLeft.home} V {playersLeft.away} to play
+          <span className="ml-auto shrink-0 whitespace-nowrap text-caption text-text-tertiary">
+            <span className="font-mono tabular-nums">{playersLeft.home}</span> v{" "}
+            <span className="font-mono tabular-nums">{playersLeft.away}</span> to play
           </span>
         )}
       </div>
@@ -143,7 +144,7 @@ export function LiveMatchupCard({
               Win prob <span className="font-mono tabular-nums">{homePct}%</span>
             </span>
             {aside && (
-              <span className="font-serif italic text-accent-warm">
+              <span className="text-accent-warm">
                 {aside}
               </span>
             )}
@@ -151,7 +152,7 @@ export function LiveMatchupCard({
         </div>
       ) : (
         aside && (
-          <p className="mt-4 pt-3 border-t border-divider text-body-sm italic text-accent-warm">
+          <p className="mt-4 pt-3 border-t border-divider text-body-sm text-accent-warm">
             {aside}
           </p>
         )

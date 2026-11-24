@@ -27,7 +27,7 @@ export function SmackComposerSlot() {
   return (
     <Link
       href="/claim"
-      className="card-surface block p-4 text-body-sm text-text-tertiary transition-colors duration-150 hover:text-text-secondary"
+      className="card-surface block min-h-11 p-4 text-body-sm text-text-secondary transition-[scale,color] duration-150 hover:text-text-primary active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
     >
       Got something to say?{" "}
       <span className="font-semibold text-accent-gold">Claim your team.</span>

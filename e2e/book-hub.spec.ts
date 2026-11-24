@@ -39,13 +39,16 @@ test("the hub surfaces The Book's line when a game is priced for the hub's curre
 
   await page.goto("/");
 
-  // Read the hub's own notion of "current week" off the hero itself, which is
+  // Read the hub's own notion of "current week" off the page itself, which is
   // exactly what AC1 asks the underlying query to agree with, rather than
   // independently guessing a week. The regular-season game-window hero uses
-  // "Week N." as its h1; the between-weeks hero (the state NFL_STATE_OVERRIDE
+  // "Week N." as its h1; the between-weeks hub (the state NFL_STATE_OVERRIDE
   // =regular:next:force actually lands on pre-kickoff, since no game has started)
-  // states the week in its kicker instead ("... Week N · Kickoff Thursday").
-  const heroText = await page.locator("main section").first().innerText();
+  // states it in the slate meta instead ("Week N · Kickoff Thursday").
+  const meta = page.getByTestId("slate-meta");
+  const heroText = (await meta.count())
+    ? await meta.first().innerText()
+    : await page.locator("main section").first().innerText();
   const weekMatch = /Week\s+(\d+)/i.exec(heroText);
   expect(weekMatch, `could not parse a week number out of hero text "${heroText}"`).not.toBeNull();
   const week = Number(weekMatch![1]);
@@ -60,13 +63,14 @@ test("the hub surfaces The Book's line when a game is priced for the hub's curre
 
   test.skip(n === 0, `no priced lines for week ${week}`);
 
-  // A real signed spread chip from a hub card's Book footer, and a CTA that
-  // actually points at /book. If the wiring regressed to an empty footer,
-  // neither of these would be on the page.
-  const bookCta = page.getByRole("link", { name: /^(Pick|The Book)\s*→$/ }).first();
-  await expect(bookCta).toBeVisible();
-  await expect(bookCta).toHaveAttribute("href", "/book");
-
-  const spreadChips = page.locator("span.font-mono").filter({ hasText: /[+-]\d+(\.\d+)?/ });
+  // A real signed spread inside a link that actually points at /book (a
+  // between-weeks slate row or the Game of the week's "See lines", or a live
+  // card's Book footer). If the wiring regressed to an empty footer, none of
+  // these would be on the page.
+  const bookLinks = page.locator('main a[href="/book"]');
+  await expect(bookLinks.first()).toBeVisible();
+  const spreadChips = page
+    .locator('main a[href="/book"] span.font-mono, main span.font-mono')
+    .filter({ hasText: /^[+-]\d+(\.\d+)?$/ });
   expect(await spreadChips.count()).toBeGreaterThan(0);
 });

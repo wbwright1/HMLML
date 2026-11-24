@@ -27,7 +27,7 @@ export function ProjectedActual({ seasonYear, weeklyPoints }: ProjectedActualPro
   return (
     <div className="card-surface p-4 flex flex-wrap items-center gap-x-6 gap-y-2">
       <div>
-        <p className="text-caption text-text-tertiary">{seasonYear} Actual</p>
+        <p className="text-caption text-text-tertiary"><span className="font-mono tabular-nums">{seasonYear}</span> actual</p>
         <p className="text-h3 font-mono tabular-nums text-text-primary">
           {actual.toFixed(1)}
         </p>
@@ -40,7 +40,7 @@ export function ProjectedActual({ seasonYear, weeklyPoints }: ProjectedActualPro
       </div>
       <div>
         <p className="text-caption text-text-tertiary">
-          {delta === 0 ? "On Projection" : beat ? "Beat Projection" : "Under Projection"}
+          {delta === 0 ? "On projection" : beat ? "Beat projection" : "Under projection"}
         </p>
         <p
           className={`text-h3 font-mono tabular-nums inline-flex items-center gap-1 ${

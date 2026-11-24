@@ -119,7 +119,7 @@ function eventCopy(event: TimelineEvent): React.ReactNode {
       return (
         <>
           Won {meta?.label ?? event.awardType}
-          {event.awardNote ? ` — ${event.awardNote}` : ""}.
+          {event.awardNote ? `: ${event.awardNote}` : ""}.
         </>
       );
     }
@@ -144,7 +144,7 @@ export function CareerTimeline({ timeline }: CareerTimelineProps) {
 
   return (
     <div className="space-y-4">
-      <p className="text-kicker text-text-tertiary">Career Timeline</p>
+      <p className="text-kicker text-text-tertiary">Career timeline</p>
       <ol className="space-y-3">
         {newestFirst.map((event, i) => {
           const Icon = eventIcon(event.type);
@@ -163,11 +163,11 @@ export function CareerTimeline({ timeline }: CareerTimelineProps) {
                     : "bg-surface-muted text-text-tertiary"
                 }`}
               >
-                <Icon className="size-4" strokeWidth={1.7} aria-hidden="true" />
+                <Icon className="size-4" strokeWidth={2} aria-hidden="true" />
               </div>
               <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-mono text-caption tabular-nums text-text-tertiary">
+                  <span className="text-caption tabular-nums text-text-tertiary">
                     {eventDate(event)}
                   </span>
                   {event.franchise && (
@@ -186,7 +186,7 @@ export function CareerTimeline({ timeline }: CareerTimelineProps) {
                     </TeamLink>
                   )}
                 </div>
-                <p className="font-serif italic text-body-sm text-text-secondary">
+                <p className="text-body-sm text-text-secondary">
                   {eventCopy(event)}
                 </p>
               </div>

@@ -29,28 +29,26 @@ function leagueDayStamp(d: Date): number {
   return Date.UTC(year, month - 1, day) / 86_400_000;
 }
 
-/** e.g. "PRESEASON · WK 1 IN 34D" */
+/** e.g. "Preseason · Wk 1 in 34d" (sentence case: no label is all caps). */
 export function formatPreseasonKickoffLabel(target: Date, now: Date): string {
-  return `PRESEASON · WK 1 IN ${daysUntil(target, now)}D`;
+  return `Preseason · Wk 1 in ${daysUntil(target, now)}d`;
 }
 
-/** Weekday of a kickoff in America/Chicago (the league's home timezone), e.g. "THU". */
+/** Weekday of a kickoff in America/Chicago (the league's home timezone), e.g. "Thu". */
 function formatKickoffDay(target: Date): string {
   return new Intl.DateTimeFormat("en-US", {
     weekday: "short",
     timeZone: LEAGUE_TIME_ZONE,
-  })
-    .format(target)
-    .toUpperCase();
+  }).format(target);
 }
 
 /**
- * e.g. "WK 10 · KICKOFF THU". Day-only by design: our schedule source
+ * e.g. "Wk 10 · Kickoff Thu". Day-only by design: our schedule source
  * (Sleeper) gives a date, not a kickoff clock time, so we never display a time
  * we do not have. Every current kickoff anchor is a Chicago start-of-day
  * instant (see parseKickoff), so the weekday is the most precise honest signal.
  * Phase 2 upgrade: wire a real kickoff-time source and restore the time here.
  */
 export function formatBetweenWeeksKickoffLabel(week: number, target: Date): string {
-  return `WK ${week} · KICKOFF ${formatKickoffDay(target)}`;
+  return `Wk ${week} · Kickoff ${formatKickoffDay(target)}`;
 }

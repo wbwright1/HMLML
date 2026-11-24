@@ -8,6 +8,7 @@ import {
   type SmackActionState,
 } from "@/lib/smack-shared";
 import { postSmack } from "@/app/actions/smack";
+import { buttonVariants } from "@/components/ui/button-variants";
 
 /**
  * Compact smack composer for signed-in members. A NEW client island (enumerated
@@ -55,7 +56,7 @@ export function SmackComposer() {
         maxLength={SMACK_MAX_LENGTH}
         placeholder="Talk your talk. The whole league is watching."
         aria-label="Write a smack post"
-        className="w-full resize-none bg-transparent text-body-sm text-text-primary placeholder:text-text-muted focus:outline-none"
+        className="min-h-11 w-full resize-none rounded-[6px] bg-transparent py-2 text-body text-text-primary placeholder:text-text-tertiary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       />
       <div className="mt-3 flex items-center justify-between gap-3">
         <span
@@ -68,7 +69,7 @@ export function SmackComposer() {
         </span>
         <div className="flex items-center gap-3">
           {state.error && (
-            <span className="text-caption text-accent-warm normal-case tracking-normal">
+            <span className="text-caption text-accent-warm">
               {state.error}
             </span>
           )}
@@ -85,7 +86,7 @@ function SubmitButton({ disabled }: { disabled: boolean }) {
     <button
       type="submit"
       disabled={disabled || pending}
-      className="rounded-full bg-accent-gold px-4 py-1.5 text-body-sm font-semibold text-canvas transition-[filter] duration-150 hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+      className={buttonVariants()}
     >
       {pending ? "Posting…" : "Post"}
     </button>

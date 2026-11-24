@@ -43,7 +43,7 @@ export function InjuryBanner({ identity }: InjuryBannerProps) {
     <div
       className={`card-surface ${tintClass} flex items-center gap-3 px-4 py-3 ${textClass}`}
     >
-      <AlertTriangle className="size-5 shrink-0" strokeWidth={1.7} aria-hidden="true" />
+      <AlertTriangle className="size-5 shrink-0" strokeWidth={2} aria-hidden="true" />
       <p className="text-body-sm font-medium">{label}</p>
     </div>
   );

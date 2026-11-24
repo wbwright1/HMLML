@@ -90,7 +90,7 @@ function FranchiseCrestStrip({ franchises }: { franchises: LoreFranchiseBadge[] 
       ))}
       {overflow > 0 ? (
         <span
-          className="flex items-center justify-center rounded-full bg-surface text-text-tertiary text-[9px] font-bold ring-1 ring-canvas"
+          className="flex items-center justify-center rounded-full bg-surface font-mono text-caption font-bold tabular-nums text-text-tertiary ring-1 ring-canvas"
           style={{ width: CREST_STRIP_SIZE, height: CREST_STRIP_SIZE, marginLeft: -6 }}
         >
           +{overflow}
@@ -148,7 +148,7 @@ function LoreCard({ piece }: { piece: LorePiece }) {
     return (
       <Link
         href={piece.href}
-        className={`${shellClass} block transition-colors duration-150 hover:border-accent-gold/40`}
+        className={`${shellClass} block transition-[scale,border-color] duration-150 hover:border-accent-gold/40 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas`}
       >
         {content}
       </Link>

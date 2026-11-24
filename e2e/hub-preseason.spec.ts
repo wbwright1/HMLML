@@ -14,18 +14,16 @@ test.describe("Preseason hub (1a)", () => {
   test("hero renders the countdown headline and dek", async ({ page }) => {
     await page.goto("/");
 
-    await expect(
-      page.locator("p.text-kicker", { hasText: /Title Defense Loading/i }).first(),
-    ).toBeVisible();
-
     const hero = page.locator("main section").first();
     await expect(hero.locator("h1")).toContainText(/on the clock/i);
+    // No kicker stacked above the headline (UI/UX pass, 2026-11-24).
+    await expect(hero.locator(".text-kicker")).toHaveCount(0);
 
-    // Headline uses the serif display family, italic.
+    // Headline uses the serif display family, upright.
     const fontStyle = await hero
       .locator("h1")
       .evaluate((el) => getComputedStyle(el).fontStyle);
-    expect(fontStyle).toBe("italic");
+    expect(fontStyle).toBe("normal");
 
     // Dek renders non-empty. Its wording is LLM-generated (editorial.heroDek
     // prefers the generated dek over the hardcoded computed fallback, and the
@@ -64,7 +62,7 @@ test.describe("Preseason hub (1a)", () => {
     await page.goto("/");
 
     // The module label.
-    await expect(page.locator("p.text-kicker", { hasText: /The Field/i }).first()).toBeVisible();
+    await expect(page.locator("h2.text-kicker", { hasText: /The field/i }).first()).toBeVisible();
 
     // At least one franchise crest (dynasty logo) renders inside the field.
     const crests = page.locator("main img");
@@ -79,10 +77,10 @@ test.describe("Preseason hub (1a)", () => {
     await page.goto("/");
 
     await expect(
-      page.locator("p.text-kicker", { hasText: /Burning Questions/i }).first(),
+      page.locator("h2.text-kicker", { hasText: /Burning questions/i }).first(),
     ).toBeVisible();
     await expect(
-      page.locator("p.text-kicker", { hasText: /The Smack Feed/i }).first(),
+      page.locator("h2.text-kicker", { hasText: /Smack feed/i }).first(),
     ).toBeVisible();
   });
 
@@ -90,7 +88,7 @@ test.describe("Preseason hub (1a)", () => {
     await page.goto("/");
 
     await expect(
-      page.locator("p.text-kicker", { hasText: /Bold Predictions/i }).first(),
+      page.locator("h2.text-kicker", { hasText: /Bold predictions/i }).first(),
     ).toBeVisible();
     // At least one verdict is a text chip (LOCK / NO), never color-only.
     const bodyText = await page.locator("main").innerText();
@@ -99,7 +97,7 @@ test.describe("Preseason hub (1a)", () => {
     // Prediction card count is always even and capped at 6, so the two-column
     // grid never leaves a lone orphan card on the last row.
     const section = page.locator("section", {
-      has: page.locator("p.text-kicker", { hasText: /Bold Predictions/i }),
+      has: page.locator("h2.text-kicker", { hasText: /Bold predictions/i }),
     });
     const cardCount = await section.locator("div.card-surface").count();
     expect(cardCount % 2).toBe(0);

@@ -109,7 +109,7 @@ export function ProfileModalShell({ children }: ProfileModalShellProps) {
 
   return (
     <div
-      className={`fixed inset-0 z-[60] bg-black/60 backdrop-blur-[2px] transition-opacity duration-150 ease-out ${
+      className={`fixed inset-0 z-(--z-modal) bg-black/60 backdrop-blur-[2px] transition-opacity duration-150 ease-out ${
         mounted ? "opacity-100" : "opacity-0"
       }`}
       onMouseDown={(e) => {
@@ -141,7 +141,7 @@ export function ProfileModalShell({ children }: ProfileModalShellProps) {
             */}
             <a
               href={pathname}
-              className="pointer-events-auto hidden sm:inline-flex items-center rounded-full border border-border bg-surface px-3 py-2 text-caption text-text-tertiary backdrop-blur-sm transition-colors hover:bg-surface-muted hover:text-accent-gold"
+              className="pointer-events-auto hidden sm:inline-flex min-h-11 items-center rounded-full border border-border-strong bg-surface px-4 text-body-sm font-medium text-text-secondary backdrop-blur-sm transition-[scale,color,background-color] duration-150 hover:bg-surface-muted hover:text-accent-gold active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Open full page
             </a>
@@ -150,9 +150,9 @@ export function ProfileModalShell({ children }: ProfileModalShellProps) {
               type="button"
               onClick={close}
               aria-label="Close"
-              className="pointer-events-auto flex size-11 items-center justify-center rounded-full border border-border bg-surface text-text-secondary backdrop-blur-sm transition-colors hover:bg-surface-muted hover:text-text-primary"
+              className="pointer-events-auto flex size-11 items-center justify-center rounded-full border border-border-strong bg-surface text-text-secondary backdrop-blur-sm transition-[scale,color,background-color] duration-150 hover:bg-surface-muted hover:text-text-primary active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <X className="size-5" strokeWidth={1.7} aria-hidden="true" />
+              <X className="size-5" strokeWidth={2} aria-hidden="true" />
             </button>
           </div>
         </div>

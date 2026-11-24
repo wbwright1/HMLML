@@ -122,7 +122,7 @@ function renderChart(valueSeries: ValueSeriesPoint[], options: RenderChartOption
               textAnchor="end"
               fontSize={fontSize}
               fontFamily="var(--font-mono)"
-              fill="var(--text-muted)"
+              fill="var(--text-tertiary)"
             >
               {Math.round(v).toLocaleString()}
             </text>
@@ -168,8 +168,8 @@ function renderChart(valueSeries: ValueSeriesPoint[], options: RenderChartOption
             y={height - 8}
             textAnchor={anchor}
             fontSize={fontSize}
-            fontFamily="var(--font-mono)"
-            fill="var(--text-muted)"
+            fontFamily="var(--font-sans)"
+            fill="var(--text-tertiary)"
           >
             {formatTickDate(dateStr)}
           </text>
@@ -211,7 +211,7 @@ export function ValueChart({ valueSeries }: ValueChartProps) {
         {renderChart(valueSeries, { width: 360, height: 240, tickCount: 4, fontSize: 13, padLeft: 40 })}
       </div>
       <div className="hidden lg:block">
-        {renderChart(valueSeries, { width: 720, height: 260, tickCount: 5, fontSize: 11, padLeft: 40 })}
+        {renderChart(valueSeries, { width: 720, height: 260, tickCount: 5, fontSize: 12, padLeft: 44 })}
       </div>
 
       {firstFantasyCalcPoint && (

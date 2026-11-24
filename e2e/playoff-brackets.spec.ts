@@ -369,7 +369,9 @@ test.describe("#215: 2025 renders as a true bracket", () => {
     await expect(capsule).toContainText("HMLML Bowl V");
 
     // The page leads with the bowl name too.
-    await expect(page.getByText("The road to HMLML Bowl V.")).toBeVisible();
+    await expect(
+      page.getByRole("heading", { level: 1, name: "The road to HMLML Bowl V", exact: true })
+    ).toBeVisible();
   });
 
   test("the Toilet Bowl traces the drain in rust and crowns the sinker", async ({
@@ -399,7 +401,7 @@ test.describe("#215: 2025 renders as a true bracket", () => {
 
     const lane = page.getByTestId("bracket-placement-lane-winners");
     await expect(lane).toBeVisible();
-    await expect(lane).toContainText("Placement Games");
+    await expect(lane).toContainText("Placement games");
     await expect(lane).toContainText("3rd Place Game");
     await expect(lane).toContainText("5th Place Game");
 

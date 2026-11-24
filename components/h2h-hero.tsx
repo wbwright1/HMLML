@@ -54,11 +54,11 @@ export function H2HHero({
               </>
             )}
           </p>
-          <h2 className="font-serif text-h1 italic text-accent-gold">
+          <h2 className="text-h1 text-accent-gold">
             {rivalry.name}
           </h2>
           {rivalry.tagline && (
-            <p className="mx-auto max-w-prose font-serif text-body-lg italic text-text-secondary">
+            <p className="mx-auto max-w-prose text-body-lg text-text-secondary">
               {rivalry.tagline}
             </p>
           )}
@@ -132,7 +132,7 @@ export function H2HHero({
       {rivalry?.origin && (
         <aside
           aria-label="Rivalry origin"
-          className="mx-auto max-w-prose border-l-2 border-accent-gold/40 pl-4 font-serif text-body italic text-text-tertiary"
+          className="mx-auto max-w-prose border-l-2 border-accent-gold/40 pl-4 text-body text-text-secondary"
         >
           {rivalry.origin}
         </aside>

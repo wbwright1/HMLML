@@ -27,8 +27,8 @@ test.describe("Co-Owner Display Across Site", () => {
     }
 
     // At least one franchise card should have owner text rendered
-    // The FranchiseIdentity standard variant puts owner in a p.text-caption element
-    const ownerTexts = page.locator('a[href^="/teams/"] p.text-caption');
+    // Each teams-index row puts the owner line under the name (data-testid="franchise-owner")
+    const ownerTexts = page.locator('a[href^="/teams/"] [data-testid="franchise-owner"]');
     const ownerCount = await ownerTexts.count();
     expect(ownerCount).toBeGreaterThan(0);
 
@@ -45,7 +45,7 @@ test.describe("Co-Owner Display Across Site", () => {
   }) => {
     await page.goto("/teams");
 
-    const ownerTexts = page.locator('a[href^="/teams/"] p.text-caption');
+    const ownerTexts = page.locator('a[href^="/teams/"] [data-testid="franchise-owner"]');
     const count = await ownerTexts.count();
 
     if (count === 0) {
@@ -68,7 +68,7 @@ test.describe("Co-Owner Display Across Site", () => {
   }) => {
     await page.goto("/teams");
 
-    const ownerTexts = page.locator('a[href^="/teams/"] p.text-caption');
+    const ownerTexts = page.locator('a[href^="/teams/"] [data-testid="franchise-owner"]');
     const count = await ownerTexts.count();
 
     if (count === 0) {
@@ -291,7 +291,7 @@ test.describe("Co-Owner Display Across Site", () => {
 
     // The standard variant in FranchiseIdentity does NOT include "Owned by"
     // It just renders "{ownerName}" or "{ownerName} & {coOwnerName}"
-    const ownerTexts = page.locator('a[href^="/teams/"] p.text-caption');
+    const ownerTexts = page.locator('a[href^="/teams/"] [data-testid="franchise-owner"]');
     const count = await ownerTexts.count();
 
     if (count === 0) {

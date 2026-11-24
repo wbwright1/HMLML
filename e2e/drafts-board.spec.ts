@@ -40,7 +40,7 @@ test.describe("Draft board", () => {
 
     await page.goto(href);
 
-    await expect(page.getByRole("heading", { name: "Draft Board." })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Draft Board", exact: true })).toBeVisible();
 
     // Desktop grid should render at least one pick cell with a real position
     // abbreviation rendered as visible text (not conveyed by color alone).
@@ -178,7 +178,7 @@ test.describe("Draft board", () => {
       await page.setViewportSize(DESKTOP_VIEWPORT);
       await page.goto(`/drafts/${year}`);
 
-      const heading = page.getByRole("heading", { name: "Draft Board." });
+      const heading = page.getByRole("heading", { level: 1, name: "Draft Board", exact: true });
       if ((await heading.count()) === 0) return;
       // Not a completed draft (upcoming boards have no filled pick cells).
       const isUpcoming = await page.getByText("Upcoming", { exact: true }).count();

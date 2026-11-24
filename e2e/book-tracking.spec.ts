@@ -153,7 +153,7 @@ test.describe("Tracking tab pick'ems", () => {
     ).toBeVisible();
 
     // The slate still renders, because picking is what the tab is for now.
-    await expect(trackingPanel(page).getByText("The Slate")).toBeVisible();
+    await expect(trackingPanel(page).getByText(/^Week \d+ slate$/)).toBeVisible();
     expect(await slateCards(page).count()).toBeGreaterThan(0);
   });
 
@@ -196,7 +196,7 @@ test.describe("Tracking tab pick'ems", () => {
     await button.click();
     await expect(button).toHaveAttribute("aria-pressed", "true");
     // The written label on the card, not just the gold tint on the row.
-    await expect(trackingPanel(page).getByText("Your pick ·").first()).toBeVisible();
+    await expect(trackingPanel(page).getByText("Your pick:").first()).toBeVisible();
 
     // The database is the proof, not the optimistic button state.
     await expect
@@ -220,7 +220,7 @@ test.describe("Tracking tab pick'ems", () => {
 
     // The Board pane mounts with the pick already on the slip: same row, same
     // member, read back through the same API the Board uses.
-    await expect(page.getByText("Your pick ·").first()).toBeVisible({
+    await expect(page.getByText("Your pick:").first()).toBeVisible({
       timeout: 10000,
     });
 
@@ -231,8 +231,8 @@ test.describe("Tracking tab pick'ems", () => {
     await expect(pressed).toBeVisible({ timeout: 10000 });
     await pressed.click();
 
-    await page.getByRole("tab", { name: "The Board" }).click();
-    await expect(page.getByText("Your pick ·")).toHaveCount(0, { timeout: 10000 });
+    await page.getByRole("tab", { name: "Board", exact: true }).click();
+    await expect(page.getByText("Your pick:")).toHaveCount(0, { timeout: 10000 });
 
     // Toggling the same side off deletes the row outright.
     await expect
@@ -261,7 +261,7 @@ test.describe("Tracking tab pick'ems", () => {
 
     // The viewer's own pick is visible to the viewer: that is the half of the
     // privacy rule that must still work.
-    await expect(card.getByText("Your pick ·")).toBeVisible({ timeout: 10000 });
+    await expect(card.getByText("Your pick:")).toBeVisible({ timeout: 10000 });
 
     // Nobody's side is on an open card, not even the viewer's own, in the rail:
     // the rail does not exist before kickoff.
@@ -275,7 +275,7 @@ test.describe("Tracking tab pick'ems", () => {
     await openTrackingTab(page);
     await expect(slateCard(page, row.matchup_id)).toBeVisible();
     await expect(
-      slateCard(page, row.matchup_id).getByText("Your pick ·"),
+      slateCard(page, row.matchup_id).getByText("Your pick:"),
     ).toHaveCount(0);
 
     // The DOM assertions above could in principle pass while the pick still
@@ -292,7 +292,10 @@ test.describe("Tracking tab pick'ems", () => {
     expect(cardHtml!).not.toContain(`data-member-id="${seededMemberId}"`);
     // The whole shipped page, not just this card: an open pick's side must not
     // appear anywhere in it.
-    expect(body).not.toContain(`Your pick · ${pickedTeam}`);
+    // The viewer's own pick row is client-only, so no "Your pick" line of any
+    // kind (let alone this team's) may be in the shipped HTML.
+    expect(body).not.toContain("Your pick:");
+    expect(body).not.toContain(`Your pick: ${pickedTeam}`);
   });
 
   // Issue #255: a picker is identified by a crest, not by a bare letter code.
@@ -355,7 +358,7 @@ test.describe("Tracking tab pick'ems", () => {
     // Same component tree as the desktop, not a different one: the cards are
     // there, and so is the ledger.
     expect(await slateCards(page).count()).toBeGreaterThan(0);
-    await expect(trackingPanel(page).getByText("The Slate")).toBeVisible();
+    await expect(trackingPanel(page).getByText(/^Week \d+ slate$/)).toBeVisible();
 
     // The retired grid's phone affordances must be gone with it.
     await expect(page.locator("#pickems-division")).toHaveCount(0);
@@ -486,7 +489,7 @@ test.describe("Tracking tab pick'ems", () => {
     expect((await unlockButton.boundingBox())!.height).toBeGreaterThanOrEqual(44);
 
     // ...and the Board agrees, with no reload, through the pick-events signal.
-    await page.getByRole("tab", { name: "The Board" }).click();
+    await page.getByRole("tab", { name: "Board", exact: true }).click();
     await expect(page.getByText("Picks are in. No takebacks.").first()).toBeVisible({
       timeout: 10000,
     });

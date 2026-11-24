@@ -35,7 +35,9 @@ function TagOrRecord({ team }: { team: FieldTeamEntry }) {
     );
   }
   return (
-    <span className="text-caption text-text-tertiary shrink-0">1ST YR</span>
+    <span className="text-caption text-text-tertiary shrink-0">
+      <span className="font-mono tabular-nums">1</span>st year
+    </span>
   );
 }
 
@@ -56,24 +58,24 @@ export function DivisionFieldCard({
         <h3 className="text-body-lg font-semibold text-text-primary">
           {division.divisionName}
         </h3>
-        <span className="font-serif italic text-body-sm text-accent-gold text-right">
+        <span className="text-body-sm text-accent-gold text-right">
           {characterization}
         </span>
       </div>
       {recordsSeasonYear && (
         <p className="text-caption text-text-tertiary mt-1">
-          {recordsSeasonYear} finish
+          <span className="font-mono tabular-nums">{recordsSeasonYear}</span> finish
         </p>
       )}
 
-      <ul className="mt-4 space-y-3">
+      <ul className="mt-4 space-y-1">
         {division.teams.map((team) => (
           <li key={team.franchiseId} className="flex items-center gap-3">
             {/* Colour on the anchor, not on the name span: a child text-*
                 class beats the anchor's hover: and the gold never shows. */}
             <TeamLink
               slug={team.slug}
-              className="flex min-w-0 flex-1 items-center gap-3 text-text-primary"
+              className="flex min-h-11 min-w-0 flex-1 items-center gap-3 text-text-primary"
             >
               <FranchiseLogo
                 slug={team.slug}
@@ -94,7 +96,7 @@ export function DivisionFieldCard({
       </ul>
 
       <div className="mt-auto border-t border-divider pt-4">
-        <p className="font-serif italic text-body-sm text-text-tertiary">
+        <p className="text-body-sm text-text-secondary">
           {rivalryNote}
         </p>
       </div>

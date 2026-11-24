@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 
 interface DraftOrderCardProps {
   picks: { rank: number; franchiseName: string; record: string; originalOwnerName?: string }[];
@@ -43,9 +44,10 @@ export function DraftOrderCard({ picks, seasonYear }: DraftOrderCardProps) {
       {seasonYear && (
         <Link
           href={`/drafts/${seasonYear}`}
-          className="block mt-4 text-body-sm font-medium text-accent-green hover:underline"
+          className="mt-2 inline-flex min-h-11 items-center gap-1 rounded-md text-body-sm font-medium text-accent-green hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
         >
-          View Full Draft Order (All 3 Rounds) &rarr;
+          Full draft order, all <span className="font-mono tabular-nums">3</span> rounds
+          <ChevronRight className="size-4" strokeWidth={2} aria-hidden />
         </Link>
       )}
     </div>

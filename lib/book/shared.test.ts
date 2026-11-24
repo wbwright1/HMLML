@@ -213,12 +213,12 @@ describe("bookConsensusText", () => {
 
 describe("bookCtaLabel", () => {
   it("invites a pick while the game is open", () => {
-    expect(bookCtaLabel("open")).toBe("Pick →");
+    expect(bookCtaLabel("open")).toBe("Pick");
   });
 
   it("points to The Book once a game has kicked off", () => {
-    expect(bookCtaLabel("live")).toBe("The Book →");
-    expect(bookCtaLabel("final")).toBe("The Book →");
+    expect(bookCtaLabel("live")).toBe("The Book");
+    expect(bookCtaLabel("final")).toBe("The Book");
   });
 });
 

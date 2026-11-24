@@ -257,7 +257,7 @@ test.describe("Player profile", () => {
     await page.goto("/players/6786");
     await expect(page.locator("h1#player-profile-title")).toBeVisible();
 
-    const ledger = page.getByText("Ownership Ledger").locator("..");
+    const ledger = page.getByText("Ownership ledger").locator("..");
     // Two Tokyo Thunderbirds pills (2021-22 and 2024-26), not one collapsed
     // 2021-26 pill, plus Latter Day Lamb Special 2023-24 in between.
     await expect(ledger.getByTitle(/The Tokyo Thunderbirds \(2021–22\)/)).toBeVisible();
@@ -269,7 +269,7 @@ test.describe("Player profile", () => {
   test("CeeDee Lamb (6786): career timeline shows in-round draft pick and a single condensed trade event", async ({ page }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto("/players/6786");
-    await expect(page.getByText("Career Timeline")).toBeVisible();
+    await expect(page.getByText("Career timeline")).toBeVisible();
 
     // 2021 startup: overall pick 36 was pick 6 of round 4 in the 10-team draft.
     await expect(page.getByText(/Drafted Round 4, Pick 6/)).toBeVisible();

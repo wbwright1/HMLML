@@ -40,7 +40,7 @@ export function FranchisePicker({
       </select>
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute right-0 text-[10px] text-accent-gold"
+        className="pointer-events-none absolute right-0 text-caption text-accent-gold"
       >
         &#9662;
       </span>

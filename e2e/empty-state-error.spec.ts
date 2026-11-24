@@ -24,10 +24,10 @@ test.describe("AC2: 404 Page", () => {
     expect(text).not.toContain("\u2014");
   });
 
-  test("FE-T08: Go to Hub link navigates to /", async ({ page }) => {
+  test("FE-T08: Go to the hub link navigates to /", async ({ page }) => {
     await page.goto(notFoundUrl);
 
-    const hubLink = page.getByRole("link", { name: "Go to Hub" });
+    const hubLink = page.getByRole("link", { name: "Go to the hub" });
     await expect(hubLink).toBeVisible();
     await expect(hubLink).toHaveAttribute("href", "/");
 
@@ -35,10 +35,10 @@ test.describe("AC2: 404 Page", () => {
     await expect(page).toHaveURL("/");
   });
 
-  test("FE-T09: Browse Teams link navigates to /teams", async ({ page }) => {
+  test("FE-T09: Browse teams link navigates to /teams", async ({ page }) => {
     await page.goto(notFoundUrl);
 
-    const teamsLink = page.getByRole("link", { name: "Browse Teams" });
+    const teamsLink = page.getByRole("link", { name: "Browse teams" });
     await expect(teamsLink).toBeVisible();
     await expect(teamsLink).toHaveAttribute("href", "/teams");
 
@@ -58,10 +58,10 @@ test.describe("AC2: 404 Page", () => {
     await expect(body).toBeVisible();
 
     await expect(
-      page.getByRole("link", { name: "Go to Hub" })
+      page.getByRole("link", { name: "Go to the hub" })
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "Browse Teams" })
+      page.getByRole("link", { name: "Browse teams" })
     ).toBeVisible();
   });
 });

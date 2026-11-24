@@ -382,17 +382,105 @@ export function heroDekFromData(input: HeroHeadlineInput, headline: HeroLine): s
 }
 
 /**
- * The kicker's schedule clause: "Kickoff Thursday", "Kickoff Today", or "The
- * Slate Is Set" when the kickoff is unknown, already past, or a week or more
- * out (a bare weekday would then be ambiguous). Title case like the rest of
- * the kicker; the kicker class uppercases it.
+ * The slate's schedule clause: "Kickoff Thursday", "Kickoff today", or "The
+ * slate is set" when the kickoff is unknown, already past, or a week or more
+ * out (a bare weekday would then be ambiguous). Sentence case: it renders as
+ * the meta line beside the Game of the week label (the hero lost its kicker
+ * in the 2026-11-24 UI/UX pass; the live pill already names the week).
  */
 export function heroKickerTail(nextKickoff: Date | null, now: Date = new Date()): string {
-  if (!nextKickoff || nextKickoff.getTime() <= now.getTime()) return "The Slate Is Set";
+  if (!nextKickoff || nextKickoff.getTime() <= now.getTime()) return "The slate is set";
   const days = daysUntil(nextKickoff, now);
-  if (days === 0) return "Kickoff Today";
-  if (days > 6) return "The Slate Is Set";
+  if (days === 0) return "Kickoff today";
+  if (days > 6) return "The slate is set";
   return `Kickoff ${kickoffWeekdayName(nextKickoff)}`;
+}
+
+// ---------------------------------------------------------------------------
+// The hero's fact line
+// ---------------------------------------------------------------------------
+
+function finalOf(finals: readonly HeroFinal[], franchiseId: string): HeroFinal | null {
+  return (
+    finals.find((f) => f.winner.franchiseId === franchiseId || f.loser.franchiseId === franchiseId) ??
+    null
+  );
+}
+
+function slateGameOf(slate: readonly HeroSlateGame[], ids: readonly string[]): HeroSlateGame | null {
+  return (
+    slate.find(
+      (g) => ids.includes(g.a.franchiseId) && ids.includes(g.b.franchiseId)
+    ) ?? null
+  );
+}
+
+/** True when `side` is the one lowest score of the week (no tie for it). */
+function isUniqueLow(finals: readonly HeroFinal[], side: HeroFinalSide): boolean {
+  const sides = allSides(finals);
+  const low = Math.min(...sides.map((s) => s.points));
+  return side.points === low && sides.filter((s) => s.points === low).length === 1;
+}
+
+/**
+ * The plain line under the hero headline: ONE specific fact about the
+ * headline's subject, never a second punchline (the headline owns the snark)
+ * and never a number the headline already printed. Null when the rung has no
+ * clean companion fact (winless-watch prints both records already, and the
+ * fallback asserts nothing); the caller then falls back to the dek chain.
+ *
+ * Because the wrap's No-show tile is gone (the hero owns the week's low), the
+ * mercy line names the loser's score as the week's lowest when it is.
+ */
+export function heroFactLine(
+  input: HeroHeadlineInput,
+  headline: HeroLine,
+  priorWeek: number
+): string | null {
+  const finals = input.priorFinals;
+  const ids = headline.claim.franchiseIds;
+  switch (headline.rung) {
+    case "mercy": {
+      const f = finalOf(finals, ids[0] ?? "");
+      if (!f) return null;
+      return isUniqueLow(finals, f.loser)
+        ? `${pts(f.loser.points)} points, the lowest score of Week ${priorWeek}.`
+        : `${pts(f.loser.points)} points against ${f.winner.name}.`;
+    }
+    case "monster": {
+      const f = finalOf(finals, ids[0] ?? "");
+      if (!f) return null;
+      return f.winner.franchiseId === ids[0]
+        ? `${f.loser.name} scored ${pts(f.loser.points)} against them.`
+        : `They still lost, to ${f.winner.name}'s ${pts(f.winner.points)}.`;
+    }
+    case "photo-finish": {
+      const f = finalOf(finals, ids[0] ?? "");
+      if (!f) return null;
+      return `${f.winner.name} ${pts(f.winner.points)}, ${f.loser.name} ${pts(f.loser.points)}.`;
+    }
+    case "dud": {
+      const f = finalOf(finals, ids[0] ?? "");
+      if (!f) return null;
+      return f.loser.franchiseId === ids[0]
+        ? `The lowest score of Week ${priorWeek}, in a loss to ${f.winner.name}.`
+        : `The lowest score of Week ${priorWeek}, and still a win over ${f.loser.name}.`;
+    }
+    case "unbeaten-clash":
+    case "winless-clash": {
+      const g = slateGameOf(input.slate, ids);
+      return g ? `It is ${g.a.name} against ${g.b.name}.` : null;
+    }
+    case "division-flip":
+    case "named-rivalry": {
+      const g = slateGameOf(input.slate, ids);
+      return g
+        ? `${g.a.name} is ${record(g.a)}, ${g.b.name} is ${record(g.b)}.`
+        : null;
+    }
+    default:
+      return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

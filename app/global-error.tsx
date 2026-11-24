@@ -55,7 +55,8 @@ export default function GlobalError({
                 color: "#1A1613",
                 border: "none",
                 borderRadius: "999px",
-                padding: "10px 24px",
+                minHeight: "44px",
+                padding: "0 24px",
                 fontWeight: 600,
                 fontSize: "15px",
                 cursor: "pointer",
@@ -67,10 +68,14 @@ export default function GlobalError({
             <a
               href="/"
               style={{
-                border: "1px solid rgba(255,255,255,.14)",
+                border: "1px solid #7A7466",
                 color: "#F2EADC",
                 borderRadius: "999px",
-                padding: "10px 24px",
+                minHeight: "44px",
+                boxSizing: "border-box",
+                display: "inline-flex",
+                alignItems: "center",
+                padding: "0 24px",
                 fontWeight: 600,
                 fontSize: "15px",
                 textDecoration: "none",

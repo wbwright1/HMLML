@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { TeamLink } from "@/components/team-link";
 import { SuperlativeBadge } from "@/components/superlative-badge";
@@ -13,7 +14,7 @@ interface TradeCardProps {
   trade: Trade;
   /**
    * Optional Site Desk "who won this trade" aside, keyed to this trade's
-   * transaction id upstream. Rendered as a serif italic editorial note.
+   * transaction id upstream. Rendered as a short editorial note.
    */
   verdict?: string | null;
   /** Optional hindsight grade (realized-points report) for this trade. */
@@ -50,22 +51,27 @@ export function TradeCard({
   highlighted,
 }: TradeCardProps) {
   return (
-    <div
+    <article
       id={`trade-${trade.id}`}
+      data-testid="trade-card"
+      aria-label={`Trade, ${trade.date}`}
       className={`card-surface p-5 space-y-4 scroll-mt-24${highlighted ? " trade-focus" : ""}`}
     >
 
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <SuperlativeBadge text="Trade" variant="gold" />
-          <span className="text-body-sm text-text-tertiary font-mono tabular-nums">
-            {trade.date}
-          </span>
-          <span className="text-body-sm text-text-tertiary">{trade.seasonYear}</span>
-        </div>
+        <p className="text-body-sm text-text-tertiary tabular-nums">
+          {trade.date === "Unknown date" ? (
+            <>
+              Date unknown,{" "}
+              <span className="font-mono">{trade.seasonYear}</span>
+            </>
+          ) : (
+            trade.date
+          )}
+        </p>
         {trade.week != null && (
-          <span className="text-caption text-text-tertiary font-mono tabular-nums">
-            Week {trade.week}
+          <span className="text-caption text-text-tertiary">
+            Week <span className="font-mono tabular-nums">{trade.week}</span>
           </span>
         )}
       </div>
@@ -82,7 +88,7 @@ export function TradeCard({
               <div className="min-w-0 space-y-0.5">
                 <TeamLink
                   slug={side.franchise?.slug}
-                  className="flex min-w-0 items-center gap-2 text-text-primary"
+                  className="flex min-h-11 min-w-0 items-center gap-2 rounded-md text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
                 >
                   {side.franchise && (
                     <FranchiseLogo
@@ -123,7 +129,7 @@ export function TradeCard({
                         <span className="truncate">{player.name}</span>
                       </PlayerLink>
                       {player.nflTeam && (
-                        <span className="text-caption font-mono text-text-tertiary">
+                        <span className="text-caption text-text-tertiary">
                           {player.nflTeam}
                         </span>
                       )}
@@ -136,10 +142,13 @@ export function TradeCard({
                     >
                       <div className="flex items-center gap-2">
                         {pick.originalFranchise && (
+                          // No aria-label on the link: its accessible name
+                          // comes from the crest itself (img alt or the
+                          // monogram's role="img" label), so the name always
+                          // matches what the crest shows (WCAG 2.5.3).
                           <TeamLink
                             slug={pick.originalFranchise.slug}
-                            aria-label={pick.originalFranchise.name}
-                            className="inline-flex shrink-0"
+                            className="-my-3 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           >
                             <FranchiseLogo
                               slug={pick.originalFranchise.slug}
@@ -148,16 +157,15 @@ export function TradeCard({
                               brandingColor={pick.originalFranchise.brandingColor}
                               avatarUrl={pick.originalFranchise.avatarUrl}
                               size={20}
-                              decorative
                             />
                           </TeamLink>
                         )}
                         <span
-                          className={`font-mono tabular-nums ${pick.voided ? "text-text-muted line-through" : "text-accent-gold"}`}
+                          className={`font-mono tabular-nums ${pick.voided ? "text-text-tertiary line-through" : "text-accent-gold"}`}
                         >
                           {pick.season}
                         </span>
-                        <span className={pick.voided ? "text-text-muted line-through" : undefined}>
+                        <span className={pick.voided ? "text-text-tertiary line-through" : undefined}>
                           Round {pick.round} pick
                         </span>
                         {pick.voided && (
@@ -171,9 +179,10 @@ export function TradeCard({
                       ) : pick.flippedToTradeId != null ? (
                         <Link
                           href={`/trades?highlight=${pick.flippedToTradeId}#trade-${pick.flippedToTradeId}`}
-                          className="w-fit pl-1 text-caption text-accent-gold hover:underline"
+                          className="-my-2 inline-flex min-h-11 w-fit items-center gap-0.5 rounded-md pl-1 pr-2 text-body-sm text-accent-gold hover:underline transition-[scale] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
                         >
-                          flipped in a later trade &rarr;
+                          flipped in a later trade
+                          <ChevronRight className="size-4" strokeWidth={2} aria-hidden />
                         </Link>
                       ) : pick.became && (
                         <div className="flex min-w-0 items-center gap-1.5 pl-1 text-caption text-text-tertiary">
@@ -218,7 +227,7 @@ export function TradeCard({
             <p
               className={`text-kicker ${grade.graded ? "text-accent-gold" : "text-text-tertiary"}`}
             >
-              {grade.graded ? "Hindsight Report" : "Hindsight Pending"}
+              {grade.graded ? "Hindsight report" : "Hindsight pending"}
             </p>
             {grade.label && (
               <SuperlativeBadge
@@ -247,11 +256,23 @@ export function TradeCard({
                     >
                       {side?.franchise?.name ?? "Unknown Team"}
                     </TeamLink>
-                    <span className="text-caption font-mono tabular-nums text-text-tertiary">
-                      {s.realizedPoints.toFixed(1)} pts realized &middot;{" "}
-                      {s.startedPoints.toFixed(1)} started
+                    <span className="text-caption text-text-tertiary">
+                      <span className="font-mono tabular-nums">
+                        {s.realizedPoints.toFixed(1)}
+                      </span>{" "}
+                      pts realized &middot;{" "}
+                      <span className="font-mono tabular-nums">
+                        {s.startedPoints.toFixed(1)}
+                      </span>{" "}
+                      started
                       {s.flipCreditPoints >= 0.5 && (
-                        <> &middot; {s.flipCreditPoints.toFixed(1)} via flips</>
+                        <>
+                          {" "}&middot;{" "}
+                          <span className="font-mono tabular-nums">
+                            {s.flipCreditPoints.toFixed(1)}
+                          </span>{" "}
+                          via flips
+                        </>
                       )}
                     </span>
                   </li>
@@ -266,7 +287,7 @@ export function TradeCard({
 
       {values && values.sides.some((s) => s.coverage !== "none") && (
         <div className="border-t border-divider pt-3 space-y-2">
-          <p className="text-kicker text-text-tertiary">Dynasty Value &middot; Then &rarr; Now</p>
+          <p className="text-kicker text-text-tertiary">Dynasty value, then and now</p>
           <ul className="space-y-1.5">
             {values.sides.map((s) => {
               const side = trade.sides.find((ts) => ts.rosterId === s.rosterId);
@@ -287,7 +308,7 @@ export function TradeCard({
                     {name}
                   </TeamLink>
                   {s.coverage === "none" && (
-                    <span className="text-caption text-text-muted">no market data</span>
+                    <span className="text-caption text-text-tertiary">no market data</span>
                   )}
                   {s.coverage === "partial" && (
                     <>
@@ -302,14 +323,14 @@ export function TradeCard({
                       <span className="font-mono tabular-nums text-text-tertiary">
                         {s.then!.toLocaleString()}
                       </span>
-                      <span className="px-1.5 text-text-muted" aria-hidden>
+                      <span className="px-1.5 text-text-tertiary" aria-hidden>
                         &rarr;
                       </span>
                       <span className="font-mono tabular-nums text-text-primary">
                         {s.now!.toLocaleString()}
                       </span>
                       {delta === 0 ? (
-                        <span className="text-caption text-text-muted">no change</span>
+                        <span className="text-caption text-text-tertiary">no change</span>
                       ) : delta !== null && delta > 0 ? (
                         <span className="flex items-center gap-0.5 font-mono text-xs font-bold tabular-nums text-accent-green shrink-0">
                           <span className="sr-only">up </span>
@@ -334,12 +355,12 @@ export function TradeCard({
 
       {verdict && (
         <div className="border-t border-divider pt-3">
-          <p className="text-kicker text-accent-gold mb-1">Site Desk Verdict</p>
-          <p className="font-serif italic text-body text-text-secondary">
+          <p className="text-kicker text-accent-gold mb-1">Site Desk verdict</p>
+          <p className="text-body text-text-secondary">
             {verdict}
           </p>
         </div>
       )}
-    </div>
+    </article>
   );
 }

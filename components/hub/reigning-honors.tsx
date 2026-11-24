@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { PlayerLink } from "@/components/player-link";
 import { TeamLink } from "@/components/team-link";
@@ -23,7 +25,7 @@ function HonorCard({ award }: { award: AwardEntry }) {
       <div className="flex items-center gap-3">
         <PlayerLink
           playerId={award.playerId}
-          className="flex min-w-0 flex-1 items-center gap-3"
+          className="flex min-h-11 min-w-0 flex-1 items-center gap-3"
         >
           <PlayerHeadshot
             playerId={award.playerId}
@@ -46,8 +48,8 @@ function HonorCard({ award }: { award: AwardEntry }) {
           </p>
         </PlayerLink>
       </div>
-      <div className="mt-1.5 truncate text-caption text-text-tertiary normal-case tracking-normal">
-        <TeamLink slug={award.franchise?.slug}>
+      <div className="truncate text-caption text-text-tertiary">
+        <TeamLink slug={award.franchise?.slug} className="inline-flex min-h-11 items-center">
           {award.franchise?.name ?? "Franchise unknown"}
         </TeamLink>
       </div>
@@ -76,13 +78,14 @@ export async function ReigningHonors({
 
   return (
     <section className="py-4">
-      <div className="mb-4 flex items-baseline justify-between gap-3">
-        <p className="text-kicker">{kicker}</p>
+      <div className="mb-4 flex min-h-11 items-center justify-between gap-3">
+        <h2 className="text-kicker">{kicker}</h2>
         <Link
           href="/records/hall-of-fame"
-          className="text-caption font-medium text-accent-gold hover:brightness-110"
+          className={`${buttonVariants({ variant: "quiet", size: "sm" })} -mr-3`}
         >
-          The Trophy Case &rarr;
+          The trophy case
+          <ChevronRight aria-hidden="true" strokeWidth={2} data-icon="inline-end" />
         </Link>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -90,7 +93,7 @@ export async function ReigningHonors({
           <HonorCard key={award.id} award={award} />
         ))}
       </div>
-      <p className="mt-2 text-caption text-text-tertiary normal-case tracking-normal">
+      <p className="mt-2 text-caption text-text-tertiary">
         {`${seasonYear} league honors, commissioner’s call.`}
       </p>
     </section>

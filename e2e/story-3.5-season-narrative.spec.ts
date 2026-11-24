@@ -87,9 +87,10 @@ test.describe("Season Narrative Block", () => {
 
     // Check for expected labels
     const sectionText = await section.innerText();
-    expect(sectionText).toContain("Champion");
-    expect(sectionText).toContain("Seasons Played");
-    expect(sectionText).toContain("Total Matchups");
+    // Labels are sentence case (UI/UX pass); match casing-agnostically.
+    expect(sectionText).toMatch(/Champion/i);
+    expect(sectionText).toMatch(/Seasons played/i);
+    expect(sectionText).toMatch(/Total matchups/i);
   });
 
   // T04: Offseason reigning champion includes ChampionshipStars

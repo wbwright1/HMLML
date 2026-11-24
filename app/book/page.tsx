@@ -97,16 +97,15 @@ export default async function BookPage() {
 
   return (
     <div className="pb-12">
-      <BookHeader week={week} />
+      <BookHeader />
 
       <BookTabs
         board={<BoardIsland games={games} week={week} />}
         futures={
           <div className="flex flex-col gap-4">
             <div>
-              <p className="text-kicker mb-1.5">{FUTURES_COPY.kicker}</p>
               <h2 className="text-h2">{FUTURES_COPY.title}</h2>
-              <p className="mt-1.5 font-serif text-body-sm italic text-text-tertiary">
+              <p className="mt-1.5 text-body-sm text-text-secondary">
                 {FUTURES_COPY.subline}
               </p>
             </div>
@@ -115,7 +114,7 @@ export default async function BookPage() {
               seasonId={futuresSeasonId}
               finalRegularWeek={finalRegularWeek}
             />
-            <p className="text-caption normal-case tracking-normal text-text-tertiary">
+            <p className="text-caption text-text-tertiary">
               {FUTURES_COPY.syncNote}
             </p>
           </div>
@@ -136,7 +135,7 @@ export default async function BookPage() {
         props={<PropsIsland props={props} week={week} />}
       />
 
-      <p className="mt-10 flex flex-wrap items-center justify-center gap-2 text-caption normal-case tracking-normal text-text-tertiary">
+      <p className="mt-10 flex flex-wrap items-center justify-center gap-2 text-caption text-text-tertiary">
         <SyncTimestamp dataType="book_lines" />
         <span aria-hidden="true">·</span>
         <span>{BOOK_COPY.syncNote}</span>
@@ -145,30 +144,28 @@ export default async function BookPage() {
   );
 }
 
-function BookHeader({ week }: { week: number }) {
+/**
+ * Title plus one intro line, nothing stacked above it (design rule: no kicker
+ * over a page title). The week number lives on the pick slip instead.
+ */
+function BookHeader() {
   return (
-    <section className="py-10">
-      <p className="text-kicker mb-3">
-        {BOOK_COPY.kicker} · Week{" "}
-        <span className="font-mono tabular-nums">{week}</span>
-      </p>
+    <section className="pt-7 pb-5 sm:pt-10 sm:pb-6">
       <h1 className="text-display">{BOOK_COPY.title}</h1>
-      <p className="mt-3 font-serif text-body-sm italic text-text-tertiary">
-        {BOOK_COPY.subline}
-      </p>
+      <p className="mt-2 text-body text-text-secondary">{BOOK_COPY.subline}</p>
     </section>
   );
 }
 
 /**
- * A tab that is not open yet. Deliberately a kicker plus one serif line and
- * nothing else: a dead control that looks live is worse than an honest gap.
+ * A tab that is not open yet. Deliberately a label plus one line and nothing
+ * else: a dead control that looks live is worse than an honest gap.
  */
 function ComingSoonPane({ kicker, line }: { kicker: string; line: string }) {
   return (
     <div className="card-surface p-6">
       <p className="text-kicker mb-2">{kicker}</p>
-      <p className="font-serif text-h3 italic text-text-secondary">{line}</p>
+      <p className="text-body text-text-secondary">{line}</p>
     </div>
   );
 }

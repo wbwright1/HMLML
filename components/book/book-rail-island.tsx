@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button-variants";
+import { MonoNumerals } from "@/components/book/mono-numerals";
 import { useSessionMember } from "@/components/use-session-member";
 import { gradePick } from "@/lib/book/pricing";
 import { formatRecord } from "@/lib/format-record";
@@ -100,13 +103,14 @@ export function BookRailIsland({
             </p>
           )}
           <p className={recordLine ? "mt-3 text-body-sm text-text-secondary" : "text-body-sm text-text-secondary"}>
-            {summaryLine}
+            <MonoNumerals text={summaryLine} />
           </p>
           <Link
             href="/book"
-            className="mt-4 inline-block rounded-full bg-accent-gold px-4 py-2 text-body-sm font-semibold text-canvas transition-[filter] duration-150 hover:brightness-110"
+            className={buttonVariants({ variant: "outline", className: "mt-4" })}
           >
-            Open the board &rarr;
+            Open the board
+            <ChevronRight data-icon="inline-end" strokeWidth={2} aria-hidden="true" />
           </Link>
         </div>
       </div>

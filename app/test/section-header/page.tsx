@@ -19,7 +19,7 @@ export default function SectionHeaderTestPage() {
         <SectionHeader
           title="2024 Draft"
           viewAllHref="/drafts/2024"
-          viewAllLabel="Full Draft →"
+          viewAllLabel="Full draft"
         />
         <p className="text-body">Content below the custom link header.</p>
       </div>

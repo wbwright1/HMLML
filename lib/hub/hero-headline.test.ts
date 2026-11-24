@@ -4,6 +4,7 @@ import {
   heroHeadlineLadder,
   heroDekFromData,
   heroKickerTail,
+  heroFactLine,
   numeralSegments,
   repeatsHeroNumber,
   finalsFromPairedMatchups,
@@ -342,13 +343,63 @@ describe("heroKickerTail", () => {
   });
 
   it("says today on kickoff day", () => {
-    expect(heroKickerTail(kickoff, new Date("2026-09-24T18:00:00Z"))).toBe("Kickoff Today");
+    expect(heroKickerTail(kickoff, new Date("2026-09-24T18:00:00Z"))).toBe("Kickoff today");
   });
 
-  it("falls back to The Slate Is Set when unknown, past, or a week or more out", () => {
-    expect(heroKickerTail(null, now)).toBe("The Slate Is Set");
-    expect(heroKickerTail(kickoff, new Date("2026-09-26T00:00:00Z"))).toBe("The Slate Is Set");
-    expect(heroKickerTail(new Date("2026-10-01T00:15:00Z"), now)).toBe("The Slate Is Set");
+  it("falls back to The slate is set when unknown, past, or a week or more out", () => {
+    expect(heroKickerTail(null, now)).toBe("The slate is set");
+    expect(heroKickerTail(kickoff, new Date("2026-09-26T00:00:00Z"))).toBe("The slate is set");
+    expect(heroKickerTail(new Date("2026-10-01T00:15:00Z"), now)).toBe("The slate is set");
+  });
+});
+
+describe("heroFactLine: one plain fact under the headline", () => {
+  const recap = (finals: HeroFinal[]): HeroHeadlineInput => ({
+    recapShown: true,
+    priorFinals: finals,
+    slate: [],
+    standings: [],
+  });
+
+  it("mercy names the loser's score as the week's low when it is, never the margin again", () => {
+    const h = heroHeadline(LIVE);
+    const fact = heroFactLine(LIVE, h, 2)!;
+    expect(fact).toBe("140.8 points against The Tokyo Thunderbirds.");
+    expect(repeatsHeroNumber(fact, h.claim)).toBe(false);
+
+    const lowLoser = recap([final("MCC", 150, "OMM", 100), final("ROG", 120, "BCM", 110)]);
+    expect(heroFactLine(lowLoser, heroHeadline(lowLoser), 11)).toBe(
+      "100.0 points, the lowest score of Week 11."
+    );
+  });
+
+  it("monster names the other side of that game", () => {
+    const input = recap([final("TTT", 190.44, "TB", 170), final("ROG", 120, "BCM", 110)]);
+    expect(heroFactLine(input, heroHeadline(input), 3)).toBe("Taking Boutte scored 170.0 against them.");
+  });
+
+  it("photo finish prints the two scores, not the margin", () => {
+    const input = recap([final("VV", 120.8, "FOO", 120), final("ROG", 130, "BCM", 110)]);
+    const h = heroHeadline(input);
+    const fact = heroFactLine(input, h, 3)!;
+    expect(fact).toBe("Vanilla Vick 120.8, Foopus 120.0.");
+    expect(repeatsHeroNumber(fact, h.claim)).toBe(false);
+  });
+
+  it("dud says whether the low score still won", () => {
+    const lost = recap([final("ROG", 120, "OMM", 82.48), final("MCC", 130, "BCM", 110)]);
+    expect(heroFactLine(lost, heroHeadline(lost), 4)).toBe(
+      "The lowest score of Week 4, in a loss to Real Olave Garden."
+    );
+  });
+
+  it("slate rungs name the game's two teams; winless-watch and the fallback have none", () => {
+    const input = { ...LIVE, recapShown: false };
+    expect(heroFactLine(input, heroHeadline(input), 2)).toBe(
+      "It is Better call Myballs against Foopus."
+    );
+    const empty = recap([]);
+    expect(heroFactLine(empty, heroHeadline(empty), 1)).toBeNull();
   });
 });
 

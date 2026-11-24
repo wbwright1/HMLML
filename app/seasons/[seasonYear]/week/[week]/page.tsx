@@ -1,6 +1,9 @@
 import { notFound } from "next/navigation";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button-variants";
+import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { MatchupRow } from "@/components/matchup-row";
 import { getNamedRivalryLookup } from "@/lib/queries/named-rivalries-optional";
@@ -76,49 +79,41 @@ export default async function WeekResultsPage({
 
   return (
     <>
-      <PageSection
-        label={`${year} Season${isPlayoffWeek ? " · Playoffs" : ""}`}
-        title={`Week ${week}.`}
-      >
-        <div className="flex flex-wrap items-center gap-4">
-          <Link
-            href={`/seasons/${year}`}
-            className="text-body-sm text-text-tertiary hover:text-text-primary transition-colors"
-          >
-            &larr; {year} Season
-          </Link>
+      <PageSection as="h1" title={`Week ${week}`}>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <BackLink href={`/seasons/${year}`} label={`${year} season`} />
 
           {isPlayoffWeek && (
-            <SuperlativeBadge text="Playoff Week" variant="gold" />
+            <SuperlativeBadge text="Playoff week" variant="gold" />
           )}
 
-          {hasLive && <SuperlativeBadge text="In Progress" variant="green" />}
+          {hasLive && <SuperlativeBadge text="Live" variant="green" />}
           {allComplete && matchups.length > 0 && (
             <SuperlativeBadge text="Final" variant="neutral" />
           )}
         </div>
 
         {/* Week navigation */}
-        <div className="flex items-center gap-3 mt-4">
-          {week > 1 ? (
+        <nav aria-label="Week navigation" className="flex items-center gap-3">
+          {week > 1 && (
             <Link
               href={`/seasons/${year}/week/${week - 1}`}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-4 py-1.5 text-body-sm font-medium text-text-tertiary hover:text-text-primary hover:bg-surface-muted transition-colors"
+              className={buttonVariants({ variant: "outline" })}
             >
-              &larr; Week <span className="font-mono tabular-nums">{week - 1}</span>
+              <ChevronLeft className="size-4" strokeWidth={2} aria-hidden />
+              Week <span className="font-mono tabular-nums">{week - 1}</span>
             </Link>
-          ) : (
-            <span />
           )}
           {nextWeekHasData && (
             <Link
               href={`/seasons/${year}/week/${week + 1}`}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-surface px-4 py-1.5 text-body-sm font-medium text-text-tertiary hover:text-text-primary hover:bg-surface-muted transition-colors"
+              className={buttonVariants({ variant: "outline" })}
             >
-              Week <span className="font-mono tabular-nums">{week + 1}</span> &rarr;
+              Week <span className="font-mono tabular-nums">{week + 1}</span>
+              <ChevronRight className="size-4" strokeWidth={2} aria-hidden />
             </Link>
           )}
-        </div>
+        </nav>
       </PageSection>
 
       <section className="pb-8 md:pb-12 space-y-6">

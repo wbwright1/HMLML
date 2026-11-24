@@ -140,7 +140,7 @@ function CrestLabel({
       </span>
       {showAbbr && (
         <span
-          className={`text-[11px] font-semibold uppercase tracking-wide ${
+          className={`text-caption font-semibold ${
             crowned ? "text-accent-gold" : "text-text-tertiary"
           }`}
         >
@@ -326,7 +326,7 @@ function MobileArcList({
 
   return (
     <div className="sm:hidden" aria-hidden>
-      <div className="mb-2 flex items-center justify-between px-3 text-[10px] font-semibold uppercase tracking-[.18em] text-text-tertiary">
+      <div className="mb-2 flex items-center justify-between px-3 text-caption font-semibold text-text-tertiary">
         <span>Final</span>
         <span className="flex items-center gap-2.5">
           <span className="text-center" style={{ width: SPARK_W }}>
@@ -376,7 +376,7 @@ function MobileArcList({
                 >
                   {team.name}
                 </p>
-                <p className="whitespace-nowrap font-mono text-[11px] tabular-nums text-text-tertiary">
+                <p className="whitespace-nowrap font-mono text-caption tabular-nums text-text-tertiary">
                   #{s.ranks[0]} → #{endRank}
                 </p>
               </div>
@@ -460,7 +460,7 @@ function LensPanel({
           {teams.map((_, i) => (
             <span
               key={i}
-              className={`flex items-center justify-end font-mono text-[10px] tabular-nums ${
+              className={`flex items-center justify-end font-mono text-caption tabular-nums ${
                 i < 3 ? "text-accent-gold" : "text-text-tertiary"
               }`}
               style={{ height: ROW_PX }}
@@ -592,7 +592,7 @@ function LensPanel({
             {weeks.map((w, i) => (
               <span
                 key={w}
-                className={`text-center font-mono text-[10px] tabular-nums text-text-tertiary ${
+                className={`text-center font-mono text-caption tabular-nums text-text-tertiary ${
                   i % 2 === 1 && i !== lastCol ? "max-sm:invisible" : ""
                 }`}
               >
@@ -605,7 +605,7 @@ function LensPanel({
               </span>
             )}
           </div>
-          <p className="mt-1 text-center text-[10px] font-semibold uppercase tracking-[.18em] text-text-tertiary">
+          <p className="mt-1 text-center text-caption font-semibold text-text-tertiary">
             Week
           </p>
         </div>

@@ -58,11 +58,11 @@ export function NamedRivalryCard({
               </>
             )}
           </div>
-          <Heading className="font-serif text-h2 italic text-accent-gold">
+          <Heading className="text-h2 text-accent-gold">
             {lore.name}
           </Heading>
           {lore.tagline && (
-            <p className="font-serif text-body-lg italic text-text-secondary">
+            <p className="text-body-lg text-text-secondary">
               {lore.tagline}
             </p>
           )}
@@ -110,7 +110,7 @@ export function NamedRivalryCard({
         )}
 
         {lore.origin && (
-          <p className="font-serif text-body italic text-text-tertiary">
+          <p className="text-body text-text-secondary">
             {lore.origin}
           </p>
         )}

@@ -1,10 +1,21 @@
 import Link from "next/link";
+import {
+  ArrowLeftRight,
+  Award,
+  CalendarDays,
+  ChevronRight,
+  Flame,
+  History,
+  Receipt,
+  TrendingUp,
+  Trophy,
+  type LucideIcon,
+} from "lucide-react";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { PageSection } from "@/components/page-section";
 import { SectionHeader } from "@/components/section-header";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { TeamLink } from "@/components/team-link";
-import { ScrollReveal } from "@/components/scroll-reveal";
 import {
   getLeaderboard,
   getSeasonYears,
@@ -37,46 +48,59 @@ export const metadata = {
     "All-time leaderboard, head-to-head records, rivalries, and trophy case for the Harambe Memorial League Memorial League.",
 };
 
-const subPages = [
+const subPages: {
+  href: string;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+}[] = [
   {
     href: "/records/hall-of-fame",
-    label: "The Hall of Fame & Shame",
-    description: "The all-time ladder, plus the players who wrote the legend",
+    label: "Hall of Fame and Shame",
+    description: "Every franchise ranked, all-time",
+    icon: Trophy,
   },
   {
     href: "/records/head-to-head",
-    label: "Head-to-Head",
-    description: "Compare any two franchises all-time",
+    label: "Head-to-head",
+    description: "Any two franchises, every meeting",
+    icon: ArrowLeftRight,
   },
   {
     href: "/records/rivalries",
     label: "Rivalries",
     description: "The closest and most played matchups",
+    icon: Flame,
   },
   {
     href: "/records/power-rankings",
-    label: "Power Rankings",
-    description: "Current season standings and context",
+    label: "Power rankings",
+    description: "This season, ranked with context",
+    icon: TrendingUp,
   },
   {
     href: "/records/trophies",
-    label: "Trophy Case",
+    label: "Trophy case",
     description: "Every champion in league history",
+    icon: Award,
   },
   {
     href: "/trades",
-    label: "The Receipts",
-    description: "Every trade in league history, graded in hindsight",
+    label: "Trades",
+    description: "Every trade, graded once the results are in",
+    icon: Receipt,
   },
   {
     href: "/history",
     label: "History",
     description: "The full season-by-season timeline",
+    icon: History,
   },
   {
     href: "/seasons",
     label: "Seasons",
-    description: "Browse standings and champions by year",
+    description: "Standings and champions by year",
+    icon: CalendarDays,
   },
 ];
 
@@ -101,7 +125,7 @@ function buildRecordBook(data: LeaderboardEntry[]): RecordBookEntry[] {
   const mostWins = [...data].sort((a, b) => b.wins - a.wins)[0];
   if (mostWins && mostWins.wins > 0) {
     entries.push({
-      label: "Most Wins",
+      label: "Most wins",
       value: String(mostWins.wins),
       context: mostWins.name,
       contextSlug: mostWins.slug,
@@ -113,7 +137,7 @@ function buildRecordBook(data: LeaderboardEntry[]): RecordBookEntry[] {
   )[0];
   if (mostTitles && mostTitles.championships > 0) {
     entries.push({
-      label: "Most Titles",
+      label: "Most titles",
       value: `${mostTitles.championships}x`,
       context: mostTitles.name,
       contextSlug: mostTitles.slug,
@@ -123,7 +147,7 @@ function buildRecordBook(data: LeaderboardEntry[]): RecordBookEntry[] {
   const mostPF = [...data].sort((a, b) => b.pointsScored - a.pointsScored)[0];
   if (mostPF && mostPF.pointsScored > 0) {
     entries.push({
-      label: "Career PF Leader",
+      label: "Career PF leader",
       value: mostPF.pointsScored.toLocaleString(undefined, {
         maximumFractionDigits: 0,
       }),
@@ -136,7 +160,7 @@ function buildRecordBook(data: LeaderboardEntry[]): RecordBookEntry[] {
   const bestWinPct = [...eligible].sort((a, b) => b.winPct - a.winPct)[0];
   if (bestWinPct) {
     entries.push({
-      label: "Best Win%",
+      label: "Best win %",
       value: `${(bestWinPct.winPct * 100).toFixed(1)}%`,
       context: bestWinPct.name,
       contextSlug: bestWinPct.slug,
@@ -149,11 +173,11 @@ function buildRecordBook(data: LeaderboardEntry[]): RecordBookEntry[] {
 function RecordBookCard({ label, value, context, contextSlug }: RecordBookEntry) {
   return (
     <div className="card-surface p-4">
-      <p className="text-caption text-accent-gold mb-2">{label}</p>
-      <p className="text-stat text-[28px] leading-none text-text-primary">
+      <p className="text-kicker text-accent-gold mb-2">{label}</p>
+      <p className="text-stat text-h2 leading-none text-text-primary">
         {value}
       </p>
-      <div className="text-body-sm text-text-tertiary mt-2 truncate">
+      <div className="text-body-sm text-text-secondary mt-2 truncate">
         <TeamLink slug={contextSlug}>{context}</TeamLink>
       </div>
     </div>
@@ -183,7 +207,7 @@ function PowerMiniRow({
   return (
     <Link
       href={`/teams/${slug}`}
-      className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-muted"
+      className="flex min-h-11 items-center gap-3 rounded-lg px-2 py-2 transition-[background-color,scale] duration-150 hover:bg-surface-muted active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
     >
       <span className="font-mono text-sm tabular-nums text-text-tertiary w-4 shrink-0">
         {rank}
@@ -312,7 +336,7 @@ export default async function RecordsPage() {
     <>
       {recordBook.length > 0 && (
         <div>
-          <p className="text-kicker mb-4">The Record Book</p>
+          <h2 className="text-kicker mb-4">Record book</h2>
           <div className="grid grid-cols-2 gap-3">
             {recordBook.map((entry) => (
               <RecordBookCard key={entry.label} {...entry} />
@@ -323,13 +347,13 @@ export default async function RecordsPage() {
 
       {projection && projection.hasDivisions && projection.field.length > 0 && (
         <div>
-          <p className="text-kicker mb-4">Projected Playoff Field</p>
+          <h2 className="text-kicker mb-4">Projected playoff field</h2>
           <div className="space-y-1">
             {projection.field.map((team) => (
               <Link
                 key={team.franchiseId}
                 href={`/teams/${team.slug}`}
-                className="flex items-center gap-3 rounded-lg px-2 py-2 transition-colors hover:bg-surface-muted"
+                className="flex min-h-11 items-center gap-3 rounded-lg px-2 py-2 transition-[background-color,scale] duration-150 hover:bg-surface-muted active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
               >
                 <span className="font-mono text-sm tabular-nums text-text-tertiary w-4 shrink-0">
                   {team.seed}
@@ -360,7 +384,7 @@ export default async function RecordsPage() {
             {projection.firstOut && (
               <TeamLink
                 slug={projection.firstOut.slug}
-                className="flex items-center gap-3 rounded-lg px-2 py-2 border-t border-divider mt-2 pt-3 text-text-secondary"
+                className="flex min-h-11 items-center gap-3 rounded-lg px-2 py-2 border-t border-divider mt-2 pt-3 text-text-secondary"
               >
                 <span className="text-caption text-text-tertiary w-4 shrink-0">
                   &middot;
@@ -380,7 +404,7 @@ export default async function RecordsPage() {
                   {projection.firstOut.name}
                 </span>
                 <span className="text-caption text-accent-warm shrink-0">
-                  First Out
+                  First out
                 </span>
               </TeamLink>
             )}
@@ -393,8 +417,8 @@ export default async function RecordsPage() {
           <SectionHeader
             title={
               powerView.mode === "preseason"
-                ? "Preseason Power"
-                : "Power Ranking"
+                ? "Preseason power"
+                : "Power ranking"
             }
             viewAllHref="/records/power-rankings"
           />
@@ -452,69 +476,50 @@ export default async function RecordsPage() {
       )}
 
       <div>
-        <p className="text-kicker mb-4">Explore</p>
-        <div className="grid grid-cols-1 gap-2">
-          {subPages.map((page, index) => (
-            <ScrollReveal key={page.href} delay={index * 60}>
-              <Link
-                href={page.href}
-                title={page.label}
-                className="card-surface group flex items-center justify-between gap-3 p-3 transition-colors hover:border-border-strong hover:bg-surface-muted"
-              >
-                <div className="min-w-0">
-                  <p className="text-body-sm font-semibold text-accent-gold">
-                    {page.label}
-                  </p>
-                  <p className="text-caption text-text-tertiary mt-0.5 normal-case tracking-normal font-normal">
-                    {page.description}
-                  </p>
-                </div>
-                <span
-                  className="shrink-0 text-text-tertiary transition-transform group-hover:translate-x-0.5"
-                  aria-hidden
+        <h2 className="text-kicker mb-3">Go deeper</h2>
+        <ul className="card-surface divide-y divide-divider px-2">
+          {subPages.map((page) => {
+            const Icon = page.icon;
+            return (
+              <li key={page.href}>
+                <Link
+                  href={page.href}
+                  className="group flex min-h-14 items-center gap-3 rounded-lg px-2 py-3 transition-[background-color,scale] duration-150 hover:bg-surface-muted active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
                 >
-                  &rarr;
-                </span>
-              </Link>
-            </ScrollReveal>
-          ))}
-        </div>
+                  <Icon
+                    className="size-5 shrink-0 text-accent-gold"
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-body font-semibold text-text-primary">
+                      {page.label}
+                    </span>
+                    <span className="block text-body-sm text-text-secondary">
+                      {page.description}
+                    </span>
+                  </span>
+                  <ChevronRight
+                    className="size-4 shrink-0 text-text-tertiary transition-transform group-hover:translate-x-0.5"
+                    strokeWidth={2}
+                    aria-hidden
+                  />
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </div>
     </>
   );
 
   return (
     <>
-      <PageSection label="Standings · Record Book" title="The Records.">
-        <p className="text-body-lg text-text-secondary max-w-prose">
-          The definitive record book for the Harambe Memorial League Memorial League: career
-          stats, head-to-head records, and every milestone worth remembering.
-        </p>
-      </PageSection>
-
-      <ScrollReveal>
-        <Link
-          href="/records/hall-of-fame"
-          className="group card-surface card-tint-gold mb-10 flex items-center justify-between gap-4 p-5 md:p-6 transition-colors hover:border-accent-gold/50"
-        >
-          <div className="min-w-0 space-y-1">
-            <p className="text-kicker text-accent-gold">All-Time · New</p>
-            <p className="text-h3 text-text-primary group-hover:text-accent-gold transition-colors">
-              The Hall of Fame &amp; Shame
-            </p>
-            <p className="text-body-sm text-text-secondary">
-              Every franchise ranked 1 to 12, all-time, plus the players who
-              wrote the legend. Find out where you really stand.
-            </p>
-          </div>
-          <span
-            className="shrink-0 text-accent-gold group-hover:translate-x-0.5 transition-transform"
-            aria-hidden
-          >
-            &rarr;
-          </span>
-        </Link>
-      </ScrollReveal>
+      <PageSection
+        as="h1"
+        title="Records"
+        intro="Standings, head-to-head and milestones."
+      />
 
       <RecordsSeasonView
         allTimeData={allTimeData}

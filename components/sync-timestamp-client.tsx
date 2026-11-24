@@ -1,24 +1,7 @@
 "use client";
 
 import { useState } from "react";
-
-function ClockIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="inline-block size-3"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  );
-}
+import { Clock } from "lucide-react";
 
 export function SyncTimestampClient({
   relativeTime,
@@ -35,14 +18,16 @@ export function SyncTimestampClient({
     <button
       type="button"
       onClick={() => setShowAbsolute((prev) => !prev)}
-      className={`text-caption text-left ${isStale ? "text-accent-warm" : "text-text-tertiary"}`}
+      aria-expanded={showAbsolute}
+      className={`inline-flex min-h-11 flex-col justify-center rounded-[10px] px-1 text-caption text-left transition-[scale] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${isStale ? "text-accent-warm" : "text-text-tertiary"}`}
     >
-      <span>
-        <ClockIcon /> Last updated {relativeTime}
+      <span className="inline-flex items-center gap-1.5">
+        <Clock className="size-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+        Last updated {relativeTime}
         {isStale && " (outdated)"}
       </span>
       {showAbsolute && (
-        <span className="block text-[10px] text-text-tertiary mt-0.5">
+        <span className="block text-caption text-text-tertiary mt-0.5">
           {absoluteTime}
         </span>
       )}

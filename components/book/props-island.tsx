@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { Check } from "lucide-react";
+import { MonoNumerals } from "@/components/book/mono-numerals";
 import { useSessionMember } from "@/components/use-session-member";
 import { togglePropPick } from "@/app/actions/book";
 import { FranchiseLogo } from "@/components/franchise-logo";
@@ -148,7 +150,7 @@ export function PropsIsland({
       <div className="flex flex-col gap-4">
         <div className="card-surface p-6">
           <p className="text-kicker mb-2">Props</p>
-          <p className="font-serif text-h3 italic text-text-secondary">
+          <p className="text-body text-text-secondary">
             {BOOK_COPY.propsSoon}
           </p>
         </div>
@@ -171,7 +173,7 @@ export function PropsIsland({
         <section key={section.group} className="flex flex-col gap-4">
           <div className="flex items-baseline gap-2">
             <h3 className="text-kicker">{section.label}</h3>
-            <span className="font-mono text-caption font-semibold tabular-nums text-text-muted">
+            <span className="font-mono text-caption font-semibold tabular-nums text-text-tertiary">
               {section.items.length}
             </span>
           </div>
@@ -330,7 +332,7 @@ function PropCard({
 
       {prop.snark && (
         <p
-          className={`mt-3 font-serif italic text-text-tertiary ${
+          className={`mt-3 text-text-secondary ${
             marquee ? "text-body" : "text-body-sm"
           }`}
         >
@@ -352,7 +354,7 @@ function SubjectIdentity({ prop }: { prop: BookPropView }) {
     return (
       <div className="mb-3 flex items-center gap-2">
         <EntityChip entity={subject.a} />
-        <span className="font-mono text-caption font-bold text-text-muted">VS</span>
+        <span className="text-caption font-semibold text-text-tertiary">vs</span>
         <EntityChip entity={subject.b} />
       </div>
     );
@@ -370,7 +372,7 @@ function EntityChip({ entity }: { entity: BookPropEntity }) {
     return (
       <BookEntityLink
         target={{ kind: "player", playerId: entity.playerId }}
-        className="flex min-w-0 items-center gap-2 text-text-primary"
+        className="flex min-h-11 min-w-0 items-center gap-2 rounded-lg text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
       >
         <PlayerHeadshot
           playerId={entity.playerId}
@@ -394,7 +396,7 @@ function EntityChip({ entity }: { entity: BookPropEntity }) {
     <BookEntityLink
       target={{ kind: "franchise", slug: entity.slug, name: entity.name }}
       labelled={false}
-      className="flex min-w-0 items-center gap-2 text-text-primary"
+      className="flex min-h-11 min-w-0 items-center gap-2 rounded-lg text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
     >
       <FranchiseLogo
         slug={entity.slug}
@@ -503,10 +505,14 @@ function PropSideButton({
   onClick: () => void;
 }) {
   const base =
-    "flex-1 rounded-[11px] border p-2.5 text-center transition-colors duration-150";
+    "min-h-11 flex-1 rounded-[11px] border p-2.5 text-center";
+  // A pressable side gets the 3:1 control edge; a read-only one (signed out,
+  // graded) is a price, not a control, so it keeps the quiet card edge.
   const skin = picked
     ? "border-accent-gold/45 bg-accent-gold-light"
-    : "border-border bg-white/[.03]";
+    : interactive
+      ? "border-border-control bg-transparent"
+      : "border-border bg-white/[.03]";
   // Once graded, dim the side that did not hit. Never the only signal: the
   // winning side carries a checkmark with an sr-only equivalent, and a push
   // dims neither side because neither one won.
@@ -518,17 +524,21 @@ function PropSideButton({
         {label}
         {graded && resultSide && (
           <>
-            <span className="ml-1.5 text-accent-green" aria-hidden="true">
-              ✓
-            </span>
+            <Check
+              className="ml-1 inline size-4 -translate-y-px text-accent-green"
+              strokeWidth={2}
+              aria-hidden="true"
+            />
             <span className="sr-only"> (winning side)</span>
           </>
         )}
       </span>
-      <span className="mt-0.5 block font-mono text-caption font-semibold normal-case tracking-normal tabular-nums text-text-tertiary">
+      <span className="mt-0.5 block font-mono text-caption font-semibold tabular-nums text-text-tertiary">
         {odds}
       </span>
-      <span className="mt-0.5 block text-[11px] leading-tight text-text-muted">{payout}</span>
+      <span className="mt-0.5 block text-caption leading-tight text-text-tertiary">
+        <MonoNumerals text={payout} />
+      </span>
       {/* The picked state must survive greyscale, so it says so in words
           rather than relying on the gold border and tint alone. */}
       {picked && (
@@ -548,7 +558,7 @@ function PropSideButton({
       disabled={pending}
       aria-pressed={picked}
       aria-label={`Pick ${label}`}
-      className={`${base} ${skin} cursor-pointer hover:border-border-strong disabled:cursor-wait`}
+      className={`${base} ${skin} cursor-pointer transition-[scale,background-color] duration-150 ease-out hover:bg-surface-muted active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-wait`}
     >
       {content}
     </button>
@@ -572,12 +582,18 @@ function ResultBadge({
     // Rust and green both mean "somebody won". A push is neither, so it takes
     // the neutral token and an = glyph, never a colour on its own.
     return (
-      <span className="text-caption font-semibold text-text-tertiary">Push =</span>
+      <span className="text-caption font-semibold text-text-tertiary">Push</span>
     );
   }
 
   if (!pick) {
-    return <span className="text-caption font-semibold text-text-tertiary">Graded</span>;
+    // Which side won, in words; not a bare "Graded" badge that says nothing.
+    const winner = prop.result === "over" ? prop.overLabel : prop.underLabel;
+    return (
+      <span className="text-caption font-semibold text-text-tertiary">
+        {winner} won
+      </span>
+    );
   }
 
   const hit = pick.side === prop.result;
@@ -587,7 +603,7 @@ function ResultBadge({
         hit ? "text-accent-green" : "text-accent-warm"
       }`}
     >
-      {hit ? "Hit ✓" : "Missed ✗"}
+      {hit ? "Hit" : "Missed"}
     </span>
   );
 }
@@ -595,7 +611,7 @@ function ResultBadge({
 function HouseRulesCard() {
   return (
     <div className="rounded-[14px] border border-dashed border-border-strong p-6">
-      <p className="text-kicker mb-1.5">House Rules</p>
+      <p className="text-kicker mb-1.5">House rules</p>
       <p className="text-body-sm leading-relaxed text-text-secondary">
         {BOOK_COPY.houseRules}
       </p>

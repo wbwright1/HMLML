@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
 import { EmptyState } from "@/components/empty-state";
@@ -46,7 +48,7 @@ export async function PlayoffsHub({
       {matchupData && matchupData.matchups.length > 0 && (
         <ScrollReveal>
           <PageSection
-            label={`${seasonYear} Playoffs`}
+            label={`${seasonYear} playoffs`}
             title={playoffRound}
           >
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -72,9 +74,10 @@ export async function PlayoffsHub({
         <div className="text-center py-8">
           <Link
             href={`/playoffs/${seasonYear}`}
-            className="inline-flex items-center gap-2 text-body-sm text-accent-gold hover:brightness-110 font-medium"
+            className={buttonVariants({ variant: "quiet", size: "default" })}
           >
-            View Full Playoff Bracket &rarr;
+            Full playoff bracket
+            <ChevronRight aria-hidden="true" strokeWidth={2} data-icon="inline-end" />
           </Link>
         </div>
       </ScrollReveal>

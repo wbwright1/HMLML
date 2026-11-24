@@ -93,31 +93,37 @@ export default async function PlayersPage() {
 
   return (
     <section className="py-8 md:py-12 space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="space-y-2">
-          <p className="text-kicker">
-            Player Universe &middot; {players.length} Players
-          </p>
-          <h1 className="text-h1">Players.</h1>
+      <div className="space-y-1">
+        <h1 className="text-h1">Players</h1>
+        <div className="flex flex-wrap items-center gap-x-1.5 text-body-sm text-text-tertiary">
+          <span>
+            <span className="font-mono tabular-nums">{players.length}</span> players
+          </span>
+          <span aria-hidden="true">&middot;</span>
+          <SyncTimestamp dataType="players" />
         </div>
-        <SyncTimestamp dataType="players" />
       </div>
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_300px] lg:items-start">
         <aside className="lg:order-2">
           <TrendingRail players={trendingPlayers} />
         </aside>
-        <PlayerTable
-          players={playerRows}
-          franchises={franchises}
-          statsSeason={statsSeason}
-          projSeason={projSeason}
-          projLeads={projLeads}
-          currentWeek={currentWeek}
-          showWkColumn={showWkColumn}
-          showTrdColumn={showTrdColumn}
-          awardsByPlayerId={awardsByPlayerId}
-        />
+        <section aria-labelledby="all-players-heading" className="space-y-3">
+          <h2 id="all-players-heading" className="text-kicker">
+            All players
+          </h2>
+          <PlayerTable
+            players={playerRows}
+            franchises={franchises}
+            statsSeason={statsSeason}
+            projSeason={projSeason}
+            projLeads={projLeads}
+            currentWeek={currentWeek}
+            showWkColumn={showWkColumn}
+            showTrdColumn={showTrdColumn}
+            awardsByPlayerId={awardsByPlayerId}
+          />
+        </section>
       </div>
     </section>
   );

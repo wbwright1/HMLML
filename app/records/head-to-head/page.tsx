@@ -72,12 +72,12 @@ export default async function HeadToHeadPage({
 
   return (
     <>
-      <PageSection label="Records" title="Head-to-Head.">
-        <BackLink href="/records" label="All Records" />
-
-        <p className="text-body-lg text-text-secondary max-w-prose">
-          Select two franchises to compare their all-time head-to-head record.
-        </p>
+      <PageSection
+        as="h1"
+        title="Head-to-head"
+        intro="Pick two franchises to see every meeting."
+      >
+        <BackLink href="/records" label="All records" />
 
         <FranchisePairSelector
           franchises={franchises}
@@ -163,7 +163,7 @@ export default async function HeadToHeadPage({
             )}
           </section>
 
-          <PageSection label="Game Log" title="Match History">
+          <PageSection title="Match history">
             {history.length === 0 ? (
               <EmptyState
                 icon="chart"

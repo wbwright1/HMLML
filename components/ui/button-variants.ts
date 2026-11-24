@@ -1,16 +1,29 @@
 import { cva } from "class-variance-authority";
 
+/**
+ * Button system (UI/UX pass, 2026-11-24; mirrors the Cardhouse kit):
+ * - `default` is the primary: gold fill, the ONLY in-page button with a
+ *   shadow, at most one per screen. Pressing scales to 97% and tucks the
+ *   shadow in.
+ * - `outline` is the secondary: transparent with a 3:1 control edge.
+ * - `quiet` is a text action (gold text, tint on hover), for "View all",
+ *   "Undo", "Retry" style links inside rows and toasts.
+ * - Sizes: `lg` 48 (hero action), `default` 44 (everything else), `sm` 36
+ *   (header and dense rows only, inside a 44px hit area). Nothing smaller.
+ */
 export const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center rounded-lg border border-transparent bg-clip-padding text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 active:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center rounded-full border border-transparent bg-clip-padding font-semibold whitespace-nowrap outline-none select-none transition-[scale,box-shadow,background-color,border-color,color] duration-150 ease-out active:scale-[0.97] focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:pointer-events-none disabled:opacity-40 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-5",
   {
     variants: {
       variant: {
         default:
-          "bg-primary text-primary-foreground hover:brightness-110",
+          "bg-primary text-primary-foreground shadow-[var(--shadow-primary)] hover:brightness-105 active:shadow-[var(--shadow-primary-pressed)] disabled:shadow-none",
         outline:
-          "border-border bg-surface text-text-primary hover:bg-surface-muted hover:border-border-strong aria-expanded:bg-surface-muted aria-expanded:text-text-primary",
+          "border-border-control bg-transparent text-text-primary hover:bg-surface-muted aria-expanded:bg-surface-muted aria-expanded:text-text-primary",
         secondary:
-          "bg-secondary text-secondary-foreground hover:bg-surface-muted aria-expanded:bg-surface-muted aria-expanded:text-secondary-foreground",
+          "border-border-control bg-transparent text-text-primary hover:bg-surface-muted aria-expanded:bg-surface-muted aria-expanded:text-secondary-foreground",
+        quiet:
+          "bg-transparent text-accent-gold hover:bg-accent-gold-light",
         ghost:
           "text-text-primary hover:bg-surface hover:text-text-primary aria-expanded:bg-surface aria-expanded:text-text-primary",
         destructive:
@@ -19,16 +32,14 @@ export const buttonVariants = cva(
       },
       size: {
         default:
-          "h-8 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        xs: "h-6 gap-1 rounded-[min(var(--radius-md),10px)] px-2 text-xs in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-7 gap-1 rounded-[min(var(--radius-md),12px)] px-2.5 text-[0.8rem] in-data-[slot=button-group]:rounded-lg has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&_svg:not([class*='size-'])]:size-3.5",
-        lg: "h-9 gap-1.5 px-2.5 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
-        icon: "size-8",
-        "icon-xs":
-          "size-6 rounded-[min(var(--radius-md),10px)] in-data-[slot=button-group]:rounded-lg [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm":
-          "size-7 rounded-[min(var(--radius-md),12px)] in-data-[slot=button-group]:rounded-lg",
-        "icon-lg": "size-9",
+          "h-11 gap-2 px-5 text-[15px] has-data-[icon=inline-end]:pr-4 has-data-[icon=inline-start]:pl-4",
+        xs: "h-9 gap-1.5 px-3.5 text-sm has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3 [&_svg:not([class*='size-'])]:size-4",
+        sm: "h-9 gap-1.5 px-3.5 text-sm has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3 [&_svg:not([class*='size-'])]:size-4",
+        lg: "h-12 gap-2 px-6 text-[15px] has-data-[icon=inline-end]:pr-5 has-data-[icon=inline-start]:pl-5",
+        icon: "size-11",
+        "icon-xs": "size-9 [&_svg:not([class*='size-'])]:size-4",
+        "icon-sm": "size-9 [&_svg:not([class*='size-'])]:size-4",
+        "icon-lg": "size-12",
       },
     },
     defaultVariants: {

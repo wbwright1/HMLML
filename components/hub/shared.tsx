@@ -1,5 +1,4 @@
 import type { ReactNode } from "react";
-import { FranchiseLogo } from "@/components/franchise-logo";
 import { LiveMatchupCard } from "@/components/live-matchup-card";
 import { computeWinProbability } from "@/lib/win-probability";
 import { deriveLiveAside } from "@/lib/live-aside";

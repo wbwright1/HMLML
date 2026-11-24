@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { db } from "@/lib/db";
 import { seasons } from "@/lib/db/schema";
@@ -46,7 +47,7 @@ export default async function DraftsPage() {
 
   if (drafts.length === 0 && !upcomingSeasonYear) {
     return (
-      <PageSection label="Draft Room" title="The Drafts.">
+      <PageSection as="h1" title="Drafts">
         <EmptyState
           icon="calendar"
           title="No Draft Data"
@@ -79,18 +80,17 @@ export default async function DraftsPage() {
     : [];
 
   return (
-    <PageSection label="Draft Room" title="The Drafts.">
-      <p className="text-body-lg text-text-tertiary max-w-prose">
-        Complete draft boards and pick-by-pick results for every Harambe
-        Memorial League draft.
-      </p>
-
-      <div className="mt-8 space-y-4">
+    <PageSection
+      as="h1"
+      title="Drafts"
+      intro="Every draft board, pick by pick."
+    >
+      <div className="space-y-4">
         {spotlightYear && (
           <ScrollReveal>
             <Link
               href={`/drafts/${spotlightYear}`}
-              className="group block rounded-[14px] border border-accent-gold/30 bg-accent-gold-light p-6 transition-colors hover:border-accent-gold/50"
+              className="group block rounded-[14px] border border-accent-gold/30 bg-accent-gold-light p-6 hover:border-accent-gold/50 transition-[border-color,background-color,scale] duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
               <div className="flex items-start justify-between gap-4">
                 <div className="space-y-2">
@@ -109,17 +109,18 @@ export default async function DraftsPage() {
                   </div>
                   <p className="text-body-sm text-text-secondary max-w-prose">
                     The newest board is in the books.{" "}
-                    {spotlightDrafts.reduce((sum, d) => sum + d.pickCount, 0)}{" "}
+                    <span className="font-mono tabular-nums">
+                      {spotlightDrafts.reduce((sum, d) => sum + d.pickCount, 0)}
+                    </span>{" "}
                     picks, every reach and every steal on the record. See who won
                     the room.
                   </p>
                 </div>
-                <span
-                  className="shrink-0 text-accent-gold group-hover:translate-x-0.5 transition-transform"
-                  aria-hidden="true"
-                >
-                  &rarr;
-                </span>
+                <ChevronRight
+                  className="size-5 shrink-0 text-accent-gold group-hover:translate-x-0.5 transition-transform"
+                  strokeWidth={2}
+                  aria-hidden
+                />
               </div>
             </Link>
           </ScrollReveal>
@@ -128,26 +129,25 @@ export default async function DraftsPage() {
           <ScrollReveal>
             <Link
               href={`/drafts/${upcomingSeasonYear}`}
-              className="group flex items-center justify-between rounded-[14px] border border-accent-gold/30 bg-accent-gold-light p-5 transition-colors hover:border-accent-gold/50"
+              className="group flex items-center justify-between rounded-[14px] border border-accent-gold/30 bg-accent-gold-light p-5 hover:border-accent-gold/50 transition-[border-color,background-color,scale] duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-3">
-                  <span className="text-h3 group-hover:text-accent-gold transition-colors">
+                  <span className="text-h3 font-mono tabular-nums group-hover:text-accent-gold transition-colors">
                     {upcomingSeasonYear}
                   </span>
                   <SuperlativeBadge text="Upcoming" variant="gold" />
                   <SuperlativeBadge text="Rookie" variant="neutral" />
                 </div>
-                <p className="text-body-sm text-text-tertiary">
+                <p className="text-body-sm text-text-secondary">
                   Draft board preview
                 </p>
               </div>
-              <span
-                className="text-text-tertiary group-hover:text-accent-gold transition-colors"
-                aria-hidden="true"
-              >
-                &rarr;
-              </span>
+              <ChevronRight
+                className="size-5 shrink-0 text-text-tertiary group-hover:text-accent-gold transition-colors"
+                strokeWidth={2}
+                aria-hidden
+              />
             </Link>
           </ScrollReveal>
         )}
@@ -161,11 +161,11 @@ export default async function DraftsPage() {
             >
               <Link
                 href={`/drafts/${year}`}
-                className="group flex items-center justify-between rounded-[14px] border border-border bg-surface p-5 transition-colors hover:border-accent-gold/40 hover:bg-surface-muted"
+                className="group flex items-center justify-between rounded-[14px] border border-border bg-surface p-5 hover:border-accent-gold/40 hover:bg-surface-muted transition-[border-color,background-color,scale] duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
               >
                 <div className="space-y-1">
                   <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-h3 group-hover:text-accent-gold transition-colors">
+                    <span className="text-h3 font-mono tabular-nums group-hover:text-accent-gold transition-colors">
                       {year}
                     </span>
                     <DraftTypeBadge
@@ -174,16 +174,15 @@ export default async function DraftsPage() {
                     />
                   </div>
                   <p className="text-body-sm text-text-tertiary">
-                    {draft.pickCount} picks
+                    <span className="font-mono tabular-nums">{draft.pickCount}</span> picks
                   </p>
                 </div>
 
-                <span
-                  className="text-text-tertiary group-hover:text-accent-gold transition-colors"
-                  aria-hidden="true"
-                >
-                  &rarr;
-                </span>
+                <ChevronRight
+                  className="size-5 shrink-0 text-text-tertiary group-hover:text-accent-gold transition-colors"
+                  strokeWidth={2}
+                  aria-hidden
+                />
               </Link>
             </ScrollReveal>
           ));
@@ -208,7 +207,7 @@ function DraftTypeBadge({
       />
       {isLegacyEra && (
         <span className="text-caption text-text-tertiary bg-surface-muted px-2 py-0.5 rounded-full">
-          Legacy Era
+          Legacy era
         </span>
       )}
     </div>

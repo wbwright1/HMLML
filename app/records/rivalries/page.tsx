@@ -60,13 +60,12 @@ export default async function RivalriesPage() {
 
   return (
     <>
-      <PageSection label="Records" title="Rivalries.">
-        <BackLink href="/records" label="All Records" />
-
-        <p className="text-body-lg text-text-secondary max-w-prose">
-          Every head-to-head pairing in league history, ranked
-          by total games played and competitiveness.
-        </p>
+      <PageSection
+        as="h1"
+        title="Rivalries"
+        intro="Every pairing, ranked by games played and how close they were."
+      >
+        <BackLink href="/records" label="All records" />
 
         {rivalries.length > 0 && (
           <p className="text-body-sm text-text-tertiary">
@@ -76,7 +75,7 @@ export default async function RivalriesPage() {
       </PageSection>
 
       {featured.length > 0 && (
-        <PageSection label="Lore" title="Named Rivalries">
+        <PageSection title="Named rivalries">
           <div className="grid gap-4 md:grid-cols-2">
             {featured.map(({ rivalry, a, b, record }, index) => (
               <ScrollReveal key={rivalry.id} delay={index * 40}>
@@ -94,7 +93,7 @@ export default async function RivalriesPage() {
 
       <section className="pb-8 md:pb-12 space-y-6">
         {featured.length > 0 && rivalries.length > 0 && (
-          <h2 className="text-kicker">Every Pairing</h2>
+          <h2 className="text-kicker">Every pairing</h2>
         )}
         {rivalries.length === 0 ? (
           <EmptyState

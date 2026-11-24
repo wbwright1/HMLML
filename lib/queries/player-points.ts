@@ -472,6 +472,28 @@ export async function getCurrentWeekPlayerStatusByPlayer(
 }
 
 /**
+ * Sleeper team defenses have no full_name: the player id is the team code
+ * ("WAS") and the row carries first_name "Washington", last_name "Commanders".
+ * Without this, a trending defense rendered as "Unknown" with a "UN" monogram.
+ * Resolves "Commanders D/ST", falling back to the team code ("WAS D/ST").
+ */
+function isTeamDefenseId(playerId: string): boolean {
+  return /^[A-Z]{2,3}$/.test(playerId);
+}
+
+function trendingDisplayName(
+  row: { name: string | null; lastName: string | null; position: string | null; nflTeam: string | null },
+  playerId: string
+): string | null {
+  if (row.name) return row.name;
+  if (row.position === "DEF" || isTeamDefenseId(playerId)) {
+    const label = row.lastName ?? row.nflTeam ?? playerId;
+    return `${label} D/ST`;
+  }
+  return null;
+}
+
+/**
  * Returns the most-added players across Sleeper, joined with local player
  * records for names/positions/teams, ordered by add count descending.
  *
@@ -505,6 +527,7 @@ export async function getTrendingAddPlayers(
       .select({
         id: players.id,
         name: players.fullName,
+        lastName: players.lastName,
         position: players.position,
         nflTeam: players.nflTeam,
       })
@@ -518,9 +541,13 @@ export async function getTrendingAddPlayers(
         const row = byId.get(t.player_id);
         return {
           playerId: t.player_id,
-          name: row?.name ?? null,
-          position: row?.position ?? null,
-          nflTeam: row?.nflTeam ?? null,
+          name: row
+            ? trendingDisplayName(row, t.player_id)
+            : isTeamDefenseId(t.player_id)
+              ? `${t.player_id} D/ST`
+              : null,
+          position: row?.position ?? (isTeamDefenseId(t.player_id) ? "DEF" : null),
+          nflTeam: row?.nflTeam ?? (isTeamDefenseId(t.player_id) ? t.player_id : null),
           count: t.count,
         };
       })

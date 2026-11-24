@@ -51,7 +51,7 @@ test.describe("Playoff projection", () => {
   }) => {
     await page.goto("/records");
 
-    const heading = page.getByText("Projected Playoff Field", { exact: true });
+    const heading = page.getByText("Projected playoff field", { exact: true });
     await expect(heading).toBeVisible({ timeout: 15000 });
 
     const fieldSection = heading.locator("xpath=following-sibling::div[1]");
@@ -79,8 +79,8 @@ test.describe("Playoff projection", () => {
     // Hotel (7-3) has a strictly BETTER overall record than Alpha (5-5) yet
     // is the FIRST TEAM OUT — only possible because Alpha auto-qualifies as a
     // division winner. Under a flat top-6, Hotel would be in and Alpha out.
-    await expect(page.getByText("First Out")).toBeVisible();
-    const bubbleRow = page.getByText("First Out").locator("xpath=ancestor::div[1]");
+    await expect(page.getByText("First out")).toBeVisible();
+    const bubbleRow = page.getByText("First out").locator("xpath=ancestor::div[1]");
     await expect(bubbleRow).toContainText(f.h.name);
     // And the better-record team really is excluded from the qualified field.
     expect(qualifiedText).not.toContain(f.h.name);

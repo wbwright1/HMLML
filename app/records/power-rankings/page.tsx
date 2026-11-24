@@ -155,7 +155,7 @@ function StatCell({
       >
         {children}
       </span>
-      <span className="text-[10px] uppercase tracking-wider text-text-tertiary whitespace-nowrap">
+      <span className="text-caption text-text-tertiary whitespace-nowrap">
         {label}
       </span>
     </div>
@@ -169,7 +169,7 @@ function PowerIndex({ value }: { value: number }) {
       <span className="font-mono text-lg font-black tabular-nums text-accent-gold">
         {(value * 100).toFixed(1)}
       </span>
-      <span className="text-[10px] uppercase tracking-wider text-text-tertiary">
+      <span className="text-caption text-text-tertiary">
         Power
       </span>
     </div>
@@ -187,13 +187,12 @@ function RegularEdition({ rankings }: { rankings: PowerRankingEntry[] }) {
 
   return (
     <>
-      <PageSection label="Records" title="Power Rankings.">
-        <BackLink href="/records" label="All Records" />
-
-        <p className="text-body-lg text-text-secondary max-w-prose">
-          Ranked on the last {windowWeeks === 1 ? "week" : `${windowWeeks} weeks`}:
-          recent results, scoring trend, and injuries. Not season-long record.
-        </p>
+      <PageSection
+        as="h1"
+        title="Power rankings"
+        intro={`Ranked on the last ${windowWeeks === 1 ? "week" : `${windowWeeks} weeks`}: results, scoring trend and injuries.`}
+      >
+        <BackLink href="/records" label="All records" />
       </PageSection>
 
       <section className="pb-8 md:pb-12 space-y-3 md:space-y-4">
@@ -331,15 +330,12 @@ function RegularEdition({ rankings }: { rankings: PowerRankingEntry[] }) {
 function PreseasonEdition({ rankings }: { rankings: PreseasonPowerEntry[] }) {
   return (
     <>
-      <PageSection label="Preseason Power Rankings" title="Power Rankings.">
-        <BackLink href="/records" label="All Records" />
-
-        <p className="text-body-lg text-text-secondary max-w-prose">
-          No games have kicked off yet, so nobody has a record to hide behind.
-          Until real football exists, we rank on what we know: franchise history
-          (weighted hard toward last season) plus the projected strength of every
-          current roster. Prove us wrong in Week 1.
-        </p>
+      <PageSection
+        as="h1"
+        title="Preseason power rankings"
+        intro="No games yet, so nobody has a record to hide behind. Ranked on franchise history and roster strength."
+      >
+        <BackLink href="/records" label="All records" />
       </PageSection>
 
       <section className="pb-8 md:pb-12 space-y-3 md:space-y-6">
@@ -519,8 +515,8 @@ export default async function PowerRankingsPage() {
   if (view.entries.length === 0) {
     return (
       <>
-        <PageSection label="Records" title="Power Rankings.">
-          <BackLink href="/records" label="All Records" />
+        <PageSection as="h1" title="Power rankings">
+          <BackLink href="/records" label="All records" />
         </PageSection>
         <section className="pb-8 md:pb-12">
           <EmptyState
