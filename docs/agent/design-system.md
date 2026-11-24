@@ -29,10 +29,11 @@ Card gradient fill: `linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255
 
 ## Typography (three-font rule)
 
-- **Instrument Serif, italic (400)**: display, page titles, wordmark, editorial asides. Classes: `.text-display` (40-56px), `.text-h1` (36-44px), `.text-h2` (28-32px). Bound to `font-serif` / `var(--font-serif)`. Minimal negative tracking.
-- **Geist**: all UI, labels, body, buttons. Weights 400/500/600/700/900. Classes: `.text-h3` (20-24px, 500), `.text-body-lg` (18px), `.text-body` (16px), `.text-body-sm` (14px), `.text-caption` (12px, 500, .06em, uppercase). This is the default `font-sans`.
-- **JetBrains Mono, tabular**: EVERY numeral: scores, records, stats, ranks. Class `.text-stat` (700, `tabular-nums`) / `font-mono` / `var(--font-mono)`. Never render a score or stat in the serif or in Geist. One exception: a numeral inside a serif italic display sentence (the hub hero headline, the recap headline) stays in the serif; an upright mono figure dropped mid-sentence breaks the line.
-- **Kicker** (`.text-kicker`): 10-11px, weight 600, `letter-spacing:.18em`, uppercase, `--text-tertiary`. The small eyebrow label above titles and card groups.
+- **Instrument Serif, upright (400)**: display, page titles, feature titles (24px and up only). Classes: `.text-display` (40-56px), `.text-h1` (36-44px), `.text-h2` (28-32px). Bound to `font-serif` / `var(--font-serif)`. Minimal negative tracking. **Italic is reserved for the HMLML wordmark** (UI/UX pass, 2026-11-24: italic everywhere read as AI-generated). Serif below 24px becomes Geist.
+- **Geist**: all UI, labels, body, buttons. Weights 400/500/600/700/900. Classes: `.text-h3` (20-24px, 500), `.text-body-lg` (18px), `.text-body` (16px), `.text-body-sm` (14px), `.text-caption` (12px, 500, sentence case). This is the default `font-sans`.
+- **12px floor:** nothing renders below 12px (no `text-[8-11px]`, no inline font sizes under 12). Use the scale classes; avoid one-off arbitrary sizes.
+- **JetBrains Mono, tabular**: EVERY numeral, and ONLY numerals (letters such as positions, team codes, "ML", "PF" stay in Geist): scores, records, stats, ranks. Class `.text-stat` (700, `tabular-nums`) / `font-mono` / `var(--font-mono)`. Never render a score or stat in the serif or in Geist. One exception: a numeral inside a serif italic display sentence (the hub hero headline, the recap headline) stays in the serif; an upright mono figure dropped mid-sentence breaks the line.
+- **Label** (`.text-kicker`): 12px, weight 600, sentence case, `--text-tertiary`. One label per module; never stack two labels that say the same thing, and never put a kicker above a page title. Page heads are a title with no trailing period plus one short intro line.
 - Tabular figures (`font-variant-numeric: tabular-nums`) on all `td`/`th` and every score/stat number.
 
 ## Card & Surface Language
@@ -45,12 +46,23 @@ Card gradient fill: `linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255
 
 - Wherever a franchise is identified, render `FranchiseLogo` from `components/franchise-logo.tsx`. A bare letter code is never the primary identifier.
 - Never hand-roll a crest chip (a `brandingColor` square with the team's initials in it). That is `FranchiseLogo`'s monogram fallback, and it must come from the component so the fallback lives in exactly one place.
-- Sizes: `size={28}` in Book rows and list rows; **24px in compact grid columns**, which is both the floor (below 28px the monogram is pinned at 9px) and effectively the ceiling (the mobile pick'ems column is 40px wide); 20px in slip rails, hero stat chips and slate cards; 14px in "via" notes, decorative only.
+- Sizes: `size={28}` in Book rows and list rows; **24px in compact grid columns**, which is both the floor (24-27px monograms use 12px initials; below 24px the fallback is a plain color tile, since initials can't meet the 12px type floor) and effectively the ceiling (the mobile pick'ems column is 40px wide); 20px in slip rails, hero stat chips and slate cards; 14px in "via" notes, decorative only.
 - `FranchiseLogo` renders a `div`, so it can never sit inside a `<p>`: the parser closes the paragraph early and React refuses to hydrate it. Wrap crest-plus-name lines in a `div` or a `span`. On the hub, use `components/hub/team-flag.tsx` (`TeamFlag` plus the `FlagTeam` shape) rather than writing that pairing again.
 - Pair every logo with visible text. Pass `decorative` (alt `""`) only when the franchise's full name is visible immediately adjacent; otherwise pass the name so the identity is announced. Both render paths announce the name when non-decorative: `alt` on the avatar `<img>`, `role="img"` plus `aria-label` on the monogram fallback, matching `PlayerHeadshot`'s monogram branch. The visible-text rule still stands for sighted users; it is not a substitute for the accessible name.
 - The codes from `lib/team-acronym.ts` and the persisted `franchises.abbreviation` are a fallback and a compact secondary label, not a primary identifier. Do not derive a franchise code any other way; `.slice(0, n)` on a team name is not an abbreviation scheme.
 - Accepted exceptions, which stay letter codes or plain text: native `<option>` labels (an option cannot host an element), prose sentences, and cells whose value is a *pick* or an event rather than an identity (the pick'ems grid cell names the team a member picked, not the member).
 - Use `components/franchise-identity.tsx` when championship stars and owner attribution are wanted; it has no size below 32px, so compact sites use `FranchiseLogo` directly. Its `CREST_PX` map duplicates `franchise-logo.tsx`'s `sizeMap` by convention: any sizing work touches both.
+
+## Controls, icons, feedback (UI/UX pass, 2026-11-24)
+
+- **Buttons** (`components/ui/button-variants.ts`): `default` = gold primary, the only in-page button with a shadow, at most one per screen; `outline` = secondary with the `--border-control` edge (3:1); `quiet` = gold text action (View all, Undo, Retry). Sizes `lg` 48, `default` 44, `sm` 36 (header and dense rows, inside a 44px hit area). Everything presses to 97% with the shadow tucking in.
+- **Targets:** every link and button is at least 44px tall on phone; text links get a padded hit area.
+- **Focus:** `focus-visible` ring only (`ring-2 ring-ring ring-offset-2 ring-offset-canvas`), never a border-color change alone.
+- **Icons:** lucide-react, stroke 2, `aria-hidden`, text color, only where they carry meaning (ChevronRight on navigation rows instead of "→", Clock for lock and updated times, Check for saved, Trophy for champion, TrendingUp for adds, Info for explanations, Search). Never decorative, never emoji.
+- **Chips state facts and are never buttons.** Segmented tabs sit in a visible track; the selected knob is soft white so gold stays free for the primary action.
+- **Feedback:** saving shows a toast (`--shadow-float`, Check icon, Undo when reversible). Alerts are quiet: neutral surface, colored icon, words. Repeated facts (a lock time on every card) are said once.
+- **Kept on purpose (Blake):** the gold-tinted leader row (figures on it use `--text-secondary`), gold rivalry and game titles, and the league nickname stat labels in `lib/content.ts`.
+- **Layers:** `--z-raised/sticky/dropdown/overlay/modal/toast` (use `z-(--z-sticky)`), `--shadow-float` for floating chrome only. Cards are lines, not shadows.
 
 ## Spacing (8px base unit)
 
@@ -96,7 +108,7 @@ Card gradient fill: `linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255
 ## Navigation Structure
 
 - **Desktop topbar (64px, `components/nav/topbar.tsx`):** serif "HMLML" wordmark (left), centered pill nav [Hub, Teams, Records, Drafts, The Book] (active = accent-tint background + gold text), right cluster: inline search field (~230px, ⌘K hint), a live-games pill (pulsing green dot + "N GAMES LIVE"), and the current user's dynasty crest.
-- **Mobile:** slim top header (56px, `components/nav/mobile-header.tsx`: wordmark, then a right cluster of compact live pill, search icon trigger, and dynasty crest) plus a **fixed bottom dock** (`components/nav/mobile-dock.tsx`): a tab-bar-only 5-icon nav [Hub, Teams, Records, Drafts, The Book] (icon + 9px label, active = accent-tint + gold), ~80px + safe-area. The dock labels The Book "Book" (`dockLabel` in `components/nav/nav-pills.tsx`); "The Book" does not fit at 9px in a fifth of the screen, and the full name stays as the link's aria-label.
+- **Mobile:** slim top header (56px, `components/nav/mobile-header.tsx`: wordmark, then a right cluster of compact live pill, search icon trigger, and dynasty crest) plus a **fixed bottom dock** (`components/nav/mobile-dock.tsx`): a tab-bar-only 5-icon nav [Hub, Teams, Records, Drafts, The Book] (icon + 12px sentence-case label, active = accent-tint + gold), ~80px + safe-area. The dock labels The Book "Book" (`dockLabel` in `components/nav/nav-pills.tsx`) to fit a fifth of the screen; the full name stays as the link's aria-label. Signed-out visitors get a compact "Claim" pill in the mobile header.
 - **The nav stays at five items; The Book took the Players slot** (Blake's call, 2026-08-29). `/players` is reachable by search (its primary door), the footer's Players link (`components/site-footer.tsx`), every PlayerLink on the site, and the "All players in the league" entry on team roster pages. Do not re-add a Players pill without removing something else.
 - No hamburger; search opens a full-screen dialog from the header icon (same shared search UI as desktop, different trigger).
 - The header stays pinned at all times; only the bottom dock hides on scroll-down and reveals on scroll-up (`components/nav/scroll-chrome.tsx`), always shown within 8px of the top to absorb iOS rubber-band. Bottom clearance for scrollable content lives on the footer (`pb-[calc(env(safe-area-inset-bottom)+96px)] lg:pb-8` on `SiteFooter`), not on `app/layout.tsx`'s `<main>`.

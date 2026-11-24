@@ -61,12 +61,11 @@ export default async function HistoryPage() {
 
   return (
     <>
-      <PageSection label="League History" title="The Timeline.">
-        <p className="text-body-lg text-text-secondary max-w-prose">
-          Every season in Harambe Memorial League Memorial League history.
-          From the 10-team legacy era to the current 12-team dynasty format.
-        </p>
-      </PageSection>
+      <PageSection
+        as="h1"
+        title="Timeline"
+        intro="Every season, from the 10-team legacy era to the 12-team dynasty."
+      />
 
       <section className="pb-8 md:pb-12 space-y-6">
         {timelineData.length === 0 ? (

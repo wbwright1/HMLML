@@ -290,11 +290,11 @@ export function BracketPlacementCell({
       className="overflow-hidden rounded-[9px] border border-border bg-surface transition-colors hover:border-border-strong lg:rounded-[10px]"
     >
       <div className="flex items-center justify-between gap-2 border-b border-divider px-2.5 pb-1 pt-1.5 lg:px-3">
-        <span className="text-[8px] font-bold uppercase tracking-[.1em] text-text-tertiary lg:text-[9px] lg:tracking-[.12em]">
-          {match.placementLabel ?? "Placement Game"}
+        <span className="text-caption font-bold text-text-tertiary">
+          {match.placementLabel ?? "Placement game"}
         </span>
         {match.week != null && (
-          <span className="bracket-score font-mono">WK {match.week}</span>
+          <span className="bracket-score">Week <span className="font-mono">{match.week}</span></span>
         )}
       </div>
       <MatchRows match={match} bracketType={bracketType} />

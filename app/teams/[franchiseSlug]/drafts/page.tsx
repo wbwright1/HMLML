@@ -101,15 +101,15 @@ export default async function FranchiseDraftsPage({
         />
 
         {draftHistory.length > 0 && (
-          <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-text-tertiary pt-2 font-mono">
+          <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-text-tertiary pt-2">
             <span>
-              <span className="font-bold text-text-primary tabular-nums">
+              <span className="font-mono font-bold text-text-primary tabular-nums">
                 {totalPicks}
               </span>{" "}
               total picks
             </span>
             <span>
-              <span className="font-bold text-text-primary tabular-nums">
+              <span className="font-mono font-bold text-text-primary tabular-nums">
                 {draftHistory.length}
               </span>{" "}
               {draftHistory.length === 1 ? "draft" : "drafts"}
@@ -119,7 +119,7 @@ export default async function FranchiseDraftsPage({
       </section>
 
       {/* Draft History */}
-      <PageSection label="All Picks" title="Draft History.">
+      <PageSection title="Draft history">
         {draftHistory.length === 0 ? (
           <EmptyState
             icon="calendar"

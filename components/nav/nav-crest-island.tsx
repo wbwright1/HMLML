@@ -1,7 +1,12 @@
 "use client";
 
-import { NavCrest } from "@/components/nav/nav-crest";
+import {
+  NavCrest,
+  CLAIM_CTA_CLASS,
+  CLAIM_CTA_LABEL,
+} from "@/components/nav/nav-crest";
 import { useSessionMember } from "@/components/use-session-member";
+import { cn } from "@/lib/utils";
 
 interface NavCrestIslandProps {
   variant?: "topbar" | "mobile";
@@ -24,15 +29,22 @@ export function NavCrestIsland({ variant = "topbar" }: NavCrestIslandProps) {
   const session = useSessionMember();
 
   if (session.status === "loading") {
-    // Desktop signed-out renders a "Claim your team" pill; mobile renders
-    // nothing. Mirror each so the header does not shift when the fetch lands.
-    if (variant === "mobile") return null;
+    // Same classes as the signed-out Claim pill, made invisible and inert.
     return (
       <span
         aria-hidden="true"
-        className="shrink-0 whitespace-nowrap rounded-full border border-transparent px-3 py-1.5 text-caption font-semibold text-transparent"
+        className={cn(
+          variant === "mobile" ? "flex h-11 shrink-0 items-center px-1" : "inline-flex"
+        )}
       >
-        Claim your team
+        <span
+          className={cn(
+            CLAIM_CTA_CLASS[variant],
+            "invisible shadow-none"
+          )}
+        >
+          {CLAIM_CTA_LABEL[variant]}
+        </span>
       </span>
     );
   }

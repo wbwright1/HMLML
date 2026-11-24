@@ -62,10 +62,9 @@ async function PlayerProfileOrNotFound({
   if (rendered === null) {
     return (
       <div className="space-y-3 py-4">
-        <p className="text-kicker text-text-tertiary">Player 404</p>
         <h1
           id="player-profile-title"
-          className="text-h2 font-serif italic text-text-primary"
+          className="text-h2 text-text-primary"
         >
           Not on any roster we know of.
         </h1>
@@ -76,7 +75,7 @@ async function PlayerProfileOrNotFound({
         {/* eslint-disable-next-line @next/next/no-html-link-for-pages -- intentional hard navigation: this is the intercepted-route modal, a soft nav would leave the modal shell mounted over /players */}
         <a
           href="/players"
-          className="inline-block text-body-sm font-medium text-accent-gold hover:underline"
+          className="inline-flex min-h-11 items-center rounded-full text-body-sm font-medium text-accent-gold hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           Browse all players
         </a>

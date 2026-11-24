@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { notFound } from "next/navigation";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
@@ -598,9 +599,10 @@ export default async function RosterPage({ params }: RosterPageProps) {
               */}
               <Link
                 href="/players"
-                className="mt-4 block border-t border-divider pt-3 text-body-sm font-semibold text-accent-gold transition-colors duration-150 hover:brightness-110"
+                className="mt-4 flex min-h-11 items-center justify-between gap-2 border-t border-divider pt-1 text-body-sm font-semibold text-accent-gold transition-[filter,scale] duration-150 hover:brightness-110 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
               >
-                All players in the league →
+                All players in the league
+                <ChevronRight className="size-4" strokeWidth={2} aria-hidden />
               </Link>
             </aside>
           </ScrollReveal>

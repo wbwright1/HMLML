@@ -5,7 +5,7 @@ export function LiveIndicator() {
         <span className="absolute inline-flex h-full w-full rounded-full bg-accent-green opacity-75 motion-safe:animate-[live-pulse_1.6s_ease-out_infinite]" />
         <span className="relative inline-flex size-2 rounded-full bg-accent-green" />
       </span>
-      <span className="text-xs font-semibold uppercase tracking-wider text-accent-green">
+      <span className="text-caption font-semibold text-accent-green">
         Live
       </span>
     </span>

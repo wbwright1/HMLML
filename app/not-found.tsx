@@ -7,12 +7,12 @@ export default function NotFound() {
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-6 text-center">
       <div className="flex flex-col items-center gap-2">
         <ArrowRightLeft
-          className="size-12 text-text-tertiary/50 mb-2"
-          strokeWidth={1.5}
+          className="size-12 text-text-tertiary mb-2"
+          strokeWidth={2}
           aria-hidden="true"
         />
         <h1 className="text-h2">This page doesn&apos;t exist.</h1>
-        <p className="text-body text-text-tertiary max-w-md">
+        <p className="text-body text-text-secondary max-w-md">
           Maybe it was traded away.
         </p>
       </div>
@@ -21,13 +21,13 @@ export default function NotFound() {
           href="/"
           className={buttonVariants({ variant: "default", size: "lg" })}
         >
-          Go to Hub
+          Go to the hub
         </Link>
         <Link
           href="/teams"
           className={buttonVariants({ variant: "outline", size: "lg" })}
         >
-          Browse Teams
+          Browse teams
         </Link>
       </div>
     </div>

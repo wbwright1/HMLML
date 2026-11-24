@@ -560,6 +560,38 @@ const MATCHUP_ANGLES_OPENER: MatchupTrashAngles = Object.freeze({
 export const HERO_DEK_FALLBACK =
   'Lineups lock, excuses start Monday. Nobody in this league gets to sit this week out.';
 
+/** The between-weeks hero's one primary action for signed-out visitors. */
+export const HUB_CLAIM_CTA = 'Claim your team';
+
+/**
+ * Between-weeks hub module labels: 12px sentence case, one per module. The
+ * wrap's two extra stat tiles use these nicknames beside SNARKY_LABELS'
+ * Boom game / Mercy rule / Coaching malpractice.
+ */
+export const HUB_LABELS = Object.freeze({
+  photoFinish: 'Photo finish',
+  dudOfTheWeek: 'Dud of the week',
+  finalScores: 'Final scores',
+  teamOfTheWeek: 'Team of the week',
+  bestPossibleLineup: 'Best possible lineup',
+  gameOfTheWeek: 'Game of the week',
+  restOfTheSlate: 'Rest of the slate',
+  powerRankings: 'Power rankings',
+  preseasonPower: 'Preseason power',
+  moreThisWeek: 'More this week',
+  playersToWatch: 'Players to watch',
+  leagueMoves: 'League moves',
+  weekInHistory: 'This week in history',
+  smackFeed: 'Smack feed',
+  boxScores: 'Box scores',
+} as const);
+
+/** "Boom Game" -> "Boom game", "No-Show" -> "No-show": SNARKY_LABELS are Title
+ * Case for the pages that title with them; hub labels are sentence case. */
+export function sentenceCaseLabel(label: string): string {
+  return label.charAt(0) + label.slice(1).toLowerCase();
+}
+
 // The smack feed is authored by the site's own "Site Desk", NOT by member
 // franchises: we do not put fabricated quotes in a real team's mouth. Every
 // post shares the Site Desk identity (a neutral gold crest) and speaks as the

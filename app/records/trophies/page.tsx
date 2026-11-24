@@ -51,15 +51,15 @@ export default async function TrophyCasePage() {
 
   return (
     <>
-      <PageSection label="Records" title="Trophy Case.">
-        <BackLink href="/records" label="All Records" />
-
-        <p className="text-body-lg text-text-secondary max-w-prose">
-          Every championship and accolade in league history.
-        </p>
+      <PageSection
+        as="h1"
+        title="Trophy case"
+        intro="Every championship and accolade in league history."
+      >
+        <BackLink href="/records" label="All records" />
       </PageSection>
 
-      <PageSection label="All Hardware" title="The Shelf">
+      <PageSection title="The Shelf">
         {isEmpty ? (
           <EmptyState
             icon="trophy"

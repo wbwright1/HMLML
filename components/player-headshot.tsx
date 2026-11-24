@@ -78,7 +78,7 @@ export function PlayerHeadshot({
       {showMonogram ? (
         <div
           className="flex h-full w-full items-center justify-center rounded-full bg-surface text-text-tertiary select-none"
-          style={{ fontSize: Math.max(9, Math.round(size * 0.36)) }}
+          style={{ fontSize: Math.max(12, Math.round(size * 0.36)) }}
           {...(decorative ? {} : { role: "img", "aria-label": name })}
         >
           <span className="font-bold">{getInitials(name)}</span>

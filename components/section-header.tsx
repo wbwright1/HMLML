@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 
 interface SectionHeaderProps {
   title: string;
@@ -11,7 +12,7 @@ export function SectionHeader({
   viewAllHref,
   viewAllLabel,
 }: SectionHeaderProps) {
-  const linkLabel = viewAllLabel ?? (viewAllHref ? "View All \u2192" : undefined);
+  const linkLabel = viewAllLabel ?? (viewAllHref ? "View all" : undefined);
 
   return (
     <div className="flex items-center justify-between pb-2 border-b border-border mb-4">
@@ -19,9 +20,10 @@ export function SectionHeader({
       {viewAllHref && linkLabel && (
         <Link
           href={viewAllHref}
-          className="text-body-sm font-medium text-accent-gold hover:brightness-110 py-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:rounded-sm"
+          className="inline-flex min-h-11 items-center gap-1 rounded-md px-2 -mr-2 text-body-sm font-medium text-accent-gold hover:brightness-110 transition-[scale] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
         >
           {linkLabel}
+          <ChevronRight className="size-4" strokeWidth={2} aria-hidden />
         </Link>
       )}
     </div>

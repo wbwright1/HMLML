@@ -1,4 +1,5 @@
 import { getLatestSuccessfulSync } from "@/lib/queries/sync-log";
+import { Clock } from "lucide-react";
 import { SyncTimestampClient } from "./sync-timestamp-client";
 
 function getRelativeTime(date: Date): string {
@@ -40,24 +41,6 @@ export function getStaleThresholdMs(dataType: string): number {
   return HOURLY_STALE_THRESHOLD_MS; // hourly and all other types
 }
 
-function ClockIcon() {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={2}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className="inline-block size-3"
-      aria-hidden="true"
-    >
-      <circle cx="12" cy="12" r="10" />
-      <polyline points="12 6 12 12 16 14" />
-    </svg>
-  );
-}
-
 export async function SyncTimestamp({
   dataType = "league",
 }: {
@@ -74,8 +57,9 @@ export async function SyncTimestamp({
 
   if (!syncEntry || !syncEntry.completedAt) {
     return (
-      <span className="text-caption text-text-tertiary">
-        <ClockIcon /> Data may be outdated
+      <span className="inline-flex items-center gap-1.5 text-caption text-text-tertiary">
+        <Clock className="size-3.5 shrink-0" strokeWidth={2} aria-hidden="true" />
+        Data may be outdated
       </span>
     );
   }

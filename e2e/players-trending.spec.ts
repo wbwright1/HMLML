@@ -8,7 +8,7 @@ import { test, expect } from "@playwright/test";
  * cannot seed deterministically:
  *   - PROJ only renders once the hourly sync has written projections for the
  *     CURRENT season/week (matched against the live Sleeper NFL-state
- *     endpoint), for ROSTERED players. The default "Free Agents" roster
+ *     endpoint), for ROSTERED players. The default "Free agents" roster
  *     filter can legitimately show an all-dash PROJ column even when the
  *     column itself is populated for rostered players elsewhere in the list
  *     -- that mirrors the existing Age/Exp null treatment, not a bug.
@@ -22,6 +22,8 @@ import { test, expect } from "@playwright/test";
 
 const DESKTOP_VIEWPORT = { width: 1280, height: 900 };
 const NUMBER_OR_DASH = /^-$|^\d+(\.\d+)?$/;
+// Trending counts are compact-formatted: "942", "12K", "877.7K", "1.2M".
+const COMPACT_COUNT = /^\d+(\.\d)?[KM]?$/;
 
 test.describe("Players page: PROJ / trending", () => {
   test("PROJ column, when rendered, shows a number or the null dash for every visible row", async ({
@@ -60,7 +62,7 @@ test.describe("Players page: PROJ / trending", () => {
 
     const rosterSelect = page.getByLabel("Roster");
     await rosterSelect.click();
-    await page.getByRole("option", { name: "All Players" }).click();
+    await page.getByRole("option", { name: "All players" }).click();
 
     const rows = page.locator("table tbody tr");
     const count = await rows.count();
@@ -76,20 +78,20 @@ test.describe("Players page: PROJ / trending", () => {
     expect(firstCell).toMatch(NUMBER_OR_DASH);
   });
 
-  test("TRD column, when rendered, pairs the arrow glyph with a visible count (not color alone)", async ({
+  test("TRD column, when rendered, pairs the TrendingUp glyph with a visible compact count (not color alone)", async ({
     page,
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto("/players");
 
-    const trdHeader = page.getByRole("columnheader", { name: "Trd", exact: true });
+    const trdHeader = page.getByRole("columnheader", { name: "Trending adds, last 24h" });
     if ((await trdHeader.count()) === 0) return; // trending list empty: column omitted
 
     await expect(trdHeader).toBeVisible();
 
     const rosterSelect = page.getByLabel("Roster");
     await rosterSelect.click();
-    await page.getByRole("option", { name: "All Players" }).click();
+    await page.getByRole("option", { name: "All players" }).click();
 
     const rows = page.locator("table tbody tr");
     const count = await rows.count();
@@ -104,16 +106,17 @@ test.describe("Players page: PROJ / trending", () => {
 
     const text = (await trendingCell.first().textContent())?.trim();
     expect(text).toBeTruthy();
-    expect(text).toMatch(/^\d+$/);
+    expect(text).toMatch(COMPACT_COUNT);
+    await expect(trendingCell.first().locator("svg.lucide-trending-up")).toHaveCount(1);
   });
 
-  test("trending rail is either absent or renders real player rows with headshots and counts", async ({
+  test("trending rail is either absent or renders real player rows with compact add counts and real names", async ({
     page,
   }) => {
     await page.setViewportSize(DESKTOP_VIEWPORT);
     await page.goto("/players");
 
-    const railHeading = page.getByText("Trending · Adds");
+    const railHeading = page.getByRole("heading", { name: "Trending adds" });
 
     if ((await railHeading.count()) === 0) {
       // Sleeper trending-adds call failed/empty this run: rail correctly
@@ -133,8 +136,18 @@ test.describe("Players page: PROJ / trending", () => {
     const firstRow = railRows.first();
     await expect(firstRow.locator("img").first()).toBeVisible();
 
-    const countBadge = (await firstRow.locator("span").last().textContent())?.trim();
-    expect(countBadge).toBeTruthy();
-    expect(countBadge).toMatch(/^\d+$/);
+    // "877.7K adds" with a TrendingUp icon, never a bare "↑ 877698".
+    const count = firstRow.locator("span.font-mono").last();
+    expect((await count.textContent())?.trim()).toMatch(COMPACT_COUNT);
+    await expect(firstRow.getByText("adds", { exact: true })).toBeVisible();
+    await expect(firstRow.locator("svg.lucide-trending-up")).toHaveCount(1);
+
+    // No row falls back to "Unknown": team defenses resolve to "<Team> D/ST".
+    await expect(page.locator("aside").getByText(/^Unknown/)).toHaveCount(0);
+    const defenseRows = railRows.filter({ hasText: "DEF ·" });
+    const defenseCount = await defenseRows.count();
+    for (let i = 0; i < defenseCount; i++) {
+      await expect(defenseRows.nth(i)).toContainText("D/ST");
+    }
   });
 });

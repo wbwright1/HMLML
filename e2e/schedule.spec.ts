@@ -61,8 +61,14 @@ test.describe("League Schedule View", () => {
       .filter({ hasText: "Team Alpha" })
       .first();
     await expect(alphaRow).toBeVisible();
-    await expect(alphaRow.getByText("Final", { exact: false })).toBeVisible();
-    await expect(alphaRow.getByText("120.5")).toBeVisible();
+    // The row renders a phone and a desktop layout (one hidden by CSS), so
+    // assert on the visible "Final" label.
+    await expect(
+      alphaRow.getByText("Final", { exact: false }).filter({ visible: true }).first()
+    ).toBeVisible();
+    await expect(
+      alphaRow.getByText("120.5").filter({ visible: true }).first()
+    ).toBeVisible();
   });
 
   test("an in-progress week (week 2) shows the Live indicator with scores", async ({
@@ -77,8 +83,10 @@ test.describe("League Schedule View", () => {
       .filter({ hasText: "Team Alpha" })
       .first();
     await expect(liveRow).toBeVisible();
-    await expect(liveRow.getByText("Live", { exact: true })).toBeVisible();
-    await expect(liveRow.getByText("42.1")).toBeVisible();
+    await expect(
+      liveRow.getByText("Live", { exact: true }).filter({ visible: true }).first()
+    ).toBeVisible();
+    await expect(liveRow.getByText("42.1").filter({ visible: true }).first()).toBeVisible();
   });
 
   test("an upcoming week (week 3) shows 'vs' with no score", async ({
@@ -94,7 +102,9 @@ test.describe("League Schedule View", () => {
       .first();
     await expect(upcomingRow).toBeVisible();
     // Preview variant renders "vs" instead of scores.
-    await expect(upcomingRow.getByText("vs", { exact: true })).toBeVisible();
+    await expect(
+      upcomingRow.getByText("vs", { exact: true }).filter({ visible: true }).first()
+    ).toBeVisible();
     // No score text should appear for this scheduled matchup.
     await expect(upcomingRow.getByText("0.0")).toHaveCount(0);
   });

@@ -167,7 +167,7 @@ export function SeasonSwitcher({
       </div>
 
       <div className="space-y-3">
-        <p className="text-kicker text-text-tertiary">Weekly Lines</p>
+        <p className="text-kicker text-text-tertiary">Weekly lines</p>
 
         {seasonsPresent.length > 1 && (
           <nav
@@ -184,7 +184,7 @@ export function SeasonSwitcher({
                   href={href}
                   aria-current={isActive ? "page" : undefined}
                   onClick={(e) => handlePillClick(e, year, href)}
-                  className={`shrink-0 rounded-full border px-3 py-1.5 text-body-sm font-medium tabular-nums transition-colors ${
+                  className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-4 font-mono text-body-sm font-medium tabular-nums transition-[scale,color,background-color] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${
                     isActive
                       ? "border-accent-gold/30 bg-accent-gold-light text-accent-gold"
                       : "border-border bg-surface text-text-tertiary hover:text-text-primary"

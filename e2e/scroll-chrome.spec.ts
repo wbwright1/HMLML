@@ -94,7 +94,7 @@ test.describe("Mobile nav scroll chrome", () => {
     for (const y of [8, 28, 52]) {
       const onTop = await page.evaluate(
         ({ cx, y }) =>
-          !!document.elementFromPoint(cx, y)?.closest(".sticky.top-0.z-40"),
+          !!document.elementFromPoint(cx, y)?.closest("[data-mobile-header]"),
         { cx, y },
       );
       expect(onTop, `header must own paint at (${cx}, ${y})`).toBe(true);

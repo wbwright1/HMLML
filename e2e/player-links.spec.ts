@@ -86,7 +86,7 @@ test.describe("Sitewide player links", () => {
     if (!href) return; // No completed draft seeded in this environment.
 
     await page.goto(href);
-    await expect(page.getByRole("heading", { name: "Draft Board." })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Draft Board", exact: true })).toBeVisible();
 
     const playerLinks = page.locator('a[href^="/players/"]');
     const linkCount = await playerLinks.count();

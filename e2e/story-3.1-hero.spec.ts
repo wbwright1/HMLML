@@ -4,9 +4,9 @@ import type { Locator } from "@playwright/test";
 // ============================================================================
 // Story 3.1: Hub Hero (Command Center redesign)
 //
-// The hub hero is the first <section> inside <main>: a kicker line
-// ("Harambe Memorial League · YEAR") above a serif-italic display title
-// (e.g. "Week 10." / "The Offseason."). Which hub state renders depends on the
+// The hub hero is the first <section> inside <main>: an upright serif display
+// title (e.g. "Week 10." / "The Offseason.") with no kicker stacked above it
+// (UI/UX pass, 2026-11-24: the live pill already names the week/state). Which hub state renders depends on the
 // NFL calendar + seeded data; when no season data is present the hub falls back
 // to an empty state with no hero section, in which case these tests skip.
 // ============================================================================
@@ -17,8 +17,8 @@ test.describe("Hub Hero", () => {
     return page.locator("main section").first();
   }
 
-  // T01: hero renders with the league kicker line
-  test("T01: hero renders with league kicker", async ({ page }) => {
+  // T01: no kicker line is stacked above the hero headline
+  test("T01: hero has no kicker above its headline", async ({ page }) => {
     await page.goto("/");
     const h = hero(page);
     if ((await h.count()) === 0) {
@@ -27,10 +27,9 @@ test.describe("Hub Hero", () => {
     }
     await expect(h).toBeVisible();
 
-    const kicker = h.locator("p.text-kicker").first();
-    await expect(kicker).toBeVisible();
-    const text = await kicker.innerText();
-    expect(text).toMatch(/Harambe Memorial League/i);
+    await expect(h.locator("h1")).toBeVisible();
+    await expect(h.locator(".text-kicker")).toHaveCount(0);
+    expect(await h.innerText()).not.toMatch(/Harambe Memorial League ·/i);
   });
 
   // T02: hero has a display title
@@ -48,8 +47,9 @@ test.describe("Hub Hero", () => {
   });
 
   // T05 (replaces old green-tint tint check): the hero title uses the serif
-  // display family (Instrument Serif via --font-serif), italic.
-  test("T05: hero title renders in the serif display family, italic", async ({
+  // display family (Instrument Serif via --font-serif), upright: italic stays
+  // only on the HMLML wordmark.
+  test("T05: hero title renders in the serif display family, upright", async ({
     page,
   }) => {
     await page.goto("/");
@@ -76,7 +76,7 @@ test.describe("Hub Hero", () => {
     const fontStyle = await h1.evaluate(
       (el) => getComputedStyle(el).fontStyle
     );
-    expect(fontStyle).toBe("italic");
+    expect(fontStyle).toBe("normal");
   });
 
   // T06 (replaces old weight-900 check): the title is large display type.

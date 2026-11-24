@@ -1,5 +1,12 @@
+import { Check, Clock } from "lucide-react";
 import { FranchiseLogo } from "@/components/franchise-logo";
-import { formatMoneyline, formatSpread, payoutLabel } from "@/lib/book/pricing";
+import {
+  formatMoney,
+  formatMoneyline,
+  formatSpread,
+  pay,
+  payoutTotal,
+} from "@/lib/book/pricing";
 import {
   DEFAULT_STAKE,
   gradeGamePick,
@@ -10,9 +17,9 @@ import {
 } from "@/lib/book/shared";
 
 /**
- * The three pieces both pick surfaces of The Book are built out of: the side
- * row that IS the pick control, the line that reports the viewer's own pick on
- * a game, and the status kicker above a card.
+ * The pieces both pick surfaces of The Book are built out of: the side row
+ * that carries the pick control, the line that reports the viewer's own pick
+ * on a game, the status label above a card, and the shared lock-day logic.
  *
  * They started as module-local functions inside board-island.tsx and moved
  * here when the Tracking tab's slate cards began reusing all three. One
@@ -32,6 +39,24 @@ import {
  */
 export type SideRowVariant = "board" | "slate";
 
+/** Width of the Board's spread column; the column heads above the cards share it. */
+export const SPREAD_COL = "w-[76px]";
+/** Width of the Board's moneyline column. */
+export const ML_COL = "w-[72px]";
+
+/**
+ * `board` is the sportsbook row: the spread is the pick button, the moneyline
+ * sits beside it as a price. `slate` is the Tracking tab's row: the cover
+ * state in words, the live score, and no prices at all (the price lives one
+ * tab over, and the slate's job is who took which side); the whole row is the
+ * control there.
+ *
+ * Why the moneyline is not a second button on the Board: a Book pick is ONE
+ * side of a game, graded against the spread (gradeGamePick), with the
+ * moneyline snapshotted beside it for the friendly payout. There is no
+ * separate moneyline market to book, so a moneyline button would be a second
+ * control for the same pick, pretending to be a different bet.
+ */
 export function SideRow({
   game,
   side,
@@ -55,115 +80,134 @@ export function SideRow({
   const settled = game.status === "final";
   // A push is a property of the GAME, not of one side, so it carries no side
   // tag at all; the card header says so once (see StatusKicker's `showPush`).
-  const coverLabel = settled ? "Covered ✓" : "Covering ✓";
+  const coverLabel = settled ? "Covered" : "Covering";
+  const coverTag = (
+    <span className="inline-flex items-center gap-1 text-caption font-semibold text-accent-green">
+      <Check className="size-3.5" strokeWidth={2} aria-hidden="true" />
+      {coverLabel}
+    </span>
+  );
 
-  const content =
-    variant === "slate" ? (
-      <>
-        <FranchiseLogo
-          slug={team.slug}
-          name={team.name}
-          abbreviation={team.abbreviation ?? undefined}
-          brandingColor={team.brandingColor ?? undefined}
-          avatarUrl={team.avatarUrl ?? undefined}
-          size={28}
-          decorative
-        />
-        <span className="min-w-0 flex-1 text-left">
-          <span className="block truncate text-body-sm font-semibold text-text-primary">
+  const logo = (
+    <FranchiseLogo
+      slug={team.slug}
+      name={team.name}
+      abbreviation={team.abbreviation ?? undefined}
+      brandingColor={team.brandingColor ?? undefined}
+      avatarUrl={team.avatarUrl ?? undefined}
+      size={28}
+      decorative
+    />
+  );
+
+  if (variant === "board") {
+    // The Board dims a game that is off the board, never one that is merely
+    // unpickable-by-you: a signed-out visitor should read a live sportsbook,
+    // not a greyed-out one.
+    const dim = game.status !== "open" && !picked ? "opacity-55" : "";
+    const spreadText = formatSpread(team.spread);
+    const cell = `flex h-11 ${SPREAD_COL} shrink-0 items-center justify-center rounded-xl border font-mono text-[15px] font-bold tabular-nums`;
+
+    let spread;
+    if (interactive) {
+      spread = (
+        <button
+          type="button"
+          onClick={() => onPick(game, side)}
+          disabled={pending}
+          aria-pressed={picked}
+          aria-label={`Pick ${team.name} ${spreadText}`}
+          className={`${cell} cursor-pointer transition-[scale,background-color,border-color] duration-150 ease-out active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-wait ${
+            picked
+              ? "border-accent-gold bg-accent-gold text-canvas"
+              : "border-border-control bg-transparent text-text-primary hover:bg-surface-muted"
+          }`}
+        >
+          {spreadText}
+        </button>
+      );
+    } else {
+      // Read-only (signed out, locked, or kicked off): a price, not a control,
+      // so it gets no control edge. A locked-in pick keeps a gold tint.
+      spread = (
+        <span
+          className={`${cell} ${
+            picked
+              ? "border-accent-gold/45 bg-accent-gold-light text-text-primary"
+              : "border-transparent bg-surface-muted text-text-primary"
+          }`}
+        >
+          {spreadText}
+        </span>
+      );
+    }
+
+    return (
+      <div className={`flex items-center gap-2 py-2.5 ${dim}`}>
+        {logo}
+        <span className="flex min-w-0 flex-1 flex-col gap-0.5 pl-1">
+          {/* Wraps, never truncates: the full name is the payload. */}
+          <span className="text-[15px] leading-tight font-semibold text-pretty break-words text-text-primary">
             {team.name}
           </span>
-          <span className="flex flex-wrap items-baseline gap-x-2 text-[11px] text-text-tertiary">
+          <span className="flex flex-wrap items-center gap-x-2 text-caption text-text-tertiary">
             <span className="font-mono tabular-nums">{team.record}</span>
-            {/* Under `sm` the cover tag rides the meta line instead of taking
-                a share of the name's row: at 390 the franchise name is the
-                payload, and four items on one line truncated it to a letter. */}
-            {covering && (
-              <span className="text-caption font-semibold normal-case tracking-normal text-accent-green sm:hidden">
-                {coverLabel}
-              </span>
-            )}
+            {covering && coverTag}
           </span>
         </span>
-        {covering && (
-          <span className="hidden shrink-0 text-caption font-semibold text-accent-green sm:inline">
-            {coverLabel}
-          </span>
-        )}
-        {game.status !== "open" && (
-          <span
-            className={`hidden min-w-[46px] shrink-0 text-right font-mono text-[15px] font-bold tabular-nums min-[360px]:inline sm:min-w-[52px] ${
-              covering ? "text-text-primary" : "text-text-secondary"
-            }`}
-          >
-            {team.points.toFixed(1)}
-          </span>
-        )}
-        <span className="shrink-0 rounded-lg bg-surface-muted px-2 py-1.5 font-mono text-body-sm font-bold tabular-nums text-text-primary sm:px-2.5">
-          {formatSpread(team.spread)}
-        </span>
-      </>
-    ) : (
-      <>
-        <FranchiseLogo
-          slug={team.slug}
-          name={team.name}
-          abbreviation={team.abbreviation ?? undefined}
-          brandingColor={team.brandingColor ?? undefined}
-          avatarUrl={team.avatarUrl ?? undefined}
-          size={28}
-          decorative
-        />
-        <span className="min-w-0 flex-1 text-left">
-          <span className="block truncate text-body-sm font-semibold text-text-primary">
-            {team.name}
-          </span>
-          <span className="block text-[11px] text-text-tertiary">
-            <span className="font-mono tabular-nums">{team.record}</span>
-          </span>
-          <span className="block text-[11px] text-text-tertiary sm:hidden">
-            <span className="font-mono tabular-nums leading-tight">
-              {payoutLabel(team.moneyline, DEFAULT_STAKE)}
-            </span>
-          </span>
-        </span>
-        <span className="shrink-0 rounded-lg bg-surface-muted px-2.5 py-1 font-mono text-body-sm font-bold tabular-nums text-text-primary">
-          {formatSpread(team.spread)}
-        </span>
-        <span className="w-11 shrink-0 text-right font-mono text-caption font-semibold normal-case tracking-normal tabular-nums text-text-tertiary">
+        {spread}
+        <span
+          className={`${ML_COL} shrink-0 text-center font-mono text-body-sm font-semibold tabular-nums text-text-secondary`}
+        >
+          {/* Names the price for screen readers; the column head is aria-hidden. */}
+          <span className="sr-only">moneyline </span>
           {formatMoneyline(team.moneyline)}
         </span>
-        <span className="hidden w-[168px] shrink-0 text-right text-caption normal-case leading-tight tracking-normal text-text-tertiary sm:block">
-          <span className="font-mono tabular-nums">
-            {payoutLabel(team.moneyline, DEFAULT_STAKE)}
-          </span>
-        </span>
-        {covering && (
-          <span className="shrink-0 text-caption font-semibold text-accent-green">
-            ✓
-          </span>
-        )}
-      </>
+      </div>
     );
+  }
+
+  const content = (
+    <>
+      {logo}
+      <span className="min-w-0 flex-1 text-left">
+        <span className="block text-body-sm font-semibold text-pretty break-words text-text-primary">
+          {team.name}
+        </span>
+        <span className="flex flex-wrap items-baseline gap-x-2 text-caption text-text-tertiary">
+          <span className="font-mono tabular-nums">{team.record}</span>
+          {/* Under `sm` the cover tag rides the meta line instead of taking
+              a share of the name's row: at 390 the franchise name is the
+              payload. */}
+          {covering && <span className="sm:hidden">{coverTag}</span>}
+        </span>
+      </span>
+      {covering && <span className="hidden shrink-0 sm:inline">{coverTag}</span>}
+      {game.status !== "open" && (
+        <span
+          className={`hidden min-w-[46px] shrink-0 text-right font-mono text-[15px] font-bold tabular-nums min-[360px]:inline sm:min-w-[52px] ${
+            covering ? "text-text-primary" : "text-text-secondary"
+          }`}
+        >
+          {team.points.toFixed(1)}
+        </span>
+      )}
+      <span className="shrink-0 rounded-lg bg-surface-muted px-2 py-1.5 font-mono text-body-sm font-bold tabular-nums text-text-primary sm:px-2.5">
+        {formatSpread(team.spread)}
+      </span>
+    </>
+  );
 
   // Every phone pixel the row does not spend on gaps is a pixel the franchise
-  // name keeps: at 390 the name is the payload, and a 12px gutter between five
-  // items was truncating it to an initial.
-  const base = `flex w-full items-center rounded-[11px] border p-2.5 text-left transition-colors duration-150 ${
-    variant === "slate" ? "gap-2 sm:gap-3" : "gap-3"
-  }`;
+  // name keeps.
+  const base =
+    "flex min-h-11 w-full items-center gap-2 rounded-[11px] border p-2.5 text-left sm:gap-3";
   const skin = picked
     ? "border-accent-gold/45 bg-accent-gold-light"
     : "border-border bg-white/[.03]";
-  // The Board dims a game that is off the board, never one that is merely
-  // unpickable-by-you: a signed-out visitor should read a live sportsbook, not
-  // a greyed-out one. The slate never dims at all, because a settled card
-  // there is the point of the card, not a leftover.
-  const dim =
-    variant === "board" && game.status !== "open" && !picked ? "opacity-55" : "";
 
   if (!interactive) {
-    return <div className={`${base} ${skin} ${dim}`}>{content}</div>;
+    return <div className={`${base} ${skin}`}>{content}</div>;
   }
 
   return (
@@ -173,7 +217,7 @@ export function SideRow({
       disabled={pending}
       aria-pressed={picked}
       aria-label={`Pick ${team.name} ${formatSpread(team.spread)}`}
-      className={`${base} ${skin} cursor-pointer hover:border-border-strong disabled:cursor-wait`}
+      className={`${base} ${skin} cursor-pointer transition-[scale,border-color] duration-150 ease-out hover:border-border-control active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas disabled:cursor-wait`}
     >
       {content}
     </button>
@@ -189,17 +233,22 @@ export function SideRow({
  * is final (see buildPickemsCell), because a cover that flips three times on a
  * Sunday afternoon is noise, not a result.
  *
- * Wraps rather than truncates: the team name is the payload, so at 390 the tag
- * drops to a second line instead of the name ellipsing away.
+ * `showPayout` (the Board) adds the friendly-wager sentence for the picked
+ * side only, priced off the moneyline snapshotted on the pick row. It used to
+ * ride every side row on the board; once per pick is the useful version.
+ *
+ * Wraps rather than truncates: the team name is the payload.
  */
 export function YourPickRow({
   game,
   pick,
   slipClosed,
+  showPayout = false,
 }: {
   game: BookGame;
   pick: MemberBookPick;
   slipClosed: boolean;
+  showPayout?: boolean;
 }) {
   const team = pick.side === "home" ? game.home : game.away;
   const spread = pick.side === "home" ? pick.spreadAtPick : -pick.spreadAtPick;
@@ -214,28 +263,45 @@ export function YourPickRow({
     const result = gradeGamePick(game, pick);
     const settled = game.status === "final";
     if (result === "push") {
-      tag = "Push · refunded";
+      tag = "Push, refunded";
       tone = "text-text-tertiary";
     } else if (result === pick.side) {
-      tag = settled ? "Covered ✓" : "Covering ✓";
+      tag = settled ? "Covered" : "Covering";
       tone = "text-accent-green";
     } else {
-      tag = settled ? "Missed ✗" : "Not covering ✗";
+      tag = settled ? "Missed" : "Not covering";
       tone = "text-accent-warm";
     }
   }
 
   return (
-    <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 rounded-[10px] bg-white/[.03] px-3 py-2">
-      <span className="min-w-0 text-caption normal-case tracking-normal text-text-secondary">
-        Your pick ·{" "}
-        <span className="font-mono font-bold tabular-nums text-text-primary">
-          {team.name} {formatSpread(spread)}
+    <div className="flex flex-col gap-1 border-t border-divider pt-2.5 pb-2">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <span className="min-w-0 text-body-sm text-text-secondary">
+          Your pick:{" "}
+          <span className="font-semibold text-text-primary">
+            {team.name}{" "}
+            <span className="font-mono tabular-nums">{formatSpread(spread)}</span>
+          </span>
         </span>
-      </span>
-      <span className={`shrink-0 text-caption font-semibold ${tone}`}>
-        {tag}
-      </span>
+        <span className={`shrink-0 text-caption font-semibold ${tone}`}>
+          {tag}
+        </span>
+      </div>
+      {showPayout && (
+        <p className="text-caption text-text-tertiary">
+          <span className="font-mono tabular-nums">${DEFAULT_STAKE}</span>{" "}
+          returns{" "}
+          <span className="font-mono tabular-nums">
+            {formatMoney(payoutTotal(pick.mlAtPick, DEFAULT_STAKE))}
+          </span>{" "}
+          (
+          <span className="font-mono tabular-nums">
+            {formatMoney(pay(pick.mlAtPick, DEFAULT_STAKE))}
+          </span>{" "}
+          profit)
+        </p>
+      )}
     </div>
   );
 }
@@ -243,34 +309,121 @@ export function YourPickRow({
 /**
  * A named rivalry's label for a game card header, beside StatusKicker. Renders
  * nothing for an unnamed pair. Plain text from BookGame, so it adds no client
- * state and no fetch to the islands that render it.
+ * state and no fetch to the islands that render it. Gold on purpose: the
+ * rivalry title is one of the league's own names.
  */
 export function RivalryKicker({ game }: { game: BookGame }) {
   if (!game.rivalryName) return null;
   return (
     <span
-      className="min-w-0 truncate text-kicker text-text-secondary"
+      className="min-w-0 truncate text-kicker text-accent-gold"
       data-testid="book-rivalry-name"
     >
-      <span aria-hidden="true">· </span>
       {game.rivalryName}
     </span>
   );
 }
 
+const WEEKDAY_NAMES: Record<string, string> = {
+  SUN: "Sunday",
+  MON: "Monday",
+  TUE: "Tuesday",
+  WED: "Wednesday",
+  THU: "Thursday",
+  FRI: "Friday",
+  SAT: "Saturday",
+};
+
+/** "THU" -> "Thursday"; null for a game with no known kickoff. */
+export function lockDayName(label: string | null): string | null {
+  if (!label) return null;
+  return WEEKDAY_NAMES[label.toUpperCase()] ?? label;
+}
+
 /**
- * The kicker above a game card: when it locks, that it is live, or that it is
- * done. `showPush` adds the push to the FINAL label, which is where a push
- * belongs: it is a property of the game, so no single side row can carry it.
- * The Board leaves it off, since its side rows already read the same either
- * way and its slip says "Push" on the member's own row.
+ * The lock day most of the open games share, said ONCE above the cards. A
+ * card only repeats a lock day when its own differs from this one.
+ * `mixed` is true when at least one open game locks on another day.
+ */
+export function primaryLockDay(games: BookGame[]): {
+  day: string | null;
+  mixed: boolean;
+  anyOpen: boolean;
+} {
+  const counts = new Map<string | null, number>();
+  for (const g of games) {
+    if (g.status !== "open") continue;
+    const day = lockDayName(g.kickoffLabel);
+    counts.set(day, (counts.get(day) ?? 0) + 1);
+  }
+  let day: string | null = null;
+  let best = 0;
+  for (const [d, n] of counts) {
+    if (n > best) {
+      day = d;
+      best = n;
+    }
+  }
+  return { day, mixed: counts.size > 1, anyOpen: counts.size > 0 };
+}
+
+/**
+ * The one quiet lock notice above a slate of game cards: neutral surface,
+ * gold Clock. Built from the games' real kickoff days.
+ */
+export function LockAlert({
+  games,
+  canChange,
+}: {
+  games: BookGame[];
+  /** Whether the viewer can still change picks (false once their slip is locked). */
+  canChange: boolean;
+}) {
+  const { day, mixed, anyOpen } = primaryLockDay(games);
+  if (!anyOpen) return null;
+  const when = day ? `${day} at kickoff` : "at kickoff";
+  const title = mixed ? `Most lines lock ${when}` : `Lines lock ${when}`;
+  return (
+    <div
+      data-testid="book-lock-alert"
+      className="flex items-center gap-3 rounded-xl border border-border bg-surface px-3.5 py-3"
+    >
+      <Clock
+        className="size-5 shrink-0 text-accent-gold"
+        strokeWidth={2}
+        aria-hidden="true"
+      />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="text-body-sm font-semibold text-text-primary">{title}</span>
+        <span className="text-caption text-text-secondary">
+          {mixed
+            ? "Each game locks at its own first kickoff."
+            : canChange
+              ? "Picks can change until then."
+              : "Your slip is locked in."}
+        </span>
+      </span>
+    </div>
+  );
+}
+
+/**
+ * The label above a game card: when it locks (only if that differs from the
+ * page's lock alert), that it is live, or that it is done. `showPush` adds the
+ * push to the final label, which is where a push belongs: it is a property of
+ * the game, so no single side row can carry it.
+ *
+ * `primaryDay` is the day the LockAlert already announced; an open game that
+ * locks that same day renders nothing here.
  */
 export function StatusKicker({
   game,
   showPush = false,
+  primaryDay,
 }: {
   game: BookGame;
   showPush?: boolean;
+  primaryDay?: string | null;
 }) {
   if (game.status === "live") {
     return (
@@ -279,19 +432,22 @@ export function StatusKicker({
           <span className="absolute inline-flex size-full animate-[live-pulse_1.6s_ease-out_infinite] rounded-full bg-accent-green opacity-75" />
           <span className="relative inline-flex size-2 rounded-full bg-accent-green" />
         </span>
-        <span className="text-kicker text-accent-green">Locked · Live</span>
+        <span className="text-kicker text-accent-green">Live</span>
       </span>
     );
   }
 
   if (game.status === "final") {
     const pushed = showPush && game.coveringSide === "push";
-    return <span className="text-kicker">{pushed ? "Final · Push" : "Final"}</span>;
+    return <span className="text-kicker">{pushed ? "Final, push" : "Final"}</span>;
   }
 
+  const day = lockDayName(game.kickoffLabel);
+  if (primaryDay !== undefined && day === primaryDay) return null;
   return (
-    <span className="text-kicker text-accent-gold">
-      {game.kickoffLabel ? `Locks ${game.kickoffLabel}` : "Locks at kickoff"}
+    <span className="inline-flex items-center gap-1.5 text-kicker text-text-secondary">
+      <Clock className="size-3.5 text-accent-gold" strokeWidth={2} aria-hidden="true" />
+      {day ? `Locks ${day}` : "Locks at kickoff"}
     </span>
   );
 }

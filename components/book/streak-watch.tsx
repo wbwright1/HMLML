@@ -37,7 +37,7 @@ export function StreakWatch({ tiles }: { tiles: StreakTile[] }) {
   if (tiles.length === 0) {
     return (
       <aside>
-        <p className="text-kicker mb-3">Streak Watch</p>
+        <p className="text-kicker mb-3">Streak watch</p>
         <div className="card-surface p-5">
           <p className="text-body-sm text-text-secondary">
             No streak worth bragging (or hiding from) yet.
@@ -49,7 +49,7 @@ export function StreakWatch({ tiles }: { tiles: StreakTile[] }) {
 
   return (
     <aside className="flex flex-col gap-3">
-      <p className="text-kicker">Streak Watch</p>
+      <p className="text-kicker">Streak watch</p>
       {tiles.map((tile) => {
         const style = TILE_STYLES[tile.kind];
         return (

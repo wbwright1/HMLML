@@ -51,7 +51,7 @@ function Stat({
       >
         {value}
       </span>
-      <span className="text-[10px] uppercase tracking-[0.12em] text-text-tertiary">
+      <span className="text-caption text-text-tertiary">
         {label}
       </span>
     </div>
@@ -62,15 +62,16 @@ function Stat({
 function RingsChip({ count }: { count: number }) {
   if (count <= 0) {
     return (
-      <span className="text-caption text-text-muted uppercase tracking-[0.08em]">
+      <span className="text-caption text-text-tertiary">
         No rings
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-gold-light px-2.5 py-1 text-caption font-semibold text-accent-gold uppercase tracking-[0.08em]">
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-gold-light px-2.5 py-1 text-caption font-semibold text-accent-gold">
       <span aria-hidden>◆</span>
-      {count} {count === 1 ? "Ring" : "Rings"}
+      <span className="font-mono tabular-nums">{count}</span>{" "}
+      {count === 1 ? "ring" : "rings"}
     </span>
   );
 }
@@ -116,7 +117,7 @@ function GoatHero({ entry }: { entry: GoatEntry }) {
                 <span className="font-mono text-[44px] md:text-[52px] font-bold leading-none tabular-nums text-accent-gold">
                   {(entry.goatScore * 100).toFixed(1)}
                 </span>
-                <span className="text-[10px] uppercase tracking-[0.14em] text-text-tertiary">
+                <span className="text-caption text-text-tertiary">
                   GOAT Index
                 </span>
               </div>
@@ -174,7 +175,7 @@ function GoatRow({ entry, sting }: { entry: GoatEntry; sting?: boolean }) {
 
         <div className="min-w-0 flex-1">
           <p
-            className={`text-[10px] font-semibold uppercase tracking-[0.14em] mb-0.5 ${
+            className={`text-caption font-semibold mb-0.5 ${
               sting ? "text-accent-warm" : "text-text-tertiary"
             }`}
           >
@@ -208,7 +209,7 @@ function GoatRow({ entry, sting }: { entry: GoatEntry; sting?: boolean }) {
           >
             {(entry.goatScore * 100).toFixed(1)}
           </span>
-          <span className="text-[10px] uppercase tracking-[0.12em] text-text-tertiary">
+          <span className="text-caption text-text-tertiary">
             Index
           </span>
         </div>
@@ -265,11 +266,9 @@ export default async function HallOfFamePage() {
       <section className="pt-8 pb-2 md:pt-12 space-y-4">
         <BackLink href="/records" label="Records" />
         <div className="space-y-2">
-          <p className="text-kicker">All-Time · Enshrined</p>
-          <h1 className="text-display">The Hall of Fame &amp; Shame.</h1>
-          <p className="text-body-lg text-text-secondary max-w-prose">
-            Every franchise ranked, every legend on the record, and a
-            basement nobody can climb out of. The receipts are permanent.
+          <h1 className="text-display">The Hall of Fame &amp; Shame</h1>
+          <p className="text-body text-text-secondary max-w-prose">
+            Every franchise ranked, and a basement nobody climbs out of.
           </p>
         </div>
       </section>
@@ -278,7 +277,6 @@ export default async function HallOfFamePage() {
           module within the Hall rather than folded into a flat page. */}
       <section className="pb-12 md:pb-16 space-y-3">
         <div className="pb-2">
-          <p className="text-kicker text-accent-gold mb-1.5">Module</p>
           <h2 className="text-h2 text-text-primary">The GOAT Ladder</h2>
           <p className="text-body-sm text-text-tertiary mt-1">
             Every franchise, ranked 1 to {ladder.length} by one composite
@@ -303,7 +301,7 @@ export default async function HallOfFamePage() {
         )}
 
         {/* Methodology footnote: keeps the roast arguable, not arbitrary. */}
-        <p className="text-caption text-text-muted normal-case tracking-normal pt-4 max-w-prose">
+        <p className="text-caption text-text-tertiary pt-4 max-w-prose">
           Methodology: the GOAT Index blends {weightLine}. Championships and
           all-time points are normalized across the league; win rate, playoff
           rate, and recent form are rates already. Recent form weights the last
@@ -321,7 +319,6 @@ export default async function HallOfFamePage() {
           className="pb-12 md:pb-16 space-y-3"
         >
           <div className="pb-2">
-            <p className="text-kicker text-accent-warm mb-1.5">Module</p>
             <h2 className="text-h2 text-text-primary">The Basement</h2>
             <p className="text-body-sm text-text-tertiary mt-1">
               {TOILET_BOWL_COPY.explainer} These are the franchises that got
@@ -352,7 +349,7 @@ export default async function HallOfFamePage() {
                     <p className="truncate text-body-sm text-text-primary mt-1">
                       {champion.franchiseName}
                     </p>
-                    <p className="text-[10px] uppercase tracking-[0.12em] text-text-tertiary mt-0.5">
+                    <p className="text-caption text-text-tertiary mt-0.5">
                       {SNARKY_LABELS.TOILET_BOWL_CHAMPION.displayText}
                     </p>
                   </div>
@@ -371,7 +368,6 @@ export default async function HallOfFamePage() {
           is seeded/synced. */}
       <section className="pb-12 md:pb-16 space-y-8">
         <div className="pb-2">
-          <p className="text-kicker text-accent-gold mb-1.5">Module</p>
           <h2 className="text-h2 text-text-primary">The Player Wing</h2>
           <p className="text-body-sm text-text-tertiary mt-1">
             The hardware handed out and the legends who earned it.
@@ -382,7 +378,7 @@ export default async function HallOfFamePage() {
 
         <div className="space-y-3">
           <div className="pb-1">
-            <p className="text-kicker text-accent-gold mb-1.5">League Lore</p>
+            <p className="text-kicker text-accent-gold mb-1.5">League lore</p>
             <h3 className="text-h3 text-text-primary">
               Twelve Legends and Cautionary Tales
             </h3>

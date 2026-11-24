@@ -5,7 +5,7 @@ interface BurningQuestionsCardProps {
 }
 
 /**
- * Right-rail "Burning Questions" card: serif italic ordinals paired with each
+ * Right-rail "Burning questions" card: gold mono ordinals paired with each
  * storyline, hairline-separated. The ordinals are decorative editorial markers
  * (serif, not the mono stat treatment used for scores and records).
  */
@@ -17,7 +17,7 @@ export function BurningQuestionsCard({ questions }: BurningQuestionsCardProps) {
       {questions.map((question, i) => (
         <div key={i} className="flex gap-4 py-4 first:pt-0 last:pb-0">
           <span
-            className="font-serif italic text-h3 leading-none text-accent-gold"
+            className="font-mono tabular-nums text-h3 leading-none text-accent-gold"
             aria-hidden="true"
           >
             {i + 1}

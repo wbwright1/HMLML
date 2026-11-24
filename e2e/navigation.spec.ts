@@ -89,6 +89,84 @@ test.describe("Site Navigation — desktop topbar", () => {
   });
 });
 
+test.describe("Site Navigation: narrow desktop (1024-1279px)", () => {
+  // Between lg and xl the topbar used to wrap pill and live-pill text. The
+  // search collapses to a 36px icon button there and nothing may wrap.
+  test.use({ viewport: { width: 1100, height: 800 } });
+
+  test("no topbar pill wraps, and search is an icon button that expands", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const topbar = page.locator('nav[aria-label="Main navigation"]').locator("..");
+    await expect(topbar).toBeVisible();
+
+    // Every nav pill renders on a single line: its height stays well under
+    // two lines of 14px text.
+    const pills = page.locator('nav[aria-label="Main navigation"] ul a');
+    const pillCount = await pills.count();
+    for (let i = 0; i < pillCount; i++) {
+      const box = await pills.nth(i).boundingBox();
+      expect(box, "pill should be laid out").not.toBeNull();
+      expect(box!.height).toBeLessThan(40);
+    }
+
+    // The search field is collapsed to an icon trigger below xl.
+    const combobox = page.getByRole("combobox", { name: "Search league" });
+    await expect(combobox).toBeHidden();
+    const trigger = page.getByRole("button", { name: "Search league, Command K" });
+    await expect(trigger).toBeVisible();
+    const triggerBox = await trigger.boundingBox();
+    expect(Math.round(triggerBox!.width)).toBe(36);
+
+    await trigger.click();
+    await expect(combobox).toBeVisible();
+    await expect(combobox).toBeFocused();
+
+    // The topbar itself stays a single 64px row.
+    const bar = page.locator("div.sticky.hidden.h-16").first();
+    const barBox = await bar.boundingBox();
+    expect(Math.round(barBox!.height)).toBe(64);
+  });
+
+  test("signed-out header CTA is the 36px gold 'Claim your team' button, unwrapped", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    // Scope to the topbar row: the hub's smack slot also says "Claim your team."
+    const topbar = page.locator('nav[aria-label="Main navigation"]').locator("..");
+    const cta = topbar.locator('a[href="/claim"]', { hasText: "Claim your team" });
+    await expect(cta).toBeVisible();
+    const box = await cta.boundingBox();
+    expect(Math.round(box!.height)).toBe(36);
+    const whiteSpace = await cta.evaluate((el) => getComputedStyle(el).whiteSpace);
+    expect(whiteSpace).toBe("nowrap");
+  });
+});
+
+test.describe("Site Navigation: mobile header", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test("signed out, a compact Claim pill with a 44px hit area links to /claim", async ({
+    page,
+  }) => {
+    await page.goto("/");
+    const claim = page
+      .locator("header")
+      .locator('a[href="/claim"]', { hasText: /^Claim$/ })
+      .filter({ visible: true });
+    await expect(claim).toBeVisible();
+    const box = await claim.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    // It sits in the top header, beside the search trigger.
+    expect(box!.y).toBeLessThan(56);
+    const search = page.getByRole("button", { name: "Search teams, players, records" });
+    const searchBox = await search.boundingBox();
+    expect(searchBox!.width).toBeGreaterThanOrEqual(44);
+    expect(box!.x).toBeGreaterThan(searchBox!.x);
+  });
+});
+
 test.describe("Skip link", () => {
   test("skip-to-content link is the first focusable element", async ({
     page,

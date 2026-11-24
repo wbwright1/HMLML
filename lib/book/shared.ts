@@ -208,9 +208,9 @@ export function bookConsensusText(
   return `${pct}% on ${favorite.abbreviation ?? favorite.name}`;
 }
 
-/** "The Book →" once a game has kicked off, "Pick →" while it is still open. */
+/** "The Book" once a game has kicked off, "Pick" while it is still open (the link draws its own chevron). */
 export function bookCtaLabel(status: BookGameStatus): string {
-  return status === "open" ? "Pick →" : "The Book →";
+  return status === "open" ? "Pick" : "The Book";
 }
 
 /**
@@ -271,10 +271,9 @@ export const MAX_STAKE = 500;
  */
 export const BOOK_COPY = {
   kicker: "HMLML Sportsbook",
-  title: "The Book.",
-  subline:
-    "Lines computed from projections. Wagers strictly friendly. The house is a gorilla.",
-  translatorTitle: "Wager Translator",
+  title: "The Book",
+  subline: "Lines come from projections. Friendly wagers only.",
+  translatorTitle: "Wager translator",
   translatorSnark: "friendly wagers only, the commish is not a casino",
   spreadNote: "Spread bets pay -110: a $10 friendly returns $19.09 ($9.09 profit).",
   syncNote: "Lines re-priced hourly from projections",
@@ -297,9 +296,9 @@ export const BOOK_COPY = {
     "Picks reveal at kickoff and grade when the game goes final. You always see your own slip; nobody sees an open pick but its owner.",
   pickemsNoGames:
     "No games on the board this week, so there is nothing to pick.",
-  /** Section kickers on the Tracking tab: "Week 6 · The Sheet" / "· The Slate". */
-  sheetKicker: "The Sheet",
-  slateKicker: "The Slate",
+  /** Section labels on the Tracking tab: "Week 6 sheet" / "Week 6 slate". */
+  sheetKicker: "sheet",
+  slateKicker: "slate",
   pulseSheets: "Sheets complete",
   pulseGhosting: "Still ghosting",
   railTookSide: "took this side",
@@ -353,10 +352,10 @@ export const BOOK_COPY = {
     "The projected doormat only has to win once to ruin somebody's month.",
   /** Section headers on the Props tab, in PROP_GROUP order. */
   propGroupLabels: {
-    specials: "House Specials",
-    players: "Player Props",
-    teams: "Team Totals",
-    h2h: "Head to Head",
+    specials: "House specials",
+    players: "Player props",
+    teams: "Team totals",
+    h2h: "Head to head",
   } as Record<PropGroup, string>,
   propSlipEmpty: "Nothing on the slip yet.",
   /** A posted prop whose subject no longer resolves. Calm, never panicked. */
@@ -1050,7 +1049,7 @@ const FUTURES_MARKET_COPY = {
 
 export const FUTURES_COPY = {
   kicker: "Season-long markets",
-  title: "Futures.",
+  title: "Futures",
   subline:
     "Priced daily off real standings and real points. Picks lock and never move after.",
   signedOut: "Claim your team to put a future on the board.",

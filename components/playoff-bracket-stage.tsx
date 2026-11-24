@@ -109,7 +109,7 @@ export function PlayoffBracketStage({
       data-testid={`bracket-${bracketType}`}
       className="bracket-root space-y-3"
     >
-      <p className="text-[9.5px] font-semibold uppercase tracking-[.12em] text-text-tertiary lg:hidden">
+      <p className="text-caption font-semibold text-text-tertiary lg:hidden">
         {getBracketSwipeHint(bracketType)}
       </p>
 
@@ -135,7 +135,7 @@ export function PlayoffBracketStage({
                 {column.week != null && (
                   <>
                     {" · "}
-                    <span className="font-mono">WK {column.week}</span>
+                    <span>Week <span className="font-mono">{column.week}</span></span>
                   </>
                 )}
               </div>
@@ -191,7 +191,7 @@ export function PlayoffBracketStage({
                 }}
               >
                 <p
-                  className={`text-[8px] font-bold uppercase tracking-[.14em] lg:text-[9.5px] lg:tracking-[.16em] ${
+                  className={`text-caption font-bold ${
                     isToiletBowl ? "text-accent-warm" : "text-accent-gold"
                   }`}
                 >
@@ -199,12 +199,12 @@ export function PlayoffBracketStage({
                     ? TOILET_BOWL_COPY.championKicker
                     : `${seasonYear} Champion`}
                 </p>
-                <p className="font-serif text-[16px] italic leading-[1.15] text-text-primary lg:text-[21px]">
+                <p className="text-body font-semibold leading-tight text-text-primary lg:text-body-lg">
                   <TeamLink slug={stage.champion.franchiseSlug}>
                     {stage.champion.franchiseName}
                   </TeamLink>
                 </p>
-                <p className="text-[9.5px] text-text-tertiary lg:text-[11px]">
+                <p className="text-caption text-text-tertiary">
                   {isToiletBowl ? (
                     <>
                       {totalRosters != null && (
@@ -246,8 +246,8 @@ export function PlayoffBracketStage({
           data-testid={`bracket-placement-lane-${bracketType}`}
           className="pt-4"
         >
-          <p className="text-[9px] font-semibold uppercase tracking-[.14em] text-text-tertiary mb-2 lg:text-[10px] lg:tracking-[.16em]">
-            Placement Games
+          <p className="text-caption font-semibold text-text-tertiary mb-2">
+            Placement games
           </p>
           <div
             className="bracket-lane"

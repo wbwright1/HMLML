@@ -14,9 +14,10 @@ import { getSql } from "./helpers/sql";
 // silent-skip defect (a runtime isBetweenWeeks() guard letting every test
 // self-skip with zero assertions exercised).
 //
-// The distinctive marker is the hero kicker's schedule clause: "... KICKOFF
-// THURSDAY" (the slate's first kickoff day), "KICKOFF TODAY", or "THE SLATE IS
-// SET" when the kickoff is unknown. The first
+// The distinctive marker is the slate meta on the Game of the week label row
+// (the hero lost its kicker in the 2026-11-24 UI/UX pass): "Week 12 · Kickoff
+// Thursday" (the slate's first kickoff day), "Kickoff today", or "The slate is
+// set" when the kickoff is unknown. The first
 // test below asserts it unconditionally, making the state itself a hard claim
 // rather than an implicit one; every other test in the file also asserts
 // unconditionally now.
@@ -36,11 +37,30 @@ function hero(page: Page): Locator {
   return page.locator("main section").first();
 }
 
+/**
+ * Opens every visible "More this week" disclosure row so its content is
+ * rendered (Players to watch on phones, League moves, This week in history).
+ * Returns how many rows it opened.
+ */
+async function openMoreThisWeek(page: Page): Promise<number> {
+  const rows = page.locator('details[data-testid^="more-"]');
+  let opened = 0;
+  for (const row of await rows.all()) {
+    if (!(await row.isVisible())) continue;
+    await row.locator("summary").click();
+    await expect(row).toHaveAttribute("open", "");
+    opened++;
+  }
+  return opened;
+}
+
 test.describe("Between-Weeks Hub (1d)", () => {
   test("T00: the between-weeks slate marker renders", async ({ page }) => {
     await page.goto("/");
-    const kicker = (await page.getByTestId("hero-kicker").innerText()).trim();
-    expect(kicker).toMatch(SLATE_MARKER);
+    const meta = (await page.getByTestId("slate-meta").innerText()).trim();
+    expect(meta).toMatch(SLATE_MARKER);
+    // No kicker stacked above the headline any more.
+    await expect(page.getByTestId("hero-kicker")).toHaveCount(0);
   });
 
   // Blake: "Two days to kickoff." was awful to read. The headline is now a
@@ -69,7 +89,7 @@ test.describe("Between-Weeks Hub (1d)", () => {
     if (rung === "named-rivalry") {
       const name = /^(.+) is (the Game of the Week|back on the slate)\.$/.exec(text)?.[1];
       expect(name, text).toBeTruthy();
-      // The rivalry's name renders on its card too (kicker or slate angle).
+      // The rivalry's name renders on its card too (title or slate angle).
       expect(main.split(name!.toUpperCase()).length - 1).toBeGreaterThanOrEqual(2);
     }
     if (rung === "winless-watch") {
@@ -77,26 +97,46 @@ test.describe("Between-Weeks Hub (1d)", () => {
       expect(m, text).not.toBeNull();
     }
     if (rung === "unbeaten-clash") {
-      const kicker = (await page.getByTestId("gotw-kicker").innerText()).trim();
-      expect(kicker).toMatch(/BATTLE OF UNBEATENS|DIVISION LEAD ON THE LINE|PLAYOFF SPOT|TOP-THREE/);
+      const kicker = (await page.getByTestId("gotw-kicker").getAttribute("data-kicker")) ?? "";
+      expect(kicker).toMatch(/BATTLE OF UNBEATENS|DIVISION LEAD ON THE LINE|PLAYOFF SPOT|TOP-THREE/i);
     }
   });
 
-  test("T01: hero renders the slate kicker and a serif headline", async ({
+  test("T01: hero is an upright serif headline with no kicker above it", async ({
     page,
   }) => {
     await page.goto("/");
 
     const h = hero(page);
-    await expect(h.locator("p.text-kicker").first()).toContainText(
-      /Harambe Memorial League/i
-    );
+    await expect(h.locator(".text-kicker")).toHaveCount(0);
     const h1 = h.locator("h1");
     await expect(h1).toBeVisible();
     expect((await h1.innerText()).trim().length).toBeGreaterThan(0);
-    // Serif italic display family.
-    const fontStyle = await h1.evaluate((el) => getComputedStyle(el).fontStyle);
-    expect(fontStyle).toBe("italic");
+    // Serif display family, upright (italic stays only on the wordmark).
+    const { fontStyle, fontFamily } = await h1.evaluate((el) => {
+      const cs = getComputedStyle(el);
+      return { fontStyle: cs.fontStyle, fontFamily: cs.fontFamily };
+    });
+    expect(fontStyle).toBe("normal");
+    expect(fontFamily).toMatch(/Instrument Serif/i);
+  });
+
+  test("T26: signed out, the hero offers one primary action: Claim your team", async ({
+    page,
+  }) => {
+    await page.context().clearCookies();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    const cta = hero(page).getByTestId("hero-claim-cta");
+    await expect(cta).toBeVisible();
+    await expect(cta).toHaveText(/Claim your team/);
+    await expect(cta).toHaveAttribute("href", "/claim");
+    const box = await cta.boundingBox();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    // The quiet companion goes to last week's box scores.
+    await expect(
+      hero(page).getByRole("link", { name: "Box scores", exact: true })
+    ).toHaveAttribute("href", /^\/seasons\/\d{4}\/week\/\d+$/);
   });
 
   test("T02: Game of the Week feature card is present with both teams", async ({
@@ -104,19 +144,37 @@ test.describe("Between-Weeks Hub (1d)", () => {
   }) => {
     await page.goto("/");
 
-    const gotwLabel = page.getByText("Game of the Week", { exact: true });
+    const gotwLabel = page.getByText("Game of the week", { exact: true });
     await expect(gotwLabel).toBeVisible();
-    // The card carries a serif "vs" between the two teams.
+    // The gold title is upright serif; the card carries a "vs" between the teams.
+    const title = page.getByTestId("gotw-title");
+    await expect(title).toBeVisible();
+    expect(await title.evaluate((el) => getComputedStyle(el).fontStyle)).toBe("normal");
     await expect(page.getByText("vs", { exact: true }).first()).toBeVisible();
   });
 
-  test("T03: the rest of the slate section renders preview cards", async ({
+  test("T03: every rest-of-slate row is one 44px link into The Book", async ({
     page,
   }) => {
     await page.goto("/");
     await expect(
-      page.getByText("The Rest of the Slate", { exact: true })
+      page.getByText("Rest of the slate", { exact: true })
     ).toBeVisible();
+    const rows = page.getByTestId("slate-card");
+    expect(await rows.count()).toBeGreaterThanOrEqual(2);
+    for (const row of await rows.all()) {
+      expect(await row.evaluate((el) => el.tagName)).toBe("A");
+      await expect(row).toHaveAttribute("href", "/book");
+      expect((await row.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      // A ChevronRight icon, not a "→" text arrow.
+      await expect(row.locator("svg")).toHaveCount(1);
+      expect(await row.innerText()).not.toContain("→");
+      // Letters stay Geist: the angle is not set in the serif.
+      const angleFont = await row
+        .getByTestId("slate-angle")
+        .evaluate((el) => getComputedStyle(el).fontFamily);
+      expect(angleFont).not.toMatch(/Instrument Serif/i);
+    }
   });
 
   test("T11: every slate card carries its own angle, never the 0-0 placeholder", async ({
@@ -124,7 +182,7 @@ test.describe("Between-Weeks Hub (1d)", () => {
   }) => {
     await page.goto("/");
     await expect(
-      page.getByText("The Rest of the Slate", { exact: true })
+      page.getByText("Rest of the slate", { exact: true })
     ).toBeVisible();
 
     const angles = (
@@ -157,7 +215,7 @@ test.describe("Between-Weeks Hub (1d)", () => {
     await page.goto("/");
 
     const dek = (await page.getByTestId("hero-dek").innerText()).trim();
-    const kicker = (await page.getByTestId("gotw-kicker").innerText()).trim();
+    const kicker = ((await page.getByTestId("gotw-kicker").getAttribute("data-kicker")) ?? "").trim();
     const blurb = (await page.getByTestId("gotw-blurb").innerText()).trim();
 
     for (const line of [dek, kicker, blurb]) {
@@ -198,11 +256,15 @@ test.describe("Between-Weeks Hub (1d)", () => {
     page,
   }) => {
     await page.goto("/");
-    const kicker = (await page.getByTestId("gotw-kicker").innerText()).trim();
+    // The full "{lead} · {stakes}" string rides on data-kicker (the card shows
+    // the lead as its title and the stakes under it); upper-cased so the
+    // casing-agnostic assertions below read as they always have.
+    const kicker = ((await page.getByTestId("gotw-kicker").getAttribute("data-kicker")) ?? "")
+      .trim()
+      .toUpperCase();
     expect(kicker.length).toBeGreaterThan(0);
 
-    const gotwHeading = page.getByText("Game of the Week", { exact: true });
-    const card = gotwHeading.locator("xpath=following-sibling::*[1]");
+    const card = page.getByTestId("gotw-kicker").locator("xpath=ancestor::div[contains(@class,'card-surface')][1]");
     const records = (await card.locator("span.text-stat").allInnerTexts())
       .map((r) => r.trim())
       .filter((r) => /^\d+-\d+(-\d+)?$/.test(r));
@@ -247,13 +309,12 @@ test.describe("Between-Weeks Hub (1d)", () => {
   }) => {
     await page.goto("/");
     const kickerEl = page.getByTestId("gotw-kicker");
-    const kicker = (await kickerEl.innerText()).trim();
+    const kicker = ((await kickerEl.getAttribute("data-kicker")) ?? "").trim().toUpperCase();
     // Shape either way: exactly "{lead} · {stakes}", both clauses non-empty.
     expect(kicker).toMatch(/^[^·]+\S · \S[^·]+$/);
 
     // The featured pair, read off the card's two team links.
-    const gotwHeading = page.getByText("Game of the Week", { exact: true });
-    const card = gotwHeading.locator("xpath=following-sibling::*[1]");
+    const card = kickerEl.locator("xpath=ancestor::div[contains(@class,'card-surface')][1]");
     const slugs = (await card.locator('a[href^="/teams/"]').evaluateAll((els) =>
       els.map((el) => (el.getAttribute("href") ?? "").split("/")[2])
     )).filter(Boolean);
@@ -283,7 +344,7 @@ test.describe("Between-Weeks Hub (1d)", () => {
       // The featured game IS a named rivalry (at weight 12 that takes a real
       // game, not just a name: the 2-0 v 0-2 Custody Battle stays a slate card
       // in week 3): its name leads the kicker, the second
-      // clause is a real fact, and the tagline sits under it in the serif.
+      // clause is a real fact, and the tagline sits under it in upright Geist.
       expect(attr).toBe(featured.name);
       expect(kicker.startsWith(`${featured.name.toUpperCase()} · `)).toBe(true);
       const second = kicker.slice(featured.name.length + 3);
@@ -293,7 +354,7 @@ test.describe("Between-Weeks Hub (1d)", () => {
       if (featured.tagline) {
         await expect(tagline).toHaveText(featured.tagline);
         const fontStyle = await tagline.evaluate((el) => getComputedStyle(el).fontStyle);
-        expect(fontStyle).toBe("italic");
+        expect(fontStyle).toBe("normal");
       } else {
         await expect(tagline).toHaveCount(0);
       }
@@ -312,11 +373,11 @@ test.describe("Between-Weeks Hub (1d)", () => {
     // A named rivalry that did NOT take the top card still carries its name
     // and tagline on its slate card (the builder's rivalry rung always beats
     // a stored generated angle for a named pair).
+    // Slate rows are one link into The Book (no nested team links), so the
+    // pair rides on data-team-slugs.
     for (const card of await page.getByTestId("slate-card").all()) {
       const cardSlugs = new Set(
-        (await card.locator('a[href^="/teams/"]').evaluateAll((els) =>
-          els.map((el) => (el.getAttribute("href") ?? "").split("/")[2])
-        )).filter(Boolean)
+        ((await card.getAttribute("data-team-slugs")) ?? "").split(" ").filter(Boolean)
       );
       const named = rows.find((r) => cardSlugs.has(r.a_slug) && cardSlugs.has(r.b_slug));
       if (!named) continue;
@@ -355,15 +416,16 @@ test.describe("Between-Weeks Hub (1d)", () => {
     page,
   }) => {
     await page.goto("/");
+    await openMoreThisWeek(page);
     const main = page.locator("main");
     const text = await main.innerText();
     expect(text).not.toContain("Standouts");
     // Only assert the heading exists when the rail actually has picks; an
     // empty result renders nothing, which is also correct behavior.
-    const hasPlayersToWatch = /Players to Watch/i.test(text);
+    const hasPlayersToWatch = /Players to watch/i.test(text);
     if (hasPlayersToWatch) {
       await expect(
-        page.getByText(/Players to Watch/i).first()
+        page.getByText(/Players to watch/i).filter({ visible: true }).first()
       ).toBeVisible();
       // Every pick carries a story kicker: the headliner, or one of the
       // archetype slots (see lib/queries/players-to-watch.ts).
@@ -379,16 +441,15 @@ test.describe("Between-Weeks Hub (1d)", () => {
     page,
   }) => {
     await page.goto("/");
+    await openMoreThisWeek(page);
     const text = await page.locator("main").innerText();
     // The Trending module is gone; the hub makes no live Sleeper call.
     expect(text).not.toContain("Most-added player in the league");
     // League Moves and the history card are both optional (empty renders
     // nothing), so assert their shape only when they are on the page.
-    if (/League Moves/i.test(text)) {
-      expect(text).toMatch(/\bADD\b|\bDROP\b|\bTRADE\b/);
-      const card = page
-        .locator("section", { has: page.getByText("League Moves", { exact: true }) })
-        .first();
+    if (await page.getByTestId("more-league-moves").count()) {
+      expect(text).toMatch(/\bAdd\b|\bDrop\b|\bTrade\b/);
+      const card = page.getByTestId("more-league-moves");
       // The player is the focal, clickable identity: at least one row links
       // through to its player page.
       await expect(
@@ -397,7 +458,11 @@ test.describe("Between-Weeks Hub (1d)", () => {
       // Every row draws either a real headshot from the Sleeper CDN or the
       // initials monogram fallback, never a bare franchise crest as the lead.
       const hasHeadshot = await card
-        .locator('img[src*="sleepercdn.com/content/nfl/players"]')
+        // next/image proxies the CDN, so the src is URL-encoded
+        // (/_next/image?url=https%3A%2F%2Fsleepercdn.com%2Fcontent...).
+        .locator(
+          'img[src*="sleepercdn.com/content/nfl/players"], img[src*="sleepercdn.com%2Fcontent%2Fnfl%2Fplayers"]'
+        )
         .first()
         .isVisible()
         .catch(() => false);
@@ -408,13 +473,14 @@ test.describe("Between-Weeks Hub (1d)", () => {
         .catch(() => false);
       expect(hasHeadshot || hasMonogram).toBe(true);
       // The fantasy franchise stays visible as secondary attribution: the
-      // kind label ("ADD"/"DROP"/"TRADE") sits on a row with the franchise
-      // name trailing it, so that row's text is more than the kind alone.
-      const kindSpan = card.getByText(/^(ADD|DROP|TRADE)$/).first();
-      const kindRowText = await kindSpan.locator("xpath=..").innerText();
+      // kind label ("Add"/"Drop"/"Trade", sentence case) sits on a row with
+      // the franchise name trailing it, so that row's text is more than the
+      // kind alone.
+      await expect(card.getByTestId("move-kind").first()).toHaveText(/^(Add|Drop|Trade)$/);
+      const kindRowText = await card.getByTestId("move-kind-row").first().innerText();
       expect(kindRowText.trim().length).toBeGreaterThan(4);
     }
-    if (/This Week in HMLML History/i.test(text)) {
+    if (await page.getByTestId("more-week-history").count()) {
       // Case-insensitive for the same CSS `uppercase` reason as T06.
       expect(text).toMatch(/High Water|Beatdown|Nail-Biter/i);
     }
@@ -436,9 +502,11 @@ test.describe("Between-Weeks Hub (1d)", () => {
     // number even at week 1): both teams reading 0-0 there means the league
     // has played zero games, so no "1st in Division" claim should exist
     // anywhere in <main>.
-    const gotwHeading = page.getByText("Game of the Week", { exact: true });
+    const gotwHeading = page.getByText("Game of the week", { exact: true });
     await expect(gotwHeading).toBeVisible();
-    const gotwCard = gotwHeading.locator("xpath=following-sibling::*[1]");
+    const gotwCard = page
+      .getByTestId("gotw-kicker")
+      .locator("xpath=ancestor::div[contains(@class,'card-surface')][1]");
     const recordSpans = gotwCard.locator("span.text-stat");
     const records = await recordSpans.allInnerTexts();
     const seasonRecords = records.filter((r) => /^\d+-\d+$/.test(r.trim()));
@@ -459,19 +527,22 @@ test.describe("Between-Weeks Hub (1d)", () => {
     ]) {
       await page.setViewportSize(viewport);
       await page.goto("/");
+      await openMoreThisWeek(page);
       const main = page.locator("main");
       const text = await main.innerText();
 
-      // Players to Watch: story-detail and projection paragraphs.
-      if (/Players to Watch/i.test(text)) {
+      // Players to watch: story-detail and projection paragraphs. Desktop
+      // shows them in the rail, phones inside the opened "More this week" row;
+      // only the copy actually on screen is measured.
+      if (/Players to watch/i.test(text)) {
         // data-testid, not literal Tailwind class strings: the class-based
         // selector this used to carry went stale the moment the spacing pass
         // changed a clamp, and the `for i < count` loop below passes silently
         // at count 0, so the assertion vanished without failing. The explicit
         // count check is the guard against that recurring.
-        const storyParagraphs = page.locator(
-          '[data-testid="ptw-story"], [data-testid="ptw-projected"]'
-        );
+        const storyParagraphs = page
+          .locator('[data-testid="ptw-story"], [data-testid="ptw-projected"]')
+          .filter({ visible: true });
         const count = await storyParagraphs.count();
         expect(count).toBeGreaterThan(0);
         for (let i = 0; i < count; i++) {
@@ -492,9 +563,11 @@ test.describe("Between-Weeks Hub (1d)", () => {
         }
       }
 
-      // This Week in HMLML History: the claim paragraph.
-      if (/This Week in HMLML History/i.test(text)) {
-        const claimParagraphs = page.locator('[data-testid="week-history-claim"]');
+      // This week in history: the claim paragraph.
+      if (await page.getByTestId("more-week-history").count()) {
+        const claimParagraphs = page
+          .locator('[data-testid="week-history-claim"]')
+          .filter({ visible: true });
         const count = await claimParagraphs.count();
         expect(count).toBeGreaterThan(0);
         for (let i = 0; i < count; i++) {
@@ -517,31 +590,38 @@ test.describe("Between-Weeks Hub (1d)", () => {
     }
   });
 
-  test("T05: mobile keeps the top of the funnel and hides the rail", async ({
+  test("T05: mobile keeps the top of the funnel and folds the secondary modules", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/");
 
-    // Hero + Game of the Week visible on mobile.
+    // Hero + Game of the week visible on mobile.
     await expect(hero(page).locator("h1")).toBeVisible();
-    await expect(page.getByText("Game of the Week", { exact: true })).toBeVisible();
+    await expect(page.getByText("Game of the week", { exact: true })).toBeVisible();
 
-    // Right-rail modules (League Moves, This Week in HMLML History) are
-    // desktop-only. Left On The Bench is too, EXCEPT while the post-week recap
-    // leads the hub: #300 moved it into the recap in the main column so phones
-    // see it, and there it must be visible.
-    const recapLeads = (await page.getByTestId("week-recap").count()) > 0;
-    const bench = page.getByText("Left On The Bench", { exact: true });
-    if (recapLeads) {
-      await expect(page.getByTestId("week-recap").getByText("Left On The Bench", { exact: true })).toBeVisible();
-    } else {
-      await expect(bench).toBeHidden();
+    // The desktop rail is hidden; its bench fallback never shows on a phone.
+    await expect(page.getByText("Left on the bench", { exact: true })).toBeHidden();
+
+    // Players to watch, League moves and This week in history are NOT
+    // rendered inline: each is a closed "More this week" row whose content
+    // shows only once opened.
+    const more = page.locator('details[data-testid^="more-"]');
+    const n = await more.count();
+    if (n > 0) {
+      await expect(page.getByText("More this week", { exact: true })).toBeVisible();
+      for (const row of await more.all()) {
+        expect(await row.getAttribute("open")).toBeNull();
+        const summary = row.locator("summary");
+        expect((await summary.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      }
+      await expect(page.getByTestId("week-history-claim").first()).toBeHidden();
+      await openMoreThisWeek(page);
+      const history = page.getByTestId("more-week-history");
+      if (await history.count()) {
+        await expect(history.getByTestId("week-history-claim").first()).toBeVisible();
+      }
     }
-    await expect(page.getByText("League Moves", { exact: true })).toBeHidden();
-    await expect(
-      page.getByText("This Week in HMLML History", { exact: true })
-    ).toBeHidden();
 
     // Page does not scroll horizontally.
     const overflow = await page.evaluate(
@@ -581,9 +661,9 @@ test.describe("Between-Weeks Hub (1d)", () => {
     const main = page.locator("main");
     const text = await main.innerText();
 
-    expect(text).toMatch(/Power Rankings|Preseason Power/i);
+    expect(text).toMatch(/Power rankings|Preseason power/i);
 
-    const isPreseason = /Preseason Power/i.test(text);
+    const isPreseason = /Preseason power/i.test(text);
     if (isPreseason) {
       expect(text).toMatch(/Real rankings land after Week 1/i);
     } else {
@@ -603,7 +683,7 @@ test.describe("Between-Weeks Hub (1d)", () => {
     await link.click();
 
     await page.waitForURL(/\/records\/power-rankings/);
-    await expect(page.getByText("Power Rankings.", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: /Power rankings/i })).toBeVisible();
   });
 
   test("T19: every rank number renders in the mono numeral face", async ({
@@ -623,60 +703,22 @@ test.describe("Between-Weeks Hub (1d)", () => {
     expect(fontFamily).toMatch(/JetBrains/i);
   });
 
-  test("T20: sibling slate cards in a row share a height and a footer baseline", async ({
+  test("T20: slate rows print each side's Book line in mono, numbers only", async ({
     page,
   }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/");
-
-    const cards = page.locator('[data-testid="slate-card"]');
-    const count = await cards.count();
-    expect(count).toBeGreaterThan(1);
-
-    // Group by rounded y: the slate is a 2-up grid, so each y is one row.
-    const rows = new Map<number, { height: number; footerY: number | null }[]>();
-    for (let i = 0; i < count; i++) {
-      const card = cards.nth(i);
-      const box = await card.boundingBox();
-      expect(box).not.toBeNull();
-      const footer = card.locator('[data-testid="slate-footer"]');
-      const footerBox = (await footer.count()) ? await footer.boundingBox() : null;
-      const key = Math.round(box!.y);
-      const bucket = rows.get(key) ?? [];
-      bucket.push({ height: box!.height, footerY: footerBox?.y ?? null });
-      rows.set(key, bucket);
+    const lines = page.getByTestId("slate-line");
+    // Lines are optional data (a week with no priced games prints none), but
+    // every one that renders is a signed spread in the mono face, and the two
+    // sides of a row mirror each other.
+    for (const line of await lines.all()) {
+      await expect(line).toHaveText(/^[+-]?\d+(\.\d)?$/);
+      expect(await line.evaluate((el) => getComputedStyle(el).fontFamily)).toMatch(/JetBrains/i);
     }
-
-    let comparedRows = 0;
-    let comparedFooters = 0;
-    for (const bucket of rows.values()) {
-      if (bucket.length < 2) continue;
-      comparedRows++;
-      const first = bucket[0];
-      for (const card of bucket) {
-        // Content-driven jitter (a two-line angle beside a one-line one) is
-        // exactly what this must catch, so the tolerance is 1px, not "close".
-        expect(Math.abs(card.height - first.height)).toBeLessThanOrEqual(1);
-      }
-
-      // ... and the Book footers sit on one baseline, which is the part
-      // grid stretch alone does not give you (the footer used to float off
-      // the angle, so a shorter card left ragged dead space beneath it).
-      const footerYs = bucket
-        .map((c) => c.footerY)
-        .filter((y): y is number => y !== null);
-      if (footerYs.length > 1) {
-        comparedFooters++;
-        for (const y of footerYs) {
-          expect(Math.abs(y - footerYs[0])).toBeLessThanOrEqual(1);
-        }
-      }
+    for (const row of await page.getByTestId("slate-card").all()) {
+      const pair = (await row.getByTestId("slate-line").allInnerTexts()).map(Number);
+      if (pair.length === 2) expect(pair[0] + pair[1]).toBeCloseTo(0, 5);
     }
-    expect(comparedRows).toBeGreaterThan(0);
-    // Same guard as the count check in T10: without it, a slate that stopped
-    // rendering Book footers would take the `length > 1` branch zero times and
-    // this test would report green having compared nothing.
-    expect(comparedFooters).toBeGreaterThan(0);
   });
 
   test("T21: every rail card uses the one row rhythm", async ({ page }) => {

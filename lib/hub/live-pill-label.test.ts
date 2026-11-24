@@ -42,7 +42,7 @@ describe("formatPreseasonKickoffLabel", () => {
   it("formats the preseason countdown label", () => {
     const now = new Date("2026-08-01T00:00:00Z");
     const target = new Date("2026-09-04T00:00:00Z");
-    expect(formatPreseasonKickoffLabel(target, now)).toBe("PRESEASON · WK 1 IN 34D");
+    expect(formatPreseasonKickoffLabel(target, now)).toBe("Preseason · Wk 1 in 34d");
   });
 });
 
@@ -51,11 +51,11 @@ describe("formatBetweenWeeksKickoffLabel", () => {
     // A Chicago start-of-day anchor for Thursday 2026-09-10 (05:00 UTC = CDT
     // midnight). The label names the weekday only; we have no kickoff clock time.
     const target = new Date("2026-09-10T05:00:00Z");
-    expect(formatBetweenWeeksKickoffLabel(10, target)).toBe("WK 10 · KICKOFF THU");
+    expect(formatBetweenWeeksKickoffLabel(10, target)).toBe("Wk 10 · Kickoff Thu");
   });
 
   it("includes the week number", () => {
     const target = new Date("2026-09-10T05:00:00Z");
-    expect(formatBetweenWeeksKickoffLabel(3, target)).toContain("WK 3");
+    expect(formatBetweenWeeksKickoffLabel(3, target)).toContain("Wk 3");
   });
 });

@@ -10,6 +10,7 @@ interface LivePillIslandProps {
   /** Server-resolved seasonal/live state. Rendered as-is on first paint. */
   initial: LivePillProps;
   format?: "full" | "compact";
+  className?: string;
 }
 
 /**
@@ -18,7 +19,7 @@ interface LivePillIslandProps {
  * The seasonal state is resolved on the server and rendered immediately (no
  * layout shift, and it is all a crawler or a no-JS visitor ever needs). The
  * problem is only the LIVE variant: with pages cached for an hour, a baked-in
- * "6 GAMES LIVE" would keep showing a stale count, or keep showing LIVE long
+ * "6 games live" would keep showing a stale count, or keep showing LIVE long
  * after the games ended.
  *
  * So this refreshes from /api/live-scores, but only when it could possibly
@@ -26,7 +27,7 @@ interface LivePillIslandProps {
  * claims LIVE (which is exactly the case that needs clearing). Outside those,
  * it never issues a request, so an ordinary offseason page view stays free.
  */
-export function LivePillIsland({ initial, format }: LivePillIslandProps) {
+export function LivePillIsland({ initial, format, className }: LivePillIslandProps) {
   const [pill, setPill] = useState<LivePillProps>(initial);
 
   useEffect(() => {
@@ -73,5 +74,5 @@ export function LivePillIsland({ initial, format }: LivePillIslandProps) {
     };
   }, [initial]);
 
-  return <LivePill {...pill} format={format} />;
+  return <LivePill {...pill} format={format} className={className} />;
 }

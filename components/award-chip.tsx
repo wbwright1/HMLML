@@ -18,7 +18,7 @@ export function AwardChip({ awardType, seasonYear }: AwardChipData) {
   return (
     <span
       title={title}
-      className="inline-flex items-center rounded-full bg-accent-gold-light px-1.5 py-0.5 font-mono text-[10px] font-semibold uppercase leading-none tracking-[0.04em] text-accent-gold"
+      className="inline-flex items-center rounded-full bg-accent-gold-light px-1.5 py-0.5 font-mono text-caption font-semibold leading-none text-accent-gold"
     >
       {label}
     </span>

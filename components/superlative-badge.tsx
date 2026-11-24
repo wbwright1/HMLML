@@ -19,7 +19,7 @@ export function SuperlativeBadge({
 
   return (
     <span
-      className={`inline-block text-caption uppercase tracking-wide font-medium rounded-full px-2 py-0.5 ${classes}`}
+      className={`inline-block text-caption font-semibold rounded-full px-2 py-0.5 ${classes}`}
     >
       {text}
     </span>

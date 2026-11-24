@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { SuperlativeBadge } from "@/components/superlative-badge";
 import { FranchiseLogo } from "@/components/franchise-logo";
 
@@ -37,7 +38,7 @@ export function SeasonTimelineCard({
   return (
     <Link
       href={`/seasons/${seasonYear}`}
-      className="group card-surface block p-6 transition-colors duration-150 hover:border-border-strong"
+      className="group card-surface block p-6 transition-[border-color,scale] duration-150 hover:border-border-strong active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
     >
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         {championSlug && championName && (
@@ -52,18 +53,18 @@ export function SeasonTimelineCard({
 
         <div className="flex-1 space-y-1">
           <div className="flex items-center gap-3">
-            <h3 className="font-serif italic text-2xl tracking-tight text-text-primary group-hover:text-accent-gold transition-colors">
+            <h3 className="font-mono text-2xl font-bold tabular-nums text-text-primary group-hover:text-accent-gold transition-colors">
               {seasonYear}
             </h3>
-            <span className="font-mono text-body-sm tabular-nums text-text-tertiary">
-              {teamCount} teams
+            <span className="text-body-sm text-text-tertiary">
+              <span className="font-mono tabular-nums">{teamCount}</span> teams
             </span>
             {isLegacy && (
-              <SuperlativeBadge text="Legacy Era" variant="neutral" />
+              <SuperlativeBadge text="Legacy era" variant="neutral" />
             )}
             {status && status !== "complete" && (
               <SuperlativeBadge
-                text={badgeLabel ?? (status === "in_season" ? "In Season" : "Pre-Draft")}
+                text={badgeLabel ?? (status === "in_season" ? "In season" : "Pre-draft")}
                 variant="green"
               />
             )}
@@ -75,7 +76,6 @@ export function SeasonTimelineCard({
               <span className="text-body-sm font-bold text-accent-gold">
                 {championName}
               </span>
-              <SuperlativeBadge text="CHAMP" variant="gold" />
             </div>
           )}
 
@@ -95,12 +95,11 @@ export function SeasonTimelineCard({
           )}
         </div>
 
-        <span
-          className="text-text-tertiary group-hover:text-text-primary transition-colors shrink-0"
-          aria-hidden="true"
-        >
-          &rarr;
-        </span>
+        <ChevronRight
+          className="hidden size-5 shrink-0 text-text-tertiary transition-colors group-hover:text-text-primary sm:block"
+          strokeWidth={2}
+          aria-hidden
+        />
       </div>
     </Link>
   );

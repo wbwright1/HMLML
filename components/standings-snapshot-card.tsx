@@ -103,7 +103,7 @@ function PlayoffLine() {
       aria-hidden="true"
     >
       <span className="h-px flex-1 bg-accent-gold/30" />
-      <span className="font-serif italic text-sm leading-none text-accent-gold/80">
+      <span className="text-caption leading-none text-accent-gold">
         the playoff line
       </span>
       <span className="h-px flex-1 bg-accent-gold/30" />
@@ -160,13 +160,13 @@ function LadderRow({
       <span className={`text-body flex-1 min-w-0 truncate ${nameColor}`}>
         {entry.franchiseName}
         {entry.divisionName && (
-          <span className="hidden lg:inline text-caption text-text-tertiary normal-case tracking-normal ml-2">
+          <span className="hidden lg:inline text-caption text-text-tertiary ml-2">
             {entry.divisionName}
           </span>
         )}
       </span>
       {isDoormat && (
-        <span className="hidden sm:inline text-body-sm font-serif italic text-accent-warm shrink-0">
+        <span className="hidden sm:inline text-body-sm text-accent-warm shrink-0">
           {SNARKY_LABELS.LEAGUE_DOORMAT.displayText.toLowerCase()}
         </span>
       )}

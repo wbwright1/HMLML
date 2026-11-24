@@ -42,17 +42,14 @@ function ClaimForm({ errorKind }: { errorKind?: string }) {
   const hasError = Boolean(errorMessage);
   return (
     <div className="card-surface card-glows p-8">
-      <p className="text-kicker">Take the wheel</p>
-      <h1 className="text-h2 font-serif italic text-text-primary mt-2">
-        Claim your team.
-      </h1>
+      <h1 className="text-h2 text-text-primary">Claim your team</h1>
       <p className="text-body-sm text-text-secondary mt-3">
         The commish handed you a code. Punch it in and the franchise is yours:
         your crest, your feed, your receipts.
       </p>
 
       <form action={claimAction} className="mt-6 space-y-3">
-        <label htmlFor="code" className="text-caption text-text-tertiary block">
+        <label htmlFor="code" className="text-kicker block">
           Claim code
         </label>
         <input
@@ -66,7 +63,7 @@ function ClaimForm({ errorKind }: { errorKind?: string }) {
           placeholder="ABCD-EFGH-JKMN"
           aria-invalid={hasError || undefined}
           aria-describedby={hasError ? "code-error" : undefined}
-          className="h-11 w-full rounded-[10px] border border-border bg-surface px-3 font-mono text-base uppercase tracking-[0.12em] text-text-primary placeholder:text-text-muted placeholder:tracking-[0.12em] outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20"
+          className="h-12 w-full rounded-[10px] border border-border-control bg-transparent px-3 text-body-lg font-medium uppercase tabular-nums tracking-[0.12em] text-text-primary placeholder:text-text-tertiary placeholder:tracking-[0.12em] outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas aria-invalid:border-accent-warm"
         />
         {hasError && (
           <p id="code-error" className="text-body-sm text-accent-warm">

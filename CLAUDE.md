@@ -11,7 +11,7 @@ The double "Memorial League" is intentional. Use "HMLML" in code, nav branding, 
 - Tailwind CSS v4; shadcn/ui primitives copied into `components/ui/`
 - Vercel hosting (hobby tier), Vercel crons
 - Playwright for E2E, Vitest for unit and DB tests
-- Fonts via next/font: Instrument Serif (italic display), Geist (UI/body), JetBrains Mono (every numeral)
+- Fonts via next/font: Instrument Serif (upright display; italic only for the wordmark), Geist (UI/body), JetBrains Mono (numerals only)
 
 ## Commands
 - `npm run dev`, `npm run build`, `npm run lint` (ESLint 9 flat config `eslint.config.mjs`; `next lint` no longer exists; warnings do not fail it, errors do; `docs/**` is excluded)
@@ -84,7 +84,9 @@ Full reference: `docs/agent/design-system.md`. Tokens live in `app/globals.css`.
 - No red/purple pairings anywhere (a league member has red/purple color blindness). Negative is warm rust `--accent-warm`, never red; positive is sage green.
 - Never convey information by color alone: every win/loss/up/down/live signal carries a W/L letter, a number beside the arrow, or a "LIVE" label.
 - Body text meets WCAG AA 4.5:1. `--text-muted` (~3.2:1) is decorative, disabled, or 24px+ only, never body copy.
-- Every numeral (scores, records, stats, ranks) is JetBrains Mono tabular; the only exception is a numeral inside a serif display sentence.
+- Every numeral (scores, records, stats, ranks) is JetBrains Mono tabular, and mono is for numerals only; the only exception is a numeral inside a serif display sentence.
+- Serif titles are upright (italic only on the wordmark); 12px is the type floor; labels are sentence case, one per module; page heads are a title without a period plus one intro line.
+- Tap targets are 44px minimum; buttons come from `buttonVariants` (one gold primary per screen); icons are lucide at stroke 2 and only where they carry meaning.
 - Every franchise identity renders through `FranchiseLogo` (`components/franchise-logo.tsx`): never hand-roll an initials chip, never derive codes with `.slice()`, and never put it inside a `<p>` (it renders a `div` and breaks hydration).
 - Snarky labels come from `lib/content.ts`, not hardcoded strings. Errors read calm ("We're showing the last available data"), never "Oops!"
 - The nav stays at five items [Hub, Teams, Records, Drafts, The Book]; The Book took the Players slot. Do not add a pill without removing one.

@@ -1,64 +1,79 @@
-import { TeamFlag, type FlagTeam } from "@/components/hub/team-flag";
-import { BookLineFooterRow, type BookLineFooter } from "@/components/book/line-footer";
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
+import { FranchiseLogo } from "@/components/franchise-logo";
+import { HUB_ROW_LINK } from "@/components/hub/rail-card";
+import { MonoNums } from "@/components/hub/mono-nums";
+import type { FlagTeam } from "@/components/hub/team-flag";
+
+export interface SlateSide extends FlagTeam {
+  /** This side's spread as The Book prices it ("-20.5", "+20.5"); null when
+   * the game has no priced line (genuinely optional data). */
+  line: string | null;
+}
 
 interface SlateCardProps {
-  teamA: FlagTeam;
-  teamB: FlagTeam;
-  /** All-time H2H record from team A's perspective, e.g. "6-0". */
-  h2hRecord: string;
-  /** Serif one-line angle for the matchup. */
+  teamA: SlateSide;
+  teamB: SlateSide;
+  /** One-line angle for the matchup (series, last meeting, a projected star). */
   angle: string;
-  /** The Book's line footer, from book_lines. Omitted entirely when the game
-   * has no priced line (genuinely optional data). Every slate card at this
-   * stage is pre-kickoff, so this always carries the dog-payout line. */
-  bookFooter?: BookLineFooter;
 }
 
 /**
- * One preview card in the between-weeks hub's "The Rest of the Slate" grid:
- * bold "TeamA vs TeamB", the all-time H2H record top-right (mono), and a serif
- * one-line angle below. Server component.
+ * One compact row in the between-weeks hub's "Rest of the slate" list: both
+ * teams with their Book line, the angle under them, and a ChevronRight. The
+ * WHOLE row is one link into The Book (Fitts: the old cards' only way in was
+ * a small "Pick" text link at the far right). Team names are therefore plain
+ * text here, not TeamLinks: a link cannot nest inside a link. Letters are
+ * Geist and every numeral is mono. Server component.
  */
-export function SlateCard({ teamA, teamB, h2hRecord, angle, bookFooter }: SlateCardProps) {
+export function SlateCard({ teamA, teamB, angle }: SlateCardProps) {
   return (
-    // flex column so the Book footer can be pushed to the real bottom: grid
-    // children already stretch to equal height, so without it a shorter card's
-    // footer floats mid-card and the row's footers never share a baseline.
-    <div data-testid="slate-card" className="card-surface flex h-full flex-col p-4">
-      <div className="flex items-start justify-between gap-3">
-        {/* A div, not a <p>: TeamFlag contains FranchiseLogo's root div, and a
-            div inside a <p> is invalid markup the parser closes early. */}
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-body font-semibold text-text-primary">
-          <TeamFlag team={teamA} />
-          <span className="font-normal text-text-tertiary">vs</span>
-          <TeamFlag team={teamB} />
-        </div>
-        <span className="text-stat tabular-nums text-body-sm text-text-tertiary shrink-0">
-          {h2hRecord}
+    <Link
+      href="/book"
+      data-testid="slate-card"
+      data-team-slugs={`${teamA.slug} ${teamB.slug}`}
+      className={`${HUB_ROW_LINK} items-start`}
+    >
+      <span className="min-w-0 flex-1 space-y-1.5">
+        <SideLine team={teamA} />
+        <SideLine team={teamB} />
+        <span
+          data-testid="slate-angle"
+          className="block pt-0.5 text-body-sm text-text-secondary"
+        >
+          <MonoNums text={angle} />
         </span>
-      </div>
-      {/* min-h reserves two lines so a one-line angle does not leave the card
-          hollow, but the angle is NOT clamped: at 390px a one-liner runs to
-          three lines, and clamping it dropped real copy off the end of the
-          sentence. Equal heights come from the grid stretch plus the mt-auto
-          footer below, neither of which needs the text bounded. */}
-      <p
-        data-testid="slate-angle"
-        className="mt-2 min-h-[2lh] font-serif italic text-body-sm text-text-tertiary"
-      >
-        {angle}
-      </p>
+      </span>
+      <ChevronRight
+        aria-hidden="true"
+        strokeWidth={2}
+        className="mt-0.5 size-4 shrink-0 self-center text-text-tertiary"
+      />
+    </Link>
+  );
+}
 
-      {bookFooter && (
-        // mt-auto pins the footer to the bottom of the stretched card; the
-        // inner pt-4 keeps the 16px gap above the rule that mt-auto alone
-        // (which collapses to zero on the tallest card) would not.
-        <div className="mt-auto pt-4">
-          <div data-testid="slate-footer" className="border-t border-divider pt-4">
-            <BookLineFooterRow footer={bookFooter} />
-          </div>
-        </div>
+function SideLine({ team }: { team: SlateSide }) {
+  return (
+    <span className="flex items-center gap-2 text-body-sm font-semibold text-text-primary">
+      <FranchiseLogo
+        slug={team.slug}
+        name={team.name}
+        abbreviation={team.abbreviation ?? undefined}
+        brandingColor={team.brandingColor ?? undefined}
+        avatarUrl={team.avatarUrl ?? undefined}
+        size={20}
+        decorative
+      />
+      <span className="min-w-0 truncate">{team.name}</span>
+      {team.line && (
+        <span
+          data-testid="slate-line"
+          className="ml-auto shrink-0 font-mono tabular-nums font-normal text-text-secondary"
+        >
+          {team.line}
+        </span>
       )}
-    </div>
+    </span>
   );
 }

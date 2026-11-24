@@ -68,7 +68,7 @@ function TrophyRow({
     >
       <span className="w-9 shrink-0 font-mono text-body-sm font-bold tabular-nums text-accent-gold">
         {String(seasonYear).slice(-2)}
-        <span className="text-[10px] text-text-tertiary">&rsquo;</span>
+        <span className="text-caption text-text-tertiary">&rsquo;</span>
       </span>
       <div className="min-w-0 flex-1">
         {/* ONE link over headshot and name, not two to the same place. */}
@@ -87,7 +87,7 @@ function TrophyRow({
               {playerName}
             </span>
             {repeatCount > 1 && (
-              <span className="inline-flex shrink-0 items-center rounded-full bg-accent-gold-light px-1.5 py-0.5 font-mono text-[10px] font-semibold leading-none text-accent-gold">
+              <span className="inline-flex shrink-0 items-center rounded-full bg-accent-gold-light px-1.5 py-0.5 font-mono text-caption font-semibold leading-none text-accent-gold">
                 {repeatCount}x
               </span>
             )}
@@ -100,7 +100,7 @@ function TrophyRow({
           {franchise ? (
             <FranchiseCrestChip franchise={franchise} />
           ) : (
-            <span className="text-caption text-text-muted normal-case tracking-normal">
+            <span className="text-caption text-text-tertiary">
               Franchise unknown
             </span>
           )}
@@ -202,7 +202,7 @@ export async function TrophyCase() {
   return (
     <div data-testid="trophy-case" className="space-y-3">
       <div className="pb-1">
-        <p className="text-kicker text-accent-gold mb-1.5">Yearly Hardware</p>
+        <p className="text-kicker text-accent-gold mb-1.5">Yearly hardware</p>
         <h3 className="text-h3 text-text-primary">The Trophy Case</h3>
         <p className="text-body-sm text-text-tertiary mt-1">
           Every MVP, Finals MVP, Rookie of the Year, and waiver heist, and the
@@ -211,7 +211,7 @@ export async function TrophyCase() {
       </div>
 
       <p className="lg:hidden text-caption text-text-tertiary mb-2">
-        Swipe for all {totalGroups} trophies &rarr;
+        Swipe for all <span className="font-mono tabular-nums">{totalGroups}</span> trophies
       </p>
 
       <div className="-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2 no-scrollbar md:-mx-6 md:px-6 lg:mx-0 lg:grid lg:grid-cols-2 lg:overflow-visible lg:px-0 lg:pb-0">

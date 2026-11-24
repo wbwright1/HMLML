@@ -55,9 +55,8 @@ export default async function CommishPage({
   return (
     <div className="space-y-12 py-8">
       <header className="space-y-2">
-        <p className="text-kicker">Commish console</p>
-        <h1 className="text-h1 font-serif italic text-text-primary">
-          The keys to the kingdom.
+        <h1 className="text-h1 text-text-primary">
+          The keys to the kingdom
         </h1>
         <p className="text-body-sm text-text-secondary">
           Hand out claim codes, name the grudges, and keep the smack feed
@@ -209,7 +208,7 @@ function ModerationSection({ posts }: { posts: PostRow[] }) {
                   )}
                 </div>
                 <p className="mt-1 text-body-sm text-text-secondary">{p.body}</p>
-                <p className="mt-1 text-caption text-text-muted truncate">
+                <p className="mt-1 text-caption text-text-tertiary truncate">
                   {p.memberDisplayName}
                 </p>
               </div>
@@ -244,7 +243,7 @@ function ModerationSection({ posts }: { posts: PostRow[] }) {
 type FranchiseOption = { id: string; name: string };
 
 const FIELD_CLASS =
-  "w-full min-w-0 rounded-[10px] border border-border bg-surface px-2.5 py-1.5 text-body-sm text-text-primary outline-none transition-colors placeholder:text-text-tertiary focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+  "min-h-11 w-full min-w-0 rounded-[10px] border border-border-control bg-transparent px-3 py-2 text-body-sm text-text-primary outline-none transition-colors placeholder:text-text-tertiary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas";
 
 function RivalriesSection({
   rivalries,
@@ -327,7 +326,7 @@ function RivalryRow({
     <div className="card-surface space-y-3 p-4" data-rivalry-id={r.id}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0 space-y-2">
-          <p className="font-serif text-h3 italic text-text-primary">{r.name}</p>
+          <p className="text-h3 text-text-primary">{r.name}</p>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-body-sm text-text-secondary">
             <RivalrySide franchise={r.franchiseA} />
             <span className="text-caption text-text-tertiary">vs</span>
@@ -344,7 +343,9 @@ function RivalryRow({
           {(r.originYear != null || r.trophyName) && (
             <p className="text-caption text-text-tertiary">
               {r.originYear != null && (
-                <span className="font-mono tabular-nums">Since {r.originYear}</span>
+                <span>
+                  Since <span className="font-mono tabular-nums">{r.originYear}</span>
+                </span>
               )}
               {r.originYear != null && r.trophyName && " · "}
               {r.trophyName && <span>Trophy: {r.trophyName}</span>}
@@ -365,7 +366,7 @@ function RivalryRow({
       </div>
 
       <details className="group rounded-[10px] border border-border">
-        <summary className="cursor-pointer list-none px-3 py-2 text-body-sm text-text-secondary hover:text-text-primary">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center rounded-[10px] px-3 text-body-sm text-text-secondary hover:text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
           Edit {r.name}
         </summary>
         <form

@@ -80,7 +80,7 @@ test.describe("First-paint visibility (Issue #150)", () => {
     await page.goto("/records");
     await page.waitForTimeout(ANIMATION_SETTLE_MS);
 
-    await expect(page.getByText("The Records.")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Records", exact: true })).toBeVisible();
     await assertFirstRevealVisible(page);
   });
 
@@ -147,7 +147,7 @@ test.describe("First-paint visibility (Issue #150)", () => {
     // No animation-settle wait needed: prefers-reduced-motion neutralizes
     // the reveal animation entirely (globals.css sets animation: none), so
     // content should be opaque immediately.
-    await expect(page.getByText("The Records.")).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Records", exact: true })).toBeVisible();
     await assertFirstRevealVisible(page);
 
     await context.close();

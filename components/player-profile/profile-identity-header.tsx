@@ -36,8 +36,8 @@ export function ProfileIdentityHeader({
           id="player-profile-title"
           className={
             variant === "page"
-              ? "text-h1 font-serif italic text-text-primary"
-              : "text-h2 font-serif italic text-text-primary"
+              ? "text-h1 text-text-primary"
+              : "text-h2 text-text-primary"
           }
         >
           {name}
@@ -47,7 +47,7 @@ export function ProfileIdentityHeader({
           <PositionBadge position={identity.position} />
           <span className="inline-flex items-center gap-1.5 text-body-sm text-text-secondary">
             <NflTeamLogo teamAbbrev={identity.nflTeam} size={20} />
-            {identity.nflTeam ?? "Free Agent"}
+            {identity.nflTeam ?? "Free agent"}
           </span>
           {identity.age != null && (
             <span className="text-body-sm text-text-tertiary">
@@ -73,7 +73,7 @@ export function ProfileIdentityHeader({
               />
               <Link
                 href={`/teams/${identity.ownerFranchiseSlug}`}
-                className="text-body-sm font-medium text-accent-gold hover:brightness-110"
+                className="inline-flex min-h-11 items-center rounded-[6px] text-body-sm font-medium text-accent-gold hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 {identity.ownerFranchiseName}
               </Link>
@@ -89,7 +89,7 @@ export function ProfileIdentityHeader({
             )}
           </div>
         ) : (
-          <p className="text-body-sm text-text-tertiary italic">Free Agent</p>
+          <p className="text-body-sm text-text-tertiary">Free agent</p>
         )}
       </div>
     </div>

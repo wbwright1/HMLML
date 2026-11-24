@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -325,7 +326,7 @@ export default async function FranchiseDetailPage({
       {/* Hero Section — dark canvas frame; brandingColor survives only as a
           subtle ring on the crest (see FranchiseIdentity's BrandedCrest). */}
       <section className="py-8 md:py-12 space-y-6">
-        <BackLink href="/teams" label="All Teams" />
+        <BackLink href="/teams" label="All teams" />
 
         <ScrollReveal>
           <FranchiseIdentity
@@ -393,25 +394,25 @@ export default async function FranchiseDetailPage({
             <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:justify-center sm:gap-6 pt-2">
               <Link
                 href={`/teams/${franchise.slug}/roster`}
-                className="inline-flex w-full items-center justify-center rounded-lg bg-primary px-4 py-2 text-body-sm font-medium text-primary-foreground transition-colors hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
+                className={buttonVariants({ className: "w-full sm:w-auto" })}
               >
-                View Current Roster
+                Current roster
               </Link>
               <Link
                 href={`/teams/${franchise.slug}/drafts`}
-                className="inline-flex w-full items-center justify-center rounded-lg border border-border bg-surface px-4 py-2 text-body-sm font-medium text-text-primary transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
+                className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
               >
-                Draft History
+                Draft history
               </Link>
               <Link
                 href={`/trades?team=${franchise.slug}`}
-                className="inline-flex w-full items-center justify-center rounded-lg border border-border bg-surface px-4 py-2 text-body-sm font-medium text-text-primary transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
+                className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
               >
-                Trade History
+                Trade history
               </Link>
               <Link
                 href={`/teams/${franchise.slug}/schedule`}
-                className="inline-flex w-full items-center justify-center rounded-lg border border-border bg-surface px-4 py-2 text-body-sm font-medium text-text-primary transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-auto"
+                className={buttonVariants({ variant: "outline", className: "w-full sm:w-auto" })}
               >
                 Schedule
               </Link>
@@ -421,7 +422,7 @@ export default async function FranchiseDetailPage({
       </section>
 
       {/* Season History */}
-      <PageSection label="Year by Year" title="Season History">
+      <PageSection title="Season history">
         {franchise.seasonHistory.length === 0 ? (
           <EmptyState
             icon="calendar"
@@ -435,12 +436,12 @@ export default async function FranchiseDetailPage({
                 <Link
                   href={`/teams/${franchise.slug}/schedule?season=${season.seasonYear}`}
                   aria-label={`${season.seasonYear} schedule`}
-                  className="card-surface block p-5 transition-colors hover:border-border-strong hover:bg-surface-muted"
+                  className="card-surface block p-5 transition-[border-color,background-color,scale] duration-150 hover:border-border-strong hover:bg-surface-muted active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
                 >
                   <div className="flex flex-wrap items-start justify-between gap-4">
                     <div className="space-y-1">
                       <div className="flex items-center gap-3">
-                        <span className="text-h3 text-text-primary">
+                        <span className="text-h3 font-mono tabular-nums text-text-primary">
                           {season.seasonYear}
                         </span>
                         {season.isLegacyEra && (
@@ -497,7 +498,7 @@ export default async function FranchiseDetailPage({
 
                       {/* Division */}
                       <span className="text-text-tertiary whitespace-nowrap normal-case tracking-normal">
-                        {season.divisionName ?? "—"}
+                        {season.divisionName ?? "-"}
                       </span>
 
                       {/* Playoff result */}
@@ -516,7 +517,6 @@ export default async function FranchiseDetailPage({
           case, but it is not announced as "Hardware", because it isn't. */}
       {trophies.length > 0 && (
         <PageSection
-          label={hardwareCount > 0 ? "Hardware" : "Receipts"}
           title={hardwareCount > 0 ? "Trophy Case" : "The Case"}
         >
           <ScrollReveal>
@@ -530,7 +530,7 @@ export default async function FranchiseDetailPage({
 
       {/* Who Owns Who — lifetime H2H vs the rest of the league */}
       {gridRows.length > 0 && (
-        <PageSection label="Lifetime Head-to-Head" title="Who Owns Who">
+        <PageSection title="Who Owns Who">
           <ScrollReveal>
             <FranchiseH2HGrid
               franchiseSlug={franchise.slug}

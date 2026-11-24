@@ -3,7 +3,7 @@ import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import { BackLink } from "@/components/back-link";
 import { EmptyState } from "@/components/empty-state";
 import { ScrollReveal } from "@/components/scroll-reveal";
-import { FranchiseIdentity } from "@/components/franchise-identity";
+import { BrandedCrest } from "@/components/franchise-identity";
 import { TeamLink } from "@/components/team-link";
 import { TradeCard } from "@/components/trade-card";
 import { TradeScrollFocus } from "@/components/trades/trade-scroll-focus";
@@ -53,10 +53,6 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
     ? franchiseList.find((f) => f.slug === team)
     : undefined;
 
-  const selectedSeason = season
-    ? allSeasons.find((s) => String(s.seasonYear) === season)
-    : undefined;
-
   // Fetch ALL trades: grading needs full flip-chain context even on a
   // filtered view. The visible list narrows afterward.
   const [allTrades, verdicts] = await Promise.all([
@@ -65,36 +61,61 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
   ]);
   const grades = await getTradeGrades(allTrades);
   const tradeValues = await getTradeValues(allTrades);
+
+  // Season scope. A bare /trades opens on the current season (the most
+  // recent season with a trade, so an early offseason never opens empty);
+  // ?season=all is "All seasons". A team-scoped (?team=) or deep-linked
+  // (?highlight=) view with no season widens to all seasons, so a franchise's
+  // trade history and flip links to older trades keep landing on their card.
+  const defaultSeasonYear =
+    allTrades.reduce<number | null>(
+      (max, t) => (max == null || t.seasonYear > max ? t.seasonYear : max),
+      null,
+    ) ??
+    allSeasons.reduce<number | null>(
+      (max, s) => (max == null || s.seasonYear > max ? s.seasonYear : max),
+      null,
+    );
+  const requestedSeason = season
+    ? allSeasons.find((s) => String(s.seasonYear) === season)
+    : undefined;
+  const scopedSeasonYear: number | undefined =
+    season === "all"
+      ? undefined
+      : requestedSeason
+        ? requestedSeason.seasonYear
+        : !season && !team && !highlight
+          ? (defaultSeasonYear ?? undefined)
+          : undefined;
+  const seasonFilterValue =
+    scopedSeasonYear != null ? String(scopedSeasonYear) : "all";
+
   const trades = filterTrades(allTrades, {
-    seasonYear: selectedSeason?.seasonYear,
+    seasonYear: scopedSeasonYear,
     franchiseId: selectedFranchise?.id,
   });
 
+  const listLabel = `${scopedSeasonYear ?? "All seasons"} · ${trades.length} ${
+    trades.length === 1 ? "trade" : "trades"
+  }`;
+
   return (
-    <PageSection label="The Receipts" title="Trade History.">
+    <PageSection
+      as="h1"
+      title="Trades"
+      intro="Every trade, graded once the results are in."
+    >
       {selectedFranchise && (
-        <BackLink
-          href={`/teams/${selectedFranchise.slug}`}
-          label={selectedFranchise.name}
-        />
-      )}
-
-      <div className="flex flex-col lg:flex-row lg:items-start gap-6">
-        <p className="text-body-lg text-text-tertiary max-w-prose">
-          Every completed trade in league history, graded in hindsight once the
-          receipts have had time to print: real points scored, flipped picks
-          followed down the chain, no projections, no mercy. FAAB and cash
-          considerations aren&apos;t tracked here, but the grades don&apos;t
-          need them.
-        </p>
-
-        <GradeFormulaNugget />
-      </div>
-
-      {selectedFranchise && (
-        <ScrollReveal>
-          <TeamLink slug={selectedFranchise.slug} className="group block">
-            <FranchiseIdentity
+        <div className="space-y-2">
+          <BackLink
+            href={`/teams/${selectedFranchise.slug}`}
+            label={selectedFranchise.name}
+          />
+          <TeamLink
+            slug={selectedFranchise.slug}
+            className="group flex min-h-11 w-fit items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+          >
+            <BrandedCrest
               franchise={{
                 slug: selectedFranchise.slug,
                 name: selectedFranchise.name,
@@ -102,19 +123,23 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
                 brandingColor: selectedFranchise.brandingColor,
                 avatarUrl: selectedFranchise.avatarUrl,
               }}
-              championships={selectedFranchise.championships}
-              variant="hero"
+              size="md"
             />
+            <h2 className="text-h3 text-text-primary transition-colors group-hover:text-accent-gold">
+              {selectedFranchise.name}
+            </h2>
           </TeamLink>
-        </ScrollReveal>
+        </div>
       )}
 
       <TradeFilters
         seasons={allSeasons.map((s) => ({ seasonYear: s.seasonYear }))}
         teams={franchiseList.map((f) => ({ slug: f.slug, name: f.name }))}
-        selectedSeason={season}
+        selectedSeason={seasonFilterValue}
         selectedTeam={team}
       />
+
+      <GradeFormulaNugget />
 
       {trades.length === 0 ? (
         <EmptyState
@@ -124,10 +149,13 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
         />
       ) : (
         <div className="space-y-4">
+          <h2 className="text-kicker" data-testid="trade-list-label">
+            {listLabel}
+          </h2>
           {trades.map((trade, index) => {
             const isHighlight = String(trade.id) === highlight;
             return (
-              <ScrollReveal key={trade.id} delay={isHighlight ? 0 : index * 40}>
+              <ScrollReveal key={trade.id} delay={isHighlight ? 0 : Math.min(index, 6) * 40}>
                 <TradeCard
                   trade={trade}
                   verdict={verdicts.get(String(trade.id))}
@@ -145,7 +173,7 @@ export default async function TradesPage({ searchParams }: TradesPageProps) {
       )}
 
       {tradeValues.size > 0 && (
-        <p className="text-caption text-text-muted normal-case tracking-normal pt-2">
+        <p className="text-caption text-text-tertiary pt-2">
           Dynasty values via FantasyCalc; historical snapshots via DynastyProcess.
         </p>
       )}

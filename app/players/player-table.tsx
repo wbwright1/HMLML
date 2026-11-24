@@ -11,7 +11,7 @@ import {
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-import { Search, ChevronUp, ChevronDown, ArrowUp } from "lucide-react";
+import { Search, ChevronUp, ChevronDown, TrendingUp } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -25,9 +25,10 @@ import {
 } from "@/components/ui/select";
 import { PlayerHeadshot } from "@/components/player-headshot";
 import { FranchiseLogo } from "@/components/franchise-logo";
-import { EmptyState } from "@/components/empty-state";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { AwardChipRow, type AwardChipData } from "@/components/award-chip";
 import { cn } from "@/lib/utils";
+import { formatAddCount } from "@/lib/format-adds";
 import type { RosteredPlayer } from "@/lib/queries/players";
 
 /**
@@ -76,6 +77,17 @@ export interface PlayerRow extends RosteredPlayer {
 
 const POSITIONS = ["ALL", "QB", "RB", "WR", "TE"] as const;
 type PositionFilter = (typeof POSITIONS)[number];
+
+const POSITION_LABELS: Record<PositionFilter, string> = {
+  ALL: "All",
+  QB: "QB",
+  RB: "RB",
+  WR: "WR",
+  TE: "TE",
+};
+
+/** Rows rendered per page; "Load 50 more" reveals the next page. */
+const PAGE_SIZE = 50;
 
 type SortKey =
   | "name"
@@ -132,12 +144,12 @@ function compareValues(
 }
 
 const INJURY_LABELS: Record<string, string> = {
-  Out: "OUT",
-  Doubtful: "DOUBTFUL",
+  Out: "Out",
+  Doubtful: "Doubtful",
   Questionable: "Q",
   IR: "IR",
   PUP: "PUP",
-  Suspended: "SUSP",
+  Suspended: "Susp",
   NFI: "NFI",
   COV: "COVID",
 };
@@ -162,7 +174,7 @@ function StatusIndicator({
   injuryStatus: string | null;
 }) {
   if (injuryStatus) {
-    const label = INJURY_LABELS[injuryStatus] ?? injuryStatus.toUpperCase();
+    const label = INJURY_LABELS[injuryStatus] ?? injuryStatus;
     const isNegative = NEGATIVE_INJURY_STATUSES.has(injuryStatus);
 
     return (
@@ -190,9 +202,9 @@ function StatusIndicator({
 }
 
 /**
- * Small trending-adds marker: an up-arrow glyph plus the raw add count, so
- * the signal never rests on color alone. Renders a plain dash for players
- * outside the trending list.
+ * Small trending-adds marker: a TrendingUp glyph plus the compact add count
+ * ("877.7K"), so the signal never rests on color alone. Renders a plain dash
+ * for players outside the trending list.
  */
 function TrendingSignal({ count }: { count: number | null }) {
   if (count == null) {
@@ -201,11 +213,13 @@ function TrendingSignal({ count }: { count: number | null }) {
 
   return (
     <span
-      className="inline-flex items-center justify-end gap-1 text-caption font-mono font-semibold text-accent-green"
-      title={`${count} adds in the last 24 hours`}
+      className="inline-flex items-center justify-end gap-1"
+      title={`${count.toLocaleString("en-US")} adds in the last 24 hours`}
     >
-      <ArrowUp className="size-3" aria-hidden="true" />
-      {count}
+      <TrendingUp className="size-4 text-accent-green" strokeWidth={2} aria-hidden="true" />
+      <span className="font-mono text-body-sm font-semibold tabular-nums text-text-primary">
+        {formatAddCount(count)}
+      </span>
     </span>
   );
 }
@@ -264,7 +278,7 @@ function SortHeader({
       onKeyDown={handleKeyDown}
       aria-label={fullText}
       title={fullText}
-      className={`${firstCol ? FIRST_TH_PADDING : TH_PADDING} text-caption text-text-tertiary cursor-pointer select-none hover:text-text-primary transition-colors ${align === "right" ? "text-right" : "text-left"}`}
+      className={`${firstCol ? FIRST_TH_PADDING : TH_PADDING} text-caption text-text-tertiary cursor-pointer select-none whitespace-nowrap hover:text-text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${align === "right" ? "text-right" : "text-left"}`}
       aria-sort={
         isActive ? (activeDir === "asc" ? "ascending" : "descending") : "none"
       }
@@ -273,12 +287,12 @@ function SortHeader({
         {label}
         {isActive ? (
           activeDir === "asc" ? (
-            <ChevronUp className="size-3" />
+            <ChevronUp className="size-3.5" strokeWidth={2} aria-hidden="true" />
           ) : (
-            <ChevronDown className="size-3" />
+            <ChevronDown className="size-3.5" strokeWidth={2} aria-hidden="true" />
           )
         ) : (
-          <span className="size-3" aria-hidden="true" />
+          <span className="size-3.5" aria-hidden="true" />
         )}
       </span>
     </th>
@@ -388,6 +402,21 @@ export function PlayerTable({
     return [...result].sort((a, b) => compareValues(a, b, sortKey, sortDir));
   }, [players, search, posFilter, rosterFilter, sortKey, sortDir]);
 
+  // Render PAGE_SIZE rows at a time instead of all ~700. The page count is
+  // keyed to the current filter/sort, so any change starts back at page one
+  // without an effect.
+  const filterKey = `${search}|${posFilter}|${rosterFilter}|${sortKey}|${sortDir}`;
+  const [paging, setPaging] = useState({ key: filterKey, count: PAGE_SIZE });
+  const visibleCount = paging.key === filterKey ? paging.count : PAGE_SIZE;
+  const visible = filtered.slice(0, visibleCount);
+  const remaining = filtered.length - visible.length;
+
+  const clearFilters = useCallback(() => {
+    setSearch("");
+    setPosFilter("ALL");
+    setRosterFilter("ALL");
+  }, []);
+
   return (
     <>
       {/* ?q= seeding lives in a zero-UI child so that useSearchParams, which
@@ -398,17 +427,24 @@ export function PlayerTable({
       <Suspense fallback={null}>
         <SearchQuerySeed onSeed={setSearch} />
       </Suspense>
-    <div className="mt-8 space-y-6">
+    <div className="space-y-4">
       {/* Filter row: position pills + search + roster select */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <Tabs
           value={posFilter}
           onValueChange={(value) => setPosFilter(value as PositionFilter)}
         >
-          <TabsList aria-label="Position filter">
+          <TabsList
+            aria-label="Position filter"
+            className="h-auto! gap-2 rounded-none border-0 bg-transparent p-0"
+          >
             {POSITIONS.map((pos) => (
-              <TabsTrigger key={pos} value={pos}>
-                {pos}
+              <TabsTrigger
+                key={pos}
+                value={pos}
+                className="h-11! min-w-[52px] flex-none border-border-strong px-3.5 font-sans text-body-sm font-semibold hover:bg-surface-muted data-active:border-text-primary focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas focus-visible:outline-none"
+              >
+                {POSITION_LABELS[pos]}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -417,7 +453,8 @@ export function PlayerTable({
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative sm:w-72">
             <Search
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-text-tertiary"
+              className="pointer-events-none absolute left-3.5 top-1/2 size-5 -translate-y-1/2 text-text-secondary"
+              strokeWidth={2}
               aria-hidden="true"
             />
             <label htmlFor="player-filter" className="sr-only">
@@ -428,9 +465,9 @@ export function PlayerTable({
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search players, NFL teams, or HMLML teams..."
+              placeholder="Player, NFL team, or HMLML team"
               autoComplete="off"
-              className="h-8 rounded-full pl-9"
+              className="pl-11"
             />
           </div>
 
@@ -442,12 +479,12 @@ export function PlayerTable({
               value={rosterFilter}
               onValueChange={(value) => setRosterFilter(value as RosterFilter)}
             >
-              <SelectTrigger id="roster-filter" className="rounded-full">
+              <SelectTrigger id="roster-filter" className="min-w-40">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="FA">Free Agents</SelectItem>
-                <SelectItem value="ALL">All Players</SelectItem>
+                <SelectItem value="FA">Free agents</SelectItem>
+                <SelectItem value="ALL">All players</SelectItem>
                 <SelectGroup>
                   <SelectLabel>Teams</SelectLabel>
                   {franchises.map((f) => (
@@ -463,11 +500,17 @@ export function PlayerTable({
       </div>
 
       {/* Result count */}
-      <p className="text-body-sm text-text-tertiary">
-        <span className="text-stat text-text-primary">{filtered.length}</span>{" "}
-        of <span className="text-stat text-text-primary">{players.length}</span>{" "}
-        players
-      </p>
+      {filtered.length > 0 && (
+        <p className="text-body-sm text-text-tertiary" aria-live="polite">
+          Showing <span className="text-stat text-text-primary">{visible.length}</span>{" "}
+          of <span className="text-stat text-text-primary">{filtered.length}</span>
+          {filtered.length !== players.length && (
+            <>
+              {" "}(<span className="text-stat">{players.length}</span> total)
+            </>
+          )}
+        </p>
+      )}
 
       {/*
         Always-visible, horizontally-scrolling table. This div is the sole
@@ -477,12 +520,13 @@ export function PlayerTable({
         No will-change / transform anywhere in this subtree — a transformed
         ancestor silently breaks `position: sticky` (see PRs #150/#155/#156).
       */}
+      {filtered.length > 0 && (
       <div className="overflow-x-auto">
         <table className="w-full min-w-[560px] text-left">
           <thead>
             <tr className="border-b border-divider">
               <th
-                className={`sticky left-0 z-[1] bg-canvas border-r border-divider max-w-[168px] md:max-w-none ${TH_PADDING} text-caption text-text-tertiary cursor-pointer select-none hover:text-text-primary transition-colors text-left`}
+                className={`sticky left-0 z-(--z-raised) bg-canvas border-r border-divider max-w-[168px] md:max-w-none ${TH_PADDING} text-caption text-text-tertiary cursor-pointer select-none hover:text-text-primary transition-colors text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring`}
                 role="button"
                 tabIndex={0}
                 onClick={() => handleSort("name")}
@@ -506,12 +550,12 @@ export function PlayerTable({
                   Player
                   {sortKey === "name" ? (
                     sortDir === "asc" ? (
-                      <ChevronUp className="size-3" />
+                      <ChevronUp className="size-3.5" strokeWidth={2} aria-hidden="true" />
                     ) : (
-                      <ChevronDown className="size-3" />
+                      <ChevronDown className="size-3.5" strokeWidth={2} aria-hidden="true" />
                     )
                   ) : (
-                    <span className="size-3" aria-hidden="true" />
+                    <span className="size-3.5" aria-hidden="true" />
                   )}
                 </span>
               </th>
@@ -585,7 +629,7 @@ export function PlayerTable({
               />
               <SortHeader
                 label="INJ"
-                fullText="Injury / roster status"
+                fullText="Injury status"
                 sortKey="status"
                 activeKey={sortKey}
                 activeDir={sortDir}
@@ -603,15 +647,15 @@ export function PlayerTable({
             </tr>
           </thead>
           <tbody>
-            {filtered.map((player) => (
+            {visible.map((player) => (
               <tr
                 key={player.id}
                 className="border-b border-divider last:border-0 hover:bg-surface transition-colors"
               >
                 <td
-                  className={`sticky left-0 z-[1] bg-canvas border-r border-divider max-w-[168px] md:max-w-none ${TD_PADDING}`}
+                  className={`sticky left-0 z-(--z-raised) bg-canvas border-r border-divider max-w-[168px] md:max-w-none ${TD_PADDING}`}
                 >
-                  <PlayerLink playerId={player.id} className="flex items-center gap-2 md:gap-3">
+                  <PlayerLink playerId={player.id} className="flex min-h-11 items-center gap-2 rounded-[10px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:gap-3">
                     <PlayerHeadshot
                       playerId={player.id}
                       name={player.fullName ?? "Unknown"}
@@ -694,7 +738,7 @@ export function PlayerTable({
                     <Link
                       href={`/teams/${player.ownerFranchiseSlug}`}
                       title={player.ownerFranchiseName}
-                      className="inline-flex items-center hover:brightness-110"
+                      className="inline-flex size-11 items-center justify-center rounded-[10px] hover:brightness-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <FranchiseLogo
                         slug={player.ownerFranchiseSlug}
@@ -706,7 +750,7 @@ export function PlayerTable({
                       />
                     </Link>
                   ) : (
-                    <span className="text-caption text-text-tertiary italic">
+                    <span className="text-caption text-text-tertiary">
                       FA
                     </span>
                   )}
@@ -728,13 +772,38 @@ export function PlayerTable({
         </table>
       </div>
 
+      )}
+
+      {remaining > 0 && (
+        <button
+          type="button"
+          onClick={() =>
+            setPaging({ key: filterKey, count: visibleCount + PAGE_SIZE })
+          }
+          className={cn(buttonVariants({ variant: "outline" }), "w-full sm:w-auto")}
+        >
+          Load {Math.min(PAGE_SIZE, remaining)} more
+        </button>
+      )}
+
       {/* Empty filtered state */}
       {filtered.length === 0 && (
-        <EmptyState
-          icon="search"
-          title="No Players Found"
-          description={search ? `No players match "${search}". Check the spelling or try a different name.` : "No players match your filters."}
-        />
+        <div className="card-surface flex flex-col items-center gap-2 px-5 py-8 text-center">
+          <Search className="size-7 text-text-tertiary" strokeWidth={2} aria-hidden="true" />
+          <h3 className="text-body font-semibold text-text-primary">No players found</h3>
+          <p className="max-w-sm text-body-sm text-text-secondary">
+            {search
+              ? `Nobody matches "${search}" with these filters. Check the spelling or widen the search.`
+              : "Nobody matches these filters."}
+          </p>
+          <button
+            type="button"
+            onClick={clearFilters}
+            className={cn(buttonVariants({ variant: "outline" }), "mt-2")}
+          >
+            Show all players
+          </button>
+        </div>
       )}
       </div>
     </>

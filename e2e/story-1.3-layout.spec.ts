@@ -231,8 +231,7 @@ test.describe("Mobile Dock", () => {
     const dock = page.locator('nav[aria-label="Mobile navigation"]');
     const links = dock.locator("a");
     await expect(links).toHaveCount(5);
-    // The dock renders its labels through the caption style's uppercase
-    // text-transform, so innerText comes back uppercased; compare case-insensitively.
+    // Dock labels are sentence case now; the comparison stays case-insensitive.
     const texts = (await links.allInnerTexts()).map((t) =>
       t.trim().toLowerCase()
     );
@@ -306,7 +305,7 @@ test.describe("SyncTimestamp", () => {
       const timestampButton = footer.locator("button");
       await expect(timestampButton).toBeVisible();
 
-      // Caption text renders uppercased via text-transform; compare lowercased.
+      // Compare lowercased so the assertion is about the copy, not its casing.
       const text = (await timestampButton.innerText()).toLowerCase();
       expect(text).toContain("last updated");
       expect(text).not.toContain("(outdated)");
@@ -456,7 +455,7 @@ test.describe("SyncTimestamp", () => {
       const timestampButton = footer.locator("button");
       await expect(timestampButton).toBeVisible();
 
-      // Caption text renders uppercased via text-transform; compare lowercased.
+      // Compare lowercased so the assertion is about the copy, not its casing.
       const text = (await timestampButton.innerText()).toLowerCase();
       expect(text).toContain("last updated");
       expect(text).not.toContain("(outdated)");
@@ -507,7 +506,7 @@ test.describe("SectionHeader", () => {
     const link = section.locator("a");
     await expect(link).toBeVisible();
     const linkText = await link.innerText();
-    expect(linkText).toContain("View All");
+    expect(linkText).toContain("View all");
     expect(await link.getAttribute("href")).toBe("/records");
   });
 
@@ -518,7 +517,7 @@ test.describe("SectionHeader", () => {
     const section = page.locator('[data-testid="with-custom-link"]');
     const link = section.locator("a");
     const linkText = await link.innerText();
-    expect(linkText).toContain("Full Draft");
+    expect(linkText).toContain("Full draft");
     expect(await link.getAttribute("href")).toBe("/drafts/2024");
   });
 

@@ -79,45 +79,54 @@ export function SeasonSelector({
     }
   }, [activeSeason]);
 
-  // "All-Time" leads, followed by seasons in the order given (expected
-  // newest-to-oldest) so the most-wanted pills are reachable without
+  // "All-time" leads, followed by seasons in the order given (expected
+  // newest-to-oldest) so the most-wanted chips are reachable without
   // horizontal scrolling on mobile.
   const items: { label: string; value: number | "all-time" }[] = showAllTime
     ? [
-        { label: "All-Time", value: "all-time" as const },
+        { label: "All-time", value: "all-time" as const },
         ...seasons.map((year) => ({ label: String(year), value: year })),
       ]
     : seasons.map((year) => ({ label: String(year), value: year }));
 
+  // Edge fade as a mask on the scroller itself (not an overlay), so the next
+  // chip visibly peeks out and fades, signalling there is more to scroll.
+  const maskImage =
+    canScrollLeft && canScrollRight
+      ? "linear-gradient(90deg, transparent, #000 10%, #000 85%, transparent)"
+      : canScrollRight
+        ? "linear-gradient(90deg, #000 85%, transparent)"
+        : canScrollLeft
+          ? "linear-gradient(90deg, transparent, #000 15%)"
+          : undefined;
+
   return (
     <div className="relative">
-      {/* Fade indicators for horizontal scroll — only visible when content overflows */}
-      {canScrollLeft && (
-        <div className="pointer-events-none absolute inset-y-0 left-0 w-6 bg-gradient-to-r from-canvas to-transparent z-10" />
-      )}
-      {canScrollRight && (
-        <div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-canvas to-transparent z-10" />
-      )}
       <div
         ref={tablistRef}
         role="tablist"
         aria-label="Select season"
-        className="flex flex-nowrap gap-1 overflow-x-auto scroll-smooth pb-2 scrollbar-thin px-6"
+        className="no-scrollbar flex flex-nowrap gap-2 overflow-x-auto scroll-smooth py-1 pr-8"
+        style={maskImage ? { maskImage, WebkitMaskImage: maskImage } : undefined}
       >
       {items.map((item) => {
         const isActive = activeSeason === item.value;
+        const isYear = item.value !== "all-time";
         return (
           <button
             key={item.value}
+            type="button"
             role="tab"
             aria-selected={isActive}
             tabIndex={isActive ? 0 : -1}
             onClick={() => onSelect(item.value)}
             onKeyDown={handleKeyDown}
-            className={`shrink-0 rounded-full px-4 py-1.5 text-body-sm font-medium font-mono tabular-nums transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
+            className={`inline-flex min-h-11 shrink-0 items-center rounded-full border px-4 text-body-sm font-semibold transition-[scale,background-color,color] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${
+              isYear ? "font-mono tabular-nums" : ""
+            } ${
               isActive
-                ? "bg-accent-gold-light text-accent-gold font-bold"
-                : "text-text-tertiary hover:text-text-primary hover:bg-surface-muted"
+                ? "border-text-primary bg-text-primary text-canvas"
+                : "border-border-strong text-text-secondary hover:text-text-primary hover:bg-surface-muted"
             }`}
           >
             {item.label}

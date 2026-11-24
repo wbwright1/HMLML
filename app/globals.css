@@ -82,6 +82,7 @@
     --color-accent-gold-light: var(--accent-gold-light);
     --color-accent-warm: var(--accent-warm);
     --color-accent-warm-light: var(--accent-warm-light);
+    --color-border-control: var(--border-control);
 
     /* Border radius (cards are 14px = --radius) */
     --radius-sm: calc(var(--radius) * 0.6);
@@ -124,6 +125,20 @@
     --accent-gold-light: rgba(226, 184, 88, 0.13);
     --accent-warm: #C97C6A;
     --accent-warm-light: rgba(201, 124, 106, 0.14);
+    /* Edge for anything that identifies a control (inputs, secondary buttons):
+       ~3.9:1 on canvas, clears the 3:1 non-text contrast minimum. */
+    --border-control: #7A7466;
+
+    /* ---- Layers and elevation (named steps; never a literal z-index) ---- */
+    --z-raised: 1;
+    --z-sticky: 100;
+    --z-dropdown: 200;
+    --z-overlay: 300;
+    --z-modal: 400;
+    --z-toast: 500;
+    --shadow-float: 0 16px 40px rgba(0, 0, 0, 0.45);
+    --shadow-primary: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 6px 16px rgba(0, 0, 0, 0.35);
+    --shadow-primary-pressed: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 1px 2px rgba(0, 0, 0, 0.35);
 
     /* ---- shadcn/ui aliases (reference named tokens via var()) ---- */
     /* Core surfaces */
@@ -223,13 +238,14 @@
 
 /* =========================================================================
    Typography utility classes — Command Center type scale
-   Display/titles = Instrument Serif italic (var(--font-serif));
+   Display/titles = Instrument Serif UPRIGHT (var(--font-serif)); italic is
+   reserved for the HMLML wordmark only (UI/UX pass 2026-11-24).
    UI/body = Geist (var(--font-sans)); numerals = JetBrains Mono (var(--font-mono)).
    ========================================================================= */
 @layer utilities {
     .text-display {
         font-family: var(--font-serif);
-        font-style: italic;
+        font-style: normal;
         font-weight: 400;
         font-size: clamp(2.5rem, 5vw, 3.5rem); /* 40-56px */
         line-height: 1.05;
@@ -238,7 +254,7 @@
 
     .text-h1 {
         font-family: var(--font-serif);
-        font-style: italic;
+        font-style: normal;
         font-weight: 400;
         font-size: clamp(2.25rem, 4vw, 2.75rem); /* 36-44px */
         line-height: 1.1;
@@ -247,7 +263,7 @@
 
     .text-h2 {
         font-family: var(--font-serif);
-        font-style: italic;
+        font-style: normal;
         font-weight: 400;
         font-size: clamp(1.75rem, 3vw, 2rem); /* 28-32px */
         line-height: 1.15;
@@ -276,21 +292,21 @@
         letter-spacing: 0.005em;
     }
 
+    /* 12px is the type floor: nothing on the site renders smaller. Labels are
+       sentence case (no uppercase transform, no wide tracking). */
     .text-caption {
         font-size: 0.75rem; /* 12px */
         line-height: 1.35;
         font-weight: 500;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
+        letter-spacing: 0.01em;
     }
 
-    /* Section kicker — small uppercase eyebrow above titles */
+    /* Section label: 12px sentence case, one per module. */
     .text-kicker {
-        font-size: 0.6875rem; /* 11px */
-        line-height: 1.2;
+        font-size: 0.75rem; /* 12px */
+        line-height: 1.3;
         font-weight: 600;
-        letter-spacing: 0.18em;
-        text-transform: uppercase;
+        letter-spacing: 0.02em;
         color: var(--text-tertiary);
     }
 
@@ -316,9 +332,9 @@
         );
         border: 1px solid var(--border);
         border-radius: var(--radius); /* 14px */
-        box-shadow:
-            0 24px 60px rgba(0, 0, 0, 0.3),
-            inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        /* Lines, not shadows: cards are structure. Only floating things (dock,
+           menus, toasts, sheets) and the primary button carry a shadow. */
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
     }
 
     /* Tint variants: layer a subtle color wash over the neutral card-surface
@@ -722,12 +738,10 @@
     .bracket-colhead {
         position: absolute;
         top: 0;
-        font-size: 8.5px;
+        font-size: 12px; /* 12px type floor, sentence case */
         font-weight: 600;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        /* AA-safe: --text-muted (dim) is decorative-only per CLAUDE.md, and
-           these run at 8.5-12.5px. */
+        letter-spacing: 0.02em;
+        /* AA-safe: --text-muted (dim) is decorative-only per CLAUDE.md. */
         color: var(--text-tertiary);
         white-space: nowrap;
     }
@@ -795,7 +809,7 @@
         border: 1px solid var(--text-muted);
     }
     .bracket-name {
-        font-size: 11px;
+        font-size: 12px;
         color: var(--text-secondary);
         white-space: nowrap;
         overflow: hidden;
@@ -808,7 +822,7 @@
         font-weight: 700;
     }
     .bracket-score {
-        font-size: 10.5px;
+        font-size: 12px;
         font-variant-numeric: tabular-nums;
         color: var(--text-tertiary);
         flex: none;
@@ -823,9 +837,9 @@
     }
     .bracket-chip {
         flex: none;
-        font-size: 7.5px;
+        font-size: 12px;
         font-weight: 700;
-        letter-spacing: 0.06em;
+        line-height: 1.2;
         border-radius: 3px;
         padding: 1px 4px;
         color: var(--accent-gold);
@@ -837,13 +851,11 @@
     }
     .bracket-out {
         flex: none;
-        font-size: 8px;
-        letter-spacing: 0.05em;
+        font-size: 12px;
         color: var(--text-tertiary);
     }
     .bracket-sub {
-        font-size: 10px;
-        font-style: italic;
+        font-size: 12px;
         color: var(--text-tertiary);
         white-space: nowrap;
         overflow: hidden;
@@ -853,28 +865,15 @@
     }
 
     @media (min-width: 1024px) {
-        .bracket-colhead {
-            font-size: 10px;
-            letter-spacing: 0.16em;
-        }
         .bracket-name {
-            font-size: 12.5px;
+            font-size: 13px;
         }
         .bracket-score {
-            font-size: 12.5px;
+            font-size: 13px;
         }
         .bracket-chip {
-            font-size: 8.5px;
-            letter-spacing: 0.08em;
             border-radius: 4px;
             padding: 2px 5px;
-        }
-        .bracket-out {
-            font-size: 9px;
-            letter-spacing: 0.06em;
-        }
-        .bracket-sub {
-            font-size: 11px;
         }
         .bracket-dot {
             width: 8px;

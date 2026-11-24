@@ -5,10 +5,10 @@ import type { OffseasonReceipt, ReceiptCategory } from "@/lib/content";
 
 const CATEGORY_LABELS: Record<ReceiptCategory, string> = {
   DRAFT: "Draft",
-  TRADE: "Blockbuster Trade",
+  TRADE: "Blockbuster trade",
   WAIVERS: "Waivers",
-  FIRE_SALE: "The Fire Sale",
-  AGING_CORE: "The Time Capsule",
+  FIRE_SALE: "The fire sale",
+  AGING_CORE: "The time capsule",
 };
 
 export interface ReceiptFranchise {
@@ -41,7 +41,7 @@ export function OffseasonReceiptCard({ receipt, franchise }: OffseasonReceiptCar
         <TeamLink
           slug={franchise.slug}
           aria-label={franchise.name}
-          className="inline-flex shrink-0"
+          className="-m-2 inline-flex size-11 shrink-0 items-center justify-center"
         >
           <FranchiseLogo
             slug={franchise.slug}

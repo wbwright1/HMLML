@@ -5,11 +5,19 @@ import { useMemo, useState } from "react";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { TeamLink } from "@/components/team-link";
 import { useBookSlip } from "@/components/book/use-book-slip";
+import { PickToast } from "@/components/book/pick-toast";
+import { MonoNumerals } from "@/components/book/mono-numerals";
+import { buttonVariants } from "@/components/ui/button-variants";
 import {
+  LockAlert,
+  ML_COL,
+  SPREAD_COL,
   SideRow,
   StatusKicker,
   RivalryKicker,
   YourPickRow,
+  lockDayName,
+  primaryLockDay,
 } from "@/components/book/side-row";
 import {
   formatMoney,
@@ -61,10 +69,17 @@ export function BoardIsland({
     pendingMatchup,
     canPick,
     canUnlock,
+    saved,
+    undo,
+    dismissSaved,
     pick: onPick,
     lock,
     unlock,
   } = useBookSlip(week, games);
+
+  // The lock day is said once, in the alert; cards repeat a day only when
+  // theirs differs.
+  const primaryDay = primaryLockDay(games).day;
 
   const openGames = games.filter((g) => g.status === "open");
   const openWithoutPick = openGames.filter((g) => !picks.has(g.matchupId));
@@ -85,6 +100,7 @@ export function BoardIsland({
   return (
     <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
       <div className="flex flex-col gap-4">
+        <LockAlert games={games} canChange={!standingLock} />
         {error && (
           <p
             role="status"
@@ -93,6 +109,15 @@ export function BoardIsland({
             {error}
           </p>
         )}
+        {/* Column heads once, above every card, instead of on each row.
+            Decorative for screen readers: each button and price names itself. */}
+        <div
+          className="-mb-2 flex justify-end gap-2 pr-3"
+          aria-hidden="true"
+        >
+          <span className={`${SPREAD_COL} text-center text-kicker`}>Spread</span>
+          <span className={`${ML_COL} text-center text-kicker`}>Moneyline</span>
+        </div>
         {games.map((game) => (
           <GameCard
             key={game.matchupId}
@@ -101,10 +126,12 @@ export function BoardIsland({
             canPick={canPick}
             pending={pendingMatchup === game.matchupId}
             slipClosed={standingLock}
+            primaryDay={primaryDay}
             onPick={onPick}
           />
         ))}
       </div>
+      <PickToast saved={saved} onUndo={undo} onDismiss={dismissSaved} />
 
       <aside className="flex flex-col gap-6">
         <PickSlip
@@ -135,6 +162,7 @@ function GameCard({
   canPick,
   pending,
   slipClosed,
+  primaryDay,
   onPick,
 }: {
   game: BookGame;
@@ -143,6 +171,8 @@ function GameCard({
   pending: boolean;
   /** The member's early lock still stands over this week's open games. */
   slipClosed: boolean;
+  /** The lock day the alert above the board already announced. */
+  primaryDay: string | null;
   onPick: (game: BookGame, side: BookSideKey) => void;
 }) {
   const totalPicks = game.homePicks + game.awayPicks;
@@ -156,23 +186,28 @@ function GameCard({
     homePct >= awayPct ? game.home.abbreviation ?? game.home.name : game.away.abbreviation ?? game.away.name;
 
   const interactive = canPick && game.status === "open";
+  const showStatus =
+    game.status !== "open" || lockDayName(game.kickoffLabel) !== primaryDay;
+  const showHeader = showStatus || !!game.rivalryName || showConsensus;
 
   return (
-    <div className="card-surface p-5">
-      <div className="mb-3.5 flex items-center justify-between gap-3">
-        <span className="flex min-w-0 items-center gap-2">
-          <StatusKicker game={game} />
-          <RivalryKicker game={game} />
-        </span>
-        {showConsensus && (
-          <span className="text-body-sm text-text-tertiary">
-            <span className="font-mono tabular-nums">{leaderPct}%</span> of the
-            league on {leaderName}
+    <section className="card-surface flex flex-col px-4 pt-1.5 pb-1.5 pr-3">
+      {showHeader && (
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 pt-2">
+          <span className="flex min-w-0 items-center gap-2">
+            {showStatus && <StatusKicker game={game} primaryDay={primaryDay} />}
+            <RivalryKicker game={game} />
           </span>
-        )}
-      </div>
+          {showConsensus && (
+            <span className="text-caption text-text-tertiary">
+              <span className="font-mono tabular-nums">{leaderPct}%</span> of the
+              league on {leaderName}
+            </span>
+          )}
+        </div>
+      )}
 
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col divide-y divide-divider">
         <SideRow
           game={game}
           side="home"
@@ -194,11 +229,11 @@ function GameCard({
       </div>
 
       {pick && (
-        <YourPickRow game={game} pick={pick} slipClosed={slipClosed} />
+        <YourPickRow game={game} pick={pick} slipClosed={slipClosed} showPayout />
       )}
 
       {showConsensus && (
-        <div className="mt-3">
+        <div className="border-t border-divider pt-2.5 pb-2">
           <div
             className="h-[3px] overflow-hidden rounded-full bg-surface-muted"
             aria-hidden="true"
@@ -208,16 +243,15 @@ function GameCard({
               style={{ width: `${homePct}%` }}
             />
           </div>
-          <p className="mt-1.5 text-[11px] text-text-tertiary">
-            League consensus ·{" "}
-            <span className="font-mono tabular-nums">
-              {game.home.abbreviation ?? game.home.name} {homePct}% ·{" "}
-              {game.away.abbreviation ?? game.away.name} {awayPct}%
-            </span>
+          <p className="mt-1.5 text-caption text-text-tertiary">
+            League consensus: {game.home.abbreviation ?? game.home.name}{" "}
+            <span className="font-mono tabular-nums">{homePct}%</span>,{" "}
+            {game.away.abbreviation ?? game.away.name}{" "}
+            <span className="font-mono tabular-nums">{awayPct}%</span>
           </p>
         </div>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -251,13 +285,16 @@ function PickSlip({
   return (
     <div className="card-surface p-5">
       <p className="text-kicker mb-3.5">
-        Pick Slip · Week <span className="font-mono tabular-nums">{week}</span>
+        Week <span className="font-mono tabular-nums">{week}</span> pick slip
       </p>
 
       {!signedIn ? (
         <p className="text-body-sm text-text-secondary">
           {BOOK_COPY.signedOut}{" "}
-          <Link href="/claim" className="font-semibold text-accent-gold">
+          <Link
+            href="/claim"
+            className="-my-3 inline-block rounded-md py-3 font-semibold text-accent-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+          >
             Claim your team.
           </Link>
         </p>
@@ -303,7 +340,7 @@ function SlipRow({
           <span className="block truncate text-body-sm text-text-tertiary">
             Pick a side
           </span>
-          <span className="block truncate text-[11px] text-text-tertiary">
+          <span className="block truncate text-caption text-text-tertiary">
             {game.home.name} vs {game.away.name}
           </span>
         </span>
@@ -334,10 +371,10 @@ function SlipRow({
       tag = "Push";
       tone = "text-text-tertiary";
     } else if (result === pick.side) {
-      tag = "✓ Covering";
+      tag = "Covering";
       tone = "text-accent-green";
     } else {
-      tag = "✗ Behind";
+      tag = "Behind";
       tone = "text-accent-warm";
     }
   }
@@ -350,7 +387,7 @@ function SlipRow({
             one. */}
         <TeamLink
           slug={team.slug}
-          className="flex min-w-0 items-center gap-3 text-text-primary"
+          className="-my-3 flex min-w-0 items-center gap-3 rounded-md py-3 text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
         >
           <FranchiseLogo
             slug={team.slug}
@@ -361,11 +398,12 @@ function SlipRow({
             size={20}
             decorative
           />
-          <span className="min-w-0 truncate font-mono text-body-sm font-bold tabular-nums">
-            {team.abbreviation ?? team.name} {formatSpread(spread)}
+          <span className="min-w-0 truncate text-body-sm font-bold">
+            {team.abbreviation ?? team.name}{" "}
+            <span className="font-mono tabular-nums">{formatSpread(spread)}</span>
           </span>
         </TeamLink>
-        <span className="mt-0.5 block truncate text-[11px] text-text-tertiary">
+        <span className="mt-0.5 block truncate text-caption text-text-tertiary">
           vs {other.name}
         </span>
       </span>
@@ -389,7 +427,10 @@ function LockButton({
   onLock: () => void;
   onUnlock: () => void;
 }) {
-  const base = "w-full rounded-full px-4 py-2.5 text-body-sm font-semibold";
+  // Status pills (not controls) share the button's footprint so the slip
+  // doesn't jump when the lock state changes.
+  const base =
+    "flex min-h-11 w-full items-center justify-center rounded-full px-4 text-body-sm font-semibold";
 
   if (slipLocked) {
     return (
@@ -405,12 +446,15 @@ function LockButton({
           <button
             type="button"
             onClick={onUnlock}
-            className={`${base} mt-2.5 cursor-pointer border border-border-strong bg-surface text-center text-text-secondary transition-colors duration-150 hover:text-text-primary`}
+            className={buttonVariants({
+              variant: "outline",
+              className: "mt-2.5 w-full",
+            })}
           >
             {BOOK_COPY.unlockCta}
           </button>
         )}
-        <p className="mt-2.5 text-[11px] text-text-tertiary">
+        <p className="mt-2.5 text-caption text-text-tertiary">
           {canUnlock ? BOOK_COPY.unlockNote : BOOK_COPY.lockNoteLocked}
         </p>
       </>
@@ -424,7 +468,7 @@ function LockButton({
           <span className="font-mono tabular-nums">{openWithoutPick}</span>{" "}
           {openWithoutPick === 1 ? "pick" : "picks"} still open
         </p>
-        <p className="mt-2.5 text-[11px] text-text-tertiary">
+        <p className="mt-2.5 text-caption text-text-tertiary">
           {BOOK_COPY.lockNoteIncomplete}
         </p>
       </>
@@ -436,11 +480,11 @@ function LockButton({
       <button
         type="button"
         onClick={onLock}
-        className={`${base} cursor-pointer bg-accent-gold text-canvas transition-[filter] duration-150 hover:brightness-110`}
+        className={buttonVariants({ className: "w-full" })}
       >
         {BOOK_COPY.lockCta}
       </button>
-      <p className="mt-2.5 text-[11px] text-text-tertiary">
+      <p className="mt-2.5 text-caption text-text-tertiary">
         {BOOK_COPY.lockNoteReady}
       </p>
     </>
@@ -503,7 +547,7 @@ function WagerTranslator({ games }: { games: BookGame[] }) {
   return (
     <div className="card-surface p-5">
       <p className="text-kicker mb-1">{BOOK_COPY.translatorTitle}</p>
-      <p className="mb-3.5 font-serif text-body-sm italic text-text-tertiary">
+      <p className="mb-3.5 text-body-sm text-text-secondary">
         {BOOK_COPY.translatorSnark}
       </p>
 
@@ -515,7 +559,7 @@ function WagerTranslator({ games }: { games: BookGame[] }) {
           id="book-calc-bet"
           value={option.value}
           onChange={(e) => setSelected(e.target.value)}
-          className="w-full rounded-[10px] border border-border-strong bg-surface px-2.5 py-2 text-body-sm text-text-primary focus:border-accent-gold focus:outline-none"
+          className="min-h-11 w-full rounded-[10px] border border-border-control bg-surface px-2.5 text-body-sm text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
         >
           {options.map((o) => (
             <option key={o.value} value={o.value} className="bg-canvas">
@@ -536,9 +580,9 @@ function WagerTranslator({ games }: { games: BookGame[] }) {
             max={MAX_STAKE}
             value={stake}
             onChange={(e) => setStake(Number(e.target.value))}
-            className="w-24 rounded-[10px] border border-border-strong bg-surface px-2.5 py-2 font-mono text-body-sm tabular-nums text-text-primary focus:border-accent-gold focus:outline-none"
+            className="min-h-11 w-24 rounded-[10px] border border-border-control bg-surface px-2.5 font-mono text-body-sm tabular-nums text-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
           />
-          <span className="text-caption normal-case tracking-normal text-text-tertiary">
+          <span className="text-caption text-text-tertiary">
             USD
           </span>
         </label>
@@ -548,7 +592,7 @@ function WagerTranslator({ games }: { games: BookGame[] }) {
         <p className="text-stat text-[30px] leading-none text-accent-green">
           +{formatMoney(win)}
         </p>
-        <p className="text-caption mt-1 normal-case tracking-normal text-text-tertiary">
+        <p className="text-caption mt-1 text-text-tertiary">
           profit
         </p>
         <p className="mt-2 text-body-sm text-text-tertiary">
@@ -560,8 +604,8 @@ function WagerTranslator({ games }: { games: BookGame[] }) {
           total (<span className="font-mono tabular-nums">{formatMoney(win)}</span>{" "}
           profit).
         </p>
-        <p className="mt-2.5 text-[11px] text-text-tertiary">
-          {BOOK_COPY.spreadNote}
+        <p className="mt-2.5 text-caption text-text-tertiary">
+          <MonoNumerals text={BOOK_COPY.spreadNote} />
         </p>
       </div>
     </div>

@@ -28,8 +28,10 @@ test.describe("/api/live-scores current week (#312)", () => {
     request,
   }) => {
     await page.goto("/");
-    const kicker = (await page.getByTestId("hero-kicker").innerText()).trim();
-    const hubWeek = Number(/WEEK (\d+)/i.exec(kicker)?.[1]);
+    // The slate meta on the Game of the week label row ("Week 12 · Kickoff
+    // Thursday"); the hero lost its kicker in the 2026-11-24 UI/UX pass.
+    const meta = (await page.getByTestId("slate-meta").innerText()).trim();
+    const hubWeek = Number(/WEEK (\d+)/i.exec(meta)?.[1]);
     expect(hubWeek).toBeGreaterThan(0);
 
     const res = await request.get("/api/live-scores");

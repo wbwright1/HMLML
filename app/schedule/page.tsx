@@ -74,7 +74,7 @@ export default async function SchedulePage({
 
   if (!activeSeason) {
     return (
-      <PageSection label="Season Schedule" title="Schedule.">
+      <PageSection as="h1" title="Schedule">
         <EmptyState
           icon="calendar"
           title="No Schedule Available"
@@ -101,18 +101,17 @@ export default async function SchedulePage({
 
   return (
     <>
-      <PageSection label="Season Schedule" title={`${activeSeason.seasonYear} Schedule.`}>
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <p className="text-body-lg text-text-secondary">
-            Every week, every matchup, all season long.
-          </p>
-          {seasonYears.length > 1 && (
-            <SeasonPicker
-              seasons={seasonYears}
-              activeSeason={activeSeason.seasonYear}
-            />
-          )}
-        </div>
+      <PageSection
+        as="h1"
+        title={`${activeSeason.seasonYear} schedule`}
+        intro="Every week, every matchup, all season long."
+      >
+        {seasonYears.length > 1 && (
+          <SeasonPicker
+            seasons={seasonYears}
+            activeSeason={activeSeason.seasonYear}
+          />
+        )}
       </PageSection>
 
       {scheduleByWeek.size === 0 ? (

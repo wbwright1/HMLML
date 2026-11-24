@@ -73,13 +73,13 @@ export default async function PlayoffBracketPage({
 
   // Legacy seasons predate the HMLML Bowl naming, so they keep the plain title.
   const bowlName = getBowlName(year);
-  const pageTitle = bowlName ? `The road to ${bowlName}.` : "Playoff Results.";
+  const pageTitle = bowlName ? `The road to ${bowlName}` : "Playoff results";
 
   return (
     <>
-      <PageSection label={`${year} Season`} title={pageTitle}>
+      <PageSection as="h1" title={pageTitle}>
         <div className="flex flex-wrap items-center gap-4">
-          <BackLink href={`/seasons/${year}`} label={`${year} Season`} />
+          <BackLink href={`/seasons/${year}`} label={`${year} season`} />
         </div>
 
         {/* Champion hero, with the crest this franchise wore that season. */}

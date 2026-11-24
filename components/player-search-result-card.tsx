@@ -69,7 +69,7 @@ export function PlayerSearchResultCard({
             {ownerFranchise ? (
               <Link
                 href={`/teams/${ownerFranchise.slug}`}
-                className="text-caption text-accent-gold hover:brightness-110"
+                className="inline-flex min-h-11 items-center text-caption text-accent-gold hover:brightness-110"
               >
                 {ownerFranchise.name}
               </Link>

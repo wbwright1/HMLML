@@ -5,11 +5,16 @@ import { useMemo } from "react";
 import { FranchiseLogo } from "@/components/franchise-logo";
 import { TeamLink } from "@/components/team-link";
 import { useBookSlip } from "@/components/book/use-book-slip";
+import { PickToast } from "@/components/book/pick-toast";
+import { MonoNumerals } from "@/components/book/mono-numerals";
+import { buttonVariants } from "@/components/ui/button-variants";
 import {
+  LockAlert,
   SideRow,
   StatusKicker,
   RivalryKicker,
   YourPickRow,
+  primaryLockDay,
 } from "@/components/book/side-row";
 import {
   BOOK_COPY,
@@ -77,10 +82,14 @@ export function TrackingIsland({
     canUnlock,
     error,
     pendingMatchup,
+    saved,
+    undo,
+    dismissSaved,
     pick: onPick,
     lock,
     unlock,
   } = useBookSlip(week, games);
+  const primaryDay = primaryLockDay(games).day;
 
   const members = useMemo(
     () => grid.divisions.flatMap((d) => d.pickers),
@@ -128,9 +137,14 @@ export function TrackingIsland({
 
       <section>
         <p className="text-kicker mb-3">
-          Week <span className="font-mono tabular-nums">{week}</span> ·{" "}
+          Week <span className="font-mono tabular-nums">{week}</span>{" "}
           {BOOK_COPY.slateKicker}
         </p>
+        {games.length > 0 && (
+          <div className="mb-3">
+            <LockAlert games={games} canChange={!standingLock} />
+          </div>
+        )}
         {games.length === 0 ? (
           <div className="card-surface p-5">
             <p className="text-body-sm text-text-secondary">
@@ -154,6 +168,7 @@ export function TrackingIsland({
                   interactive={canPick && game.status === "open"}
                   pending={pendingMatchup === game.matchupId}
                   slipClosed={standingLock}
+                  primaryDay={primaryDay}
                   onPick={onPick}
                 />
               ))}
@@ -171,6 +186,7 @@ export function TrackingIsland({
         divisions={grid.divisions}
         viewerSlug={franchiseSlug}
       />
+      <PickToast saved={saved} onUndo={undo} onDismiss={dismissSaved} />
     </div>
   );
 }
@@ -250,7 +266,7 @@ function WeekPulse({
   return (
     <section>
       <p className="text-kicker mb-3">
-        Week <span className="font-mono tabular-nums">{week}</span> ·{" "}
+        Week <span className="font-mono tabular-nums">{week}</span>{" "}
         {BOOK_COPY.sheetKicker}
       </p>
       <div className="card-surface p-5">
@@ -313,7 +329,10 @@ function WeekPulse({
           />
         ) : (
           <p className="mt-4 border-t border-divider pt-3.5 text-body-sm text-text-secondary">
-            <Link href="/claim" className="font-semibold text-accent-gold">
+            <Link
+              href="/claim"
+              className="-my-3 inline-block rounded-md py-3 font-semibold text-accent-gold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+            >
               {BOOK_COPY.pickemsSignedOutLink}
             </Link>
             {BOOK_COPY.pickemsSignedOut.slice(
@@ -369,10 +388,10 @@ function LockRow({
   onLock: () => void;
   onUnlock: () => void;
 }) {
-  // inline-flex plus an explicit floor: 14px text with py-2 measures ~36px,
-  // and this is the only tap target on the tab that is not a side row.
+  // Status pills (not controls) share the 44px button footprint so the row
+  // doesn't jump when the lock state changes.
   const pill =
-    "inline-flex min-h-[44px] items-center justify-center rounded-full px-4 py-2 text-body-sm font-semibold";
+    "inline-flex min-h-11 items-center justify-center rounded-full px-4 py-2 text-body-sm font-semibold";
 
   let left: React.ReactNode;
   let note: string;
@@ -391,7 +410,7 @@ function LockRow({
           <button
             type="button"
             onClick={onUnlock}
-            className={`${pill} cursor-pointer border border-border-strong bg-surface text-text-secondary transition-colors duration-150 hover:text-text-primary`}
+            className={buttonVariants({ variant: "outline" })}
           >
             {BOOK_COPY.unlockCta}
           </button>
@@ -412,7 +431,7 @@ function LockRow({
       <button
         type="button"
         onClick={onLock}
-        className={`${pill} cursor-pointer bg-accent-gold text-canvas transition-[filter] duration-150 hover:brightness-110`}
+        className={buttonVariants()}
       >
         {BOOK_COPY.lockCta}
       </button>
@@ -423,7 +442,7 @@ function LockRow({
   return (
     <div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-divider pt-3.5">
       <div className="flex min-w-0 flex-wrap items-center gap-2.5">{left}</div>
-      <span className="min-w-0 text-[11px] text-text-tertiary">{note}</span>
+      <span className="min-w-0 text-caption text-text-tertiary">{note}</span>
     </div>
   );
 }
@@ -444,6 +463,7 @@ function SlateCard({
   interactive,
   pending,
   slipClosed,
+  primaryDay,
   onPick,
 }: {
   game: BookGame;
@@ -457,6 +477,8 @@ function SlateCard({
   interactive: boolean;
   pending: boolean;
   slipClosed: boolean;
+  /** The lock day the alert above the slate already announced. */
+  primaryDay: string | null;
   onPick: (game: BookGame, side: BookSideKey) => void;
 }) {
   const open = game.status === "open";
@@ -488,10 +510,10 @@ function SlateCard({
         }`}
       >
         <span className="flex min-w-0 items-center gap-2">
-          <StatusKicker game={game} showPush />
+          <StatusKicker game={game} showPush primaryDay={primaryDay} />
           <RivalryKicker game={game} />
         </span>
-        <span className="text-[12px] text-text-tertiary">
+        <span className="text-caption text-text-tertiary">
           <span className="font-mono font-bold tabular-nums text-text-secondary">
             {inCount}
           </span>{" "}
@@ -573,7 +595,7 @@ function PickerRail({
     <div className="flex flex-col gap-[7px] pt-2">
       <div className="flex items-baseline gap-1.5">
         <span className="text-stat text-[15px] leading-none">{total}</span>
-        <span className="text-[11px] text-text-tertiary">
+        <span className="text-caption text-text-tertiary">
           {BOOK_COPY.railTookSide}
         </span>
       </div>
@@ -604,9 +626,9 @@ function PickerRail({
         return (
           <div
             key={division.name}
-            className="grid grid-cols-[38px_minmax(0,1fr)] items-start gap-2"
+            className="grid grid-cols-[44px_minmax(0,1fr)] items-start gap-2"
           >
-            <span className="pt-1.5 text-[10px] font-semibold uppercase tracking-[.14em] text-text-tertiary">
+            <span className="pt-1 text-caption font-semibold text-text-tertiary">
               {divisionRailLabel(division.name)}
             </span>
             <span className="flex min-w-0 flex-wrap gap-1.5">
@@ -621,7 +643,7 @@ function PickerRail({
 
 function Nobody() {
   return (
-    <span className="text-[11px] text-text-tertiary">{BOOK_COPY.railNobody}</span>
+    <span className="text-caption text-text-tertiary">{BOOK_COPY.railNobody}</span>
   );
 }
 
@@ -637,17 +659,17 @@ const CHIP_STATES: Record<
   win: {
     skin: "border-accent-green/30 bg-accent-green-light",
     code: "text-accent-green",
-    glyph: "✓",
+    glyph: "W",
   },
   loss: {
     skin: "border-accent-warm/30 bg-accent-warm-light",
     code: "text-accent-warm",
-    glyph: "✗",
+    glyph: "L",
   },
   push: {
     skin: "border-border bg-surface-muted",
     code: "text-text-secondary",
-    glyph: "PUSH",
+    glyph: "Push",
   },
 };
 
@@ -694,15 +716,13 @@ function PickerChip({
         avatarUrl={member.avatarUrl ?? undefined}
         size={20}
       />
-      <span
-        className={`font-mono text-[10px] font-bold tracking-[.04em] ${code}`}
-      >
-        {isViewer ? "YOU" : member.abbreviation}
+      <span className={`text-caption font-bold ${code}`}>
+        {isViewer ? "You" : member.abbreviation}
       </span>
       {state.glyph && (
         <span
-          className={`text-[10px] font-semibold ${
-            outcome === "push" ? "tracking-[.08em] text-text-tertiary" : state.code
+          className={`text-caption font-semibold ${
+            outcome === "push" ? "text-text-tertiary" : state.code
           }`}
         >
           {state.glyph}
@@ -735,7 +755,7 @@ function SeasonLedger({
 
   return (
     <section>
-      <p className="text-kicker mb-3">Season · Against the Spread</p>
+      <p className="text-kicker mb-3">Season against the spread</p>
 
       {!anyGraded ? (
         <div className="card-surface p-6">
@@ -748,7 +768,7 @@ function SeasonLedger({
           {divisions.length > 1 && <DivisionRace divisions={divisions} />}
 
           <div
-            className={`${LEDGER_GRID} border-b border-divider px-4 py-2.5 text-[11px] font-semibold uppercase tracking-[.18em] text-text-tertiary`}
+            className={`${LEDGER_GRID} border-b border-divider px-4 py-2.5 text-caption font-semibold text-text-tertiary`}
           >
             <span className="text-center">#</span>
             <span />
@@ -768,8 +788,8 @@ function SeasonLedger({
             ))}
           </ul>
 
-          <p className="border-t border-divider px-4 py-2.5 text-[11px] text-text-tertiary">
-            {BOOK_COPY.unitsNote}
+          <p className="border-t border-divider px-4 py-2.5 text-caption text-text-tertiary">
+            <MonoNumerals text={BOOK_COPY.unitsNote} />
           </p>
         </div>
       )}
@@ -810,17 +830,17 @@ function DivisionRace({ divisions }: { divisions: PickemsDivision[] }) {
                   size={20}
                   decorative
                 />
-                <span className="min-w-0 truncate text-[13px] font-semibold text-text-primary">
+                <span className="min-w-0 truncate text-body-sm font-semibold text-text-primary">
                   {division.leader.franchiseName}
                 </span>
               </div>
             ) : (
-              <span className="text-[13px] text-text-tertiary">
+              <span className="text-body-sm text-text-tertiary">
                 {BOOK_COPY.noPicksGraded}
               </span>
             )}
             {division.record !== null && division.units !== null && (
-              <span className="text-[11px] text-text-tertiary">
+              <span className="text-caption text-text-tertiary">
                 Combined{" "}
                 <span className="font-mono font-bold tabular-nums text-text-secondary">
                   {division.record}
@@ -864,8 +884,10 @@ function LedgerRow({ row, isYou }: { row: AtsLeaderboardRow; isYou: boolean }) {
     : isYou
       ? "bg-white/[.03]"
       : "";
+  // Figures on the gold-tinted leader row read in secondary ink, not gold on
+  // gold.
   const rankColor = row.isLeader
-    ? "text-accent-gold"
+    ? "text-text-secondary"
     : row.isLast
       ? "text-accent-warm"
       : "text-text-tertiary";
@@ -924,12 +946,12 @@ function LedgerRow({ row, isYou }: { row: AtsLeaderboardRow; isYou: boolean }) {
               {row.franchiseName}
             </span>
             {isYou && (
-              <span className="shrink-0 text-[10px] font-semibold uppercase tracking-[.1em] text-accent-gold">
+              <span className="shrink-0 text-caption font-semibold text-accent-gold">
                 You
               </span>
             )}
             {row.divisionTag && (
-              <span className="hidden shrink-0 text-[10px] font-semibold uppercase tracking-[.1em] text-text-tertiary sm:inline">
+              <span className="hidden shrink-0 text-caption font-semibold text-text-tertiary sm:inline">
                 {row.divisionTag}
               </span>
             )}
@@ -937,15 +959,19 @@ function LedgerRow({ row, isYou }: { row: AtsLeaderboardRow; isYou: boolean }) {
           {/* Below `sm` the division tag, the ATS record and the streak ride
               one meta line instead of taking three more columns off a 390px
               row. Above it they are back in their own columns. */}
-          <span className="flex items-baseline gap-2.5 text-[11px] sm:hidden">
+          <span className="flex items-baseline gap-2.5 text-caption sm:hidden">
             {row.divisionTag && (
-              <span className="text-[10px] font-semibold uppercase tracking-[.1em] text-text-tertiary">
+              <span className="font-semibold text-text-tertiary">
                 {row.divisionTag}
               </span>
             )}
             {ranked && (
               <>
-                <span className="font-mono font-bold tabular-nums text-text-tertiary">
+                <span
+                  className={`font-mono font-bold tabular-nums ${
+                    row.isLeader ? "text-text-secondary" : "text-text-tertiary"
+                  }`}
+                >
                   {row.record}
                 </span>
                 {row.streakLabel && (
@@ -989,7 +1015,7 @@ function LedgerRow({ row, isYou }: { row: AtsLeaderboardRow; isYou: boolean }) {
         // nothing to show, and inventing a 0-0 would be a fabricated claim.
         <span
           style={{ gridColumn: "4 / -1" }}
-          className="text-right text-[11px] text-text-tertiary"
+          className="text-right text-caption text-text-tertiary"
         >
           {BOOK_COPY.noPicksGraded}
         </span>

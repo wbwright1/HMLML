@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { BackLink } from "@/components/back-link";
 import { PageSection } from "@/components/page-section";
 import { FranchiseIdentity } from "@/components/franchise-identity";
@@ -117,21 +118,18 @@ export default async function SeasonDetailPage({
 
   return (
     <>
-      <PageSection
-        label={isLegacy ? "Legacy Era" : "Season"}
-        title={`${year}`}
-      >
+      <PageSection as="h1" title={`${year} season`}>
         <div className="flex flex-wrap items-center gap-4">
-          <BackLink href="/seasons" label="All Seasons" />
+          <BackLink href="/seasons" label="All seasons" />
 
           {season.status && season.status !== "complete" && (
             <SuperlativeBadge
-              text={season.status === "in_season" ? "In Season" : "Pre-Draft"}
+              text={season.status === "in_season" ? "In season" : "Pre-draft"}
               variant="green"
             />
           )}
 
-          {isLegacy && <SuperlativeBadge text="Legacy Era" variant="neutral" />}
+          {isLegacy && <SuperlativeBadge text="Legacy era" variant="neutral" />}
         </div>
 
         {/* Season selector for switching between years */}
@@ -200,16 +198,17 @@ export default async function SeasonDetailPage({
             </div>
             <Link
               href={`/playoffs/${year}`}
-              className="inline-flex text-body-sm font-medium text-accent-gold transition-all hover:brightness-110"
+              className="inline-flex min-h-11 items-center gap-1 rounded-md text-body-sm font-medium text-accent-gold hover:brightness-110 transition-[filter,scale] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
-              See the whole bracket &rarr;
+              See the whole bracket
+              <ChevronRight className="size-4" strokeWidth={2} aria-hidden />
             </Link>
           </div>
         )}
       </PageSection>
 
       {arc && (
-        <PageSection label="Season Arc" title="How it played out.">
+        <PageSection title="How it played out">
           <SeasonArcChart
             arc={arc}
             year={year}
@@ -229,7 +228,7 @@ export default async function SeasonDetailPage({
       )}
 
       {/* Final Standings */}
-      <PageSection label="Final Standings" title="Standings">
+      <PageSection title="Standings">
         {standings.length === 0 ? (
           <p className="text-body-lg text-text-tertiary">
             Standings data is not available for this season yet.
@@ -436,13 +435,14 @@ export default async function SeasonDetailPage({
 
       {/* Week-by-Week Results */}
       {maxWeek > 0 && (
-        <PageSection label="Week by Week" title="Game Results">
-          <div className="mb-4">
+        <PageSection title="Game results">
+          <div className="-mt-2">
             <Link
               href={`/schedule?season=${year}`}
-              className="text-body-sm text-accent-gold hover:brightness-110 transition-colors"
+              className="inline-flex min-h-11 items-center gap-1 rounded-md text-body-sm font-medium text-accent-gold hover:brightness-110 transition-[filter,scale] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
             >
-              View Full Season Schedule &rarr;
+              Full season schedule
+              <ChevronRight className="size-4" strokeWidth={2} aria-hidden />
             </Link>
           </div>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-9 gap-2">
@@ -453,13 +453,13 @@ export default async function SeasonDetailPage({
                 <Link
                   key={week}
                   href={`/seasons/${year}/week/${week}`}
-                  className={`rounded-lg border text-center py-3 px-2 text-sm font-medium transition-colors hover:bg-surface-muted ${
+                  className={`rounded-lg border text-center py-3 px-2 text-sm font-medium transition-[background-color,scale] duration-150 hover:bg-surface-muted active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas ${
                     isPlayoff
                       ? "border-accent-green/30 bg-accent-green-light text-accent-green hover:bg-accent-green-light/80"
                       : "border-border bg-surface text-text-primary"
                   }`}
                 >
-                  <span className="block text-xs text-text-tertiary mb-0.5">
+                  <span className={`block text-caption mb-0.5 ${isPlayoff ? "" : "text-text-tertiary"}`}>
                     {isPlayoff ? "Playoff" : "Week"}
                   </span>
                   <span className="font-mono tabular-nums">{week}</span>
@@ -472,9 +472,10 @@ export default async function SeasonDetailPage({
             <div className="mt-6">
               <Link
                 href={`/playoffs/${year}`}
-                className="inline-flex items-center gap-2 text-body-sm font-medium text-accent-gold hover:brightness-110 transition-all"
+                className="inline-flex min-h-11 items-center gap-1 rounded-md text-body-sm font-medium text-accent-gold hover:brightness-110 transition-[filter,scale] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
               >
-                View Playoff Bracket &rarr;
+                Playoff bracket
+                <ChevronRight className="size-4" strokeWidth={2} aria-hidden />
               </Link>
             </div>
           )}

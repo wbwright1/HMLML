@@ -34,7 +34,7 @@ test.describe("The Trophy Case", () => {
     await expect(trophyCase).toBeVisible();
 
     // "Yearly Hardware" subheading present inside the Player Wing section.
-    await expect(trophyCase.getByText("Yearly Hardware")).toBeVisible();
+    await expect(trophyCase.getByText("Yearly hardware")).toBeVisible();
     await expect(
       trophyCase.getByRole("heading", { name: "The Trophy Case" }),
     ).toBeVisible();

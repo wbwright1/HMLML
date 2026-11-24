@@ -60,7 +60,7 @@ export async function PlayerProfile({
       <div className="space-y-3">
         <ValueStatCallouts valueSeries={valueSeries} position={identity.position} />
         <div className="card-surface p-4 sm:p-5">
-          <p className="text-kicker text-text-tertiary mb-3">Dynasty Value</p>
+          <p className="text-kicker text-text-tertiary mb-3">Dynasty value</p>
           <ValueChart valueSeries={valueSeries} />
         </div>
       </div>

@@ -1,28 +1,35 @@
 import Link from "next/link";
+import { cn } from "@/lib/utils";
+import { ChevronRight } from "lucide-react";
 import { TeamLink } from "@/components/team-link";
 import { PlayerLink } from "@/components/player-link";
-import { PlayerHeadshot } from "@/components/player-headshot";
-import { PositionBadge } from "@/components/position-badge";
+import { FranchiseLogo } from "@/components/franchise-logo";
 import { TeamFlag, type FlagTeam } from "@/components/hub/team-flag";
-import { HubSection, RailCard, RailRows } from "@/components/hub/rail-card";
-import { SNARKY_LABELS } from "@/lib/content";
 import {
-  recapHeadline,
-  teamOfWeekVerdict,
-  type RecapPlayer,
-  type TeamOfWeek,
-} from "@/lib/hub/week-recap";
-import type { HeroClaim } from "@/lib/hub/hero-claim";
+  HubSection,
+  LinkRows,
+  RailCard,
+  HUB_ROW_LINK,
+} from "@/components/hub/rail-card";
+import { buttonVariants } from "@/components/ui/button-variants";
+import { HUB_LABELS, SNARKY_LABELS, sentenceCaseLabel } from "@/lib/content";
+import { teamOfWeekVerdict, type RecapPlayer, type TeamOfWeek } from "@/lib/hub/week-recap";
 import type { RecapTeam, WeekRecap } from "@/lib/queries/week-recap";
 import type { WeeklySuperlatives } from "@/lib/queries/superlatives";
 import type { WeekBenchLeader } from "@/lib/queries/lineup-efficiency";
 
 /**
  * The post-week recap ("the newsletter"): leads the between-weeks hub from
- * the Tuesday-morning week roll until Thursday kickoff, on every screen size.
- * Everything in it is a completed-week fact: results, the four team
- * superlatives, the league-wide Team of the Week (optimal lineup), the top
- * started performers, the dud, and the biggest bench blunder.
+ * the Tuesday-morning week roll until the Thursday-morning cron, on every
+ * screen size. Three modules, every one a completed-week fact:
+ *   1. "Week N wrap": the league's nickname stat tiles (Boom game, Mercy rule,
+ *      Photo finish, Dud of the week, Coaching malpractice). No No-show tile:
+ *      the hero owns the week's low score. No serif sentence headline either:
+ *      it restated the hero.
+ *   2. "Final scores": one row per pairing, the whole row a link into the
+ *      matchup.
+ *   3. "Team of the week": the league-wide optimal lineup. The old Top
+ *      performers list is folded in here; it listed mostly the same players.
  *
  * Server component, zero client JS. Renders nothing when the prior week has
  * not fully completed (the query returns null in that case).
@@ -32,22 +39,13 @@ export function WeekRecapSection({
   recap,
   superlatives,
   benchLeader,
-  heroClaim = null,
 }: {
   seasonYear: number;
   recap: WeekRecap;
   superlatives: WeeklySuperlatives | null;
   benchLeader: WeekBenchLeader | null;
-  /** The hub hero's claim: the recap headline states a different fact. */
-  heroClaim?: HeroClaim | null;
 }) {
   const week = recap.week;
-  const headline = recapHeadline(week, {
-    highestScorer: superlatives?.highestScorer ?? null,
-    lowestScorer: superlatives?.lowestScorer ?? null,
-    biggestBlowout: superlatives?.biggestBlowout ?? null,
-    closestWin: superlatives?.closestWin ?? null,
-  }, heroClaim);
   const teamBySlug = new Map<string, RecapTeam>();
   for (const r of recap.results) {
     teamBySlug.set(r.winner.slug, r.winner);
@@ -64,171 +62,198 @@ export function WeekRecapSection({
     };
   };
 
-  const tiles = superlatives ? recapTiles(superlatives, flagOf) : [];
-  const hasResults = recap.results.length > 0;
-  const hasPlayers = recap.topPerformers.length > 0 || recap.dud !== null;
+  const tiles = recapTiles(superlatives, recap.dud, benchLeader, flagOf);
 
   return (
-    <HubSection
-      kicker={<>Week {week}, In The Books</>}
-      action={
-        <Link
-          href={`/seasons/${seasonYear}/week/${week}`}
-          className="text-caption text-accent-gold hover:brightness-110 normal-case tracking-normal"
+    <div data-testid="week-recap" className="space-y-8">
+      {tiles.length > 0 && (
+        <HubSection
+          kicker={`Week ${week} wrap`}
+          action={
+            // Phones get "Box scores" in the hero; desktop's hero has no
+            // action row (the topbar carries the claim pill), so it lives here.
+            <Link
+              href={`/seasons/${seasonYear}/week/${week}`}
+              className={cn(buttonVariants({ variant: "quiet", size: "sm" }), "hidden lg:inline-flex")}
+            >
+              {HUB_LABELS.boxScores}
+              <ChevronRight aria-hidden="true" strokeWidth={2} data-icon="inline-end" />
+            </Link>
+          }
         >
-          Full box scores &rarr;
-        </Link>
-      }
-    >
-      <div data-testid="week-recap" className="space-y-6">
-        {/* Headline + the four team superlatives */}
-        <div className="card-surface card-glows relative overflow-hidden p-6 md:p-8">
-          <p className="text-kicker text-accent-gold">The Week {week} Wrap</p>
-          <h2 className="text-h2 mt-2 max-w-3xl" data-testid="recap-headline">
-            {headline}
-          </h2>
-          {tiles.length > 0 && (
-            <div className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-6">
-              {tiles.map((t) => (
-                <div key={t.label} className="min-w-0">
-                  <p className={`text-kicker ${t.labelClass}`}>{t.label}</p>
-                  <p
-                    className={`mt-1 text-stat tabular-nums text-[32px] leading-none ${t.valueClass}`}
-                  >
-                    {t.value}
-                  </p>
-                  <div className="mt-2 text-body-sm text-text-secondary">{t.who}</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Two top-aligned columns, balanced by content height rather than
-            stretched to the tallest card: the ten-slot Team of the Week is
-            the tallest block, so it takes the Dud beside it and the shorter
-            Final Scores card takes the Top Performers. The bench blunder runs
-            full width below as the closing sting. */}
-        {(hasResults || hasPlayers || recap.teamOfWeek) && (
-          <div className="grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-2 lg:items-start">
-            {(hasResults || recap.topPerformers.length > 0) && (
-              <div className="space-y-6">
-                {hasResults && <ScoreboardCard results={recap.results} />}
-                {recap.topPerformers.length > 0 && (
-                  <TopPerformersCard players={recap.topPerformers} />
-                )}
+          <div className="card-surface grid grid-cols-2 gap-x-4 gap-y-6 p-6 sm:grid-cols-3">
+            {tiles.map((t) => (
+              <div
+                key={t.label}
+                data-testid="recap-tile"
+                className={`min-w-0 ${t.wide ? "col-span-2" : ""}`.trim()}
+              >
+                <p className="text-kicker">{t.label}</p>
+                <p
+                  className={`mt-2 text-stat text-3xl leading-none ${t.valueClass}`}
+                >
+                  {t.value}
+                </p>
+                <div className="mt-1 text-body-sm text-text-secondary">{t.who}</div>
               </div>
-            )}
-            {(recap.teamOfWeek || recap.dud) && (
-              <div className="space-y-6">
-                {recap.teamOfWeek && <TeamOfWeekCard team={recap.teamOfWeek} />}
-                {recap.dud && <DudCard player={recap.dud} />}
-              </div>
-            )}
+            ))}
           </div>
-        )}
+        </HubSection>
+      )}
 
-        {benchLeader && <BenchCallout leader={benchLeader} />}
-      </div>
-    </HubSection>
+      {recap.results.length > 0 && (
+        <HubSection kicker={HUB_LABELS.finalScores} id="final-scores">
+          <LinkRows>
+            {recap.results.map((r) => (
+              <Link
+                key={r.matchupId}
+                href={`/matchups/${seasonYear}/${week}/${r.matchupId}`}
+                data-testid="recap-result"
+                className={HUB_ROW_LINK}
+              >
+                <span className="min-w-0 flex-1 space-y-1.5">
+                  <ScoreLine team={r.winner} won />
+                  <ScoreLine team={r.loser} won={false} />
+                </span>
+                <ChevronRight
+                  aria-hidden="true"
+                  strokeWidth={2}
+                  className="size-4 shrink-0 text-text-tertiary"
+                />
+              </Link>
+            ))}
+          </LinkRows>
+        </HubSection>
+      )}
+
+      {recap.teamOfWeek && <TeamOfWeekCard team={recap.teamOfWeek} />}
+    </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Superlative tiles
+// Wrap tiles
 // ---------------------------------------------------------------------------
 
 interface RecapTile {
   label: string;
   value: string;
   who: React.ReactNode;
-  labelClass: string;
   valueClass: string;
+  /** Spans both phone columns (and two of three on wider screens). */
+  wide?: boolean;
+}
+
+function TwoTeams({ a, b }: { a: FlagTeam; b: FlagTeam }) {
+  return (
+    <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 [&>a]:shrink-0">
+      <TeamFlag team={a} compact className="min-h-11" />
+      <span className="text-text-tertiary">over</span>
+      <TeamFlag team={b} compact className="min-h-11" />
+    </div>
+  );
 }
 
 function recapTiles(
-  s: WeeklySuperlatives,
+  s: WeeklySuperlatives | null,
+  dud: RecapPlayer | null,
+  bench: WeekBenchLeader | null,
   flagOf: (slug: string, name: string) => FlagTeam
 ): RecapTile[] {
   const tiles: RecapTile[] = [];
-  if (s.highestScorer) {
+  if (s?.highestScorer) {
     tiles.push({
-      label: SNARKY_LABELS.BOOM_GAME.displayText,
+      label: sentenceCaseLabel(SNARKY_LABELS.BOOM_GAME.displayText),
       value: s.highestScorer.points.toFixed(1),
-      who: <TeamFlag team={flagOf(s.highestScorer.franchiseSlug, s.highestScorer.franchiseName)} />,
-      labelClass: "text-accent-gold",
+      who: (
+        <TeamFlag
+          team={flagOf(s.highestScorer.franchiseSlug, s.highestScorer.franchiseName)}
+          className="min-h-11"
+        />
+      ),
       valueClass: "text-text-primary",
     });
   }
-  if (s.lowestScorer) {
+  if (s?.biggestBlowout) {
     tiles.push({
-      label: SNARKY_LABELS.NO_SHOW.displayText,
-      value: s.lowestScorer.points.toFixed(1),
-      who: <TeamFlag team={flagOf(s.lowestScorer.franchiseSlug, s.lowestScorer.franchiseName)} />,
-      labelClass: "text-accent-warm",
+      label: sentenceCaseLabel(SNARKY_LABELS.MERCY_RULE.displayText),
+      value: `+${s.biggestBlowout.margin.toFixed(1)}`,
+      who: (
+        <TwoTeams
+          a={flagOf(s.biggestBlowout.winnerSlug, s.biggestBlowout.winner)}
+          b={flagOf(s.biggestBlowout.loserSlug, s.biggestBlowout.loser)}
+        />
+      ),
+      valueClass: "text-text-primary",
+    });
+  }
+  if (s?.closestWin) {
+    tiles.push({
+      label: HUB_LABELS.photoFinish,
+      value: `+${s.closestWin.margin.toFixed(1)}`,
+      who: (
+        <TwoTeams
+          a={flagOf(s.closestWin.winnerSlug, s.closestWin.winner)}
+          b={flagOf(s.closestWin.loserSlug, s.closestWin.loser)}
+        />
+      ),
+      valueClass: "text-text-primary",
+    });
+  }
+  if (dud) {
+    tiles.push({
+      label: HUB_LABELS.dudOfTheWeek,
+      value: dud.points.toFixed(1),
+      who: (
+        <PlayerLink
+          playerId={dud.playerId}
+          className="flex min-h-11 min-w-0 items-center"
+        >
+          <span>
+            {dud.name}, {dud.franchiseName}
+            {dud.projectedPoints != null && dud.projectedPoints > 0 && (
+              <>
+                {" "}
+                (proj.{" "}
+                <span className="font-mono tabular-nums">{dud.projectedPoints.toFixed(1)}</span>)
+              </>
+            )}
+          </span>
+        </PlayerLink>
+      ),
       valueClass: "text-accent-warm",
     });
   }
-  if (s.biggestBlowout) {
+  if (bench) {
+    const tail =
+      bench.won === true ? ", and won anyway" : bench.won === false ? ", and lost anyway" : "";
     tiles.push({
-      label: SNARKY_LABELS.MERCY_RULE.displayText,
-      value: `+${s.biggestBlowout.margin.toFixed(1)}`,
+      label: sentenceCaseLabel(SNARKY_LABELS.COACHING_MALPRACTICE.displayText),
+      value: bench.pointsLeft.toFixed(1),
       who: (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 [&>a]:shrink-0">
-          <TeamFlag team={flagOf(s.biggestBlowout.winnerSlug, s.biggestBlowout.winner)} compact />
-          <span className="text-text-tertiary">over</span>
-          <TeamFlag team={flagOf(s.biggestBlowout.loserSlug, s.biggestBlowout.loser)} compact />
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5">
+          <TeamFlag team={flagOf(bench.franchiseSlug, bench.franchiseName)} className="min-h-11" />
+          <span>left on the bench{tail}</span>
         </div>
       ),
-      labelClass: "text-accent-warm",
       valueClass: "text-text-primary",
-    });
-  }
-  if (s.closestWin) {
-    tiles.push({
-      label: "Photo Finish",
-      value: `+${s.closestWin.margin.toFixed(1)}`,
-      who: (
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 [&>a]:shrink-0">
-          <TeamFlag team={flagOf(s.closestWin.winnerSlug, s.closestWin.winner)} compact />
-          <span className="text-text-tertiary">over</span>
-          <TeamFlag team={flagOf(s.closestWin.loserSlug, s.closestWin.loser)} compact />
-        </div>
-      ),
-      labelClass: "text-text-tertiary",
-      valueClass: "text-text-primary",
+      wide: true,
     });
   }
   return tiles;
 }
 
 // ---------------------------------------------------------------------------
-// Scoreboard
+// Final scores
 // ---------------------------------------------------------------------------
 
-function ScoreboardCard({ results }: { results: WeekRecap["results"] }) {
-  return (
-    <section className="space-y-4">
-      <p className="text-kicker">Final Scores</p>
-      <RailCard>
-        <RailRows>
-          {results.map((r) => (
-            <div key={r.matchupId} data-testid="recap-result" className="space-y-1.5">
-              <ScoreLine team={r.winner} won />
-              <ScoreLine team={r.loser} won={false} />
-            </div>
-          ))}
-        </RailRows>
-      </RailCard>
-    </section>
-  );
-}
-
-/** One side of a final: W/L glyph, crest and name, then the score. Winners
- * are bold ink, losers regular tertiary, per the W/L typographic rule. */
+/** One side of a final: W/L letter, crest and name, then the score. Winners
+ * are bold ink, losers regular tertiary, per the W/L typographic rule. The
+ * crest is decorative (the name sits beside it) and is not its own link: the
+ * whole row is one link into the matchup. */
 function ScoreLine({ team, won }: { team: RecapTeam; won: boolean }) {
   return (
-    <div
+    <span
       className={`flex items-center gap-2 text-body-sm ${
         won ? "font-semibold text-text-primary" : "text-text-tertiary"
       }`}
@@ -238,48 +263,81 @@ function ScoreLine({ team, won }: { team: RecapTeam; won: boolean }) {
       >
         {won ? "W" : "L"}
       </span>
-      <TeamFlag team={team} />
+      <FranchiseLogo
+        slug={team.slug}
+        name={team.name}
+        abbreviation={team.abbreviation ?? undefined}
+        brandingColor={team.brandingColor ?? undefined}
+        avatarUrl={team.avatarUrl ?? undefined}
+        size={20}
+        decorative
+      />
+      <span className="min-w-0 truncate">{team.name}</span>
       <span className="ml-auto text-stat tabular-nums shrink-0">{team.points.toFixed(1)}</span>
-    </div>
+    </span>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Team of the Week (league-wide optimal lineup)
+// Team of the week (league-wide optimal lineup)
 // ---------------------------------------------------------------------------
 
 function TeamOfWeekCard({ team }: { team: TeamOfWeek }) {
   return (
-    <section className="space-y-4">
-      <p className="text-kicker">Team of the Week &middot; Optimal Lineup</p>
-      <RailCard tinted>
-        <div className="flex items-baseline justify-between gap-4">
-          <p className="text-kicker text-accent-gold">Best Possible Lineup</p>
-          <p className="text-stat tabular-nums text-[32px] leading-none text-text-primary">
+    <HubSection
+      kicker={HUB_LABELS.teamOfTheWeek}
+      action={
+        <p className="text-caption text-text-tertiary" data-testid="totw-total">
+          {HUB_LABELS.bestPossibleLineup}{" "}
+          <span className="text-stat tabular-nums text-body-sm text-text-primary">
             {team.total.toFixed(1)}
-          </p>
-        </div>
-        <p className="mt-2 text-body-sm text-text-secondary">{teamOfWeekVerdict(team)}</p>
-        <div className="mt-5">
-          <RailRows>
-            {team.slots.map((s, i) => (
-              <div
-                key={`${s.slot}-${i}`}
-                data-testid="totw-slot"
-                className="flex items-center gap-3"
-              >
-                <span className="text-kicker w-12 shrink-0">{slotLabel(s.slot)}</span>
-                {s.player ? (
-                  <RecapPlayerRow player={s.player} size={40} flagBenched />
-                ) : (
-                  <span className="text-body-sm text-text-muted">Empty</span>
-                )}
-              </div>
-            ))}
-          </RailRows>
-        </div>
-      </RailCard>
-    </section>
+          </span>
+        </p>
+      }
+    >
+      <p className="text-body-sm text-text-secondary">{teamOfWeekVerdict(team)}</p>
+      <LinkRows>
+        {team.slots.map((s, i) =>
+          s.player ? (
+            <PlayerLink
+              key={`${s.slot}-${i}`}
+              playerId={s.player.playerId}
+              className={HUB_ROW_LINK}
+            >
+              <TotwRow slot={s.slot} player={s.player} />
+            </PlayerLink>
+          ) : (
+            <div key={`${s.slot}-${i}`} data-testid="totw-slot" className="flex min-h-11 items-center gap-3 px-4 py-3">
+              <span className="text-caption w-12 shrink-0 text-text-tertiary">{slotLabel(s.slot)}</span>
+              <span className="text-body-sm text-text-tertiary">Empty</span>
+            </div>
+          )
+        )}
+      </LinkRows>
+    </HubSection>
+  );
+}
+
+/** Slot, player (name, then NFL team and the rostering franchise), points.
+ * Rendered inside the row's PlayerLink, so it is all spans. */
+function TotwRow({ slot, player }: { slot: string; player: RecapPlayer }) {
+  const benched = !player.started;
+  return (
+    <span data-testid="totw-slot" className="flex min-w-0 flex-1 items-center gap-3">
+      <span className="text-caption w-12 shrink-0 text-text-tertiary">{slotLabel(slot)}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-body-sm font-semibold text-text-primary">
+          {player.name}
+        </span>
+        <span className="block truncate text-caption text-text-tertiary">
+          {benched && <span className="text-accent-warm">Benched &middot; </span>}
+          {player.nflTeam ?? "FA"} &middot; {player.franchiseName}
+        </span>
+      </span>
+      <span className="text-stat tabular-nums text-body text-text-primary shrink-0">
+        {player.points.toFixed(1)}
+      </span>
+    </span>
   );
 }
 
@@ -289,118 +347,9 @@ function slotLabel(slot: string): string {
 }
 
 // ---------------------------------------------------------------------------
-// Top performers + the dud
-// ---------------------------------------------------------------------------
-
-function TopPerformersCard({ players }: { players: RecapPlayer[] }) {
-  return (
-    <section className="space-y-4">
-      <p className="text-kicker">Top Performers &middot; Started</p>
-      <RailCard>
-        <RailRows>
-          {players.map((p, i) => (
-            <div key={p.playerId} data-testid="recap-top" className="flex items-center gap-3">
-              <span className="text-stat tabular-nums text-body-sm text-text-tertiary w-5 shrink-0">
-                {i + 1}
-              </span>
-              <RecapPlayerRow player={p} size={48} />
-            </div>
-          ))}
-        </RailRows>
-      </RailCard>
-    </section>
-  );
-}
-
-function DudCard({ player }: { player: RecapPlayer }) {
-  return (
-    <section className="space-y-4">
-      <p className="text-kicker">Dud of the Week</p>
-      <div className="card-surface relative overflow-hidden p-6 card-tint-warm">
-        <p className="text-kicker text-accent-warm">
-          {SNARKY_LABELS.NO_SHOW.displayText} &middot; Started Anyway
-        </p>
-        <div className="mt-3">
-          <RecapPlayerRow player={player} size={48} tone="warm" />
-        </div>
-        {player.projectedPoints != null && player.projectedPoints > 0 && (
-          <p className="mt-3 text-body-sm text-text-secondary">
-            Projected for{" "}
-            <span className="text-stat tabular-nums">{player.projectedPoints.toFixed(1)}</span>
-            . Delivered{" "}
-            <span className="text-stat tabular-nums text-accent-warm">
-              {player.points.toFixed(1)}
-            </span>
-            .
-          </p>
-        )}
-      </div>
-    </section>
-  );
-}
-
-/** Headshot, name, NFL team and position, the rostering franchise, and the
- * week's points. The franchise crest rides on the headshot; the name is
- * visible text so the crest stays decorative. Not a <p> host: PlayerHeadshot
- * and FranchiseLogo both render divs. */
-function RecapPlayerRow({
-  player,
-  size,
-  tone = "ink",
-  flagBenched = false,
-}: {
-  player: RecapPlayer;
-  size: number;
-  tone?: "ink" | "warm";
-  flagBenched?: boolean;
-}) {
-  const benched = flagBenched && !player.started;
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-3">
-      <PlayerLink playerId={player.playerId} className="flex min-w-0 flex-1 items-center gap-3">
-        <PlayerHeadshot
-          playerId={player.playerId}
-          name={player.name}
-          size={size}
-          nflTeam={player.nflTeam}
-          franchiseBadge={{
-            slug: player.franchiseSlug,
-            name: player.franchiseName,
-            abbreviation: player.franchiseAbbreviation,
-            brandingColor: player.franchiseBrandingColor,
-            avatarUrl: player.franchiseAvatarUrl,
-          }}
-          decorative
-        />
-        <span className="min-w-0 flex-1">
-          <span className="text-body-sm font-semibold text-text-primary truncate block">
-            {player.name}
-          </span>
-          <span className="text-caption text-text-tertiary truncate block">
-            {benched && <span className="text-accent-warm">Benched &middot; </span>}
-            {player.nflTeam ?? "FA"} &middot; {player.position ?? "?"} &middot;{" "}
-            {player.franchiseName}
-          </span>
-        </span>
-      </PlayerLink>
-      <div className="flex shrink-0 items-center gap-2">
-        <span className="hidden sm:inline-block">
-          <PositionBadge position={player.position} />
-        </span>
-        <span
-          className={`text-stat tabular-nums text-body ${
-            tone === "warm" ? "text-accent-warm" : "text-text-primary"
-          }`}
-        >
-          {player.points.toFixed(1)}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Left On The Bench (moved here from between-weeks-hub.tsx; same copy)
+// Left on the bench: the desktop rail's fallback when the recap is not
+// rendering (window closed, or the prior week not fully complete). While the
+// recap renders, the same fact is the wrap's Coaching malpractice tile.
 // ---------------------------------------------------------------------------
 
 export function BenchCallout({ leader }: { leader: WeekBenchLeader }) {
@@ -411,11 +360,10 @@ export function BenchCallout({ leader }: { leader: WeekBenchLeader }) {
         ? " And still lost."
         : "";
   return (
-    <section className="space-y-4">
-      <p className="text-kicker">Left On The Bench</p>
+    <HubSection kicker="Left on the bench">
       <RailCard tinted>
-        <p className="text-kicker text-accent-gold">
-          {SNARKY_LABELS.COACHING_MALPRACTICE.displayText} &middot; Optimal Lineup
+        <p className="text-caption text-accent-gold">
+          {sentenceCaseLabel(SNARKY_LABELS.COACHING_MALPRACTICE.displayText)}
         </p>
         <p className="mt-2 text-stat tabular-nums text-5xl text-text-primary leading-none">
           {leader.pointsLeft.toFixed(1)}
@@ -434,6 +382,6 @@ export function BenchCallout({ leader }: { leader: WeekBenchLeader }) {
           {winTail}
         </div>
       </RailCard>
-    </section>
+    </HubSection>
   );
 }

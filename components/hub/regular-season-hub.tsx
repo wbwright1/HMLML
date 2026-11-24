@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { ChevronRight } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button-variants";
 import { TeamLink } from "@/components/team-link";
 import { PageSection } from "@/components/page-section";
 import { ScrollReveal } from "@/components/scroll-reveal";
@@ -224,9 +226,8 @@ export async function RegularSeasonHub({
       {/* Hero */}
       <section className="pt-2 pb-6 lg:flex lg:items-start lg:justify-between lg:gap-8">
         <div>
-          <p className="text-kicker mb-3">
-            Harambe Memorial League &middot; {seasonYear}
-          </p>
+          {/* No kicker above the headline (UI/UX pass): the live pill names
+              the week; the headline states it. */}
           <h1 className="text-display">Week {week}.</h1>
         </div>
 
@@ -234,14 +235,14 @@ export async function RegularSeasonHub({
           <div className="mt-6 lg:mt-0 flex flex-wrap gap-3">
             {highScore && highScore.points > 0 && (
               <StatChip
-                label="High Score"
+                label="High score"
                 value={highScore.points.toFixed(1)}
                 context={<TeamFlag team={highScore} />}
               />
             )}
             {highScore && highScore.points > 0 && closestGame && (
               <StatChip
-                label="Closest Game"
+                label="Closest game"
                 value={`+${closestGame.margin.toFixed(1)}`}
                 context={
                   <>
@@ -254,7 +255,7 @@ export async function RegularSeasonHub({
             )}
             {hasPlayersLeftStat && hubLive && (
               <StatChip
-                label="Players Left"
+                label="Players left"
                 value={`${hubLive.totalLeft}`}
                 context={`of ${hubLive.totalStarters}`}
               />
@@ -268,13 +269,14 @@ export async function RegularSeasonHub({
         <div className="grid gap-6 lg:grid-cols-[1fr_340px]">
           {/* On the field */}
           <HubSection
-            kicker={<>On the Field &middot; All Live</>}
+            kicker="On the field"
             action={
               <Link
                 href="/matchups"
-                className="text-caption text-accent-gold hover:brightness-110 normal-case tracking-normal"
+                className={`${buttonVariants({ variant: "quiet", size: "sm" })} -mr-3`}
               >
-                Matchup detail &rarr;
+                Matchup detail
+                <ChevronRight aria-hidden="true" strokeWidth={2} data-icon="inline-end" />
               </Link>
             }
           >
@@ -312,13 +314,14 @@ export async function RegularSeasonHub({
 
             {ladderEntries.length > 0 && (
               <HubSection
-                kicker="The Ladder"
+                kicker="The ladder"
                 action={
                   <Link
                     href="/records"
-                    className="text-caption text-accent-gold hover:brightness-110 normal-case tracking-normal"
+                    className={`${buttonVariants({ variant: "quiet", size: "sm" })} -mr-3`}
                   >
-                    Records &rarr;
+                    Records
+                    <ChevronRight aria-hidden="true" strokeWidth={2} data-icon="inline-end" />
                   </Link>
                 }
               >
@@ -332,12 +335,12 @@ export async function RegularSeasonHub({
 
             {weeklySuperlatives &&
               (weeklySuperlatives.highestScorer || weeklySuperlatives.biggestBlowout) && (
-                <HubSection kicker={<>Week {completedWeek} Damage</>}>
+                <HubSection kicker={`Week ${completedWeek} damage`}>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {weeklySuperlatives.highestScorer && (
                       <WeeklySuperlativeCard
                         type="highest-scorer"
-                        label="High Score"
+                        label="High score"
                         stat={weeklySuperlatives.highestScorer.points.toFixed(1)}
                         context={weeklySuperlatives.highestScorer.franchiseName}
                         week={completedWeek}
@@ -380,8 +383,8 @@ export async function RegularSeasonHub({
           {matchupData && matchupData.matchups.length > 0 && (
             <ScrollReveal>
               <PageSection
-                label={`${seasonYear} Season`}
-                title={`Week ${week} Matchups`}
+                label={`${seasonYear} season`}
+                title={`Week ${week} matchups`}
               >
                 <div className="space-y-3">
                   {matchupData.matchups.map((matchup) => {
@@ -395,7 +398,7 @@ export async function RegularSeasonHub({
                       <Link
                         key={matchup.matchupId}
                         href={`/matchups/${seasonYear}/${week}/${matchup.matchupId}`}
-                        className="block rounded-[14px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
+                        className="block rounded-[14px] transition-[scale] duration-150 active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas"
                       >
                         <MatchupRow
                           matchup={{
@@ -419,7 +422,7 @@ export async function RegularSeasonHub({
           {/* Standings (The Ladder) */}
           {ladderEntries.length > 0 && (
             <ScrollReveal>
-              <PageSection label="Current" title="The Ladder">
+              <PageSection label="Current" title="The ladder">
                 <div className="space-y-6">
                   {bookGames.length > 0 && (
                     <BookRailCard games={bookGames} week={week} />
@@ -444,7 +447,7 @@ export async function RegularSeasonHub({
               <ScrollReveal>
                 <PageSection
                   label={`Week ${completedWeek}`}
-                  title="This Week's Damage"
+                  title="This week's damage"
                 >
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {weeklySuperlatives.closestWin && (
@@ -472,7 +475,7 @@ export async function RegularSeasonHub({
                     {weeklySuperlatives.highestScorer && (
                       <WeeklySuperlativeCard
                         type="highest-scorer"
-                        label="Highest Scorer"
+                        label="Highest scorer"
                         stat={`${weeklySuperlatives.highestScorer.points.toFixed(1)} pts`}
                         context={weeklySuperlatives.highestScorer.franchiseName}
                         week={completedWeek}
@@ -482,7 +485,7 @@ export async function RegularSeasonHub({
                     {weeklySuperlatives.lowestScorer && (
                       <WeeklySuperlativeCard
                         type="lowest-scorer"
-                        label="Lowest Scorer"
+                        label="Lowest scorer"
                         stat={`${weeklySuperlatives.lowestScorer.points.toFixed(1)} pts`}
                         context={weeklySuperlatives.lowestScorer.franchiseName}
                         week={completedWeek}
@@ -507,14 +510,14 @@ export async function RegularSeasonHub({
           {/* Power Rankings preview */}
           {powerPreview && (
             <ScrollReveal>
-              <PowerPulseCard preview={powerPreview} week={completedWeek} />
+              <PowerPulseCard preview={powerPreview} />
             </ScrollReveal>
           )}
 
           {/* Season Superlatives */}
           {superlatives && (
             <ScrollReveal>
-              <PageSection label="Season Stats" title="The Season Ledger">
+              <PageSection label="Season stats" title="The season ledger">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6">
                   {superlatives.highestScore && (
                     <StatHero
@@ -524,7 +527,7 @@ export async function RegularSeasonHub({
                           {superlatives.highestScore.franchiseName ?? "Unknown"}
                         </TeamLink>
                       }
-                      badge="High Score"
+                      badge="High score"
                       context={`Week ${superlatives.highestScore.week}`}
                       variant="md"
                     />
@@ -545,7 +548,7 @@ export async function RegularSeasonHub({
                     <StatHero
                       value={superlatives.closestMatchup.margin.toFixed(1)}
                       label={`${superlatives.closestMatchup.teamA} vs ${superlatives.closestMatchup.teamB}`}
-                      badge="Closest Matchup"
+                      badge="Closest matchup"
                       variant="md"
                     />
                   )}
@@ -557,7 +560,7 @@ export async function RegularSeasonHub({
                           {superlatives.mostAllTimeWins.franchiseName}
                         </TeamLink>
                       }
-                      badge="Most All-Time Wins"
+                      badge="Most all-time wins"
                       variant="md"
                     />
                   )}
@@ -569,26 +572,29 @@ export async function RegularSeasonHub({
           {/* Last Week Results */}
           {lastWeekResults && lastWeekResults.results.length > 0 && (
             <ScrollReveal>
-              <PageSection label="Last Week" title={`Week ${lastWeekResults.week} Results`}>
+              <PageSection label="Last week" title={`Week ${lastWeekResults.week} results`}>
                 <div className="space-y-2">
                   {lastWeekResults.results.map((result) => (
                     <div
                       key={`${result.winner}-${result.loser}`}
-                      className="flex items-center justify-between rounded-[14px] border border-border bg-surface px-4 py-3 text-body-sm"
+                      className="flex items-center justify-between rounded-[14px] border border-border bg-surface px-4 text-body-sm"
                     >
                       <span>
                         <TeamLink
                           slug={result.winnerSlug}
-                          className="font-semibold text-text-primary"
+                          className="inline-flex min-h-11 items-center font-semibold text-text-primary"
                         >
                           {result.winner}
                         </TeamLink>
                         <span className="text-text-tertiary"> def. </span>
-                        <TeamLink slug={result.loserSlug} className="text-text-tertiary">
+                        <TeamLink
+                          slug={result.loserSlug}
+                          className="inline-flex min-h-11 items-center text-text-tertiary"
+                        >
                           {result.loser}
                         </TeamLink>
                       </span>
-                      <span className="text-stat text-sm text-text-tertiary whitespace-nowrap ml-4">
+                      <span className="text-stat text-body-sm text-text-tertiary whitespace-nowrap ml-4">
                         {result.winnerScore.toFixed(1)} - {result.loserScore.toFixed(1)}
                       </span>
                     </div>

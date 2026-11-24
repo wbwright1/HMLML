@@ -123,9 +123,9 @@ test.describe("Props, signed out", () => {
     expect(count).toBeLessThanOrEqual(20);
 
     // The sections the expanded slate posts, asserted as real headings.
-    await expect(pane.getByRole("heading", { name: "House Specials" })).toBeVisible();
-    await expect(pane.getByRole("heading", { name: "Player Props" })).toBeVisible();
-    await expect(pane.getByRole("heading", { name: "Team Totals" })).toBeVisible();
+    await expect(pane.getByRole("heading", { name: "House specials", exact: true })).toBeVisible();
+    await expect(pane.getByRole("heading", { name: "Player props", exact: true })).toBeVisible();
+    await expect(pane.getByRole("heading", { name: "Team totals", exact: true })).toBeVisible();
 
     // The new kinds are really on the board, not just the original three.
     await expect(pane.locator('[data-prop-kind="player_points"]').first()).toBeVisible();
@@ -157,8 +157,9 @@ test.describe("Props, signed out", () => {
     const actual = first.locator('[data-testid="prop-actual"]');
     await expect(actual).toBeVisible();
     expect((await actual.innerText()).trim().length).toBeGreaterThan(0);
-    // ...and the outcome reads as a word, so it survives greyscale.
-    await expect(first).toContainText(/Hit|Missed|Graded|Push/);
+    // ...and the outcome reads as a word, so it survives greyscale: the
+    // viewer's own result, or which side won (no bare "Graded" filler badge).
+    await expect(first).toContainText(/Hit|Missed|won|Push/);
   });
 
   test("mobile stays a single column with no horizontal scroll", async ({ page }) => {

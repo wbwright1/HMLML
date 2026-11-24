@@ -24,13 +24,16 @@ export interface FlagTeam {
 export function TeamFlag({
   team,
   compact = false,
+  className = "",
 }: {
   team: FlagTeam;
   /** Prints the letter code instead of the full name, for a chip naming two teams. */
   compact?: boolean;
+  /** Extra classes on the link, e.g. `min-h-11` where it is a phone tap target. */
+  className?: string;
 }) {
   return (
-    <TeamLink slug={team.slug} className="flex min-w-0 items-center gap-1.5">
+    <TeamLink slug={team.slug} className={`flex min-w-0 items-center gap-1.5 ${className}`.trim()}>
       <FranchiseLogo
         slug={team.slug}
         name={team.name}

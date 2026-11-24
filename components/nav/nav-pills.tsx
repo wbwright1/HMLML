@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, Users, BarChart3, Trophy, BookOpen } from "lucide-react";
+import { Home, Users, BarChart3, ListOrdered, BookOpen } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 interface NavItem {
   label: string;
-  /** Dock labels sit at 9px in a fifth of the screen; "The Book" does not fit. */
+  /** Dock labels are 12px in a fifth of the screen; "The Book" does not fit. */
   dockLabel?: string;
   href: string;
   icon: LucideIcon;
@@ -25,7 +25,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: "Hub", href: "/", icon: Home },
   { label: "Teams", href: "/teams", icon: Users },
   { label: "Records", href: "/records", icon: BarChart3 },
-  { label: "Drafts", href: "/drafts", icon: Trophy },
+  // A list (draft order), not a trophy: the trophy reads as "champions".
+  { label: "Drafts", href: "/drafts", icon: ListOrdered },
   { label: "The Book", dockLabel: "Book", href: "/book", icon: BookOpen },
 ];
 
@@ -52,7 +53,7 @@ export function NavPills({ variant }: NavPillsProps) {
               <Link
                 href={href}
                 aria-current={active ? "page" : undefined}
-                className={`block rounded-full px-4 py-1.5 text-body-sm font-medium transition-colors ${
+                className={`block whitespace-nowrap rounded-full px-3 py-1.5 text-body-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-canvas xl:px-4 ${
                   active
                     ? "bg-accent-gold-light text-accent-gold"
                     : "text-text-tertiary hover:text-text-primary"
@@ -77,20 +78,20 @@ export function NavPills({ variant }: NavPillsProps) {
               href={href}
               aria-current={active ? "page" : undefined}
               aria-label={dockLabel ? label : undefined}
-              className={`flex flex-col items-center gap-1 rounded-[12px] py-2 ${
+              className={`flex min-h-[52px] flex-col items-center justify-center gap-0.5 rounded-[12px] py-1.5 transition-[scale] duration-150 active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 active ? "bg-accent-gold-light" : ""
               }`}
             >
               <Icon
                 className={`size-[22px] ${
-                  active ? "text-accent-gold" : "text-text-tertiary"
+                  active ? "text-accent-gold" : "text-text-secondary"
                 }`}
-                strokeWidth={1.7}
+                strokeWidth={2}
                 aria-hidden="true"
               />
               <span
-                className={`text-[9px] font-semibold uppercase tracking-wide ${
-                  active ? "text-accent-gold" : "text-text-tertiary"
+                className={`text-caption font-medium ${
+                  active ? "text-accent-gold" : "text-text-secondary"
                 }`}
               >
                 {dockLabel ?? label}

@@ -35,7 +35,7 @@ export function MedallionShelf({
         <span className={`text-kicker ${isShame ? "text-accent-warm" : ""}`}>
           {label}
         </span>
-        <span className="font-mono text-[11px] text-text-muted">×{count}</span>
+        <span className="font-mono text-caption text-text-tertiary">×{count}</span>
       </div>
       <div className="medallion-strip no-scrollbar">{children}</div>
       <div
@@ -125,7 +125,7 @@ export function PlayerAwardPlate({
         <span className="block truncate text-[13px] font-bold text-text-primary">
           {playerName}
         </span>
-        <span className="block whitespace-nowrap text-[10px] text-text-tertiary">
+        <span className="block whitespace-nowrap text-caption text-text-tertiary">
           {position && <span>{position} · </span>}
           <span className="font-mono text-accent-gold">{seasonYear}</span>
         </span>

@@ -133,17 +133,17 @@ export async function SiteNav() {
 
   return (
     <>
-      {/* display:contents — landmark without a box, so the sticky bars resolve
+      {/* display:contents: landmark without a box, so the sticky bars resolve
           their sticky context against <body>, not a height-limited wrapper. */}
       <header className="contents">
         <Topbar livePill={livePill} />
         {/* The mobile header stays pinned; only the bottom dock hides on
             scroll (per league feedback, the header is wanted at all times). */}
-        <div className="sticky top-0 z-40 backdrop-blur-md lg:hidden">
+        <div data-mobile-header="" className="sticky top-0 z-(--z-sticky) backdrop-blur-md lg:hidden">
           <MobileHeader livePill={livePill} />
         </div>
       </header>
-      <ScrollChrome className="fixed inset-x-0 bottom-0 z-40 lg:hidden chrome-bottom">
+      <ScrollChrome className="fixed inset-x-0 bottom-0 z-(--z-sticky) lg:hidden chrome-bottom">
         <MobileDock />
       </ScrollChrome>
     </>

@@ -106,7 +106,7 @@ test.describe("Records: The Superlatives section", () => {
     const tabs = page.getByRole("tab");
     const tabCount = await tabs.count();
     if (tabCount <= 1) {
-      // Only "All-Time" (or no season tabs at all): nothing to switch to.
+      // Only "All-time" (or no season tabs at all): nothing to switch to.
       test.skip();
       return;
     }
@@ -131,7 +131,7 @@ test.describe("Records: The Superlatives section", () => {
 
     await target.click();
 
-    const label = page.getByText(`Season Awards · ${targetYear}`);
+    const label = page.getByText(`${targetYear} awards`, { exact: true });
     if ((await label.count()) === 0) {
       // That season produced no superlative cards; acceptable graceful absence.
       test.skip();
@@ -150,14 +150,14 @@ test.describe("Records: The Superlatives section", () => {
   test("R10: all-time superlatives", async ({ page }) => {
     await page.goto("/records");
 
-    const allTimeTab = page.getByRole("tab", { name: "All-Time", exact: true });
+    const allTimeTab = page.getByRole("tab", { name: "All-time", exact: true });
     if ((await allTimeTab.count()) === 0) {
       test.skip();
       return;
     }
     await allTimeTab.click();
 
-    const kicker = page.getByText("All-Time Awards");
+    const kicker = page.getByText("All-time awards", { exact: true });
     if ((await kicker.count()) === 0) {
       test.skip();
       return;

@@ -72,7 +72,7 @@ test.describe("Named rivalries", () => {
     await expect(kicker).toContainText(E2E_RIVALRY.name);
     await expect(kicker).toContainText(E2E_RIVALRY.tagline);
     // The name wins over the generic auto-detected kicker.
-    await expect(page.getByText("Rivalry Week", { exact: true })).toHaveCount(0);
+    await expect(page.getByText("Rivalry week", { exact: true })).toHaveCount(0);
     await expect(kicker.getByRole("link", { name: E2E_RIVALRY.name })).toHaveAttribute(
       "href",
       `/records/head-to-head?a=${A.slug}&b=${B.slug}`,
@@ -102,7 +102,7 @@ test.describe("Named rivalries", () => {
 
   test("T04: head-to-head for an unnamed pair has no rivalry hero", async ({ page }) => {
     await page.goto(`/records/head-to-head?a=${A.slug}&b=${C.slug}`);
-    await expect(page.getByRole("heading", { name: "Head-to-Head." })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1, name: "Head-to-head", exact: true })).toBeVisible();
     await expect(page.getByTestId("h2h-rivalry")).toHaveCount(0);
   });
 
@@ -110,7 +110,7 @@ test.describe("Named rivalries", () => {
     page,
   }) => {
     await page.goto("/records/rivalries");
-    await expect(page.getByRole("heading", { name: "Named Rivalries" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Named rivalries" })).toBeVisible();
     const card = page
       .getByTestId("named-rivalry-card")
       .filter({ has: page.getByRole("heading", { name: E2E_RIVALRY.name }) });
