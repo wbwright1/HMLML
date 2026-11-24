@@ -38,6 +38,29 @@ const standings: GotwStandingRow[] = ROWS.map(([id, w, l, pf, div]) => ({
   division: div,
   divisionName: `Division ${div}`,
 }));
+// The real weeks 1-2 results behind those standings, for the NFL tiebreakers.
+const GAMES: [string, string, number, number][] = [
+  ["TTT", "BGS", 124.66, 117.9],
+  ["VV", "ROG", 176.8, 179.26],
+  ["OMM", "WLD", 82.48, 168.88],
+  ["MCC", "BCM", 184.96, 106.72],
+  ["BCH", "FOO", 134.02, 115.76],
+  ["TB", "LDL", 145.12, 148.74],
+  ["TTT", "TB", 204.94, 140.78],
+  ["VV", "FOO", 118.4, 93.22],
+  ["OMM", "MCC", 114.54, 163.9],
+  ["BCH", "LDL", 95.56, 127.18],
+  ["WLD", "BGS", 103.6, 128.36],
+  ["BCM", "ROG", 127.4, 152.1],
+];
+const toGame = ([teamA, teamB, pointsA, pointsB]: [string, string, number, number]) => ({
+  teamA,
+  teamB,
+  pointsA,
+  pointsB,
+  winner: pointsA > pointsB ? ("A" as const) : pointsB > pointsA ? ("B" as const) : null,
+});
+const SEASON_GAMES = GAMES.map(toGame);
 const side = (id: string) => ({
   franchiseId: id,
   franchiseSlug: id.toLowerCase(),
@@ -62,7 +85,7 @@ function source(overrides: Partial<GotwSource> = {}): GotwSource {
       awayTeam: side(b),
     })),
     standings,
-    seasonLookups: { h2hLookup: new Map(), divisionRecord: new Map() },
+    seasonLookups: { games: SEASON_GAMES },
     h2hByMatchup: new Map(),
     historyByMatchup: new Map(),
     projectedByFranchise: new Map(),
@@ -168,17 +191,13 @@ describe("resolveFromSource on the real 2026 week 3", () => {
     expect(r.namedRivalry).toBeNull();
   });
 
-  it("the 1st-in-division chip follows the seedTeams chain, not points-for", () => {
-    // TTT and LDL are both 2-0; TTT has more points. A better division record
-    // for LDL must put LDL first, as the playoff seeding would.
+  it("the 1st-in-division chip follows the NFL tiebreakers, not points-for", () => {
+    // TTT and LDL are both 2-0; TTT has more points. If LDL had beaten TTT,
+    // head-to-head (NFL step 1) must put LDL first, as the playoff seeding would.
     const r = resolveFromSource(
       source({
         seasonLookups: {
-          h2hLookup: new Map(),
-          divisionRecord: new Map([
-            ["LDL", { wins: 2, losses: 0, ties: 0 }],
-            ["TTT", { wins: 1, losses: 1, ties: 0 }],
-          ]),
+          games: [...SEASON_GAMES, toGame(["LDL", "TTT", 120, 110])],
         },
       })
     );

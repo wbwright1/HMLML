@@ -37,8 +37,7 @@ import { finalsFromPairedMatchups } from "@/lib/hub/hero-headline";
 import {
   buildSeasonLookups,
   seedTeams,
-  type DivisionRecord,
-  type H2HRecord,
+  type SeasonLookups,
   type SeededTeam,
 } from "@/lib/queries/divisions";
 import { computeStandingsRaceTags, type PlayoffRaceTag } from "@/lib/queries/playoff-race";
@@ -108,11 +107,8 @@ export interface GotwSource {
   week: number;
   matchups: GotwMatchupRef[];
   standings: GotwStandingRow[];
-  /** Season head-to-head + division records, for the seedTeams tiebreak chain. */
-  seasonLookups: {
-    h2hLookup: Map<string, H2HRecord>;
-    divisionRecord: Map<string, DivisionRecord>;
-  };
+  /** Season's completed regular-season games, for the NFL tiebreak procedure. */
+  seasonLookups: SeasonLookups;
   /** All-time series per matchupId, from the HOME team's perspective. */
   h2hByMatchup: Map<number, GotwH2H | null>;
   /** Completed-meeting summary per matchupId, HOME team as side A. */
@@ -200,7 +196,7 @@ export function rankStandings(
 ): { overall: Map<string, number>; division: Map<string, number> } {
   const teams = standings.map(toSeeded);
   const overall = new Map<string, number>();
-  seedTeams(teams, lookups.h2hLookup, lookups.divisionRecord).forEach((t, i) =>
+  seedTeams(teams, lookups).forEach((t, i) =>
     overall.set(t.franchiseId, i + 1)
   );
 
@@ -213,7 +209,7 @@ export function rankStandings(
     byDivision.set(t.division, list);
   }
   for (const list of byDivision.values()) {
-    seedTeams(list, lookups.h2hLookup, lookups.divisionRecord).forEach((t, i) =>
+    seedTeams(list, lookups).forEach((t, i) =>
       division.set(t.franchiseId, i + 1)
     );
   }
@@ -517,7 +513,6 @@ async function orEmpty<T>(p: Promise<T>, fallback: T): Promise<T> {
 export async function resolveGameOfTheWeek(input: GotwLoadInput): Promise<GotwResolution> {
   const { seasonId, seasonYear, week, matchups, standings } = input;
   const pre = input.prefetched ?? {};
-  const divisionOf = new Map(standings.map((s) => [s.franchiseId, s.division ?? null]));
 
   const [
     seasonLookups,
@@ -531,7 +526,7 @@ export async function resolveGameOfTheWeek(input: GotwLoadInput): Promise<GotwRe
     seasons,
     priorFinals,
   ] = await Promise.all([
-    buildSeasonLookups(seasonId, divisionOf),
+    buildSeasonLookups(seasonId),
     pre.h2hByMatchup
       ? Promise.resolve(null)
       : Promise.all(

@@ -35,6 +35,7 @@ import {
   resolveBrandingColor,
 } from "@/lib/franchise-colors";
 import type { SleeperLeague } from "@/lib/sleeper-schemas";
+import { maxPointsForOf } from "@/lib/sync/max-points-for";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -363,6 +364,7 @@ async function importUsersAndRosters(
     const fptsAgainst = roster.settings.fpts_against ?? 0;
     const fptsAgainstDecimal = roster.settings.fpts_against_decimal ?? 0;
     const pointsAgainst = fptsAgainst + fptsAgainstDecimal / 100;
+    const maxPointsFor = maxPointsForOf(roster.settings);
 
     // Upsert franchise_season
     await db
@@ -380,6 +382,7 @@ async function importUsersAndRosters(
         ties: roster.settings.ties ?? 0,
         pointsScored,
         pointsAgainst,
+        maxPointsFor,
         isLegacyEra: isLegacy,
         updatedAt: new Date(),
       })
@@ -396,6 +399,7 @@ async function importUsersAndRosters(
           ties: roster.settings.ties ?? 0,
           pointsScored,
           pointsAgainst,
+          maxPointsFor,
           isLegacyEra: isLegacy,
           updatedAt: new Date(),
         },

@@ -127,6 +127,13 @@
       "when": 1790098378712,
       "tag": "0017_rivalries",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795548209068,
+      "tag": "0018_max_points_for",
+      "breakpoints": true
     }
   ]
 }

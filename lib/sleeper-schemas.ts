@@ -68,6 +68,8 @@ export const SleeperRosterSchema = z
         fpts_decimal: z.number().optional(),
         fpts_against: z.number().optional(),
         fpts_against_decimal: z.number().optional(),
+        ppts: z.number().optional(),
+        ppts_decimal: z.number().optional(),
         division: z.number().optional(),
       })
       .passthrough(),

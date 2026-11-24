@@ -48,6 +48,7 @@ import { describeDbError } from "@/lib/db-error";
 import { repriceFutures, gradeFutures } from "@/lib/sync/book-futures";
 import { resolveFuturesSeason } from "@/lib/queries/book-futures";
 import { resolveBookWeek } from "@/lib/queries/book";
+import { maxPointsForOf } from "@/lib/sync/max-points-for";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -388,6 +389,7 @@ async function syncUsersAndRosters(leagueId: string): Promise<SyncStepResult> {
       const fptsAgainst = roster.settings.fpts_against ?? 0;
       const fptsAgainstDecimal = roster.settings.fpts_against_decimal ?? 0;
       const pointsAgainst = fptsAgainst + fptsAgainstDecimal / 100;
+      const maxPointsFor = maxPointsForOf(roster.settings);
 
       const divisionNumber = roster.settings.division ?? null;
       const divisionName =
@@ -413,6 +415,7 @@ async function syncUsersAndRosters(leagueId: string): Promise<SyncStepResult> {
           ties: roster.settings.ties ?? 0,
           pointsScored,
           pointsAgainst,
+          maxPointsFor,
           updatedAt: new Date(),
         })
         .onConflictDoUpdate({
@@ -430,6 +433,7 @@ async function syncUsersAndRosters(leagueId: string): Promise<SyncStepResult> {
             ties: roster.settings.ties ?? 0,
             pointsScored,
             pointsAgainst,
+            maxPointsFor,
             updatedAt: new Date(),
           },
         });
