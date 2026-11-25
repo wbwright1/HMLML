@@ -127,17 +127,22 @@ export function PlayoffPictureCard({ picture }: { picture: PlayoffPicture }) {
             <div className="px-4 pt-4 pb-1">
               <h3 className="text-body font-semibold text-text-primary">Draft order watch</h3>
               <p className="text-caption text-text-tertiary">
-                Rookie draft picks if the season ended today: non-playoff teams, lowest Max PF first
+                First-round picks if the season ended today: non-playoff slots, lowest Max PF first, shown with who owns each pick
               </p>
             </div>
             <ol data-testid="draft-watch" className="divide-y divide-divider">
               {draftWatch.map((t) => (
-                <li key={t.franchiseId}>
-                  <Link href={`/teams/${t.slug}`} className={ROW}>
+                <li key={t.franchiseId} data-traded={t.owner ? "true" : "false"} data-original-slug={t.slug}>
+                  {/* The pick's owner leads; a traded pick names its original
+                      slot ("via ..."), whose record and Max PF set the pick. */}
+                  <Link href={`/teams/${(t.owner ?? t).slug}`} className={ROW}>
                     <span className="w-6 shrink-0 text-center font-mono text-body-sm font-bold tabular-nums text-text-secondary">
                       {t.pick}
                     </span>
-                    <TeamCell team={t} sub={record(t)} />
+                    <TeamCell
+                      team={t.owner ?? t}
+                      sub={t.owner ? `via ${t.name} (${record(t)})` : record(t)}
+                    />
                     {t.tag === "eliminated" && <TagChip tag={t.tag} />}
                     <span className="shrink-0 text-right text-caption text-text-tertiary">
                       <span className="block font-mono text-body-sm tabular-nums text-text-secondary">

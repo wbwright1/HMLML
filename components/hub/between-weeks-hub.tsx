@@ -127,7 +127,7 @@ export async function BetweenWeeksHub({
   let playoffPicture: PlayoffPicture | null = null;
   if (seasonId != null) {
     try {
-      playoffPicture = await getPlayoffPicture(seasonId, week, playoffWeekStart);
+      playoffPicture = await getPlayoffPicture(seasonId, seasonYear, week, playoffWeekStart);
     } catch (e) {
       rethrowUnlessTolerable(e);
     }

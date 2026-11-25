@@ -731,6 +731,10 @@ async function buildUpcomingDraftPicks(year: number): Promise<UpcomingPick[] | n
   const tradedPickMap = new Map<string, string>();
   if ("data" in tradedResult) {
     for (const pick of tradedResult.data) {
+      // Sleeper lists every future season's traded picks in one response; only
+      // this draft's season applies (a traded 2028 first must not relabel the
+      // same team's 2027 slot).
+      if (pick.season !== String(year)) continue;
       if (pick.owner_id !== pick.roster_id) {
         tradedPickMap.set(`${pick.round}-${pick.roster_id}`, String(pick.owner_id));
       }
