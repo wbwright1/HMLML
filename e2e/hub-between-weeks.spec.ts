@@ -746,4 +746,73 @@ test.describe("Between-Weeks Hub (1d)", () => {
       }
     }
   });
+
+  // Midseason lead module (Blake, 2026-11-24): from week 8 until the playoffs
+  // the hub leads with the projected playoff field and the draft order watch,
+  // directly under the headline. The pinned server tracks the live season, so
+  // this asserts against the real standings when the week qualifies.
+  test("T40: the playoff picture leads the hub from week 8, field and draft watch from real data", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto("/");
+    const meta = (await page.getByTestId("slate-meta").innerText()).trim();
+    const week = Number(/WEEK (\d+)/i.exec(meta)?.[1]);
+    const picture = page.getByTestId("playoff-picture");
+    if (!(week >= 8)) {
+      await expect(picture).toHaveCount(0);
+      return;
+    }
+    await expect(picture).toBeVisible();
+
+    // Directly under the headline: nothing else sits between them.
+    const headline = await page.getByTestId("hero-headline").boundingBox();
+    const box = await picture.boundingBox();
+    const gotw = await page.getByTestId("gotw-title").boundingBox();
+    expect(headline && box).toBeTruthy();
+    expect(box!.y).toBeGreaterThan(headline!.y);
+    if (gotw) expect(box!.y).toBeLessThan(gotw.y);
+
+    // Projected field: seeds run 1..N in order, every row links to its team.
+    const fieldRows = page.getByTestId("playoff-field").locator("li");
+    const fieldCount = await fieldRows.count();
+    expect(fieldCount).toBeGreaterThan(0);
+    for (let i = 0; i < fieldCount; i++) {
+      const link = fieldRows.nth(i).locator('a[href^="/teams/"]');
+      await expect(link).toHaveCount(1);
+      await expect(link.locator("span").first()).toHaveText(String(i + 1));
+      const h = (await link.boundingBox())!.height;
+      expect(h).toBeGreaterThanOrEqual(44);
+    }
+
+    // Draft watch: the non-playoff teams hold picks 1..M, lowest Max PF
+    // first (checked against Postgres), and the bracket owns the rest.
+    const draftRows = page.getByTestId("draft-watch").locator("li");
+    const draftCount = await draftRows.count();
+    if (draftCount > 0) {
+      const sql = getSql();
+      const rows = (await sql`
+        SELECT f.slug, fs.max_points_for::float AS mpf
+        FROM franchise_seasons fs
+        JOIN franchises f ON f.id = fs.franchise_id
+        JOIN seasons s ON s.id = fs.season_id
+        WHERE s.season_year = (SELECT max(season_year) FROM seasons)
+      `) as { slug: string; mpf: number | null }[];
+      const mpfBySlug = new Map(rows.map((r) => [r.slug, r.mpf]));
+      let prev = -Infinity;
+      for (let i = 0; i < draftCount; i++) {
+        const link = draftRows.nth(i).locator('a[href^="/teams/"]');
+        await expect(link.locator("span").first()).toHaveText(String(i + 1));
+        const slug = (await link.getAttribute("href"))!.replace("/teams/", "");
+        const mpf = mpfBySlug.get(slug);
+        if (mpf != null) {
+          expect(mpf).toBeGreaterThanOrEqual(prev);
+          prev = mpf;
+        }
+      }
+      await expect(page.getByTestId("draft-watch-bracket")).toHaveText(
+        new RegExp(`^Picks ${draftCount + 1} to \\d+ are set by the playoff bracket\\.$`)
+      );
+    }
+  });
 });

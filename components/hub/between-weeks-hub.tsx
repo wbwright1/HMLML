@@ -65,6 +65,8 @@ import {
   HUB_ROW_LINK,
 } from "@/components/hub/rail-card";
 import { rethrowUnlessTolerable } from "@/lib/db-guard";
+import { getPlayoffPicture, type PlayoffPicture } from "@/lib/queries/playoff-picture";
+import { PlayoffPictureCard } from "@/components/hub/playoff-picture-card";
 import { getBookBoard, resolveBookWeek, type BookGame } from "@/lib/queries/book";
 import { bookLineText } from "@/lib/book/shared";
 import { formatH2HLine, gameOfWeekBlurb } from "@/lib/hub/between-weeks";
@@ -93,6 +95,8 @@ interface BetweenWeeksHubProps {
   seasonYear: number;
   week: number;
   nextKickoff: Date | null;
+  /** First playoff week of the season; the playoff picture stops there. */
+  playoffWeekStart?: number | null;
 }
 
 /**
@@ -112,8 +116,22 @@ export async function BetweenWeeksHub({
   seasonYear,
   week,
   nextKickoff,
+  playoffWeekStart,
 }: BetweenWeeksHubProps) {
   const priorWeek = week > 1 ? week - 1 : week;
+
+  // Midseason lead module (week 8 to the end of the regular season): the
+  // projected playoff field and the draft order watch. A DB error throws at
+  // request time (rethrowUnlessTolerable) so ISR never caches a hub that
+  // silently dropped it.
+  let playoffPicture: PlayoffPicture | null = null;
+  if (seasonId != null) {
+    try {
+      playoffPicture = await getPlayoffPicture(seasonId, week, playoffWeekStart);
+    } catch (e) {
+      rethrowUnlessTolerable(e);
+    }
+  }
   // A ":recap" NFL_STATE_OVERRIDE (preview/dev only, never production) holds
   // the recap window open so the pinned e2e server reaches the recap state on
   // any weekday.
@@ -571,6 +589,9 @@ export async function BetweenWeeksHub({
             </div>
           )}
         </section>
+
+        {/* Playoff picture: leads the hub from week 8 until the playoffs. */}
+        {playoffPicture && <PlayoffPictureCard picture={playoffPicture} />}
 
         {/* Post-week recap: Week N wrap, Final scores, Team of the week.
             Leads the hub from the Tuesday week roll until the Thursday

@@ -224,6 +224,7 @@ export const getSeasonStandings = cache(async function getSeasonStandings(season
         ties: franchiseSeasons.ties,
         pointsScored: franchiseSeasons.pointsScored,
         pointsAgainst: franchiseSeasons.pointsAgainst,
+        maxPointsFor: franchiseSeasons.maxPointsFor,
         standingsFinish: franchiseSeasons.standingsFinish,
         playoffResult: franchiseSeasons.playoffResult,
         isLegacyEra: franchiseSeasons.isLegacyEra,

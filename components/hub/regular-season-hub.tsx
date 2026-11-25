@@ -28,6 +28,8 @@ import { getWeeklySuperlatives } from "@/lib/queries/superlatives";
 import { getWeeklyLineupAwards } from "@/lib/queries/lineup-efficiency";
 import { SNARKY_LABELS } from "@/lib/content";
 import { getPlayoffProjection } from "@/lib/queries/divisions";
+import { getPlayoffPicture, type PlayoffPicture } from "@/lib/queries/playoff-picture";
+import { PlayoffPictureCard } from "@/components/hub/playoff-picture-card";
 import { getRivalryWeek, rivalryPairKey } from "@/lib/queries/rivalry-week";
 import { getNamedRivalries } from "@/lib/queries/rivalries";
 import { namedRivalryLookupFrom } from "@/lib/hub/gotw-context";
@@ -76,6 +78,7 @@ export async function RegularSeasonHub({
         seasonYear={seasonYear}
         week={week}
         nextKickoff={nextKickoff}
+        playoffWeekStart={latestSeason?.playoffWeekStart ?? null}
       />
     );
   }
@@ -91,6 +94,7 @@ export async function RegularSeasonHub({
   // Playoff projection drives the ladder's seed badges and playoff-line cutoff;
   // undefined when unavailable (RISK-A/RISK-B degrade to the current default).
   let projection: Awaited<ReturnType<typeof getPlayoffProjection>> | undefined;
+  let playoffPicture: PlayoffPicture | null = null;
   // Power Rankings preview for the post-week branch (#277). Renders below
   // "This Week's Damage", per CLAUDE.md's Regular Season hub table.
   let powerPreview: HubPowerPreview | null = null;
@@ -117,6 +121,14 @@ export async function RegularSeasonHub({
       projection = await getPlayoffProjection(latestSeason.id);
     } catch {
       // Projection may not be available; ladder falls back to plain standings.
+    }
+
+    // Midseason lead module (week 8 to the end of the regular season). A DB
+    // error throws at request time so ISR never caches a hub without it.
+    try {
+      playoffPicture = await getPlayoffPicture(latestSeason.id, week, latestSeason.playoffWeekStart);
+    } catch (e) {
+      rethrowUnlessTolerable(e);
     }
 
     try {
@@ -228,7 +240,7 @@ export async function RegularSeasonHub({
         <div>
           {/* No kicker above the headline (UI/UX pass): the live pill names
               the week; the headline states it. */}
-          <h1 className="text-display">Week {week}.</h1>
+          <h1 className="text-display">Week {week}</h1>
         </div>
 
         {((highScore && highScore.points > 0) || hasPlayersLeftStat) && (
@@ -310,6 +322,9 @@ export async function RegularSeasonHub({
 
           {/* The ladder + weekly damage rail */}
           <aside className="space-y-8">
+            {/* During live games the scores stay first; the playoff picture
+                leads the rail instead of the page. */}
+            {playoffPicture && <PlayoffPictureCard picture={playoffPicture} />}
             {bookGames.length > 0 && <BookRailCard games={bookGames} week={week} />}
 
             {ladderEntries.length > 0 && (
@@ -367,6 +382,8 @@ export async function RegularSeasonHub({
       {/* Outside Game Window: Standings + Superlatives */}
       {!isGameWindow && (
         <>
+          {/* Playoff picture: leads the hub from week 8 until the playoffs. */}
+          {playoffPicture && <PlayoffPictureCard picture={playoffPicture} />}
           {/* Week banner (surface card) */}
           <WeekBanner
             week={week}
