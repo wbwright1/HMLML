@@ -126,7 +126,7 @@ export async function RegularSeasonHub({
     // Midseason lead module (week 8 to the end of the regular season). A DB
     // error throws at request time so ISR never caches a hub without it.
     try {
-      playoffPicture = await getPlayoffPicture(latestSeason.id, week, latestSeason.playoffWeekStart);
+      playoffPicture = await getPlayoffPicture(latestSeason.id, latestSeason.seasonYear, week, latestSeason.playoffWeekStart);
     } catch (e) {
       rethrowUnlessTolerable(e);
     }

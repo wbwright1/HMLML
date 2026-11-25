@@ -799,12 +799,50 @@ test.describe("Between-Weeks Hub (1d)", () => {
         WHERE s.season_year = (SELECT max(season_year) FROM seasons)
       `) as { slug: string; mpf: number | null }[];
       const mpfBySlug = new Map(rows.map((r) => [r.slug, r.mpf]));
+
+      // Current owner of each next-season first-rounder: the last receiver
+      // across completed trades (Sleeper's draft_picks_involved), keyed by
+      // the original slot's slug. Untraded picks stay with their slot.
+      const moves = (await sql`
+        SELECT (p->>'roster_id')::int AS slot_roster, (p->>'owner_id')::int AS owner_roster
+        FROM transactions t
+        CROSS JOIN LATERAL jsonb_array_elements(t.draft_picks_involved) p
+        WHERE t.type = 'trade' AND t.status = 'complete'
+          AND p->>'season' = ((SELECT max(season_year) FROM seasons) + 1)::text
+          AND (p->>'round')::int = 1
+        ORDER BY t.created_at_sleeper ASC NULLS FIRST, t.created_at ASC
+      `) as { slot_roster: number; owner_roster: number }[];
+      const rosterSlugs = (await sql`
+        SELECT fs.roster_id::int AS roster, f.slug
+        FROM franchise_seasons fs
+        JOIN franchises f ON f.id = fs.franchise_id
+        WHERE fs.season_id = (SELECT id FROM seasons ORDER BY season_year DESC LIMIT 1)
+      `) as { roster: number; slug: string }[];
+      const slugByRoster = new Map(rosterSlugs.map((r) => [r.roster, r.slug]));
+      const ownerBySlotSlug = new Map<string, string>();
+      for (const m of moves) {
+        const slot = slugByRoster.get(m.slot_roster);
+        const owner = slugByRoster.get(m.owner_roster);
+        if (slot && owner) ownerBySlotSlug.set(slot, owner);
+      }
+
       let prev = -Infinity;
       for (let i = 0; i < draftCount; i++) {
-        const link = draftRows.nth(i).locator('a[href^="/teams/"]');
+        const row = draftRows.nth(i);
+        const link = row.locator('a[href^="/teams/"]');
         await expect(link.locator("span").first()).toHaveText(String(i + 1));
-        const slug = (await link.getAttribute("href"))!.replace("/teams/", "");
-        const mpf = mpfBySlug.get(slug);
+        const slotSlug = (await row.getAttribute("data-original-slug"))!;
+        const hrefSlug = (await link.getAttribute("href"))!.replace("/teams/", "");
+        const expectedOwner = ownerBySlotSlug.get(slotSlug) ?? slotSlug;
+        expect(hrefSlug).toBe(expectedOwner);
+        if (expectedOwner !== slotSlug) {
+          await expect(row).toHaveAttribute("data-traded", "true");
+          await expect(row).toContainText(/via /);
+        } else {
+          await expect(row).toHaveAttribute("data-traded", "false");
+        }
+        // Max PF belongs to the original slot: it sets the pick position.
+        const mpf = mpfBySlug.get(slotSlug);
         if (mpf != null) {
           expect(mpf).toBeGreaterThanOrEqual(prev);
           prev = mpf;
